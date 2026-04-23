@@ -47,11 +47,15 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 function App() {
-  // restore from localStorage
+  // restore from localStorage; if saved articleId no longer exists (payloads changed), fall back to home
   const [route, setRoute] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('ohye_route') || 'null');
-      return saved || { page:'home', articleId:null };
+      if (!saved) return { page:'home', articleId:null };
+      if (saved.page === 'article' && !ARTICLES.some(a => a.id === saved.articleId)) {
+        return { page:'home', articleId:null };
+      }
+      return saved;
     } catch { return { page:'home', articleId:null }; }
   });
   const [level, setLevel] = useState(() => {
