@@ -1,0 +1,108 @@
+{
+  "title": "Shops on UK High Streets Selling Illegal Drugs",
+  "summary": "BBC secret filming found that some shops on UK High Streets are selling illegal drugs like cocaine and cannabis. Researchers went into shops in four towns in the West Midlands and were able to buy drugs easily. One street was called 'lawless' by a police source. The National Crime Agency says organized criminal gangs are using these shops to sell drugs. A senior MP wants the government to act quickly to stop this. The government says it is working with police to take action against these criminal businesses. Legitimate businesses nearby said they have been scared by gangs and have seen violence with knives and guns.",
+  "keywords": [
+    {
+      "term": "illegal drugs",
+      "explanation": "drugs that are not allowed by law, like cocaine and cannabis"
+    },
+    {
+      "term": "mini-marts",
+      "explanation": "small shops that sell everyday items like food and drinks"
+    },
+    {
+      "term": "organized criminal gangs",
+      "explanation": "groups of people who work together to commit crimes"
+    },
+    {
+      "term": "High Street",
+      "explanation": "the main street in a town where many shops are located"
+    },
+    {
+      "term": "undercover researchers",
+      "explanation": "people who pretend to be normal customers to find out what is really happening"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What did the BBC investigation find?",
+      "options": [
+        "Mini-marts selling illegal drugs",
+        "Mini-marts selling toys",
+        "Mini-marts selling books",
+        "Mini-marts selling clothes"
+      ],
+      "correct_answer": "Mini-marts selling illegal drugs"
+    },
+    {
+      "question": "Where did the secret filming take place?",
+      "options": [
+        "In London",
+        "In four towns in the West Midlands",
+        "In Scotland",
+        "In Wales"
+      ],
+      "correct_answer": "In four towns in the West Midlands"
+    },
+    {
+      "question": "What is a 'lawless' street?",
+      "options": [
+        "A street with no laws",
+        "A street where crime is out of control",
+        "A street with many shops",
+        "A street with no police"
+      ],
+      "correct_answer": "A street where crime is out of control"
+    },
+    {
+      "question": "Who is using the shops to sell drugs?",
+      "options": [
+        "Ordinary shop owners",
+        "Organized criminal gangs",
+        "The police",
+        "The government"
+      ],
+      "correct_answer": "Organized criminal gangs"
+    },
+    {
+      "question": "What did the researchers buy from a shop?",
+      "options": [
+        "Candy",
+        "Cannabis",
+        "Books",
+        "Clothes"
+      ],
+      "correct_answer": "Cannabis"
+    },
+    {
+      "question": "What do legitimate businesses near the shops say?",
+      "options": [
+        "They are happy",
+        "They have been intimidated by gangs",
+        "They are closing down",
+        "They are selling drugs too"
+      ],
+      "correct_answer": "They have been intimidated by gangs"
+    }
+  ],
+  "background_read": [
+    "Shops on High Streets usually sell food, drinks, and other everyday items. But this investigation found that some shops are also selling illegal drugs. The police and government are working to stop this. It is important for communities to be safe."
+  ],
+  "Article_Structure": [
+    "WHO: BBC researchers and organized criminal gangs",
+    "WHAT: Mini-marts selling illegal drugs like cocaine and cannabis",
+    "WHERE: High Streets in four towns in the West Midlands, UK",
+    "WHY: Criminal gangs are using shops to sell drugs, and the government needs to act"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Police",
+      "description": "Police are working with partners to act on complaints about illegal drug sales."
+    },
+    {
+      "perspective": "MP",
+      "description": "A senior MP wants the government to act urgently to stop organized crime on High Streets."
+    }
+  ],
+  "image_url": "/article_images/article_271f3f209fab532a_3b9be6ea63e3.webp"
+}

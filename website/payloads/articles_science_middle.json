@@ -1,57 +1,57 @@
 {
   "articles": [
     {
-      "id": "ac3eadb516260f75",
-      "title": "NASA Investigates Helium Leak in Orion Spacecraft During Artemis II Mission",
-      "summary": "During the Artemis II mission, NASA's Orion spacecraft experienced a small helium leak in its propulsion system. The leak is internal to the valves in the European-built service module and does not vent to space. Helium is used to pressurize and push oxidizer through the system to feed the spacecraft's rocket engines. Despite the leak, the propulsion system has performed nominally, with all burns executed as planned. The mission has followed a free return trajectory around the Moon, requiring minimal fuel usage, and the spacecraft has consumed only 40% of its fuel so far. NASA canceled a manual piloting demonstration to conduct additional tests on the propulsion system, aiming to characterize the leak and assess potential future modifications. The leaky valves will be jettisoned with the service module before reentry, ensuring no risk to the crew module's safe return. Officials emphasize that the leak is not a threat to reentry, as the crew module has independent systems for steering. However, engineers are gathering data to inform redesigns for future missions, as similar leaks were observed on the unpiloted Artemis I flight.",
-      "source": "Ars Science",
+      "id": "f40b0b9547320f52",
+      "title": "Gut Reset Procedure May Prevent Weight Regain After Stopping GLP-1 Drugs",
+      "summary": "A new study presented at Digestive Disease Week 2026 suggests that a minimally invasive procedure called duodenal mucosal resurfacing (DMR) could help people maintain weight loss after stopping GLP-1 medications like Ozempic or Wegovy. About 70% of people who stop these drugs regain much of the weight within 18 months. The REMAIN-1 trial tested DMR in 45 participants who had lost at least 15% of their body weight using tirzepatide. Those who received the actual procedure regained significantly less weight after six months compared to the sham group. The procedure uses controlled heat to remove damaged tissue from the duodenum, promoting growth of healthier tissue. No serious complications were reported, and recovery takes about one day. The benefits appeared to increase over time, suggesting a lasting metabolic reset. This could address the huge unmet need for a treatment that allows patients to stop GLP-1 drugs without regaining weight.",
+      "source": "Science Daily",
+      "time_ago": "5 hours ago",
+      "image_url": "/article_images/article_f40b0b9547320f52_902fc2fdc528.webp",
+      "category": "Science"
+    },
+    {
+      "id": "a98ebface9612f76",
+      "title": "Brain-Like Chip Could Cut AI Energy Use by 70%",
+      "summary": "Researchers at the University of Cambridge have developed a new type of chip that mimics the human brain, potentially reducing energy consumption in artificial intelligence systems by up to 70%. Current AI hardware consumes large amounts of electricity because it constantly moves data between separate memory and processing units. This new chip, based on a modified form of hafnium oxide, uses memristors that combine memory and processing in one place, similar to how neurons work in the brain. Unlike traditional memristors that rely on unpredictable filaments, the Cambridge design uses a controlled switching mechanism at the interface of thin films, making it more stable and reliable. In tests, the devices operated at extremely low currents and maintained hundreds of stable states, enabling brain-like learning. The innovation addresses a key challenge in AI: high energy demand. The team published their findings in Science Advances. This advancement could lead to more efficient AI hardware that learns and adapts naturally, with applications in various industries.",
+      "source": "Science Daily",
+      "time_ago": "6 hours ago",
+      "image_url": "/article_images/article_a98ebface9612f76_525b709dd016.webp",
+      "category": "Science"
+    },
+    {
+      "id": "a9a3bd2bdde1150c",
+      "title": "Deep Mantle Deformation Linked to Ancient Slabs",
+      "summary": "Scientists have created a global map showing deformation in Earth's lowermost mantle, located just above the core-mantle boundary. Using over 16 million seismograms, they analyzed seismic anisotropy—the directional variation of shear wave speeds—to identify areas where mantle material has been stretched or distorted. The study, published in The Seismic Record, reveals that most deformation occurs in regions where ancient tectonic slabs have subducted and sunk over millions of years. This finding supports geodynamic simulations and provides new insight into mantle flow patterns. Lead author Jonathan Wolf noted that while upper mantle deformation is driven by plate drag, deep mantle flow is less understood. This research offers a large-scale view of deep Earth dynamics.",
+      "source": "Science Daily",
+      "time_ago": "6 hours ago",
+      "image_url": "/article_images/article_a9a3bd2bdde1150c_b65ad316dcba.webp",
+      "category": "Science"
+    },
+    {
+      "id": "4b884f86aa475d84",
+      "title": "Fatty Acid Injection Reverses Age-Related Vision Decline in Mice",
+      "summary": "Age-related vision loss, such as difficulty reading in low light, is common among older adults. Researchers at the University of California, Irvine have discovered a potential treatment that may reverse this decline. Their study, published in Science Translational Medicine, focused on a specific polyunsaturated fatty acid that, when injected into older mice, improved their visual performance. This effect was not achieved with DHA, a common omega-3 fatty acid. The research builds on previous work involving the ELOVL2 gene, which is known to regulate levels of very-long-chain polyunsaturated fatty acids (VLC-PUFAs) in the retina. As we age, ELOVL2 activity decreases, leading to lower levels of these essential fats and worsening vision. By directly supplying the retina with the missing fatty acid, the scientists bypassed the need for ELOVL2. The results suggest that this approach could potentially be developed into a therapy for age-related macular degeneration (AMD) and other vision problems. However, further studies are needed to confirm safety and efficacy in humans.",
+      "source": "Science Daily",
       "time_ago": "11 hours ago",
-      "image_url": "/article_images/article_ac3eadb516260f75_c6f219bf7c83.webp",
+      "image_url": "/article_images/article_4b884f86aa475d84_8b3469ab1ed7.webp",
       "category": "Science"
     },
     {
-      "id": "e8a7f2a954c286b9",
-      "title": "Advancements in Gene Editing for β-Thalassaemia Treatment",
-      "summary": "A recent clinical trial demonstrates that an improved gene editing system can effectively treat β-Thalassaemia, a genetic blood disorder closely related to sickle-cell anemia. Researchers used CRISPR/Cas9 technology to edit blood stem cells, specifically targeting a gene to reactivate the fetal version of hemoglobin, which enhances oxygen transport. This approach builds on the FDA-approved therapy for sickle-cell anemia, showcasing progress in precision medicine. The study highlights advancements in reducing off-target edits and errors by employing a more focused method that avoids double-stranded breaks, instead using single base changes. Key innovations include a protein that converts cytosine to thymine and inhibits DNA repair enzymes, ensuring targeted mutations. The trial involved screening edited cells to select those with correct edits and no unintended changes, emphasizing safety. This work underscores the potential of gene editing to cure genetic diseases, though challenges remain for applying it to non-blood cells. The collaboration marks a significant step in making CRISPR-based therapies more reliable and accessible for patients worldwide.",
+      "id": "927180fbff2b63e6",
+      "title": "UK MPs Urge Ban on 'Forever Chemicals' in Everyday Products",
+      "summary": "A group of UK MPs has called for a ban on the use of PFAS, a group of man-made chemicals known as 'forever chemicals', in non-essential products such as school uniforms, frying pans, and food packaging. PFAS are valued for their ability to resist water, oil, and heat, making them useful in a wide range of items from raincoats to medical equipment. However, they do not break down in the environment and can accumulate in the human body, with some types linked to cancer and other health issues. The Environmental Audit Committee recommends phasing out non-essential uses by 2027, unless manufacturers can prove the chemicals are essential or there is no alternative. The government has its own PFAS plan focusing on monitoring, but the committee argues it does not go far enough to prevent contamination. Academics and environmental groups support the stricter measures. The public is advised not to panic, but action is needed to prevent further pollution. This issue highlights the trade-off between convenience and long-term environmental and health risks.",
+      "source": "BBC Science",
+      "time_ago": "13 hours ago",
+      "image_url": "/article_images/article_927180fbff2b63e6_4c6e712d612a.webp",
+      "category": "Science"
+    },
+    {
+      "id": "4b250c480fc84e1c",
+      "title": "Muon Mystery Solved: No Fifth Force Found",
+      "summary": "For 20 years, physicists observed a discrepancy in the magnetic properties of muons, suggesting a possible fifth force beyond the Standard Model. However, a new study published in Nature shows that the discrepancy was due to a calculation error, not new physics. The muon is a heavier cousin of the electron, and its magnetic moment is sensitive to virtual particles. The Muon g-2 experiment measured this anomaly, finding a 3.7-sigma discrepancy initially, later increased to 4.2 sigma. The new research focused on the hadronic vacuum polarization, using a hybrid method combining simulations and experimental data. The results align with Standard Model predictions, ruling out the fifth force. This reinforces our understanding of particle physics.",
       "source": "Ars Science",
-      "time_ago": "16 hours ago",
-      "image_url": "/article_images/article_e8a7f2a954c286b9_20ce8a5f5dba.webp",
-      "category": "Science"
-    },
-    {
-      "id": "791df1d58c69c480",
-      "title": "Artemis II Astronauts Reflect on Their Historic Moon Flyby",
-      "summary": "The Artemis II mission, a nine-day NASA flight, involved four astronauts aboard the Orion spacecraft who journeyed beyond the Moon. During their trip, they experienced a rare cosmic event: as they flew into the Moon's shadow, they witnessed an eclipse where Earth disappeared behind the lunar surface, described as a 'sci-fi' moment by pilot Victor Glover. Commander Reid Wiseman shared that the sight gave him chills and sweaty palms, highlighting the emotional impact. The astronauts, including Canadian Jeremy Hansen, used a radio blackout period to reflect briefly, take photos, and share maple cookies. Launched on April 1, the mission's timing allowed for this unique alignment but limited sunlight on the Moon's far side. As they return to Earth, the capsule will reenter the atmosphere at high speed and splash down in the Pacific Ocean. Artemis II serves as a test flight to validate systems for future crewed lunar landings and the establishment of a lunar base, marking the first human Moon mission since 1972. The astronauts expressed appreciation for the Orion capsule's design, which provided all necessary comforts during their voyage.",
-      "source": "Ars Science",
-      "time_ago": "18 hours ago",
-      "image_url": "/article_images/article_791df1d58c69c480_2201fe607449.webp",
-      "category": "Science"
-    },
-    {
-      "id": "e41cb8f1010b7cbe",
-      "title": "Discovery of a Brain Drain: New Insights into Waste Removal",
-      "summary": "Researchers at the Medical University of South Carolina have uncovered a previously unknown control point in the brain's lymphatic system, providing the first direct evidence in humans. Using advanced real-time MRI technology developed through a NASA collaboration, the team monitored cerebrospinal and interstitial fluid movement along the middle meningeal artery in five healthy individuals over six hours. They observed a slow, steady flow pattern distinct from fast-moving blood, indicating this vessel functions as part of the brain's waste drainage network. This challenges the long-held belief that the meninges—protective membranes around the brain—separate it from the body's immune and lymphatic systems. The study, led by Onder Albayram, builds on prior work visualizing meningeal lymphatic vessels and uses ultra high-resolution imaging to confirm the presence of lymphatic cells around the artery. This discovery enhances understanding of fluid dynamics between the brain and body, potentially aiding in the prevention and treatment of neurological and psychiatric conditions by improving waste clearance mechanisms.",
-      "source": "Science Daily",
-      "time_ago": "22 hours ago",
-      "image_url": "/article_images/article_e41cb8f1010b7cbe_e781a8127632.webp",
-      "category": "Science"
-    },
-    {
-      "id": "905ad49ba33930d5",
-      "title": "Trump's Emergency Orders on Coal Power: Legal and Policy Issues",
-      "summary": "The U.S. electricity grid historically relied heavily on coal-fired power plants, but these have been gradually decommissioned due to high costs and environmental concerns like air pollution and climate change. Upon returning to office in 2025, President Donald Trump's Department of Energy invoked Section 202(c) of the Federal Power Act, an emergency power from World War II, to force utilities to keep old coal plants operating. Legal scholars, such as Professor Alexandra Klass, argue this is illegal because the law was designed for short-term wartime emergencies, not long-term industry support. The orders undermine decades of utility planning by states and grid operators, potentially raising consumer bills and harming climate goals. Environmental advocates and state officials have filed lawsuits in the U.S. Court of Appeals. Additionally, the Trump administration is slowing clean energy alternatives, like offshore wind, exacerbating the issue. The misuse of emergency powers poses significant challenges for regulatory stability and energy transition.",
-      "source": "Ars Science",
-      "time_ago": "22 hours ago",
-      "image_url": "/article_images/article_905ad49ba33930d5_d69f58591801.webp",
-      "category": "Science"
-    },
-    {
-      "id": "518d379c2f152530",
-      "title": "The Power of Expectation: How Beliefs Shape Sweet Taste Preferences",
-      "summary": "Researchers from Radboud University, the University of Oxford, and the University of Cambridge conducted a study to investigate whether expectations about sweetness can alter enjoyment and brain responses. They recruited 99 healthy adults with similar opinions on sugar and artificial sweeteners. Participants tasted drinks while being misled about the contents: when told a drink contained sugar, they reported higher enjoyment even if it actually had artificial sweeteners, and vice versa. Brain imaging revealed that these expectations activated the dopaminergic midbrain, a reward-related region, more when sugar was believed to be present. This indicates that cognitive expectations not only influence subjective taste ratings but also neural activity. The findings suggest that labeling foods with positive terms like 'nutrient rich' rather than 'diet' could enhance enjoyment of healthier options, potentially aiding dietary changes. The study, published in JNeurosci, adds to understanding of how perception drives behavior in nutrition contexts.",
-      "source": "Science Daily",
-      "time_ago": "23 hours ago",
-      "image_url": "/article_images/article_518d379c2f152530_9fa1e4ede37a.webp",
+      "time_ago": "20 hours ago",
+      "image_url": "/article_images/article_4b250c480fc84e1c_2f7f8abf43d6.webp",
       "category": "Science"
     }
   ]

@@ -1,0 +1,141 @@
+{
+  "title": "Crew Missing After Cargo Ship Capsizes in Super Typhoon",
+  "summary": "A U.S.-registered cargo ship named the Mariana overturned near the Northern Mariana Islands during Super Typhoon Sinlaku, one of the strongest storms this year. The ship had six crew members. Searchers have found the body of one crew member and are still looking for the other five. The U.S. Coast Guard and Japanese divers used an underwater drone to search inside the overturned ship but did not find the missing crew. They are also searching for an orange life raft that might have been deployed. The search covers an area of over 99,000 square miles, about the size of Oregon. The ship lost its starboard engine during the typhoon and contacted the Coast Guard for help on April 15, but communication was lost the next day. The storm had sustained winds of up to 150 mph. The Coast Guard has expressed sympathy for the families and is continuing the search with help from agencies in Guam, Japan, and New Zealand.",
+  "keywords": [
+    {
+      "term": "cargo ship",
+      "explanation": "a ship designed to carry goods and materials"
+    },
+    {
+      "term": "capsize",
+      "explanation": "when a boat turns over in the water"
+    },
+    {
+      "term": "typhoon",
+      "explanation": "a tropical cyclone in the Pacific with strong winds and rain"
+    },
+    {
+      "term": "underwater drone",
+      "explanation": "a remote-controlled vehicle used to explore underwater"
+    },
+    {
+      "term": "life raft",
+      "explanation": "an inflatable boat used for emergency evacuation from a ship"
+    },
+    {
+      "term": "starboard engine",
+      "explanation": "the engine on the right side of a ship"
+    },
+    {
+      "term": "sustained winds",
+      "explanation": "average wind speed measured over a period of time"
+    },
+    {
+      "term": "search and rescue",
+      "explanation": "operations to find and help people in danger"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What caused the Mariana to overturn?",
+      "options": [
+        "A collision with another ship",
+        "A mechanical failure",
+        "Super Typhoon Sinlaku",
+        "Running aground"
+      ],
+      "correct_answer": "Super Typhoon Sinlaku"
+    },
+    {
+      "question": "How many crew members are still missing?",
+      "options": [
+        "One",
+        "Five",
+        "Six",
+        "None"
+      ],
+      "correct_answer": "Five"
+    },
+    {
+      "question": "What did the underwater drone find inside the ship?",
+      "options": [
+        "The missing crew",
+        "The ship's cargo",
+        "No crew members",
+        "A life raft"
+      ],
+      "correct_answer": "No crew members"
+    },
+    {
+      "question": "How large is the search area?",
+      "options": [
+        "99,000 square miles",
+        "50,000 square miles",
+        "150,000 square miles",
+        "200,000 square miles"
+      ],
+      "correct_answer": "99,000 square miles"
+    },
+    {
+      "question": "When did the ship lose contact with the Coast Guard?",
+      "options": [
+        "April 15",
+        "April 16",
+        "The day of the typhoon",
+        "After the search began"
+      ],
+      "correct_answer": "April 16"
+    },
+    {
+      "question": "What is the maximum sustained wind speed of Typhoon Sinlaku?",
+      "options": [
+        "100 mph",
+        "150 mph",
+        "200 mph",
+        "120 mph"
+      ],
+      "correct_answer": "150 mph"
+    },
+    {
+      "question": "Which countries are assisting in the search?",
+      "options": [
+        "Only the U.S.",
+        "Japan and New Zealand",
+        "Guam, Japan, and New Zealand",
+        "Australia and China"
+      ],
+      "correct_answer": "Guam, Japan, and New Zealand"
+    },
+    {
+      "question": "What color is the life raft being searched for?",
+      "options": [
+        "Yellow",
+        "Orange",
+        "Red",
+        "White"
+      ],
+      "correct_answer": "Orange"
+    }
+  ],
+  "background_read": [
+    "The Northern Mariana Islands are a U.S. territory in the Pacific. Typhoons are common in this region. Cargo ships must have life rafts that can withstand 30 days at sea. The International Maritime Organization sets safety codes for ships."
+  ],
+  "Article_Structure": [
+    "Main Points: The article reports on the search for five missing crew members after their cargo ship capsized during Super Typhoon Sinlaku. One body has been found. The search involves multiple agencies and covers a vast area. Purpose: To inform the public about a maritime disaster and ongoing rescue efforts. Evidence Evaluation: The article relies on official statements from the U.S. Coast Guard and other agencies, which are credible sources. However, details about the crew's fate remain unknown. Author Credibility: The Associated Press is a reputable news agency. Methodology: Information was gathered from press releases and official reports. The article does not include independent verification."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Coast Guard",
+      "description": "They are coordinating the search and providing updates."
+    },
+    {
+      "perspective": "Families",
+      "description": "They are anxious and awaiting news of their loved ones."
+    },
+    {
+      "perspective": "International agencies",
+      "description": "They are providing assistance in the search."
+    }
+  ],
+  "image_url": "/article_images/article_ae2215639c535f16_47c133a617c9.webp"
+}

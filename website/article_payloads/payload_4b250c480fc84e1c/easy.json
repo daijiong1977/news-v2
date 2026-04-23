@@ -1,0 +1,108 @@
+{
+  "title": "Scientists Solve a Magnet Mystery",
+  "summary": "Scientists have been studying tiny particles called muons. Muons are like electrons but heavier. They have a small magnet inside them. When muons are put in a magnetic field, they wobble. Scientists measured this wobble and thought it was different from what they expected. This difference suggested there might be a new force in nature. But a new study shows the difference was just a mistake in calculations. The old rules of physics still work. The scientists used a new method to check their numbers and found no new force. This means our understanding of the universe is still correct. The study helps us trust what we know about particles and forces.",
+  "keywords": [
+    {
+      "term": "muon",
+      "explanation": "A tiny particle like an electron but heavier"
+    },
+    {
+      "term": "magnet",
+      "explanation": "Something that pulls or pushes other magnets"
+    },
+    {
+      "term": "wobble",
+      "explanation": "A shaking or spinning movement"
+    },
+    {
+      "term": "force",
+      "explanation": "A push or pull that can change how something moves"
+    },
+    {
+      "term": "calculation",
+      "explanation": "A math problem to find an answer"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What are muons like?",
+      "options": [
+        "Heavier electrons",
+        "Lighter protons",
+        "Tiny magnets",
+        "Big atoms"
+      ],
+      "correct_answer": "Heavier electrons"
+    },
+    {
+      "question": "What did scientists think was different about the muon's wobble?",
+      "options": [
+        "It was faster",
+        "It was slower",
+        "It was the same",
+        "It disappeared"
+      ],
+      "correct_answer": "It was different"
+    },
+    {
+      "question": "What did the new study find about the difference?",
+      "options": [
+        "It was real",
+        "It was a mistake",
+        "It was bigger",
+        "It was smaller"
+      ],
+      "correct_answer": "It was a mistake"
+    },
+    {
+      "question": "What does the new study tell us about the rules of physics?",
+      "options": [
+        "They are wrong",
+        "They still work",
+        "They need to change",
+        "They are new"
+      ],
+      "correct_answer": "They still work"
+    },
+    {
+      "question": "How did scientists check their numbers?",
+      "options": [
+        "With a new method",
+        "With a bigger magnet",
+        "With a different particle",
+        "With a new force"
+      ],
+      "correct_answer": "With a new method"
+    },
+    {
+      "question": "What is a muon's cousin?",
+      "options": [
+        "Proton",
+        "Neutron",
+        "Electron",
+        "Photon"
+      ],
+      "correct_answer": "Electron"
+    }
+  ],
+  "background_read": [
+    "Everything is made of tiny particles. Some particles have magnets inside them. Scientists study these particles to learn how the universe works."
+  ],
+  "Article_Structure": [
+    "WHO: Scientists who study tiny particles called muons.",
+    "WHAT: They solved a mystery about muon wobbles.",
+    "WHERE: In laboratories and universities.",
+    "WHY: To check if our understanding of physics is correct."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Scientists",
+      "description": "They are happy that the old rules still work."
+    },
+    {
+      "perspective": "Students",
+      "description": "They can trust what they learn in science class."
+    }
+  ],
+  "image_url": "/article_images/article_4b250c480fc84e1c_2f7f8abf43d6.webp"
+}

@@ -1,0 +1,108 @@
+{
+  "title": "A Special Fat That Might Help Old Eyes See Better",
+  "summary": "As people get older, their eyes often don't work as well. Reading a menu in a dark restaurant can be hard. Scientists at the University of California, Irvine are studying a way to help old eyes see better again. They found that a special kind of fat, called a fatty acid, might help. In their study, they gave this fatty acid to old mice, and the mice's eyes got better. The scientists hope this could one day help people too. The special fat is not the same as omega-3, which is found in fish. The scientists think this new fat can reverse some of the aging in the eye. This is exciting because many older people have trouble seeing, and this could be a new treatment.",
+  "keywords": [
+    {
+      "term": "fatty acid",
+      "explanation": "A type of fat that our body needs to stay healthy."
+    },
+    {
+      "term": "vision",
+      "explanation": "The ability to see."
+    },
+    {
+      "term": "aging",
+      "explanation": "Getting older."
+    },
+    {
+      "term": "mice",
+      "explanation": "Small animals often used in science experiments."
+    },
+    {
+      "term": "treatment",
+      "explanation": "A way to help fix a health problem."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What did scientists study to help old eyes?",
+      "options": [
+        "A special fat",
+        "A new phone",
+        "A bright light",
+        "A pair of glasses"
+      ],
+      "correct_answer": "A special fat"
+    },
+    {
+      "question": "Who did the scientists test the treatment on?",
+      "options": [
+        "People",
+        "Mice",
+        "Cats",
+        "Dogs"
+      ],
+      "correct_answer": "Mice"
+    },
+    {
+      "question": "What happened to the mice's eyes after the treatment?",
+      "options": [
+        "They got worse",
+        "They stayed the same",
+        "They got better",
+        "They turned red"
+      ],
+      "correct_answer": "They got better"
+    },
+    {
+      "question": "Is the special fat the same as omega-3?",
+      "options": [
+        "Yes",
+        "No",
+        "Maybe",
+        "Only sometimes"
+      ],
+      "correct_answer": "No"
+    },
+    {
+      "question": "Why is this study important?",
+      "options": [
+        "It might help old people see better",
+        "It teaches us about mice",
+        "It shows how to read menus",
+        "It makes new phones"
+      ],
+      "correct_answer": "It might help old people see better"
+    },
+    {
+      "question": "Where did the scientists do their study?",
+      "options": [
+        "University of California, Irvine",
+        "Harvard University",
+        "Oxford University",
+        "Tokyo University"
+      ],
+      "correct_answer": "University of California, Irvine"
+    }
+  ],
+  "background_read": [
+    "As people get older, their eyesight often gets worse. This can make it hard to read or see things clearly. Scientists are always looking for new ways to help. In this study, they used a special fat that helped old mice see better. This could lead to new treatments for people with vision problems."
+  ],
+  "Article_Structure": [
+    "WHO: Scientists at the University of California, Irvine",
+    "WHAT: They studied a special fatty acid that might reverse vision loss in old mice.",
+    "WHERE: The research was done at the University of California, Irvine.",
+    "WHY: To find a treatment that could help older people see better."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Optimistic",
+      "description": "This study shows promise for reversing age-related vision loss."
+    },
+    {
+      "perspective": "Cautious",
+      "description": "The treatment has only been tested on mice, not people, so more research is needed."
+    }
+  ],
+  "image_url": "/article_images/article_4b884f86aa475d84_8b3469ab1ed7.webp"
+}

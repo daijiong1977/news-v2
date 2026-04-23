@@ -1,0 +1,145 @@
+{
+  "title": "Duodenal Mucosal Resurfacing: A Novel Endoscopic Intervention for Weight Maintenance Post-GLP-1 Therapy",
+  "summary": "The widespread use of glucagon-like peptide-1 (GLP-1) receptor agonists for obesity management has been transformative, yet discontinuation rates remain high due to cost, adverse effects, and patient preference for non-pharmacological interventions. Alarmingly, approximately 70% of individuals who cease GLP-1 therapy experience substantial weight regain within 18 months, negating metabolic benefits. Presented at Digestive Disease Week 2026, the REMAIN-1 trial provides the first blinded, randomized, sham-controlled evidence that duodenal mucosal resurfacing (DMR) may offer a durable solution. DMR is an endoscopic procedure that ablates the damaged mucosal lining of the duodenum using controlled thermal energy, promoting regeneration of healthy tissue and potentially inducing a metabolic reset. In the early cohort of 45 participants who had lost ≥15% body weight with tirzepatide, those receiving DMR regained significantly less weight at six months compared to sham controls. Notably, patients with more extensive ablation regained only ~7 pounds, retaining >80% of weight loss, while controls regained roughly twice as much. The divergence between groups widened over time, suggesting a sustained effect. No serious complications occurred, and recovery was rapid (~1 day). These findings address a critical unmet need for interventions that maintain weight loss without chronic pharmacotherapy, though larger, longer-term studies are warranted to confirm efficacy and elucidate mechanisms.",
+  "keywords": [
+    {
+      "term": "duodenal mucosal resurfacing",
+      "explanation": "An endoscopic procedure that uses thermal ablation to remove damaged duodenal mucosa, promoting tissue regeneration and metabolic improvement."
+    },
+    {
+      "term": "GLP-1 receptor agonists",
+      "explanation": "A class of incretin mimetics that enhance insulin secretion and promote weight loss, including semaglutide and tirzepatide."
+    },
+    {
+      "term": "sham-controlled",
+      "explanation": "A clinical trial design where a control group receives a placebo procedure to account for placebo effects."
+    },
+    {
+      "term": "metabolic reset",
+      "explanation": "A hypothesized restoration of normal metabolic function following duodenal mucosal renewal, leading to sustained weight maintenance."
+    },
+    {
+      "term": "dose-response",
+      "explanation": "A relationship where greater extent of tissue ablation correlates with better clinical outcomes, suggesting biological specificity."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What percentage of patients regain weight after stopping GLP-1 therapy?",
+      "options": [
+        "50%",
+        "60%",
+        "70%",
+        "80%"
+      ],
+      "correct_answer": "70%"
+    },
+    {
+      "question": "What is the primary mechanism of duodenal mucosal resurfacing?",
+      "options": [
+        "laser photocoagulation",
+        "thermal ablation of the duodenal mucosa",
+        "cryotherapy of the gastric lining",
+        "radiofrequency ablation of the ileum"
+      ],
+      "correct_answer": "thermal ablation of the duodenal mucosa"
+    },
+    {
+      "question": "In the REMAIN-1 trial, what was the minimum weight loss required for enrollment?",
+      "options": [
+        "10%",
+        "15%",
+        "20%",
+        "25%"
+      ],
+      "correct_answer": "15%"
+    },
+    {
+      "question": "How much weight did the extensive ablation group regain on average?",
+      "options": [
+        "7 pounds",
+        "14 pounds",
+        "20 pounds",
+        "40 pounds"
+      ],
+      "correct_answer": "7 pounds"
+    },
+    {
+      "question": "What is the significance of the dose-response relationship observed?",
+      "options": [
+        "it indicates a placebo effect",
+        "it suggests the treatment targets the correct biology",
+        "it shows the procedure is unsafe",
+        "it implies the effect is temporary"
+      ],
+      "correct_answer": "it suggests the treatment targets the correct biology"
+    },
+    {
+      "question": "What type of study design was used in the REMAIN-1 trial?",
+      "options": [
+        "open-label",
+        "blinded, randomized, sham-controlled",
+        "observational cohort",
+        "case-control"
+      ],
+      "correct_answer": "blinded, randomized, sham-controlled"
+    },
+    {
+      "question": "How long did the follow-up period last for the reported cohort?",
+      "options": [
+        "3 months",
+        "6 months",
+        "12 months",
+        "18 months"
+      ],
+      "correct_answer": "6 months"
+    },
+    {
+      "question": "What was the average weight loss on GLP-1 therapy among participants?",
+      "options": [
+        "20 pounds",
+        "30 pounds",
+        "40 pounds",
+        "50 pounds"
+      ],
+      "correct_answer": "40 pounds"
+    },
+    {
+      "question": "Which of the following is NOT a reason patients discontinue GLP-1 medications?",
+      "options": [
+        "cost",
+        "side effects",
+        "desire to avoid long-term medication",
+        "lack of efficacy"
+      ],
+      "correct_answer": "lack of efficacy"
+    },
+    {
+      "question": "What is a limitation of the study mentioned in the article?",
+      "options": [
+        "no sham control",
+        "small sample size",
+        "long follow-up",
+        "serious complications"
+      ],
+      "correct_answer": "small sample size"
+    }
+  ],
+  "background_read": [
+    "Obesity is a chronic disease affecting over 650 million adults worldwide. GLP-1 receptor agonists, such as semaglutide (Ozempic, Wegovy) and tirzepatide (Mounjaro, Zepbound), have revolutionized obesity treatment, enabling substantial weight loss. However, their high cost, gastrointestinal side effects, and need for chronic administration lead to high discontinuation rates. Upon cessation, patients typically regain significant weight due to loss of pharmacological appetite suppression and metabolic adaptations. Duodenal mucosal resurfacing (DMR) is an investigational endoscopic technique inspired by the metabolic improvements observed after gastric bypass surgery, which involves exclusion of the duodenum. By ablating the abnormal duodenal mucosa, DMR aims to restore normal signaling pathways involved in insulin sensitivity and energy homeostasis. The REMAIN-1 trial provides preliminary evidence of efficacy, but larger studies with longer follow-up and mechanistic investigations are needed."
+  ],
+  "Article_Structure": [
+    "The article presents findings from the REMAIN-1 trial on duodenal mucosal resurfacing for weight maintenance after GLP-1 cessation. Main points: DMR reduces weight regain, with a dose-response effect; benefits increase over six months; procedure is safe. Purpose: To address the unmet need for non-pharmacological weight maintenance strategies. Evidence evaluation: Strengths include blinded, randomized, sham-controlled design and objective weight measurements. Limitations: small sample size (n=45), short follow-up (6 months), and lack of mechanistic data. Author credibility: Dr. Shelby Sullivan is a professor of medicine and director of an endoscopic bariatric program, lending expertise. Methodology: Endoscopic thermal ablation of duodenal mucosa; sham control; weight change as primary outcome. Critical assessment: Promising early results warrant larger, longer trials to confirm durability and safety."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Endocrinologist perspective",
+      "description": "Endocrinologists see DMR as a potential adjunct to GLP-1 therapy, allowing patients to discontinue drugs while maintaining benefits, but emphasize need for long-term data."
+    },
+    {
+      "perspective": "Health economist perspective",
+      "description": "Health economists consider the cost-effectiveness of DMR compared to lifelong GLP-1 therapy, noting potential savings from reduced drug costs but high initial procedure expense."
+    }
+  ],
+  "image_url": "/article_images/article_f40b0b9547320f52_902fc2fdc528.webp"
+}

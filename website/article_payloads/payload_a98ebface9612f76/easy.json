@@ -1,0 +1,100 @@
+{
+  "title": "New Brain-Like Chip Saves Energy",
+  "summary": "Scientists made a new computer chip that works like a human brain. Normal computers use a lot of electricity because they move data between memory and processing parts. This new chip does both at the same time, like our brain does. It can use 70% less energy. The chip is made from a special material called hafnium oxide. It has tiny parts called memristors that act like brain cells. They connect and talk to each other without using much power. In tests, the chip was very stable and could learn new things. This could help make future computers faster and better for the environment.",
+  "keywords": [
+    {
+      "term": "chip",
+      "explanation": "a small piece of computer hardware"
+    },
+    {
+      "term": "brain",
+      "explanation": "the organ in your head that thinks and learns"
+    },
+    {
+      "term": "energy",
+      "explanation": "power that makes things work, like electricity"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What does the new chip copy?",
+      "options": [
+        "A. A car",
+        "B. A human brain",
+        "C. A tree",
+        "D. A book"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "How much energy can the new chip save?",
+      "options": [
+        "A. 10%",
+        "B. 50%",
+        "C. 70%",
+        "D. 100%"
+      ],
+      "correct_answer": "C"
+    },
+    {
+      "question": "What material is the chip made from?",
+      "options": [
+        "A. Plastic",
+        "B. Gold",
+        "C. Hafnium oxide",
+        "D. Wood"
+      ],
+      "correct_answer": "C"
+    },
+    {
+      "question": "What are the tiny parts in the chip called?",
+      "options": [
+        "A. Memristors",
+        "B. Batteries",
+        "C. Wires",
+        "D. Buttons"
+      ],
+      "correct_answer": "A"
+    },
+    {
+      "question": "Why do normal computers use a lot of energy?",
+      "options": [
+        "A. They are too big",
+        "B. They move data between memory and processing",
+        "C. They are old",
+        "D. They have screens"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "What did the chip show in tests?",
+      "options": [
+        "A. It was unstable",
+        "B. It used more energy",
+        "C. It was stable and could learn",
+        "D. It broke quickly"
+      ],
+      "correct_answer": "C"
+    }
+  ],
+  "background_read": [
+    "Computers have two main parts: memory (to remember things) and processing (to think). Normally, they have to send information back and forth, which uses a lot of electricity. The new chip works like your brain, where memory and thinking happen together. This saves energy and helps the computer learn faster."
+  ],
+  "Article_Structure": [
+    "WHO: Scientists at the University of Cambridge made the chip.",
+    "WHAT: They created a new chip that works like a brain and saves energy.",
+    "WHERE: The research was done at the University of Cambridge in England.",
+    "WHY: To make computers use less electricity and be better for the environment."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Environmental benefit",
+      "description": "Using less energy helps protect the planet by reducing electricity use."
+    },
+    {
+      "perspective": "Technology improvement",
+      "description": "The chip could make future computers faster and smarter."
+    }
+  ],
+  "image_url": "/article_images/article_a98ebface9612f76_525b709dd016.webp"
+}

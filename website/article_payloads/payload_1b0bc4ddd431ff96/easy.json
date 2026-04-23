@@ -1,0 +1,104 @@
+{
+  "title": "Police on Beaches to Stop Boat Crossings",
+  "summary": "The UK and France have made a new agreement to stop people from crossing the English Channel in small boats. The UK will give France £662 million over three years. France will send at least 50 riot-trained police to beaches and use drones, helicopters, and cameras to stop illegal crossings. Some of the money may be taken back if not enough crossings are stopped. Many people try to cross the Channel to reach the UK because they think life will be better there. In 2025, over 41,000 people arrived in the UK by small boat. Some UK politicians say France should do more to stop the boats, but France says it is already working hard.",
+  "keywords": [
+    {
+      "term": "riot-trained police",
+      "explanation": "Police who are specially trained to handle large, angry crowds"
+    },
+    {
+      "term": "illegal migrants",
+      "explanation": "People who move to another country without permission"
+    },
+    {
+      "term": "English Channel",
+      "explanation": "The sea between France and the UK"
+    },
+    {
+      "term": "agreement",
+      "explanation": "A deal or promise made between two countries"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is the new agreement between the UK and France about?",
+      "options": [
+        "Building a wall",
+        "Stopping illegal boat crossings",
+        "Building more boats",
+        "Sending people to space"
+      ],
+      "correct_answer": "Stopping illegal boat crossings"
+    },
+    {
+      "question": "How much money will the UK give France?",
+      "options": [
+        "£662 million",
+        "£100 million",
+        "£50 million",
+        "£1 billion"
+      ],
+      "correct_answer": "£662 million"
+    },
+    {
+      "question": "What will France use to stop crossings?",
+      "options": [
+        "Police, drones, helicopters, and cameras",
+        "Only police",
+        "Only boats",
+        "Only cameras"
+      ],
+      "correct_answer": "Police, drones, helicopters, and cameras"
+    },
+    {
+      "question": "What might happen if not enough crossings are stopped?",
+      "options": [
+        "The UK will give more money",
+        "Some money may be taken back",
+        "France will stop trying",
+        "The UK will build a wall"
+      ],
+      "correct_answer": "Some money may be taken back"
+    },
+    {
+      "question": "Why do people try to cross the Channel?",
+      "options": [
+        "For a holiday",
+        "To live a better life",
+        "To visit family",
+        "For school"
+      ],
+      "correct_answer": "To live a better life"
+    },
+    {
+      "question": "How many people arrived in the UK by small boat in 2025?",
+      "options": [
+        "41,472",
+        "6,000",
+        "50,000",
+        "10,000"
+      ],
+      "correct_answer": "41,472"
+    }
+  ],
+  "background_read": [
+    "The English Channel is a narrow sea between France and the UK. Some people without permission try to cross it in small boats to reach the UK. The UK and France are working together to stop these dangerous journeys."
+  ],
+  "Article_Structure": [
+    "WHO: The UK and France governments.",
+    "WHAT: A new deal to stop illegal migrants crossing the Channel.",
+    "WHERE: The English Channel and beaches in France.",
+    "WHY: To stop dangerous journeys and put smugglers in jail."
+  ],
+  "perspectives": [
+    {
+      "perspective": "UK Government",
+      "description": "The UK says the deal will stop illegal migrants and help save lives."
+    },
+    {
+      "perspective": "Critics",
+      "description": "Some UK politicians say France should do more and that the money is wasted."
+    }
+  ],
+  "image_url": "/article_images/article_1b0bc4ddd431ff96_3f9d93f7dc6a.webp"
+}

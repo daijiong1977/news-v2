@@ -1,57 +1,57 @@
 {
   "articles": [
     {
-      "id": "ac3eadb516260f75",
-      "title": "NASA's Orion Spacecraft Has a Small Leak on Its Moon Mission",
-      "summary": "NASA's Orion spacecraft is on a mission to fly around the Moon with four astronauts. During the flight, engineers found a small leak of helium gas in the spacecraft's system. Helium is used to push fuel to the engines, but the leak is inside the valves and not going into space. This leak does not affect the spacecraft's ability to fly safely back to Earth. The astronauts are still on track to return home and splash down in the ocean. NASA is testing the system to learn more about the leak and decide if any changes are needed for future missions. The leaky part will be thrown away before the spacecraft reenters Earth's atmosphere, so it won't cause any problems during landing.",
-      "source": "Ars Science",
+      "id": "f40b0b9547320f52",
+      "title": "A Simple Procedure to Help Keep Weight Off After Stopping Medicine",
+      "summary": "Many people take medicines like Ozempic to lose weight. But when they stop taking the medicine, they often gain the weight back. A new study shows that a simple procedure might help people keep the weight off. The procedure is called duodenal mucosal resurfacing. It uses heat to fix the inside of the small intestine. This helps the body stay healthy and not gain back the weight. In the study, people who had the procedure gained back less weight than people who did not have it. The procedure is safe and people can go back to their normal activities in about one day. This could help many people who want to keep their weight off without taking medicine forever.",
+      "source": "Science Daily",
+      "time_ago": "5 hours ago",
+      "image_url": "/article_images/article_f40b0b9547320f52_902fc2fdc528.webp",
+      "category": "Science"
+    },
+    {
+      "id": "a98ebface9612f76",
+      "title": "New Brain-Like Chip Saves Energy",
+      "summary": "Scientists made a new computer chip that works like a human brain. Normal computers use a lot of electricity because they move data between memory and processing parts. This new chip does both at the same time, like our brain does. It can use 70% less energy. The chip is made from a special material called hafnium oxide. It has tiny parts called memristors that act like brain cells. They connect and talk to each other without using much power. In tests, the chip was very stable and could learn new things. This could help make future computers faster and better for the environment.",
+      "source": "Science Daily",
+      "time_ago": "6 hours ago",
+      "image_url": "/article_images/article_a98ebface9612f76_525b709dd016.webp",
+      "category": "Science"
+    },
+    {
+      "id": "a9a3bd2bdde1150c",
+      "title": "Hidden Forces Inside Earth",
+      "summary": "Deep inside Earth, there is a layer called the mantle. It moves very slowly like honey. Scientists found that this movement can stretch and twist the rocks. They used earthquake waves to see inside Earth. When earthquakes happen, waves travel through Earth. The waves move differently depending on the rocks they go through. By studying these waves, scientists made a map of the deep mantle. They saw that most of the twisting happens where old pieces of Earth's crust have sunk down. This helps us understand how Earth's inside works.",
+      "source": "Science Daily",
+      "time_ago": "6 hours ago",
+      "image_url": "/article_images/article_a9a3bd2bdde1150c_b65ad316dcba.webp",
+      "category": "Science"
+    },
+    {
+      "id": "4b884f86aa475d84",
+      "title": "A Special Fat That Might Help Old Eyes See Better",
+      "summary": "As people get older, their eyes often don't work as well. Reading a menu in a dark restaurant can be hard. Scientists at the University of California, Irvine are studying a way to help old eyes see better again. They found that a special kind of fat, called a fatty acid, might help. In their study, they gave this fatty acid to old mice, and the mice's eyes got better. The scientists hope this could one day help people too. The special fat is not the same as omega-3, which is found in fish. The scientists think this new fat can reverse some of the aging in the eye. This is exciting because many older people have trouble seeing, and this could be a new treatment.",
+      "source": "Science Daily",
       "time_ago": "11 hours ago",
-      "image_url": "/article_images/article_ac3eadb516260f75_c6f219bf7c83.webp",
+      "image_url": "/article_images/article_4b884f86aa475d84_8b3469ab1ed7.webp",
       "category": "Science"
     },
     {
-      "id": "e8a7f2a954c286b9",
-      "title": "Gene Editing Helps Treat a Blood Disease",
-      "summary": "Scientists have found a new way to use gene editing to help people with a blood disease called β-Thalassaemia. Gene editing is like using tiny scissors to fix mistakes in our DNA, which is the instruction book for our bodies. This disease makes it hard for the body to make enough healthy red blood cells, causing tiredness and other problems. In a clinical trial, researchers used an improved tool called CRISPR to edit genes in blood stem cells. They targeted a specific gene to turn on a fetal version of hemoglobin, which helps carry oxygen in the blood. This treatment worked well and was safe, with fewer mistakes than before. It builds on success from treating sickle-cell anemia, another similar blood disease. The study shows that gene editing can be a powerful tool to cure genetic diseases, giving hope to many patients.",
+      "id": "927180fbff2b63e6",
+      "title": "A Call to Ban 'Forever Chemicals' in School Uniforms and Frying Pans",
+      "summary": "Some chemicals called PFAS are used to make things like school uniforms and frying pans waterproof and non-stick. But these chemicals are called 'forever chemicals' because they stay in the environment for a very long time and can be harmful to people and animals. A group of MPs in the UK wants to ban these chemicals unless companies can prove they are really needed. Many scientists and environmental groups are happy about this idea. The government says it will think about the suggestion. PFAS are found in many everyday items, like raincoats and medical equipment. They are useful because they resist water, oil, and heat. But they don't break down easily and can build up in our bodies. Some PFAS are known to cause health problems like cancer. The committee says we should stop using them in things like cookware and clothing by 2027, unless they are essential for safety. This is to protect our health and the environment.",
+      "source": "BBC Science",
+      "time_ago": "13 hours ago",
+      "image_url": "/article_images/article_927180fbff2b63e6_4c6e712d612a.webp",
+      "category": "Science"
+    },
+    {
+      "id": "4b250c480fc84e1c",
+      "title": "Scientists Solve a Magnet Mystery",
+      "summary": "Scientists have been studying tiny particles called muons. Muons are like electrons but heavier. They have a small magnet inside them. When muons are put in a magnetic field, they wobble. Scientists measured this wobble and thought it was different from what they expected. This difference suggested there might be a new force in nature. But a new study shows the difference was just a mistake in calculations. The old rules of physics still work. The scientists used a new method to check their numbers and found no new force. This means our understanding of the universe is still correct. The study helps us trust what we know about particles and forces.",
       "source": "Ars Science",
-      "time_ago": "16 hours ago",
-      "image_url": "/article_images/article_e8a7f2a954c286b9_20ce8a5f5dba.webp",
-      "category": "Science"
-    },
-    {
-      "id": "791df1d58c69c480",
-      "title": "Astronauts Share Their Amazing Moon Adventure",
-      "summary": "Four astronauts flew on a special spaceship called Orion to go near the Moon. They were on a nine-day mission called Artemis II. During their trip, they saw something incredible: the Earth disappeared behind the Moon, and they flew into the Moon's shadow, making it look like a scene from a science fiction movie. The astronauts felt excited and shared their feelings, saying their palms were sweaty. They took pictures and ate cookies while floating in space. Now, they are heading back to Earth and will splash down in the ocean on Friday. This mission helps NASA prepare for future trips where astronauts might land on the Moon again. The astronauts enjoyed living in their small spaceship, which had everything they needed.",
-      "source": "Ars Science",
-      "time_ago": "18 hours ago",
-      "image_url": "/article_images/article_791df1d58c69c480_2201fe607449.webp",
-      "category": "Science"
-    },
-    {
-      "id": "e41cb8f1010b7cbe",
-      "title": "Scientists Find a Hidden Drain in the Brain",
-      "summary": "Scientists have discovered a hidden drain in the human brain that helps clean out waste. This drain is part of a system called the lymphatic system, which acts like a cleanup crew for the body. Using special MRI machines from NASA, researchers watched how fluid moves in the brain of five healthy people. They found that fluid flows slowly through a blood vessel called the middle meningeal artery, unlike fast-moving blood. This slow flow shows it's part of the brain's waste removal system. The brain is protected by layers called meninges, and scientists used to think these layers kept the brain separate from the body's cleanup system. But now they know lymphatic vessels in the meninges carry waste away. This discovery could help doctors find new ways to treat brain diseases by improving how the brain gets rid of bad stuff.",
-      "source": "Science Daily",
-      "time_ago": "22 hours ago",
-      "image_url": "/article_images/article_e41cb8f1010b7cbe_e781a8127632.webp",
-      "category": "Science"
-    },
-    {
-      "id": "905ad49ba33930d5",
-      "title": "President Trump's Coal Power Orders: A Legal Problem",
-      "summary": "A long time ago, the United States used a lot of coal to make electricity. But coal plants are old and expensive, so many have been closing. President Trump wants to keep these coal plants open using a special rule from World War II. This rule was made for emergencies, like during a war, to help with electricity needs. Experts say using it now is wrong and against the law because it stops careful planning by utility companies. This could make electricity bills higher and hurt the environment. People are going to court to challenge these orders. The rule is being used to help the coal industry instead of for real emergencies.",
-      "source": "Ars Science",
-      "time_ago": "22 hours ago",
-      "image_url": "/article_images/article_905ad49ba33930d5_d69f58591801.webp",
-      "category": "Science"
-    },
-    {
-      "id": "518d379c2f152530",
-      "title": "How Your Brain Makes You Like Sweet Drinks",
-      "summary": "Scientists studied how people think about sweet drinks. They asked 99 adults to taste drinks and tell them what they liked. The adults thought some drinks had sugar and some had artificial sweeteners. But sometimes, the scientists tricked them by saying a drink had sugar when it really had artificial sweeteners, or the other way around. When people believed they were drinking sugar, they enjoyed it more, even if it was artificial sweeteners. Their brains also got more excited when they thought it was sugar. This shows that what we expect can change how much we like something and how our brain feels about it. The scientists hope this can help people choose healthier foods by using better words like 'nutrient rich' instead of 'diet'.",
-      "source": "Science Daily",
-      "time_ago": "23 hours ago",
-      "image_url": "/article_images/article_518d379c2f152530_9fa1e4ede37a.webp",
+      "time_ago": "20 hours ago",
+      "image_url": "/article_images/article_4b250c480fc84e1c_2f7f8abf43d6.webp",
       "category": "Science"
     }
   ]

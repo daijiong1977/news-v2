@@ -1,0 +1,129 @@
+{
+  "title": "Tehran's Daily Struggles: War, Economy, and Uncertainty",
+  "summary": "In Tehran, Iran, the spring day seems ordinary on Sanaei Ghaznavi street, but beneath the surface, people are grappling with severe economic hardship. Mohammad, a young shopkeeper, and his father Mustafa run a family shoe store that has been open for 40 years. They sell Chinese-made shoes, including fakes that are still expensive. Mohammad expresses a surprising hope for the resumption of war, believing it might lead to eventual improvement. His father, more experienced, is weary of the worsening economy. An elderly woman named Shahla complains that bread now costs three times as much, making life a struggle. The article highlights how the combination of war and government internet shutdowns has led to massive job losses, with unofficial estimates of up to four million jobs affected. The ceasefire is shaky, and negotiations with America are uncertain. People are caught between wanting peace and fearing that continued economic decline might be worse. The street itself reflects the divide between affluent north and poorer south Tehran. Overall, the article captures a population exhausted by crises and uncertain about the future.",
+  "keywords": [
+    {
+      "term": "ceasefire",
+      "explanation": "A temporary halt in fighting, often during peace negotiations."
+    },
+    {
+      "term": "economy",
+      "explanation": "The system of production, consumption, and trade in a country."
+    },
+    {
+      "term": "sanctions",
+      "explanation": "Penalties or restrictions imposed by one country on another, often to force compliance with international law."
+    },
+    {
+      "term": "inflation",
+      "explanation": "A general increase in prices and fall in the purchasing value of money."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What does Mohammad hope for?",
+      "options": [
+        "Peace",
+        "War to resume",
+        "More customers",
+        "Government aid"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "How many jobs may have been lost or affected according to an Iranian website?",
+      "options": [
+        "1 million",
+        "2 million",
+        "4 million",
+        "10 million"
+      ],
+      "correct_answer": "C"
+    },
+    {
+      "question": "What does Shahla complain about?",
+      "options": [
+        "Lack of jobs",
+        "High bread prices",
+        "Internet shutdown",
+        "War"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "Where are the shoes in Mohammad's shop made?",
+      "options": [
+        "Iran",
+        "China",
+        "America",
+        "Italy"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "How long has the shoe shop been in Mohammad's family?",
+      "options": [
+        "20 years",
+        "30 years",
+        "40 years",
+        "50 years"
+      ],
+      "correct_answer": "C"
+    },
+    {
+      "question": "What is the current status of the ceasefire?",
+      "options": [
+        "Permanent",
+        "Shaky",
+        "Broken",
+        "Successful"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "What does Mustafa think about the economy?",
+      "options": [
+        "It is improving",
+        "It is getting worse",
+        "It is stable",
+        "It is the best ever"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "What does the street reflect about Tehran?",
+      "options": [
+        "Only rich people live there",
+        "The divide between north and south",
+        "It is a tourist area",
+        "It is a market for luxury goods"
+      ],
+      "correct_answer": "B"
+    }
+  ],
+  "background_read": [
+    "Iran has faced economic sanctions from the United States and other countries for decades, which have severely impacted its economy. The country has also experienced conflicts and wars, including the Iran-Iraq war in the 1980s. In recent years, there have been protests over economic conditions. The government has sometimes shut down the internet to control information during unrest. Inflation is high, and many people struggle to afford basic necessities."
+  ],
+  "Article_Structure": [
+    "Main Points: The article focuses on the economic hardship in Tehran due to war and sanctions, illustrated through personal stories. Key arguments include the loss of jobs, rising prices, and the surprising hope among some for war as a catalyst for change. Purpose: To provide a human perspective on the impact of geopolitical tensions on ordinary Iranians. Evidence Evaluation: The evidence is anecdotal, based on interviews with a few individuals, and an unofficial estimate from a website. It lacks statistical rigor but offers emotional insight. Author Credibility: Lyse Doucet is a senior BBC correspondent with extensive experience covering Iran and the Middle East, lending credibility. Methodology: The article is a field report based on direct observation and interviews in Tehran. The approach is qualitative."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Young generation (Mohammad)",
+      "description": "Desperate for change, willing to risk war for potential improvement."
+    },
+    {
+      "perspective": "Older generation (Mustafa)",
+      "description": "Wary and exhausted, prefers stability despite economic woes."
+    },
+    {
+      "perspective": "Elderly woman (Shahla)",
+      "description": "Directly affected by inflation, struggles to afford basic food."
+    },
+    {
+      "perspective": "Analytical perspective",
+      "description": "The situation reflects a complex interplay of sanctions, war, and government policies leading to widespread suffering."
+    }
+  ],
+  "image_url": "/article_images/article_ed76bfd5cc90f770_ff5766e5617e.webp"
+}

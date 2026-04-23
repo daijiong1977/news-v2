@@ -1,0 +1,96 @@
+{
+  "title": "Hidden Forces Inside Earth",
+  "summary": "Deep inside Earth, there is a layer called the mantle. It moves very slowly like honey. Scientists found that this movement can stretch and twist the rocks. They used earthquake waves to see inside Earth. When earthquakes happen, waves travel through Earth. The waves move differently depending on the rocks they go through. By studying these waves, scientists made a map of the deep mantle. They saw that most of the twisting happens where old pieces of Earth's crust have sunk down. This helps us understand how Earth's inside works.",
+  "keywords": [
+    {
+      "term": "mantle",
+      "explanation": "The layer of Earth between the crust and the core."
+    },
+    {
+      "term": "earthquake waves",
+      "explanation": "Energy that travels through Earth when an earthquake happens."
+    },
+    {
+      "term": "crust",
+      "explanation": "The outer layer of Earth."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is the mantle?",
+      "options": [
+        "The outer layer of Earth",
+        "The layer between crust and core",
+        "The center of Earth",
+        "The air around Earth"
+      ],
+      "correct_answer": "The layer between crust and core"
+    },
+    {
+      "question": "How did scientists study the deep mantle?",
+      "options": [
+        "By digging a hole",
+        "By using earthquake waves",
+        "By looking through a telescope",
+        "By flying a plane"
+      ],
+      "correct_answer": "By using earthquake waves"
+    },
+    {
+      "question": "What happens to the mantle material?",
+      "options": [
+        "It stays still",
+        "It stretches and twists",
+        "It disappears",
+        "It turns into air"
+      ],
+      "correct_answer": "It stretches and twists"
+    },
+    {
+      "question": "Where does most twisting happen?",
+      "options": [
+        "Near the surface",
+        "Where old crust has sunk",
+        "In the sky",
+        "In the ocean"
+      ],
+      "correct_answer": "Where old crust has sunk"
+    },
+    {
+      "question": "What did scientists make?",
+      "options": [
+        "A map of the deep mantle",
+        "A new planet",
+        "A car",
+        "A computer"
+      ],
+      "correct_answer": "A map of the deep mantle"
+    },
+    {
+      "question": "Why is this study important?",
+      "options": [
+        "To understand Earth's inside",
+        "To find treasure",
+        "To build houses",
+        "To grow plants"
+      ],
+      "correct_answer": "To understand Earth's inside"
+    }
+  ],
+  "background_read": [
+    "Earth is made of layers: crust, mantle, and core. The mantle is very hot and moves slowly. Earthquakes happen when rocks break and release energy."
+  ],
+  "Article_Structure": [
+    "WHO: Scientists led by Jonathan Wolf at University of California, Berkeley.",
+    "WHAT: They discovered that deep mantle deformation happens where ancient tectonic slabs have sunk.",
+    "WHERE: In the lowermost mantle, about 2,900 km below Earth's surface.",
+    "WHY: To understand how the mantle flows and deforms."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Scientific perspective",
+      "description": "This study gives new information about Earth's deep interior."
+    }
+  ],
+  "image_url": "/article_images/article_a9a3bd2bdde1150c_b65ad316dcba.webp"
+}

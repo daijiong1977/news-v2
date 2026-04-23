@@ -1,0 +1,104 @@
+{
+  "title": "Life in Tehran: People Hope for Peace or War?",
+  "summary": "In Tehran, Iran, a man named Mohammad works in his family's shoe shop. He says many people have lost their jobs because of the war and because the government turned off the internet. His father Mustafa has owned the shop for 40 years. They sell shoes made in China. Even fake shoes are expensive. An old woman named Shahla buys bread. She says bread costs three times more now. People are struggling to pay for food. Some people hope the war will start again because they think things might get better after the war. Others are tired of the bad economy. The street has shops selling food, flowers, and household goods. Life is hard for people in Tehran, and they don't know what will happen next.",
+  "keywords": [
+    {
+      "term": "Tehran",
+      "explanation": "The capital city of Iran."
+    },
+    {
+      "term": "economy",
+      "explanation": "The system of money, jobs, and trade in a country."
+    },
+    {
+      "term": "ceasefire",
+      "explanation": "An agreement to stop fighting for a while."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What does Mohammad sell in his shop?",
+      "options": [
+        "Food",
+        "Shoes",
+        "Flowers",
+        "Bread"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "Why does Shahla say people are going through hell?",
+      "options": [
+        "Because of war",
+        "Because bread is expensive",
+        "Because shops are closed",
+        "Because of internet shutdown"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "Where are the shoes made?",
+      "options": [
+        "Iran",
+        "China",
+        "America",
+        "Europe"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "What does Mohammad hope for?",
+      "options": [
+        "Peace",
+        "War to start again",
+        "More customers",
+        "New shoes"
+      ],
+      "correct_answer": "B"
+    },
+    {
+      "question": "How long has Mustafa owned the shoe shop?",
+      "options": [
+        "10 years",
+        "20 years",
+        "40 years",
+        "50 years"
+      ],
+      "correct_answer": "C"
+    },
+    {
+      "question": "What is the street like in the article?",
+      "options": [
+        "Quiet and empty",
+        "Busy with shops",
+        "Dangerous",
+        "Only rich people live there"
+      ],
+      "correct_answer": "B"
+    }
+  ],
+  "background_read": [
+    "Iran is a country in the Middle East. Its capital is Tehran. Iran has been in conflicts with other countries, and there have been wars and sanctions that make life hard for ordinary people. The economy is struggling, and many people cannot find jobs or afford basic things like bread."
+  ],
+  "Article_Structure": [
+    "WHO: Mohammad, his father Mustafa, and an old woman named Shahla.",
+    "WHAT: They are struggling with a bad economy and expensive bread.",
+    "WHERE: On a street in Tehran, Iran.",
+    "WHY: Because of war and government actions that hurt the economy."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Mohammad's view",
+      "description": "He hopes war starts again because he thinks things might improve."
+    },
+    {
+      "perspective": "Mustafa's view",
+      "description": "He is tired of the bad economy and understands the situation better."
+    },
+    {
+      "perspective": "Shahla's view",
+      "description": "She is struggling to pay for bread, which costs much more now."
+    }
+  ],
+  "image_url": "/article_images/article_ed76bfd5cc90f770_ff5766e5617e.webp"
+}

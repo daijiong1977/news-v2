@@ -1,0 +1,129 @@
+{
+  "title": "UK Mini-Marts Caught Selling Cocaine and Cannabis in BBC Investigation",
+  "summary": "A BBC investigation using secret filming has revealed that mini-marts on UK High Streets are openly selling illegal drugs, including cocaine, cannabis, laughing gas, and prescription pills. Undercover researchers easily purchased cannabis and cocaine from a shop in Cradley Heath, West Midlands. The shopkeeper offered 'weed, coke, everything' and obtained cocaine within hours. The National Crime Agency (NCA) and Chartered Trading Standards Institute (CTSI) state that organized criminal gangs are exploiting shopfronts to push drugs. Analysis of local news reports found drugs in over 70 shops across the UK, from Devon to Northern Ireland. A senior Labour MP, Liam Byrne, is calling for urgent government action, saying 'We can't restore our High Streets unless we take out the cancer of organised crime.' The Home Office says it is working with police and agencies to take strong action. Legitimate businesses in affected areas report intimidation by gangs and witnessed knife and gun violence.",
+  "keywords": [
+    {
+      "term": "undercover investigation",
+      "explanation": "a secret inquiry where researchers pretend to be customers to gather evidence"
+    },
+    {
+      "term": "organized crime",
+      "explanation": "criminal activities planned and controlled by powerful groups"
+    },
+    {
+      "term": "prescription pills",
+      "explanation": "medicines that can only be obtained with a doctor's order"
+    },
+    {
+      "term": "National Crime Agency (NCA)",
+      "explanation": "a UK agency that fights serious and organized crime"
+    },
+    {
+      "term": "intimidation",
+      "explanation": "frightening or threatening someone to make them do what you want"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What did the BBC investigation use to gather evidence?",
+      "options": [
+        "Interviews",
+        "Secret filming",
+        "Surveys",
+        "Public records"
+      ],
+      "correct_answer": "Secret filming"
+    },
+    {
+      "question": "Which drugs were offered for sale in mini-marts?",
+      "options": [
+        "Only cannabis",
+        "Cocaine, cannabis, laughing gas, and prescription pills",
+        "Only cocaine",
+        "Heroin and meth"
+      ],
+      "correct_answer": "Cocaine, cannabis, laughing gas, and prescription pills"
+    },
+    {
+      "question": "Where did the undercover researchers buy cannabis?",
+      "options": [
+        "London",
+        "Cradley Heath",
+        "Belfast",
+        "Devon"
+      ],
+      "correct_answer": "Cradley Heath"
+    },
+    {
+      "question": "How much did the researchers pay for 3.5g of cannabis?",
+      "options": [
+        "£30",
+        "£95",
+        "£50",
+        "£20"
+      ],
+      "correct_answer": "£30"
+    },
+    {
+      "question": "Who is exploiting shopfronts to sell drugs according to the NCA?",
+      "options": [
+        "Individual shopkeepers",
+        "Organized criminal gangs",
+        "Local residents",
+        "Foreign dealers"
+      ],
+      "correct_answer": "Organized criminal gangs"
+    },
+    {
+      "question": "How many shops were found to be involved in drug sales across the UK?",
+      "options": [
+        "More than 70",
+        "Exactly 50",
+        "Less than 30",
+        "Over 100"
+      ],
+      "correct_answer": "More than 70"
+    },
+    {
+      "question": "What did legitimate businesses near the drug-selling shops report?",
+      "options": [
+        "Increased sales",
+        "Intimidation and violence",
+        "Police cooperation",
+        "Government support"
+      ],
+      "correct_answer": "Intimidation and violence"
+    },
+    {
+      "question": "What is Liam Byrne's role?",
+      "options": [
+        "Home Secretary",
+        "Chair of the Business and Trade Committee",
+        "Police Chief",
+        "Trading Standards Officer"
+      ],
+      "correct_answer": "Chair of the Business and Trade Committee"
+    }
+  ],
+  "background_read": [
+    "Organized crime involves groups of people who work together to commit serious crimes for profit. These groups often use legitimate businesses as fronts for illegal activities. The UK has agencies like the NCA and Trading Standards to combat such crimes. High Streets are important for local communities, and crime can harm businesses and residents."
+  ],
+  "Article_Structure": [
+    "The article exposes that mini-marts on UK High Streets are selling illegal drugs, with undercover researchers easily purchasing cannabis and cocaine. The main points include the widespread nature of the problem across the UK, the involvement of organized criminal gangs, and the intimidation of legitimate businesses. The purpose is to raise public awareness and pressure the government to act. Evidence includes secret footage, test purchases, and analysis of local news reports. The BBC is a credible source with a track record of investigative journalism. Methodology involved undercover research and filming over a year-long investigation."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Law enforcement",
+      "description": "Police and NCA acknowledge the problem and are working to take action against criminal businesses."
+    },
+    {
+      "perspective": "Government",
+      "description": "Home Office says it is working with police and agencies to take strong action."
+    },
+    {
+      "perspective": "Local businesses",
+      "description": "Legitimate businesses report intimidation and violence from gangs."
+    }
+  ],
+  "image_url": "/article_images/article_271f3f209fab532a_3b9be6ea63e3.webp"
+}

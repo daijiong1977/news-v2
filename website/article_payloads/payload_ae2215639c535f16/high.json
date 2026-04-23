@@ -1,0 +1,173 @@
+{
+  "title": "Tragedy at Sea: Search for Missing Crew After Cargo Ship Capsizes in Super Typhoon Sinlaku",
+  "summary": "The U.S.-registered cargo vessel Mariana capsized near the Northern Mariana Islands during Super Typhoon Sinlaku, the most powerful tropical cyclone of the year, with sustained winds of 150 mph. The ship, carrying six crew members, lost its starboard engine and issued a distress call on April 15 before communication ceased the following day. Searchers have recovered the body of one crew member, while five remain missing. The U.S. Coast Guard, alongside Japanese divers, utilized an underwater drone to search the overturned hull, but no other crew were found. The search, covering over 99,000 square miles (comparable to Oregon), also focuses on locating an orange life raft that may have been deployed. Debris, including a partially submerged raft, was spotted 110 miles from the ship. International cooperation includes agencies from Guam, Japan, and New Zealand. Safety regulations under the International Maritime Organization require cargo ships to carry life rafts stocked for 30 days, though specific compliance for the Mariana is unknown. The incident highlights the perils of maritime operations during extreme weather and the challenges of search and rescue in remote oceanic regions.",
+  "keywords": [
+    {
+      "term": "capsize",
+      "explanation": "to overturn in water, often used for ships"
+    },
+    {
+      "term": "tropical cyclone",
+      "explanation": "a storm system with a low-pressure center and strong winds, known as typhoons in the Pacific"
+    },
+    {
+      "term": "sustained winds",
+      "explanation": "average wind speed over a one-minute period, used to classify storm intensity"
+    },
+    {
+      "term": "starboard engine",
+      "explanation": "the engine on the right side of a vessel"
+    },
+    {
+      "term": "distress call",
+      "explanation": "a communication indicating a vessel is in immediate danger"
+    },
+    {
+      "term": "underwater drone",
+      "explanation": "a remotely operated vehicle (ROV) used for underwater exploration and search"
+    },
+    {
+      "term": "life raft",
+      "explanation": "an inflatable craft carried on ships for emergency evacuation"
+    },
+    {
+      "term": "International Maritime Organization",
+      "explanation": "a UN agency that sets global standards for ship safety and security"
+    },
+    {
+      "term": "search and rescue",
+      "explanation": "operations to locate and aid persons in distress"
+    },
+    {
+      "term": "debris field",
+      "explanation": "an area scattered with wreckage or floating objects"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What was the primary cause of the Mariana's capsizing?",
+      "options": [
+        "Engine failure",
+        "Super Typhoon Sinlaku",
+        "Collision with a reef",
+        "Overloading of cargo"
+      ],
+      "correct_answer": "Super Typhoon Sinlaku"
+    },
+    {
+      "question": "How many crew members are still unaccounted for?",
+      "options": [
+        "One",
+        "Five",
+        "Six",
+        "None"
+      ],
+      "correct_answer": "Five"
+    },
+    {
+      "question": "What technology was used to search inside the overturned ship?",
+      "options": [
+        "Sonar",
+        "Underwater drone",
+        "Manned submarine",
+        "Diving bell"
+      ],
+      "correct_answer": "Underwater drone"
+    },
+    {
+      "question": "What is the size of the search area in square miles?",
+      "options": [
+        "99,000",
+        "50,000",
+        "150,000",
+        "200,000"
+      ],
+      "correct_answer": "99,000"
+    },
+    {
+      "question": "On what date did the ship lose contact with the Coast Guard?",
+      "options": [
+        "April 15",
+        "April 16",
+        "April 17",
+        "The day of the typhoon landfall"
+      ],
+      "correct_answer": "April 16"
+    },
+    {
+      "question": "What are the sustained wind speeds of Super Typhoon Sinlaku?",
+      "options": [
+        "120 mph",
+        "150 mph",
+        "180 mph",
+        "200 mph"
+      ],
+      "correct_answer": "150 mph"
+    },
+    {
+      "question": "Which international agencies are assisting in the search?",
+      "options": [
+        "Japan and New Zealand only",
+        "Guam, Japan, and New Zealand",
+        "Australia and Japan",
+        "Philippines and Guam"
+      ],
+      "correct_answer": "Guam, Japan, and New Zealand"
+    },
+    {
+      "question": "What color was the life raft spotted among debris?",
+      "options": [
+        "Yellow",
+        "Orange",
+        "Red",
+        "White"
+      ],
+      "correct_answer": "Orange"
+    },
+    {
+      "question": "What is the minimum duration life rafts must withstand according to IMO codes?",
+      "options": [
+        "15 days",
+        "30 days",
+        "45 days",
+        "60 days"
+      ],
+      "correct_answer": "30 days"
+    },
+    {
+      "question": "What is the significance of the starboard engine failure?",
+      "options": [
+        "It caused the ship to list",
+        "It reduced maneuverability during the storm",
+        "It led to a fire",
+        "It was the only engine"
+      ],
+      "correct_answer": "It reduced maneuverability during the storm"
+    }
+  ],
+  "background_read": [
+    "The Northern Mariana Islands are a U.S. commonwealth in the western Pacific. Super Typhoon Sinlaku was a Category 4-equivalent storm. The International Maritime Organization's Safety of Life at Sea (SOLAS) convention requires cargo ships to have life rafts with survival supplies for 30 days. Search and rescue operations in such remote areas are logistically challenging and rely on international cooperation."
+  ],
+  "Article_Structure": [
+    "Main Points: The article details the capsizing of the Mariana during a super typhoon, the loss of six crew, recovery of one body, and ongoing search for five missing. It highlights the use of underwater drones, international cooperation, and the vast search area. Purpose: To report on a maritime disaster and the response, raising awareness about safety at sea. Evidence Evaluation: Information is sourced from official Coast Guard press releases and statements, which are authoritative but may lack independent verification. Author Credibility: The Associated Press is a reputable wire service with experienced journalists. Methodology: The article aggregates official updates and does not include original reporting. Critical Assessment: The article provides a factual account but lacks depth on safety compliance and crew background. Strengths include timely updates and clear presentation; limitations include reliance on official sources without critical analysis."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Coast Guard",
+      "description": "Focused on search and rescue, providing operational updates."
+    },
+    {
+      "perspective": "Families of crew",
+      "description": "Experiencing grief and uncertainty, demanding answers."
+    },
+    {
+      "perspective": "Maritime safety advocates",
+      "description": "May question adherence to safety regulations and storm avoidance protocols."
+    },
+    {
+      "perspective": "International community",
+      "description": "Demonstrates cooperation in maritime emergencies."
+    }
+  ],
+  "image_url": "/article_images/article_ae2215639c535f16_47c133a617c9.webp"
+}
