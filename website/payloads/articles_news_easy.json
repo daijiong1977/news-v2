@@ -1,0 +1,58 @@
+{
+  "articles": [
+    {
+      "id": "0d427abd1c36a9d1",
+      "title": "A Farmer Protests High Fuel Prices in Ireland",
+      "summary": "In Ireland, a farmer named John Dallon is leading protests because fuel prices are too high. He says they might protest for weeks to make fuel cheaper. People are blocking roads with tractors and other vehicles, which is causing traffic problems. For example, at Dublin Airport, travelers have to walk with their luggage because roads are blocked. The protests are happening at places like fuel terminals and ports. The police are talking to the protesters, and some government ministers are meeting to discuss the issue. Many gas stations have run out of fuel, and half of the new fuel supply is stuck behind the protests. The government warns there could be legal consequences, like losing driving licenses.",
+      "source": "BBC News",
+      "time_ago": "1 hour ago",
+      "image_url": "/article_images/article_0d427abd1c36a9d1_05700c02c898.webp",
+      "category": "News"
+    },
+    {
+      "id": "fc47721c16edd3c0",
+      "title": "Melania Trump Says No to Epstein Rumors and Helps Survivors",
+      "summary": "Melania Trump, the First Lady, said she has no connection to Jeffrey Epstein, a man who hurt many people. She told reporters at the White House that these rumors should stop. She also asked for Congress to hold hearings for survivors of Epstein's crimes, so they can share their stories. Melania said she only met Epstein briefly in 2000 and did not know about his bad actions. She denied knowing Ghislaine Maxwell, Epstein's friend, and said an old email between them was just polite. Some survivors think her statement is good but wonder what else she will do. Her husband, President Trump, did not know she would talk about this. The article explains that Melania wants to clear her name and support survivors.",
+      "source": "BBC News",
+      "time_ago": "4 hours ago",
+      "image_url": "/article_images/article_fc47721c16edd3c0_cf486dc4664d.webp",
+      "category": "News"
+    },
+    {
+      "id": "32ca833031766e26",
+      "title": "Help Birds by Not Feeding Them in Summer",
+      "summary": "Feeding birds in your garden can be harmful during warmer months, says the RSPB, a bird charity. From May to October, bird feeders can spread a disease called trichomonosis, which makes birds sick and can stop them from eating or breathing. This disease has caused greenfinches and chaffinches to become endangered, with greenfinch numbers dropping a lot. The RSPB advises people to take a break from feeding birds in summer to keep them safe. Instead, you can offer small amounts of food like mealworms or fat balls only for a day or two, and always clean feeders weekly. Also, move feeders to new spots and change water daily to prevent germs. By following these tips, you can help protect garden birds and slow the disease spread.",
+      "source": "BBC News",
+      "time_ago": "11 hours ago",
+      "image_url": "/article_images/article_32ca833031766e26_a3bc07e38ca8.webp",
+      "category": "News"
+    },
+    {
+      "id": "0d30654cf2ab9fe7",
+      "title": "Judge Says Pentagon Broke Rules for Reporters",
+      "summary": "A federal judge in Washington, D.C., said the Pentagon is not following his order to let reporters back into the building. The Pentagon had made new rules that required reporters to have escorts, which the judge said was wrong because it stopped them from doing their job freely. The judge first ruled in March that the Pentagon's policy broke reporters' rights to free speech. He ordered the Pentagon to give back press passes to seven New York Times reporters and said this applies to all reporters. The Pentagon disagrees and plans to appeal, saying they followed the order and made new rules to fix problems. Reporters had walked out in October because of the old rules, and the Times sued in December. This case is about protecting journalists' rights to report news without unfair restrictions.",
+      "source": "PBS NewsHour",
+      "time_ago": "12 hours ago",
+      "image_url": "/article_images/article_0d30654cf2ab9fe7_cf867bd0dc77.webp",
+      "category": "News"
+    },
+    {
+      "id": "b555420b94934513",
+      "title": "Venezuela's New Mining Law to Attract Investors",
+      "summary": "Venezuela is a country in South America that has a lot of minerals like gold and copper. Lawmakers there just approved a new law to make mining safer and more organized. This law is meant to bring in foreign companies from other countries to invest money in mining. In the past, mining in Venezuela was often controlled by criminal groups, which made it dangerous. The new law sets rules for mining, protects workers, and stops government leaders from owning mines. It also allows for fair ways to solve problems if investors have disputes. The government hopes this will help improve the economy and create jobs for people who are struggling with low wages and poverty. Many Venezuelans go to mining areas hoping to get rich quickly, but these places can be unsafe with crimes like theft and violence. The law now goes to the high court to check if it follows the country's constitution.",
+      "source": "PBS NewsHour",
+      "time_ago": "12 hours ago",
+      "image_url": "/article_images/article_b555420b94934513_763d695a1d34.webp",
+      "category": "News"
+    },
+    {
+      "id": "71ac1c8eab387fd8",
+      "title": "EPA Wants to Change Rules for Coal Ash, Which Can Harm Water",
+      "summary": "The EPA, which is a government agency that protects the environment, has proposed new rules about coal ash. Coal ash is a waste material made when coal is burned for energy, and it contains harmful metals like mercury and lead. If coal ash is not stored safely, it can leak into groundwater, which is the water we drink from underground. The new rules would make it easier for companies to handle coal ash and might allow some ash to stay in groundwater. This is a change from earlier rules that required stricter cleanup to protect water. Some people worry this could harm our health and the environment, while others say it helps energy companies. The rules are part of a bigger debate about how to balance energy needs with keeping our water clean.",
+      "source": "PBS NewsHour",
+      "time_ago": "12 hours ago",
+      "image_url": "/article_images/article_71ac1c8eab387fd8_85596f1346db.webp",
+      "category": "News"
+    }
+  ]
+}

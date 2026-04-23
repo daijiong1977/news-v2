@@ -1,0 +1,108 @@
+{
+  "title": "How Your Brain Makes You Like Sweet Drinks",
+  "summary": "Scientists studied how people think about sweet drinks. They asked 99 adults to taste drinks and tell them what they liked. The adults thought some drinks had sugar and some had artificial sweeteners. But sometimes, the scientists tricked them by saying a drink had sugar when it really had artificial sweeteners, or the other way around. When people believed they were drinking sugar, they enjoyed it more, even if it was artificial sweeteners. Their brains also got more excited when they thought it was sugar. This shows that what we expect can change how much we like something and how our brain feels about it. The scientists hope this can help people choose healthier foods by using better words like 'nutrient rich' instead of 'diet'.",
+  "keywords": [
+    {
+      "term": "scientists",
+      "explanation": "people who study things to learn new facts"
+    },
+    {
+      "term": "adults",
+      "explanation": "grown-up people"
+    },
+    {
+      "term": "sugar",
+      "explanation": "a sweet substance found in foods like candy"
+    },
+    {
+      "term": "artificial sweeteners",
+      "explanation": "man-made sweet things used instead of sugar"
+    },
+    {
+      "term": "brain",
+      "explanation": "the part of your body that helps you think and feel"
+    },
+    {
+      "term": "expect",
+      "explanation": "to think something will happen before it does"
+    }
+  ],
+  "questions": [
+    {
+      "question": "How many adults did the scientists study?",
+      "options": [
+        "50",
+        "99",
+        "100",
+        "24"
+      ],
+      "correct_answer": "99"
+    },
+    {
+      "question": "What did the scientists trick the adults about?",
+      "options": [
+        "The color of the drinks",
+        "What was in the drinks",
+        "The temperature of the drinks",
+        "The size of the drinks"
+      ],
+      "correct_answer": "What was in the drinks"
+    },
+    {
+      "question": "When adults thought a drink had sugar, how did they feel?",
+      "options": [
+        "They enjoyed it more",
+        "They enjoyed it less",
+        "They felt sick",
+        "They did not notice"
+      ],
+      "correct_answer": "They enjoyed it more"
+    },
+    {
+      "question": "What part of the body got more excited when people thought they drank sugar?",
+      "options": [
+        "The stomach",
+        "The brain",
+        "The heart",
+        "The legs"
+      ],
+      "correct_answer": "The brain"
+    },
+    {
+      "question": "What can this study help people do?",
+      "options": [
+        "Choose healthier foods",
+        "Run faster",
+        "Sleep better",
+        "Learn math"
+      ],
+      "correct_answer": "Choose healthier foods"
+    },
+    {
+      "question": "What words might make people like healthier foods more?",
+      "options": [
+        "'Diet' and 'low calories'",
+        "'Nutrient rich' and 'minimal added sugars'",
+        "'Sweet' and 'tasty'",
+        "'Big' and 'small'"
+      ],
+      "correct_answer": "'Nutrient rich' and 'minimal added sugars'"
+    }
+  ],
+  "background_read": [
+    "This article is about a science study where researchers wanted to see if what people think affects how much they like sweet drinks. They worked with adults who tasted drinks and were sometimes told the wrong thing about what was in them. The study found that expectations can trick our brains into liking things more or less. This is important because it shows that our minds play a big role in eating habits, and scientists hope to use this to help people eat better by changing how we talk about food."
+  ],
+  "Article_Structure": [
+    "WHO: Scientists from universities studied 99 adults.",
+    "WHAT: They tested if thinking a drink has sugar makes people enjoy it more, even if it has artificial sweeteners.",
+    "WHERE: The study was done at universities like Radboud University.",
+    "WHY: To understand how expectations affect taste and brain activity, and to help people choose healthier foods."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Science view",
+      "description": "The study shows that brain activity changes based on what people expect, which can influence enjoyment and behavior."
+    }
+  ],
+  "image_url": "/article_images/article_518d379c2f152530_9fa1e4ede37a.webp"
+}

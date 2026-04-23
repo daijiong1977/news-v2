@@ -1,0 +1,58 @@
+{
+  "articles": [
+    {
+      "id": "ac3eadb516260f75",
+      "title": "NASA's Orion Spacecraft Has a Small Leak on Its Moon Mission",
+      "summary": "NASA's Orion spacecraft is on a mission to fly around the Moon with four astronauts. During the flight, engineers found a small leak of helium gas in the spacecraft's system. Helium is used to push fuel to the engines, but the leak is inside the valves and not going into space. This leak does not affect the spacecraft's ability to fly safely back to Earth. The astronauts are still on track to return home and splash down in the ocean. NASA is testing the system to learn more about the leak and decide if any changes are needed for future missions. The leaky part will be thrown away before the spacecraft reenters Earth's atmosphere, so it won't cause any problems during landing.",
+      "source": "Ars Science",
+      "time_ago": "11 hours ago",
+      "image_url": "/article_images/article_ac3eadb516260f75_c6f219bf7c83.webp",
+      "category": "Science"
+    },
+    {
+      "id": "e8a7f2a954c286b9",
+      "title": "Gene Editing Helps Treat a Blood Disease",
+      "summary": "Scientists have found a new way to use gene editing to help people with a blood disease called β-Thalassaemia. Gene editing is like using tiny scissors to fix mistakes in our DNA, which is the instruction book for our bodies. This disease makes it hard for the body to make enough healthy red blood cells, causing tiredness and other problems. In a clinical trial, researchers used an improved tool called CRISPR to edit genes in blood stem cells. They targeted a specific gene to turn on a fetal version of hemoglobin, which helps carry oxygen in the blood. This treatment worked well and was safe, with fewer mistakes than before. It builds on success from treating sickle-cell anemia, another similar blood disease. The study shows that gene editing can be a powerful tool to cure genetic diseases, giving hope to many patients.",
+      "source": "Ars Science",
+      "time_ago": "16 hours ago",
+      "image_url": "/article_images/article_e8a7f2a954c286b9_20ce8a5f5dba.webp",
+      "category": "Science"
+    },
+    {
+      "id": "791df1d58c69c480",
+      "title": "Astronauts Share Their Amazing Moon Adventure",
+      "summary": "Four astronauts flew on a special spaceship called Orion to go near the Moon. They were on a nine-day mission called Artemis II. During their trip, they saw something incredible: the Earth disappeared behind the Moon, and they flew into the Moon's shadow, making it look like a scene from a science fiction movie. The astronauts felt excited and shared their feelings, saying their palms were sweaty. They took pictures and ate cookies while floating in space. Now, they are heading back to Earth and will splash down in the ocean on Friday. This mission helps NASA prepare for future trips where astronauts might land on the Moon again. The astronauts enjoyed living in their small spaceship, which had everything they needed.",
+      "source": "Ars Science",
+      "time_ago": "18 hours ago",
+      "image_url": "/article_images/article_791df1d58c69c480_2201fe607449.webp",
+      "category": "Science"
+    },
+    {
+      "id": "e41cb8f1010b7cbe",
+      "title": "Scientists Find a Hidden Drain in the Brain",
+      "summary": "Scientists have discovered a hidden drain in the human brain that helps clean out waste. This drain is part of a system called the lymphatic system, which acts like a cleanup crew for the body. Using special MRI machines from NASA, researchers watched how fluid moves in the brain of five healthy people. They found that fluid flows slowly through a blood vessel called the middle meningeal artery, unlike fast-moving blood. This slow flow shows it's part of the brain's waste removal system. The brain is protected by layers called meninges, and scientists used to think these layers kept the brain separate from the body's cleanup system. But now they know lymphatic vessels in the meninges carry waste away. This discovery could help doctors find new ways to treat brain diseases by improving how the brain gets rid of bad stuff.",
+      "source": "Science Daily",
+      "time_ago": "22 hours ago",
+      "image_url": "/article_images/article_e41cb8f1010b7cbe_e781a8127632.webp",
+      "category": "Science"
+    },
+    {
+      "id": "905ad49ba33930d5",
+      "title": "President Trump's Coal Power Orders: A Legal Problem",
+      "summary": "A long time ago, the United States used a lot of coal to make electricity. But coal plants are old and expensive, so many have been closing. President Trump wants to keep these coal plants open using a special rule from World War II. This rule was made for emergencies, like during a war, to help with electricity needs. Experts say using it now is wrong and against the law because it stops careful planning by utility companies. This could make electricity bills higher and hurt the environment. People are going to court to challenge these orders. The rule is being used to help the coal industry instead of for real emergencies.",
+      "source": "Ars Science",
+      "time_ago": "22 hours ago",
+      "image_url": "/article_images/article_905ad49ba33930d5_d69f58591801.webp",
+      "category": "Science"
+    },
+    {
+      "id": "518d379c2f152530",
+      "title": "How Your Brain Makes You Like Sweet Drinks",
+      "summary": "Scientists studied how people think about sweet drinks. They asked 99 adults to taste drinks and tell them what they liked. The adults thought some drinks had sugar and some had artificial sweeteners. But sometimes, the scientists tricked them by saying a drink had sugar when it really had artificial sweeteners, or the other way around. When people believed they were drinking sugar, they enjoyed it more, even if it was artificial sweeteners. Their brains also got more excited when they thought it was sugar. This shows that what we expect can change how much we like something and how our brain feels about it. The scientists hope this can help people choose healthier foods by using better words like 'nutrient rich' instead of 'diet'.",
+      "source": "Science Daily",
+      "time_ago": "23 hours ago",
+      "image_url": "/article_images/article_518d379c2f152530_9fa1e4ede37a.webp",
+      "category": "Science"
+    }
+  ]
+}

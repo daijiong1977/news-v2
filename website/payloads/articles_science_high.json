@@ -1,0 +1,58 @@
+{
+  "articles": [
+    {
+      "id": "ac3eadb516260f75",
+      "title": "Technical Analysis of Helium Leak in Orion Spacecraft: Implications for Artemis II and Future Lunar Missions",
+      "summary": "NASA's Artemis II mission has encountered a helium leak within the Orion spacecraft's propulsion system, specifically in the valves of the European-built service module. This leak, internal and not venting to space, involves the helium pressure supply used to propel oxidizer through the system to feed the spacecraft's hydrazine and nitrogen tetroxide engines. Despite the anomaly, the propulsion system has performed nominally, with all burns executed as planned, and the mission's free return trajectory around the Moon has minimized fuel consumption, utilizing only 40% of reserves. NASA officials, including lead flight director Jeff Radigan, have prioritized data collection over a manual piloting demonstration, conducting additional tests to assess thermal effects on the leak rate. The leak poses no immediate threat to reentry, as the crew module possesses independent tanks and thrusters for atmospheric guidance, and the service module will be jettisoned pre-reentry. However, this incident follows a similar helium leak observed during the unpiloted Artemis I mission, prompting concerns about valve design and necessitating potential redesigns for future flights. Engineers lack post-mission inspection opportunities due to the service module's atmospheric disposal, underscoring the reliance on in-flight diagnostics. The article highlights NASA's risk management strategies, balancing mission success with long-term spacecraft reliability for sustained lunar exploration.",
+      "source": "Ars Science",
+      "time_ago": "11 hours ago",
+      "image_url": "/article_images/article_ac3eadb516260f75_c6f219bf7c83.webp",
+      "category": "Science"
+    },
+    {
+      "id": "e8a7f2a954c286b9",
+      "title": "Precision Gene Editing Breakthrough in β-Thalassaemia Clinical Trial",
+      "summary": "A significant clinical trial has demonstrated the efficacy of an advanced gene editing system for treating β-Thalassaemia, marking a progression from earlier CRISPR-based therapies for sickle-cell anemia. This research, conducted by a large Chinese collaboration, utilizes a refined CRISPR methodology that minimizes off-target effects and enhances specificity through base editing techniques. Instead of relying on Cas9-induced double-stranded breaks, which often lead to unpredictable deletions and errors, the system employs a protein that catalyzes single nucleotide changes, converting cytosine to thymine to reactivate fetal hemoglobin expression. Key innovations include the integration of a protease-activated editor and a bacterial inhibitor to counteract endogenous DNA repair mechanisms, ensuring stable mutations. The trial involved ex vivo editing of hematopoietic stem cells, followed by rigorous screening to select clones with precise on-target edits and absence of off-target alterations, thereby addressing safety concerns inherent in gene therapy. This approach underscores the potential of precision medicine in curing monogenic disorders, yet it also highlights ongoing challenges, such as the scalability to somatic tissues and long-term genomic stability. The findings contribute to the evolving landscape of genetic therapeutics, emphasizing the need for continuous optimization of editing tools and regulatory frameworks to facilitate clinical translation.",
+      "source": "Ars Science",
+      "time_ago": "16 hours ago",
+      "image_url": "/article_images/article_e8a7f2a954c286b9_20ce8a5f5dba.webp",
+      "category": "Science"
+    },
+    {
+      "id": "791df1d58c69c480",
+      "title": "Analyzing the Psychological and Technical Dimensions of Artemis II's Lunar Flyby",
+      "summary": "The Artemis II mission, a nine-day NASA crewed test flight aboard the Orion spacecraft, represents a pivotal step in lunar exploration, with four astronauts conducting a flyby beyond the Moon. Key highlights include their psychological responses to witnessing an eclipse where Earth vanished behind the lunar disk, described by pilot Victor Glover as inducing a 'sci-fi' aesthetic and by commander Reid Wiseman as eliciting physical chills and sweat, underscoring the profound sensory impact of deep space travel. The mission's trajectory, launched on April 1, facilitated a rare alignment allowing this eclipse but limited illumination on the Moon's far side to 20%, illustrating trade-offs in launch timing. During a 40-minute radio blackout behind the Moon, the crew engaged in brief reflection, photographic documentation, and shared maple cookies, highlighting interpersonal dynamics in isolation. As they return, the capsule will reenter at approximately 25,000 mph, culminating in a parachute-assisted splashdown in the Pacific Ocean. Artemis II serves as a critical validation for Orion's systems, aiming to enable future crewed landings near the lunar south pole and establish a sustainable lunar base, marking the first human voyage to the Moon since Apollo 17 in 1972. The astronauts' appreciation for Orion's habitability, as noted by mission specialist Christina Koch, points to advancements in spacecraft design for long-duration missions.",
+      "source": "Ars Science",
+      "time_ago": "18 hours ago",
+      "image_url": "/article_images/article_791df1d58c69c480_2201fe607449.webp",
+      "category": "Science"
+    },
+    {
+      "id": "e41cb8f1010b7cbe",
+      "title": "Unveiling a Lymphatic Control Point: Direct Evidence of Brain Waste Drainage in Humans",
+      "summary": "A groundbreaking study published in iScience by researchers at the Medical University of South Carolina offers the first direct evidence in humans of a previously unidentified control point within the brain's lymphatic system: the middle meningeal artery. Utilizing cutting-edge real-time MRI technology, developed through a NASA collaboration originally for spaceflight fluid dynamics research, the team led by Onder Albayram, Ph.D., monitored cerebrospinal and interstitial fluid trajectories in five healthy subjects over a six-hour period. They documented a slow, consistent flow pattern along the artery, contrasting sharply with the dynamic pulsatility of blood, thereby implicating this vessel in the brain's waste clearance mechanisms. This finding challenges the traditional paradigm that the meninges act as a barrier isolating the brain from systemic lymphatic and immune functions. The research integrates prior work on meningeal lymphatic visualization with ultra high-resolution imaging of human brain tissue, confirming the presence of characteristic lymphatic cells adjacent to the artery. By elucidating fluid exchange pathways between the brain and periphery, this study holds significant implications for understanding the pathophysiology of neurological and psychiatric disorders, potentially informing novel therapeutic strategies targeting glymphatic dysfunction.",
+      "source": "Science Daily",
+      "time_ago": "22 hours ago",
+      "image_url": "/article_images/article_e41cb8f1010b7cbe_e781a8127632.webp",
+      "category": "Science"
+    },
+    {
+      "id": "905ad49ba33930d5",
+      "title": "Legal and Regulatory Critique of Trump's Emergency Orders on Coal Power",
+      "summary": "The article examines the Trump administration's invocation of Section 202(c) of the Federal Power Act, an emergency provision dating to World War II, to mandate the continued operation of aging coal-fired power plants. Historically, the U.S. grid transitioned away from coal due to prohibitive operational costs and environmental externalities, including toxic emissions and climate impact. Since returning to office in 2025, the Department of Energy has utilized this authority not for short-term grid emergencies, as intended, but to artificially sustain the coal industry, overriding state and regional transmission organization planning. Legal scholars, exemplified by University of Michigan Law School professor Alexandra Klass, contend this constitutes illegal misuse, distorting a statute designed for acute crises into a tool for long-term industrial policy. Concurrently, the administration impedes clean energy deployment, such as through offshore wind moratoriums, exacerbating regulatory instability. Environmental advocates and state officials have initiated litigation in the U.S. Court of Appeals for the D.C. Circuit, challenging the orders' legality. The analysis underscores how these actions subvert principles of utility regulation, potentially inflating consumer costs and delaying climate mitigation efforts, while raising questions about executive power and statutory interpretation in energy governance.",
+      "source": "Ars Science",
+      "time_ago": "22 hours ago",
+      "image_url": "/article_images/article_905ad49ba33930d5_d69f58591801.webp",
+      "category": "Science"
+    },
+    {
+      "id": "518d379c2f152530",
+      "title": "Cognitive Expectation Modulates Hedonic and Neural Responses to Sweetness: Implications for Nutritional Behavior",
+      "summary": "A collaborative study by researchers from Radboud University, the University of Oxford, and the University of Cambridge examined the impact of expectation on hedonic and neural responses to sweet stimuli. Utilizing a sample of 99 healthy adults with homogeneous attitudes toward sugar and artificial sweeteners, the experiment involved deceptive conditioning where participants were misinformed about beverage contents. Results indicated that when individuals anticipated sugar, they reported enhanced enjoyment and exhibited increased activity in the dopaminergic midbrain, a key reward-processing region, irrespective of actual sweetener type. Conversely, expectation of artificial sweeteners diminished pleasure ratings for sugar-sweetened drinks. These findings, published in JNeurosci, elucidate how top-down cognitive processes can override bottom-up sensory input, influencing both subjective experience and neurobiological mechanisms. The research underscores the role of expectation in shaping dietary preferences, with practical applications suggested by Westwater, such as reframing food labels to emphasize 'nutrient richness' rather than 'diet' connotations, potentially facilitating healthier eating patterns by aligning with innate calorie-seeking neural pathways.",
+      "source": "Science Daily",
+      "time_ago": "23 hours ago",
+      "image_url": "/article_images/article_518d379c2f152530_9fa1e4ede37a.webp",
+      "category": "Science"
+    }
+  ]
+}

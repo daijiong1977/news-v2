@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>News Oh,Ye! — Kids News Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800;9..144,900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; font-family: 'Nunito', sans-serif; background:#fff9ef; color:#1b1230; }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  button { font-family: 'Nunito', sans-serif; }
+  ::selection { background:#ffc83d; color:#1b1230; }
+  /* Scrollbar - subtle */
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:#fff9ef; }
+  ::-webkit-scrollbar-thumb { background:#e8dcc6; border-radius:10px; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="home.jsx"></script>
+<script type="text/babel" src="article.jsx"></script>
+<script type="text/babel" src="user-panel.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "sunny",
+  "showConfetti": true,
+  "heroVariant": "daily15",
+  "userName": "Mia",
+  "avatar": "panda",
+  "language": "en",
+  "dailyGoal": 15,
+  "level": "Sprout",
+  "streakDays": 7,
+  "xp": 240
+}/*EDITMODE-END*/;
+
+function App() {
+  // restore from localStorage
+  const [route, setRoute] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ohye_route') || 'null');
+      return saved || { page:'home', articleId:null };
+    } catch { return { page:'home', articleId:null }; }
+  });
+  const [level, setLevel] = useState(() => {
+    const v = localStorage.getItem('ohye_level') || 'Sprout';
+    // Retire Seedling — migrate legacy profiles
+    return v === 'Seedling' ? 'Sprout' : v;
+  });
+  const [cat, setCat] = useState(() => {
+    const v = localStorage.getItem('ohye_cat') || 'News';
+    return (v === 'Today' || v === 'Archive' || v === 'All') ? 'News' : v;
+  });
+  const [archiveDay, setArchiveDay] = useState(() => {
+    const v = localStorage.getItem('ohye_archive_day');
+    return v ? parseInt(v, 10) : null;
+  });
+  const [progress, setProgress] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ohye_progress') || 'null');
+      const base = { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} };
+      if (!saved) return base;
+      return { articleProgress: {}, ...saved, articleProgress: saved.articleProgress || {} };
+    } catch { return { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} }; }
+  });
+
+  // Tweaks / User Panel
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [userPanelOpen, setUserPanelOpen] = useState(false);
+
+  useEffect(() => { localStorage.setItem('ohye_route', JSON.stringify(route)); }, [route]);
+  useEffect(() => { localStorage.setItem('ohye_level', level); }, [level]);
+  useEffect(() => { localStorage.setItem('ohye_cat', cat); }, [cat]);
+  useEffect(() => {
+    if (archiveDay) localStorage.setItem('ohye_archive_day', String(archiveDay));
+    else localStorage.removeItem('ohye_archive_day');
+  }, [archiveDay]);
+  useEffect(() => { localStorage.setItem('ohye_progress', JSON.stringify(progress)); }, [progress]);
+
+  // Edit-mode wiring
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setUserPanelOpen(true);
+      if (e.data.type === '__deactivate_edit_mode') setUserPanelOpen(false);
+    };
+    window.addEventListener('message', handler);
+    // Announce AFTER listener
+    try { window.parent.postMessage({ type:'__edit_mode_available' }, '*'); } catch {}
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const updateTweak = (key, val) => {
+    const edits = { [key]: val };
+    setTweaks(t => ({...t, ...edits}));
+    try { window.parent.postMessage({ type:'__edit_mode_set_keys', edits }, '*'); } catch {}
+  };
+
+  // Apply theme to root
+  const themeVars = {
+    sunny: { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' },
+    sky:   { bg:'#eef6ff', accent:'#5bb4ff', hero1:'#cfe6ff', hero2:'#bfd9ff', border:'#8ec2ff', heroTextAccent:'#1f6bbf', card:'#fff', chip:'#dce8f5' },
+    candy: { bg:'#fff0f6', accent:'#ff6ba0', hero1:'#ffd0e2', hero2:'#e0cbff', border:'#ffa0c5', heroTextAccent:'#b73a79', card:'#fff', chip:'#f5dce8' },
+    forest:{ bg:'#f3f8ec', accent:'#7cbf5a', hero1:'#d9ecc0', hero2:'#f2e1a6', border:'#a7d685', heroTextAccent:'#4a7a2a', card:'#fff', chip:'#e0e8cf' },
+  };
+  const theme = themeVars[tweaks.theme] || themeVars.sunny;
+
+  useEffect(() => {
+    document.body.style.background = theme.bg;
+    const root = document.documentElement;
+    root.style.setProperty('--theme-bg', theme.bg);
+    root.style.setProperty('--theme-accent', theme.accent);
+    root.style.setProperty('--theme-hero1', theme.hero1);
+    root.style.setProperty('--theme-hero2', theme.hero2);
+    root.style.setProperty('--theme-border', theme.border);
+    root.style.setProperty('--theme-hero-text', theme.heroTextAccent);
+    root.style.setProperty('--theme-chip', theme.chip);
+  }, [tweaks.theme]);
+
+  const onOpen = (id) => {
+    // Chinese mode: always route to the Sprout-level English article
+    // (Chinese only has a landing page; detail reading is in English/Sprout)
+    if (tweaks.language === 'zh') {
+      const target = ARTICLES.find(a => a.id === id);
+      if (target && target.level !== 'Sprout') {
+        const sameCatSprout = ARTICLES.find(a => a.category === target.category && a.level === 'Sprout');
+        if (sameCatSprout) id = sameCatSprout.id;
+      }
+    }
+    setRoute({ page:'article', articleId:id });
+  };
+  const onBack = () => setRoute({ page:'home', articleId:null });
+  const onComplete = () => setRoute({ page:'home', articleId:null });
+
+  return (
+    <div data-screen-label={route.page==='home' ? '01 Home' : '02 Article'} style={{minHeight:'100vh', background: theme.bg}}>
+      {route.page === 'home' ? (
+        <HomePage
+          onOpen={onOpen}
+          onOpenArchive={(d)=>{ setArchiveDay(d); setCat('All'); window.scrollTo({top:0}); }}
+          archiveDay={archiveDay}
+          level={level} setLevel={setLevel}
+          cat={cat} setCat={setCat}
+          progress={progress}
+          theme={theme}
+          heroVariant={tweaks.heroVariant}
+          tweaks={tweaks}
+          onOpenUserPanel={()=>setUserPanelOpen(true)}
+        />
+      ) : (
+        <ArticlePage
+          articleId={route.articleId}
+          onBack={onBack}
+          onComplete={onComplete}
+          progress={progress}
+          setProgress={setProgress}
+        />
+      )}
+
+      {userPanelOpen && (
+        <UserPanel
+          tweaks={tweaks}
+          updateTweak={updateTweak}
+          level={level}
+          setLevel={setLevel}
+          onClose={()=>setUserPanelOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, updateTweak, setTweaksVisible }) {
+  return (
+    <div style={{
+      position:'fixed', bottom:20, right:20, width:280, background:'#fff',
+      borderRadius:18, border:'2px solid #1b1230', padding:'16px 18px',
+      boxShadow:'0 10px 0 rgba(27,18,48,0.18)', zIndex:100,
+      fontFamily:'Nunito, sans-serif',
+    }}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+        <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>🎨 Tweaks</div>
+        <button onClick={()=>setTweaksVisible(false)} style={{background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#9a8d7a'}}>×</button>
+      </div>
+
+      <TwkRow label="Color theme">
+        <select value={tweaks.theme} onChange={e=>updateTweak('theme', e.target.value)} style={twkInput}>
+          <option value="sunny">☀️ Sunny</option>
+          <option value="sky">🌊 Sky</option>
+          <option value="candy">🍬 Candy</option>
+          <option value="forest">🌳 Forest</option>
+        </select>
+      </TwkRow>
+
+      <TwkRow label="Hero style">
+        <select value={tweaks.heroVariant} onChange={e=>updateTweak('heroVariant', e.target.value)} style={twkInput}>
+          <option value="daily15">Daily 15 banner</option>
+          <option value="streak">Streak-focused</option>
+        </select>
+      </TwkRow>
+
+      <TwkRow label="Quiz confetti">
+        <label style={{display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:700, cursor:'pointer'}}>
+          <input type="checkbox" checked={tweaks.showConfetti} onChange={e=>updateTweak('showConfetti', e.target.checked)}/>
+          {tweaks.showConfetti ? 'On' : 'Off'}
+        </label>
+      </TwkRow>
+
+      <div style={{fontSize:11, color:'#9a8d7a', marginTop:10, borderTop:'1px dashed #eee', paddingTop:10}}>
+        Toggle Tweaks from the toolbar to customize.
+      </div>
+    </div>
+  );
+}
+const twkInput = {
+  width:'100%', padding:'8px 10px', border:'1.5px solid #f0e8d8', borderRadius:10,
+  fontSize:13, fontWeight:700, fontFamily:'Nunito, sans-serif', background:'#fff9ef', color:'#1b1230',
+};
+function TwkRow({ label, children }) {
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{fontSize:11, fontWeight:800, color:'#6b5c80', letterSpacing:'.06em', textTransform:'uppercase', marginBottom:5}}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+// Wait for all babel scripts to load
+function mount() {
+  if (!window.HomePage || !window.ArticlePage || !window.UserPanel) { setTimeout(mount, 50); return; }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+}
+setTimeout(mount, 0);
+</script>
+</body>
+</html>

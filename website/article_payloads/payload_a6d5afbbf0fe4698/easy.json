@@ -1,0 +1,104 @@
+{
+  "title": "A Man's Expensive Coat and Tariff Trouble",
+  "summary": "Alex bought a coat from France, but he got a big surprise bill for extra fees called tariffs because the coat was made in Myanmar. The Supreme Court said these tariffs were not fair and ordered refunds. However, Alex might not get his money back because he paid through a shipping company, not directly. Many people like Alex are worried they won't get refunds even though the court ruled in their favor. The government is setting up a system to give money back, but it's tricky because some costs were already passed on to customers through higher prices. This story shows how tariffs can affect everyday shoppers.",
+  "keywords": [
+    {
+      "term": "tariffs",
+      "explanation": "extra fees or taxes on goods from other countries"
+    },
+    {
+      "term": "refunds",
+      "explanation": "money given back to people"
+    },
+    {
+      "term": "Supreme Court",
+      "explanation": "the highest court in the United States that makes big decisions"
+    },
+    {
+      "term": "shipping company",
+      "explanation": "a business that sends packages to people"
+    },
+    {
+      "term": "importers",
+      "explanation": "people or companies that bring goods into a country"
+    }
+  ],
+  "questions": [
+    {
+      "question": "Why did Alex get a big bill for his coat?",
+      "options": [
+        "Because it was made in Myanmar",
+        "Because he bought it in France",
+        "Because it was too expensive",
+        "Because he lost it"
+      ],
+      "correct_answer": "Because it was made in Myanmar"
+    },
+    {
+      "question": "What did the Supreme Court say about the tariffs?",
+      "options": [
+        "They were fair",
+        "They were invalid",
+        "They should be higher",
+        "They don't matter"
+      ],
+      "correct_answer": "They were invalid"
+    },
+    {
+      "question": "Who might not get a refund according to the article?",
+      "options": [
+        "People who paid tariffs directly",
+        "People who paid through shipping companies",
+        "The government",
+        "Everyone"
+      ],
+      "correct_answer": "People who paid through shipping companies"
+    },
+    {
+      "question": "What is the government doing about the refunds?",
+      "options": [
+        "Fighting the decision",
+        "Setting up a system to give money back",
+        "Ignoring it",
+        "Making new tariffs"
+      ],
+      "correct_answer": "Setting up a system to give money back"
+    },
+    {
+      "question": "How have some costs been passed on to customers?",
+      "options": [
+        "Through lower prices",
+        "Through higher prices",
+        "Through free gifts",
+        "Through discounts"
+      ],
+      "correct_answer": "Through higher prices"
+    },
+    {
+      "question": "What is Alex's job?",
+      "options": [
+        "Teacher",
+        "Personal trainer",
+        "Doctor",
+        "Farmer"
+      ],
+      "correct_answer": "Personal trainer"
+    }
+  ],
+  "background_read": [
+    "Tariffs are extra charges on goods from other countries, often used by governments to protect local businesses or raise money. In this story, a man named Alex bought a coat and faced high tariffs because it was made in Myanmar, a country with special rules. The Supreme Court, the top court in the U.S., said these tariffs were wrong and ordered refunds. However, getting money back can be hard if you paid through a company like DHL instead of directly. This shows how international trade rules can impact regular people shopping online."
+  ],
+  "Article_Structure": [
+    "WHO: Alex Grossomanides, a personal trainer from Massachusetts, and other people affected by tariffs.",
+    "WHAT: Alex bought a coat and got a big tariff bill, but the Supreme Court ruled tariffs invalid, leading to refunds that might not reach everyone.",
+    "WHERE: United States, with examples from Massachusetts and California.",
+    "WHY: To explain how tariffs can surprise shoppers and why refunds are complicated, even with court rulings."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Consumer view",
+      "description": "People like Alex feel it's unfair to pay tariffs and want their money back, but they worry they won't get refunds because of how they paid."
+    }
+  ],
+  "image_url": "/article_images/article_a6d5afbbf0fe4698_df94f14020af.webp"
+}

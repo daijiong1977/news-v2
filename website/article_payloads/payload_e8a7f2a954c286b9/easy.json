@@ -1,0 +1,108 @@
+{
+  "title": "Gene Editing Helps Treat a Blood Disease",
+  "summary": "Scientists have found a new way to use gene editing to help people with a blood disease called β-Thalassaemia. Gene editing is like using tiny scissors to fix mistakes in our DNA, which is the instruction book for our bodies. This disease makes it hard for the body to make enough healthy red blood cells, causing tiredness and other problems. In a clinical trial, researchers used an improved tool called CRISPR to edit genes in blood stem cells. They targeted a specific gene to turn on a fetal version of hemoglobin, which helps carry oxygen in the blood. This treatment worked well and was safe, with fewer mistakes than before. It builds on success from treating sickle-cell anemia, another similar blood disease. The study shows that gene editing can be a powerful tool to cure genetic diseases, giving hope to many patients.",
+  "keywords": [
+    {
+      "term": "gene editing",
+      "explanation": "a way to change DNA to fix problems in our bodies"
+    },
+    {
+      "term": "β-Thalassaemia",
+      "explanation": "a blood disease where the body doesn't make enough healthy red blood cells"
+    },
+    {
+      "term": "CRISPR",
+      "explanation": "a tool that acts like tiny scissors to cut and edit DNA"
+    },
+    {
+      "term": "clinical trial",
+      "explanation": "a test to see if a new treatment is safe and works in people"
+    },
+    {
+      "term": "blood stem cells",
+      "explanation": "cells in the blood that can grow into different types of blood cells"
+    },
+    {
+      "term": "hemoglobin",
+      "explanation": "a protein in red blood cells that carries oxygen"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is gene editing used for in this article?",
+      "options": [
+        "To fix mistakes in DNA",
+        "To make new medicines",
+        "To study plants",
+        "To build robots"
+      ],
+      "correct_answer": "To fix mistakes in DNA"
+    },
+    {
+      "question": "Which disease is treated with gene editing in the trial?",
+      "options": [
+        "β-Thalassaemia",
+        "Diabetes",
+        "Flu",
+        "Asthma"
+      ],
+      "correct_answer": "β-Thalassaemia"
+    },
+    {
+      "question": "What tool do scientists use for gene editing?",
+      "options": [
+        "CRISPR",
+        "Microscope",
+        "Thermometer",
+        "Computer"
+      ],
+      "correct_answer": "CRISPR"
+    },
+    {
+      "question": "What do blood stem cells do?",
+      "options": [
+        "Grow into different blood cells",
+        "Fight infections",
+        "Digest food",
+        "Help bones grow"
+      ],
+      "correct_answer": "Grow into different blood cells"
+    },
+    {
+      "question": "What does hemoglobin carry in the blood?",
+      "options": [
+        "Oxygen",
+        "Sugar",
+        "Water",
+        "Salt"
+      ],
+      "correct_answer": "Oxygen"
+    },
+    {
+      "question": "Why is this gene editing treatment considered safer?",
+      "options": [
+        "It makes fewer mistakes",
+        "It uses more chemicals",
+        "It is faster",
+        "It is cheaper"
+      ],
+      "correct_answer": "It makes fewer mistakes"
+    }
+  ],
+  "background_read": [
+    "Gene editing is a new technology that lets scientists change parts of our DNA to fix diseases. DNA is like a recipe book that tells our bodies how to grow and work. Sometimes, there are mistakes in the DNA that cause diseases like β-Thalassaemia, which affects how blood cells carry oxygen. Scientists use tools like CRISPR to cut and edit the DNA in a precise way. In this study, they tested it in people through a clinical trial to make sure it is safe and effective. This builds on earlier work with sickle-cell anemia, showing that gene editing can help many patients with genetic blood disorders."
+  ],
+  "Article_Structure": [
+    "WHO: Scientists and researchers in a large Chinese collaboration",
+    "WHAT: Used improved gene editing to treat β-Thalassaemia by reactivating fetal hemoglobin",
+    "WHERE: In a clinical trial setting, likely in hospitals or research centers",
+    "WHY: To provide a safe and effective cure for a genetic blood disease and build on previous success with sickle-cell anemia"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Medical hope",
+      "description": "Gene editing offers a potential cure for genetic diseases like β-Thalassaemia, improving patients' lives."
+    }
+  ],
+  "image_url": "/article_images/article_e8a7f2a954c286b9_20ce8a5f5dba.webp"
+}

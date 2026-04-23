@@ -1,0 +1,112 @@
+{
+  "title": "EPA Wants to Change Rules for Coal Ash, Which Can Harm Water",
+  "summary": "The EPA, which is a government agency that protects the environment, has proposed new rules about coal ash. Coal ash is a waste material made when coal is burned for energy, and it contains harmful metals like mercury and lead. If coal ash is not stored safely, it can leak into groundwater, which is the water we drink from underground. The new rules would make it easier for companies to handle coal ash and might allow some ash to stay in groundwater. This is a change from earlier rules that required stricter cleanup to protect water. Some people worry this could harm our health and the environment, while others say it helps energy companies. The rules are part of a bigger debate about how to balance energy needs with keeping our water clean.",
+  "keywords": [
+    {
+      "term": "EPA",
+      "explanation": "A government agency that makes rules to protect the environment and health."
+    },
+    {
+      "term": "coal ash",
+      "explanation": "Waste from burning coal that can have dangerous metals in it."
+    },
+    {
+      "term": "groundwater",
+      "explanation": "Water found underground that people and animals drink."
+    },
+    {
+      "term": "rules",
+      "explanation": "Official instructions that tell people or companies what they must do."
+    },
+    {
+      "term": "cleanup",
+      "explanation": "The process of removing harmful things to make a place safe again."
+    },
+    {
+      "term": "metals",
+      "explanation": "Materials like mercury and lead that can be toxic if they get into water."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is coal ash?",
+      "options": [
+        "Waste from burning coal",
+        "A type of clean water",
+        "A new energy source",
+        "A safe metal"
+      ],
+      "correct_answer": "Waste from burning coal"
+    },
+    {
+      "question": "Why is coal ash dangerous?",
+      "options": [
+        "It can leak harmful metals into groundwater",
+        "It makes energy too expensive",
+        "It is always safe to drink",
+        "It helps plants grow"
+      ],
+      "correct_answer": "It can leak harmful metals into groundwater"
+    },
+    {
+      "question": "What does the EPA do?",
+      "options": [
+        "Protects the environment",
+        "Builds power plants",
+        "Sells coal ash",
+        "Makes all water dirty"
+      ],
+      "correct_answer": "Protects the environment"
+    },
+    {
+      "question": "What might the new rules allow?",
+      "options": [
+        "Some coal ash to stay in groundwater",
+        "All coal ash to be removed immediately",
+        "No more burning of coal",
+        "Groundwater to become cleaner automatically"
+      ],
+      "correct_answer": "Some coal ash to stay in groundwater"
+    },
+    {
+      "question": "Who is worried about the new rules?",
+      "options": [
+        "People who want to protect water",
+        "Only energy companies",
+        "No one cares",
+        "Everyone thinks it's great"
+      ],
+      "correct_answer": "People who want to protect water"
+    },
+    {
+      "question": "What is groundwater used for?",
+      "options": [
+        "Drinking water for people and animals",
+        "Only for swimming",
+        "To make coal ash",
+        "It is not useful"
+      ],
+      "correct_answer": "Drinking water for people and animals"
+    }
+  ],
+  "background_read": [
+    "Coal ash is a byproduct from coal-fired power plants, which generate electricity. It contains toxic substances that can pollute water sources if not managed properly. Groundwater is a vital resource for drinking and agriculture, and protecting it is important for public health. The EPA sets environmental rules to prevent pollution, and changes to these rules can affect how companies handle waste. This article discusses a proposal to relax some of these rules, sparking debate between environmental protection and industry needs."
+  ],
+  "Article_Structure": [
+    "WHO: The EPA (Environmental Protection Agency) and people like Nick Torrey from the Southern Environmental Law Center.",
+    "WHAT: A proposal to weaken rules for handling coal ash, which could allow it to contaminate groundwater.",
+    "WHERE: In the United States, at places like power plants near rivers or lakes.",
+    "WHY: To make it easier for energy companies, but some worry it harms health and the environment."
+  ],
+  "perspectives": [
+    {
+      "perspective": "EPA and supporters",
+      "description": "They say the new rules help energy companies and allow for more flexibility in handling coal ash."
+    },
+    {
+      "perspective": "Environmental groups",
+      "description": "They worry the rules could lead to more pollution and harm to groundwater and health."
+    }
+  ],
+  "image_url": "/article_images/article_71ac1c8eab387fd8_85596f1346db.webp"
+}
