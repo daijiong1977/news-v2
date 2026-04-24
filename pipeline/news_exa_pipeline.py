@@ -27,7 +27,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("exa-pipeline")
 
 # Load .env
-for _line in open("/Users/jiong/myprojects/news-v2/.env"):
+_envp = __import__("pathlib").Path(__file__).resolve().parent.parent / ".env"
+for _line in (_envp.open() if _envp.exists() else []):
     if "=" in _line and not _line.startswith("#"):
         _k, _v = _line.strip().split("=", 1)
         os.environ[_k] = _v

@@ -16,12 +16,13 @@ from supabase import create_client
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("pack")
 
-for _line in open("/Users/jiong/myprojects/news-v2/.env"):
+_envp = __import__("pathlib").Path(__file__).resolve().parent.parent / ".env"
+for _line in (_envp.open() if _envp.exists() else []):
     if "=" in _line and not _line.startswith("#"):
         k, v = _line.strip().split("=", 1)
         os.environ[k] = v
 
-ROOT = Path("/Users/jiong/myprojects/news-v2")
+ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "website"
 BUCKET = "redesign-daily-content"
 

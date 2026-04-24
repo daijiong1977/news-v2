@@ -338,7 +338,7 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
 
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    website_dir = Path("/Users/jiong/myprojects/news-v2/website")
+    website_dir = Path(__file__).resolve().parent.parent / "website"
 
     # Start run record
     run_id = insert_run({"run_date": today, "status": "running"})
