@@ -1,0 +1,119 @@
+{
+  "title": "Oops! Three Politicians Get Caught Betting on Themselves",
+  "summary": "Imagine betting on yourself to win a race — and then getting in trouble for it. That's exactly what happened to three people running for Congress in the U.S. They used a website called Kalshi, where you can bet on things like elections. But Kalshi has a rule: candidates cannot bet on their own races. Now they've been fined (made to pay money as a punishment) and banned from the site for five years. One candidate, Mark Moran from Virginia, said he did it on purpose to show that these betting sites have too much power over elections. Another candidate, Matt Klein from Minnesota, bet just $50. He said it was a mistake and that he's sorry. A third candidate, Ezekiel Enriquez from Texas, lost his race with less than 2% of the vote. Some people think the fines are too small. A congressman named Mike Levin said, \"That's not a punishment. That's a parking ticket.\" What do you think? Should politicians be allowed to bet on themselves?",
+  "why_it_matters": "This story shows that even grown-ups in charge can make silly mistakes, and it makes you think about whether betting on elections is fair or dangerous.",
+  "image_url": "/article_images/article_e70859ec15f4.webp",
+  "keywords": [
+    {
+      "term": "betting",
+      "explanation": "risking money on the outcome of an event"
+    },
+    {
+      "term": "fined",
+      "explanation": "made to pay money as punishment"
+    },
+    {
+      "term": "banned",
+      "explanation": "not allowed to use a website or service for a period of time"
+    },
+    {
+      "term": "Kalshi",
+      "explanation": "a website where people bet on things like elections"
+    },
+    {
+      "term": "elections",
+      "explanation": "events where people vote for leaders"
+    },
+    {
+      "term": "candidates",
+      "explanation": "people running for office hoping to win"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What did the three people caught betting do?",
+      "options": [
+        "They bet on horses",
+        "They bet on their own races in Congress",
+        "They bet on their opponents",
+        "They played poker"
+      ],
+      "correct_answer": "They bet on their own races in Congress"
+    },
+    {
+      "question": "What website did they use?",
+      "options": [
+        "eBay",
+        "Kalshi",
+        "Facebook",
+        "YouTube"
+      ],
+      "correct_answer": "Kalshi"
+    },
+    {
+      "question": "What punishment did they receive?",
+      "options": [
+        "They went to jail",
+        "They were fined and banned for five years",
+        "They got a warning",
+        "They lost their jobs"
+      ],
+      "correct_answer": "They were fined and banned for five years"
+    },
+    {
+      "question": "Who said the fines were 'not a punishment' but 'a parking ticket'?",
+      "options": [
+        "Mark Moran",
+        "Matt Klein",
+        "Ezekiel Enriquez",
+        "Mike Levin"
+      ],
+      "correct_answer": "Mike Levin"
+    },
+    {
+      "question": "Which candidate bet only $50?",
+      "options": [
+        "Mark Moran",
+        "Matt Klein",
+        "Ezekiel Enriquez",
+        "Mike Levin"
+      ],
+      "correct_answer": "Matt Klein"
+    },
+    {
+      "question": "Why did Mark Moran say he bet on himself?",
+      "options": [
+        "To make money",
+        "To show that betting sites have too much power over elections",
+        "He made a mistake",
+        "He wanted to win a bet"
+      ],
+      "correct_answer": "To show that betting sites have too much power over elections"
+    }
+  ],
+  "background_read": [
+    "Betting on elections is legal in some places but often has strict rules to keep it fair.",
+    "In the United States, candidates are usually not allowed to bet on their own races because it could create a conflict of interest.",
+    "Some people think politicians should not be involved in betting at all, while others say it's just for fun."
+  ],
+  "Article_Structure": [
+    "WHO: Three candidates for Congress – Mark Moran, Matt Klein, Ezekiel Enriquez",
+    "WHAT: They bet on themselves using Kalshi and were fined and banned for five years",
+    "WHERE: The United States, on a website called Kalshi",
+    "WHY: Kalshi’s rule says candidates cannot bet on their own races; some candidates did it by accident or to make a point"
+  ],
+  "perspectives": [
+    {
+      "perspective": "The politicians who were fined",
+      "description": "Matt Klein said it was a mistake and apologized. Mark Moran did it on purpose to show that betting sites have too much power."
+    },
+    {
+      "perspective": "People who think the punishment is too weak",
+      "description": "Congressman Mike Levin called the fines 'a parking ticket' and thinks the penalty should be much harsher."
+    },
+    {
+      "perspective": "The company Kalshi",
+      "description": "Kalshi has a rule banning candidates from betting on their own races and enforced it by fining and suspending the candidates."
+    }
+  ]
+}

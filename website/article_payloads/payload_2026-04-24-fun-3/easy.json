@@ -1,0 +1,119 @@
+{
+  "title": "Art World Olympics: What's Cool at the 2026 Venice Biennale",
+  "summary": "Imagine the Olympics, but for art! That's the Venice Biennale (say \"bee-en-NAH-lay\"). It happens every two years in Venice, Italy, and this year it's packed with drama and amazing art. The main exhibition is called \"In Minor Keys.\" It was planned by a curator (the person who picks the art) named Koyo Kouoh, who was the first African woman to get this job. Sadly, she passed away last year, but her friends and team made sure her vision came to life. There are 110 artists showing their work. Some countries have their own buildings called \"pavilions.\" The United States pavilion is showing artist Alma Allen. But some countries are not happy. The judges said they won't give awards to any country whose leaders are charged with crimes against humanity (very serious crimes) by the International Criminal Court. That's a big deal! Also, a country called Qatar is building a brand-new pavilion in the best area—the first new one in 30 years! And for the first time, countries like Vietnam, Somalia, and Guinea are joining. There's even an artwork that mourns victims of the war in Gaza, which was originally canceled but is now on display in a historic church. Art can be a powerful way to speak up about important issues.",
+  "why_it_matters": "The Venice Biennale shows that art isn't just pretty pictures—it's a way for people from all over the world to share ideas, argue about big issues, and make you think.",
+  "image_url": "/article_images/article_665724ba5f6f.webp",
+  "keywords": [
+    {
+      "term": "Venice Biennale",
+      "explanation": "A big art event that happens every two years in Venice, Italy"
+    },
+    {
+      "term": "In Minor Keys",
+      "explanation": "The name of the main art show at the Biennale"
+    },
+    {
+      "term": "Koyo Kouoh",
+      "explanation": "The person who planned the main exhibition"
+    },
+    {
+      "term": "Alma Allen",
+      "explanation": "The artist showing in the United States pavilion"
+    },
+    {
+      "term": "Qatar",
+      "explanation": "A country building a new pavilion at the Biennale"
+    },
+    {
+      "term": "Gaza",
+      "explanation": "A place whose war victims are remembered in an artwork"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is the Venice Biennale compared to?",
+      "options": [
+        "A movie festival",
+        "The Olympics for art",
+        "A science fair",
+        "A music concert"
+      ],
+      "correct_answer": "The Olympics for art"
+    },
+    {
+      "question": "Who planned the main exhibition called 'In Minor Keys'?",
+      "options": [
+        "Alma Allen",
+        "Koyo Kouoh",
+        "Barbara Chase-Riboud",
+        "Florentina Holzinger"
+      ],
+      "correct_answer": "Koyo Kouoh"
+    },
+    {
+      "question": "Which country is building a new pavilion in the best area?",
+      "options": [
+        "United States",
+        "Qatar",
+        "Vietnam",
+        "Somalia"
+      ],
+      "correct_answer": "Qatar"
+    },
+    {
+      "question": "What did the judges say they won't give awards to?",
+      "options": [
+        "Countries with small pavilions",
+        "Countries whose leaders are charged with crimes against humanity",
+        "Countries that don't speak Italian",
+        "Countries with no art"
+      ],
+      "correct_answer": "Countries whose leaders are charged with crimes against humanity"
+    },
+    {
+      "question": "What artwork was originally canceled but later shown in a church?",
+      "options": [
+        "Elegy",
+        "Seaworld Venice",
+        "The Punk Rockers",
+        "What Remains"
+      ],
+      "correct_answer": "Elegy"
+    },
+    {
+      "question": "Who is the artist showing in the United States pavilion?",
+      "options": [
+        "Koyo Kouoh",
+        "Alma Allen",
+        "Barbara Chase-Riboud",
+        "Nick Cave"
+      ],
+      "correct_answer": "Alma Allen"
+    }
+  ],
+  "background_read": [
+    "The Venice Biennale started in 1895 and is one of the most important art events in the world.",
+    "Countries build special buildings called pavilions to show their best art.",
+    "Sometimes politics affects art, like when judges refuse to award prizes to certain countries."
+  ],
+  "Article_Structure": [
+    "WHO: Curator Koyo Kouoh (who passed away) and artists like Alma Allen.",
+    "WHAT: The 2026 Venice Biennale, with the main exhibition 'In Minor Keys' and many country pavilions.",
+    "WHERE: Venice, Italy, in places like the Giardini and Arsenale.",
+    "WHY: To showcase art from around the world and make statements about important issues like war and justice."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive",
+      "description": "The Biennale gives artists from many countries a chance to share their work and speak about important topics."
+    },
+    {
+      "perspective": "Critical",
+      "description": "Some people think politics should not influence art awards, and that boycotts can limit creativity."
+    },
+    {
+      "perspective": "Neutral",
+      "description": "The Biennale shows how art and world events are often connected, reflecting the time we live in."
+    }
+  ]
+}

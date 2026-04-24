@@ -1,57 +1,30 @@
 {
   "articles": [
     {
-      "id": "ed76bfd5cc90f770",
-      "title": "Tehran's Daily Struggles: War, Economy, and Uncertainty",
-      "summary": "In Tehran, Iran, the spring day seems ordinary on Sanaei Ghaznavi street, but beneath the surface, people are grappling with severe economic hardship. Mohammad, a young shopkeeper, and his father Mustafa run a family shoe store that has been open for 40 years. They sell Chinese-made shoes, including fakes that are still expensive. Mohammad expresses a surprising hope for the resumption of war, believing it might lead to eventual improvement. His father, more experienced, is weary of the worsening economy. An elderly woman named Shahla complains that bread now costs three times as much, making life a struggle. The article highlights how the combination of war and government internet shutdowns has led to massive job losses, with unofficial estimates of up to four million jobs affected. The ceasefire is shaky, and negotiations with America are uncertain. People are caught between wanting peace and fearing that continued economic decline might be worse. The street itself reflects the divide between affluent north and poorer south Tehran. Overall, the article captures a population exhausted by crises and uncertain about the future.",
-      "source": "BBC News",
-      "time_ago": "Just now",
-      "image_url": "/article_images/article_ed76bfd5cc90f770_ff5766e5617e.webp",
-      "category": "News"
-    },
-    {
-      "id": "1b0bc4ddd431ff96",
-      "title": "UK and France Sign Deal to Curb Channel Crossings",
-      "summary": "The UK and France have signed a three-year agreement worth £662 million to combat illegal migration across the English Channel. Under the deal, France will deploy at least 50 riot-trained police officers to beaches, along with drones, two helicopters, and a camera system. For the first time, the UK can withdraw or redirect about £100 million of funding after one year if sufficient progress is not made, though specific targets have not been disclosed. Home Secretary Shabana Mahmood stated the deal will stop illegal migrants and put smugglers behind bars. However, critics argue that crossings have increased despite previous funding, with over 41,000 arrivals in 2025. The Conservative Party accused the government of giving money with no conditions, while Reform UK called the system a failure. Migrants in camps in France expressed hope for a better life in the UK, citing democracy and protection. The agreement aims to enhance surveillance and interception efforts, but its effectiveness remains uncertain.",
-      "source": "BBC News",
-      "time_ago": "1 hour ago",
-      "image_url": "/article_images/article_1b0bc4ddd431ff96_3f9d93f7dc6a.webp",
-      "category": "News"
-    },
-    {
-      "id": "2acdb2ee727ba622",
-      "title": "Rare Axolotl Discovered in Welsh River by Young Girl",
-      "summary": "A 10-year-old girl, Evie Hill, made a remarkable discovery while playing in the River Ogmore in Bridgend, Wales: a nine-inch Mexican axolotl, an endangered amphibian. Evie found the axolotl, later named Dippy, under a discarded mat in the shallows near the 'Dipping Bridge' at Merthyr Mawr. The axolotl had visible injuries to its tail and stomach. Experts confirm this is the first documented wild axolotl in the UK. Axolotls are critically endangered, with only 50 to 1,000 individuals remaining in the wild globally. Their popularity as pets has increased due to appearances in video games like Minecraft and Roblox. Evie's mother, Melanie, was initially shocked but noted her daughter's keen interest in nature. The family cut their campervan holiday short to return to Leicester and care for Dippy. Chris Newman, director of the National Centre for Reptile Welfare, praised Evie for potentially saving the axolotl's life. The discovery highlights the risks of exotic pets being released into the wild, as axolotls are not native to the UK and may struggle to survive.",
-      "source": "BBC News",
-      "time_ago": "1 hour ago",
-      "image_url": "/article_images/article_2acdb2ee727ba622_fd494979aad4.webp",
-      "category": "News"
-    },
-    {
-      "id": "271f3f209fab532a",
-      "title": "UK Mini-Marts Caught Selling Cocaine and Cannabis in BBC Investigation",
-      "summary": "A BBC investigation using secret filming has revealed that mini-marts on UK High Streets are openly selling illegal drugs, including cocaine, cannabis, laughing gas, and prescription pills. Undercover researchers easily purchased cannabis and cocaine from a shop in Cradley Heath, West Midlands. The shopkeeper offered 'weed, coke, everything' and obtained cocaine within hours. The National Crime Agency (NCA) and Chartered Trading Standards Institute (CTSI) state that organized criminal gangs are exploiting shopfronts to push drugs. Analysis of local news reports found drugs in over 70 shops across the UK, from Devon to Northern Ireland. A senior Labour MP, Liam Byrne, is calling for urgent government action, saying 'We can't restore our High Streets unless we take out the cancer of organised crime.' The Home Office says it is working with police and agencies to take strong action. Legitimate businesses in affected areas report intimidation by gangs and witnessed knife and gun violence.",
-      "source": "BBC News",
-      "time_ago": "7 hours ago",
-      "image_url": "/article_images/article_271f3f209fab532a_3b9be6ea63e3.webp",
-      "category": "News"
-    },
-    {
-      "id": "e111e29fd5074d65",
-      "title": "UK Bans Cigarette Sales to Future Generations: A Landmark Public Health Law",
-      "summary": "The UK Parliament has passed the Tobacco and Vapes Bill, which will prohibit anyone born after December 31, 2008 from ever legally purchasing cigarettes. This law aims to create the first smoke-free generation and is one of the strictest anti-smoking measures globally. It also grants the government authority to regulate tobacco, vaping, and nicotine products, including their flavors and packaging. Currently, it is illegal to sell cigarettes to those under 18, but this bill effectively raises the minimum age each year, so younger generations will never reach the legal age to buy tobacco. The number of smokers in the UK has fallen by two-thirds since the 1970s, yet about 6.4 million people (13% of the population) still smoke. Smoking causes approximately 80,000 deaths annually in the UK and remains the leading preventable cause of death and illness. Health Secretary Wes Streeting emphasized that children will be protected from a lifetime of addiction. The bill now requires royal assent from King Charles III to become law. A similar law in New Zealand was passed in 2022 but later repealed by a subsequent government.",
+      "id": "2026-04-24-news-1",
+      "title": "Betting on Yourself: Three Congressional Candidates Fined for Wagering on Their Own Elections",
+      "summary": "Imagine being so sure you'd win an election that you bet money on yourself. That's exactly what three congressional candidates did on a prediction market called Kalshi. But Kalshi has a rule: candidates can't bet on themselves. When the company found out, it fined and suspended Mark Moran, Ezekiel Enriquez, and Matt Klein for five years. Moran, running for Senate in Virginia, bet $100 and bragged online, so he got the biggest fine: over $6,200. Klein and Enriquez each bet under $100 and paid smaller fines. Some politicians, like Rep. Mike Levin, say the penalties are too weak — just 'a parking ticket.' The fines came from the company, not the government agency that oversees prediction markets. Klein admitted his…",
       "source": "PBS NewsHour",
-      "time_ago": "11 hours ago",
-      "image_url": "/article_images/article_e111e29fd5074d65_9a8eb2b53a2c.webp",
+      "time_ago": "Thu, 23 Apr 2026 19:05:03 -0400",
+      "image_url": "/article_images/article_e70859ec15f4.webp",
       "category": "News"
     },
     {
-      "id": "ae2215639c535f16",
-      "title": "Crew Missing After Cargo Ship Capsizes in Super Typhoon",
-      "summary": "A U.S.-registered cargo ship named the Mariana overturned near the Northern Mariana Islands during Super Typhoon Sinlaku, one of the strongest storms this year. The ship had six crew members. Searchers have found the body of one crew member and are still looking for the other five. The U.S. Coast Guard and Japanese divers used an underwater drone to search inside the overturned ship but did not find the missing crew. They are also searching for an orange life raft that might have been deployed. The search covers an area of over 99,000 square miles, about the size of Oregon. The ship lost its starboard engine during the typhoon and contacted the Coast Guard for help on April 15, but communication was lost the next day. The storm had sustained winds of up to 150 mph. The Coast Guard has expressed sympathy for the families and is continuing the search with help from agencies in Guam, Japan, and New Zealand.",
-      "source": "PBS NewsHour",
-      "time_ago": "12 hours ago",
-      "image_url": "/article_images/article_ae2215639c535f16_47c133a617c9.webp",
+      "id": "2026-04-24-news-2",
+      "title": "Mind Over Washington: Mentalist Oz Pearlman to Stun Trump and Reporters at White House Dinner",
+      "summary": "Imagine being able to read someone's mind — even the president's! That's what mentalist Oz Pearlman will try to do at the White House Correspondents' Dinner this Saturday. Instead of a comedian, the 43-year-old performer will take the stage to wow President Donald Trump and hundreds of reporters. Pearlman is famous for guessing secret words and PIN numbers, a trick called mentalism. He got his big break on America's Got Talent in 2015. Pearlman has been planning one amazing moment for 10 years, and he hopes to bring everyone together. Even though experts say it's not real mind-reading, the show promises to be unforgettable. Will he actually read Trump's mind? We'll find out Saturday night!",
+      "source": "NPR World",
+      "time_ago": "Thu, 23 Apr 2026 12:46:53 -0400",
+      "image_url": "/article_images/article_c9fd806dc459.webp",
+      "category": "News"
+    },
+    {
+      "id": "2026-04-24-news-3",
+      "title": "Iranian Leaders Unite to Reject Trump's Claims of a Rift: 'We Are One Soul, One Nation'",
+      "summary": "Imagine a country where everyone is saying the exact same thing at the exact same time — that's what happened in Iran this week. President Trump claimed Iran's leaders were fighting each other, but they proved him wrong. Iran's president, foreign minister, and parliament speaker all posted the same message on X: 'We are one soul, one nation.' This show of unity comes after a huge event — Iran's former Supreme Leader was killed in U.S.-Israeli strikes on February 28. Now, the U.S. has blocked Iranian ports, and Iran closed the Strait of Hormuz, a key waterway for oil. Oil prices are going up as a result. Trump warned he would 'shoot and kill' anyone laying mines in the strait.…",
+      "source": "Al Jazeera",
+      "time_ago": "Thu, 23 Apr 2026 20:26:13 +0000",
+      "image_url": "/article_images/article_23d2604d763b.webp",
       "category": "News"
     }
   ]

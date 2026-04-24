@@ -1,0 +1,119 @@
+{
+  "title": "London Exhibition Tells Stories of Southern Lebanon's People",
+  "summary": "Have you ever felt like nobody is listening to your story? That's how many people in southern Lebanon feel. But a new exhibition in London called \"Forget Me Not\" is making sure their voices are heard. The show features videos, photos, and drawings that tell the history of this region. It shows how people have survived wars and difficult times. One video shows a person saying, \"We are attached to this land just like a tree is rooted in its soil.\" That means they love their home and won't leave, no matter what. The exhibition was created by two people who have family roots in southern Lebanon: Rasha Kotaiche and Ali Abou Khalil. They wanted to share the real stories of their people—not just what you see on the news. There are drawings made by Lebanese schoolchildren celebrating their country's independence day. There are also photos of pomegranates and oranges from the region. The exhibition reminds us that behind every news story about war, there are real people with real lives, hopes, and dreams.",
+  "why_it_matters": "This exhibition shows that even when big countries fight, regular people—just like you and your family—are the ones who feel it most, and their stories deserve to be told.",
+  "image_url": "/article_images/article_710be88f7604.webp",
+  "keywords": [
+    {
+      "term": "Forget Me Not",
+      "explanation": "The name of the exhibition in London"
+    },
+    {
+      "term": "southern Lebanon",
+      "explanation": "The region whose people's stories are told in the exhibition"
+    },
+    {
+      "term": "exhibition",
+      "explanation": "A show of photos, videos, and drawings"
+    },
+    {
+      "term": "London",
+      "explanation": "The city where the exhibition is held"
+    },
+    {
+      "term": "Rasha Kotaiche",
+      "explanation": "One of the creators of the exhibition"
+    },
+    {
+      "term": "Ali Abou Khalil",
+      "explanation": "The other creator of the exhibition"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is the name of the exhibition?",
+      "options": [
+        "Forget Me Not",
+        "Tree Rooted in Soil",
+        "Southern Lebanon Stories",
+        "London Showcase"
+      ],
+      "correct_answer": "Forget Me Not"
+    },
+    {
+      "question": "Where is the exhibition held?",
+      "options": [
+        "Beirut",
+        "London",
+        "New York",
+        "Paris"
+      ],
+      "correct_answer": "London"
+    },
+    {
+      "question": "Who created the exhibition?",
+      "options": [
+        "Jacqueline Burke",
+        "Rasha Kotaiche and Ali Abou Khalil",
+        "Nor Nsralla",
+        "UN peacekeepers"
+      ],
+      "correct_answer": "Rasha Kotaiche and Ali Abou Khalil"
+    },
+    {
+      "question": "What does a person in a video say about the land?",
+      "options": [
+        "We want to leave",
+        "We are attached just like a tree is rooted in soil",
+        "The land is dangerous",
+        "We don't care about the land"
+      ],
+      "correct_answer": "We are attached just like a tree is rooted in soil"
+    },
+    {
+      "question": "What kind of drawings are shown in the exhibition?",
+      "options": [
+        "Drawings of war",
+        "Drawings by Lebanese schoolchildren",
+        "Drawings of animals",
+        "Drawings of London"
+      ],
+      "correct_answer": "Drawings by Lebanese schoolchildren"
+    },
+    {
+      "question": "What fruits are photographed in the exhibition?",
+      "options": [
+        "Apples and bananas",
+        "Pomegranates and oranges",
+        "Grapes and cherries",
+        "Lemons and limes"
+      ],
+      "correct_answer": "Pomegranates and oranges"
+    }
+  ],
+  "background_read": [
+    "Southern Lebanon has experienced many wars and a long occupation.",
+    "Many people from that region feel that the news doesn't tell their true stories.",
+    "This exhibition uses art to help people around the world understand what life is like there."
+  ],
+  "Article_Structure": [
+    "WHO: Rasha Kotaiche and Ali Abou Khalil, creators of the exhibition.",
+    "WHAT: An exhibition called 'Forget Me Not' that shares stories of southern Lebanon through videos, photos, and drawings.",
+    "WHERE: London, at Palestine House.",
+    "WHY: To give a voice to people from southern Lebanon and show their deep connection to their land."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive",
+      "description": "The exhibition allows people from southern Lebanon to share their own stories and be heard."
+    },
+    {
+      "perspective": "Critical",
+      "description": "Some may argue that a short exhibition in London cannot fully capture the reality of life in southern Lebanon."
+    },
+    {
+      "perspective": "Neutral",
+      "description": "Art exhibitions can help raise awareness about neglected regions and humanize complex conflicts."
+    }
+  ]
+}

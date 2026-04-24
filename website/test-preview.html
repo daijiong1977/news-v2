@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KidsNews v2 — Pipeline Test Preview</title>
+<style>
+  :root {
+    --fg: #1c1c1e;
+    --fg-dim: #4a4a4f;
+    --bg: #f4f4f6;
+    --card-bg: #ffffff;
+    --border: #d9d9df;
+    --accent: #1f5fd1;
+    --safe: #1e824c;
+    --caution: #c58a00;
+    --reject: #b22525;
+    --error: #555;
+    --code-bg: #0d1117;
+    --code-fg: #c9d1d9;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 20px 24px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header .meta {
+    font-size: 13px;
+    color: var(--fg-dim);
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 24px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 12px 20px;
+    cursor: pointer;
+    font: inherit;
+    color: var(--fg-dim);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  main { padding: 20px 24px 60px; max-width: 1100px; margin: 0 auto; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+  .cat-summary {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    font-size: 14px;
+    border-radius: 4px;
+  }
+  .cat-summary strong { color: var(--accent); }
+  .cat-summary .pill-list { margin-top: 6px; font-size: 13px; color: var(--fg-dim); }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 14px;
+  }
+  .card.rejected { opacity: 0.75; }
+  .card .thumb {
+    flex: 0 0 200px;
+    height: 150px;
+    background: #eceef1;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: #999;
+    font-size: 12px;
+  }
+  .card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .card .body { flex: 1 1 auto; min-width: 0; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card h3 a { color: var(--fg); text-decoration: none; }
+  .card h3 a:hover { text-decoration: underline; }
+  .card .source {
+    font-size: 12px;
+    color: var(--fg-dim);
+    margin-bottom: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: #eaedf2;
+    color: var(--fg-dim);
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .pill.SAFE { background: var(--safe); }
+  .pill.CAUTION { background: var(--caution); }
+  .pill.REJECT { background: var(--reject); }
+  .pill.ERROR { background: var(--error); }
+  .score-row {
+    font-size: 13px;
+    margin: 6px 0 10px;
+    color: var(--fg-dim);
+  }
+  .score-row .score {
+    font-weight: 700;
+    color: var(--fg);
+  }
+  .flags {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-left: 8px;
+  }
+  .flag {
+    background: #fff2cf;
+    color: #7a5a00;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+  }
+  details {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--fg-dim);
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 500;
+    padding: 2px 0;
+  }
+  details[open] summary { color: var(--fg); }
+  details .det-body {
+    padding: 8px 10px;
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-top: 4px;
+    color: var(--fg);
+    line-height: 1.5;
+  }
+  .raw-content {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    max-height: 400px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  pre.json {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 400px;
+    overflow: auto;
+    margin: 4px 0 0;
+  }
+  .loading { color: var(--fg-dim); font-style: italic; padding: 20px; }
+  .error-msg { color: var(--reject); padding: 12px; background: #fff; border: 1px solid var(--reject); border-radius: 6px; }
+
+  /* Final-3 styling */
+  .final-section {
+    background: linear-gradient(180deg, #fff9e0 0%, #fff 100%);
+    border: 2px solid #d4a017;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .final-section h2 {
+    margin: 0 0 10px;
+    color: #8a6a00;
+    font-size: 16px;
+    letter-spacing: 0.02em;
+  }
+  .final-list { display: flex; flex-direction: column; gap: 10px; }
+  .final-item {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #e9d99b;
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .final-item .fthumb {
+    flex: 0 0 96px;
+    height: 72px;
+    background: #eceef1;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 10px;
+  }
+  .final-item .fthumb img { width: 100%; height: 100%; object-fit: cover; }
+  .final-item .fbody { flex: 1 1 auto; min-width: 0; }
+  .final-item .ftitle {
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0 0 4px;
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .final-item .fmeta { font-size: 12px; color: var(--fg-dim); display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .final-badge {
+    display: inline-block;
+    background: linear-gradient(180deg, #ffd85c 0%, #d4a017 100%);
+    color: #4a2f00;
+    border-radius: 10px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    box-shadow: 0 1px 2px rgba(180, 120, 0, 0.3);
+    margin-right: 6px;
+  }
+  .card.final-pick {
+    border: 2px solid #d4a017;
+    box-shadow: 0 0 0 1px #fff2cf inset;
+  }
+
+  /* Inline-full-article section for the 3 picks */
+  .final-picks {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin: 4px 0 24px;
+  }
+  .final-article {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px 24px;
+  }
+  .final-article .fa-hero {
+    max-width: 500px;
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 6px;
+    margin: 0 0 14px;
+    background: #eceef1;
+  }
+  .final-article h2 {
+    font-size: 22px;
+    line-height: 1.25;
+    margin: 0 0 8px;
+    color: var(--fg);
+    max-width: 700px;
+  }
+  .final-article h2 a {
+    color: var(--fg);
+    text-decoration: none;
+  }
+  .final-article h2 a:hover { text-decoration: underline; color: var(--accent); }
+  .final-article .fa-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 12px;
+    color: var(--fg-dim);
+    margin: 0 0 14px;
+    max-width: 700px;
+  }
+  .final-article .fa-body {
+    max-width: 700px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--fg);
+  }
+  .final-article .fa-body p { margin: 0 0 0.9em; }
+  /* Interest pills */
+  .pill.int-ENGAGING { background: #1e824c; color: #fff; }
+  .pill.int-MEH { background: #c58a00; color: #fff; }
+  .pill.int-BORING { background: #b22525; color: #fff; }
+  .pill.int-ENGAGING, .pill.int-MEH, .pill.int-BORING {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>KidsNews v2 — Pipeline Test Preview</h1>
+  <div class="meta" id="meta">loading run summary...</div>
+</header>
+<nav class="tabs" id="tabs">
+  <button class="tab-btn active" data-cat="News">News</button>
+  <button class="tab-btn" data-cat="Science">Science</button>
+  <button class="tab-btn" data-cat="Fun">Fun</button>
+</nav>
+<main>
+  <section class="pane active" id="pane-News"><div class="loading">loading News...</div></section>
+  <section class="pane" id="pane-Science"><div class="loading">loading Science...</div></section>
+  <section class="pane" id="pane-Fun"><div class="loading">loading Fun...</div></section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // Infer date from today (UTC). If run is from a different date we still try it first,
+  // then fall back to whatever run_summary.json says.
+  function todayUtc() {
+    var d = new Date();
+    return d.getUTCFullYear() + "-" +
+      String(d.getUTCMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getUTCDate()).padStart(2, "0");
+  }
+
+  var DATE = todayUtc();
+  var BASE = "test_output/" + DATE + "/";
+
+  function esc(s) {
+    if (s == null) return "";
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function fetchJson(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status + " on " + url);
+      return r.json();
+    });
+  }
+
+  function renderSummary(summary) {
+    var metaEl = document.getElementById("meta");
+    var calls = summary.api_calls || {};
+    metaEl.innerHTML =
+      '<span>Date: <strong>' + esc(summary.date) + '</strong></span>' +
+      '<span>Duration: <strong>' + esc(summary.duration_sec) + 's</strong></span>' +
+      '<span>Tavily calls: <strong>' + esc(calls.tavily) + '</strong></span>' +
+      '<span>DeepSeek calls: <strong>' + esc(calls.deepseek) + '</strong></span>' +
+      '<span>Jina calls: <strong>' + esc(calls.jina) + '</strong></span>';
+  }
+
+  function renderCategory(cat, data) {
+    var pane = document.getElementById("pane-" + cat);
+    if (!data || !data.candidates) {
+      pane.innerHTML = '<div class="error-msg">No data for ' + esc(cat) + '</div>';
+      return;
+    }
+    var total = data.discovered_count || 0;
+    var safe = data.safe_count || 0;
+    var caution = data.caution_count || 0;
+    var reject = data.reject_count || 0;
+
+    var readDist = { tavily: 0, jina: 0, snippet_only: 0, none: 0 };
+    data.candidates.forEach(function (c) {
+      var k = c.read_method || "none";
+      readDist[k] = (readDist[k] || 0) + 1;
+    });
+
+    // Final-3 section (selected_for_publish)
+    var finals = data.candidates.filter(function (c) { return c.selected_for_publish; });
+    // Sort by vetted_rank asc
+    finals.sort(function (a, b) {
+      var ar = a.vetted_rank == null ? 999 : a.vetted_rank;
+      var br = b.vetted_rank == null ? 999 : b.vetted_rank;
+      return ar - br;
+    });
+
+    var html = '';
+
+    // Full inline rendering of the 3 picks at the top of each tab pane.
+    if (finals.length) {
+      html += '<section class="final-picks">';
+      finals.forEach(function (c) {
+        html += renderFinalArticle(c);
+      });
+      html += '</section>';
+    }
+
+    html += '<div class="cat-summary">';
+    html += '<div><strong>' + esc(cat) + ':</strong> ' + total + ' discovered | ';
+    html += safe + ' SAFE | ' + caution + ' CAUTION | ' + reject + ' REJECT | ';
+    if (data.engaging_count != null) {
+      html += (data.engaging_count||0) + ' ENGAGING | ' + (data.meh_count||0) + ' MEH | ' + (data.boring_count||0) + ' BORING | ';
+    }
+    html += '<strong>' + finals.length + ' FINAL</strong></div>';
+    html += '<div class="pill-list">Query: <em>' + esc(data.query || '') + '</em> &middot; Topic: ' + esc(data.topic || '') + '</div>';
+    html += '<div class="pill-list">Read methods: ';
+    html += 'tavily=' + (readDist.tavily||0) + ', jina=' + (readDist.jina||0) + ', html_scrape=' + (readDist.html_scrape||0) + ', snippet_only=' + (readDist.snippet_only||0);
+    if (readDist.none) html += ', none=' + readDist.none;
+    html += '</div>';
+    if (data.image_match_pct_description != null) {
+      html += '<div class="pill-list">Image matching: ' + esc(data.image_match_pct_description) + '% of ' +
+              esc(data.tavily_images_total || 0) + ' Tavily images came from description-match</div>';
+    }
+    if (data.boring_dropped_at_interest_filter != null) {
+      html += '<div class="pill-list">Interest filter dropped: ' + esc(data.boring_dropped_at_interest_filter) + ' BORING candidate(s)</div>';
+    }
+    if (data.curator) {
+      var cur = data.curator;
+      html += '<div class="pill-list">Curator: ' +
+        (cur.picks ? cur.picks.length : 0) + ' picks, ' +
+        (cur.duplicates ? cur.duplicates.length : 0) + ' duplicate cluster(s), ' +
+        'alt-fallbacks used: ' + (cur.alternates_used || 0) +
+        '</div>';
+      if (cur.duplicates && cur.duplicates.length) {
+        html += '<details style="margin-top:6px;"><summary>Duplicate clusters</summary><div class="det-body">';
+        cur.duplicates.forEach(function (d) {
+          html += '<div style="margin:4px 0;">ids: ' + esc((d.ids || []).join(', ')) +
+            ' — <em>' + esc(d.reason || '') + '</em></div>';
+        });
+        html += '</div></details>';
+      }
+    }
+    html += '</div>';
+
+    html += '<h3 style="margin-top:22px; font-size:15px; color:#4a4a4f;">All candidates considered (incl. rejected)</h3>';
+    data.candidates.forEach(function (c) {
+      html += renderCard(c);
+    });
+
+    pane.innerHTML = html;
+  }
+
+  function renderFinalArticle(c) {
+    var verdict = c.vetter_verdict || 'ERROR';
+    var iverdict = c.interest_verdict || 'BORING';
+    var ipeak = c.interest_peak != null ? c.interest_peak : '?';
+    var safetyTot = c.vetter_score != null ? c.vetter_score : '?';
+
+    var heroHtml = '';
+    if (c.image_url) {
+      var src = c.image_url;
+      if (!/^https?:/.test(src)) src = BASE + src;
+      heroHtml = '<img class="fa-hero" src="' + esc(src) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+    }
+
+    // Render paragraphs from raw_content (split on \n\n)
+    var bodyHtml = '';
+    var raw = c.raw_content || '';
+    if (raw) {
+      var paras = raw.split(/\n{2,}/).map(function (p) { return p.trim(); }).filter(Boolean);
+      if (!paras.length && raw.trim()) paras = [raw.trim()];
+      bodyHtml = paras.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('');
+    } else if (c.snippet) {
+      bodyHtml = '<p><em>(no full text available — showing snippet)</em></p><p>' + esc(c.snippet) + '</p>';
+    } else {
+      bodyHtml = '<p><em>(no text available)</em></p>';
+    }
+
+    var html = '<article class="final-article">';
+    html += heroHtml;
+    html += '<h2><a href="' + esc(c.source_url) + '" target="_blank" rel="noopener">' + esc(c.title || '(untitled)') + '</a></h2>';
+    html += '<div class="fa-meta">';
+    html += '<span class="badge">' + esc(c.source_name || '') + '</span>';
+    if (c.discovery_group) {
+      html += '<span class="badge">Group ' + esc(c.discovery_group) + '</span>';
+    }
+    html += '<span class="pill ' + esc(verdict) + '">' + esc(verdict) + '</span>';
+    html += '<span class="badge">safety ' + esc(safetyTot) + '/40</span>';
+    html += '<span class="pill int-' + esc(iverdict) + '">' + esc(iverdict) + '</span>';
+    html += '<span class="badge">interest_peak ' + esc(ipeak) + '/5</span>';
+    if (c.is_hot_duplicate) {
+      html += '<span class="badge" style="background:#ffe0e0;color:#b22525;font-weight:700;">&#128293; HOT</span>';
+    }
+    if (c.alternate_promoted) {
+      html += '<span class="badge" style="background:#e0f0ff;color:#1f5fd1;">alt-fallback</span>';
+    }
+    if (c.vetted_rank != null) html += '<span class="badge">vetted #' + esc(c.vetted_rank) + '</span>';
+    html += '</div>';
+    html += '<div class="fa-body">' + bodyHtml + '</div>';
+    html += '</article>';
+    return html;
+  }
+
+  function renderFinalItem(c) {
+    var thumb;
+    if (c.image_url) {
+      var src = c.image_url;
+      if (!/^https?:/.test(src)) src = BASE + src;
+      thumb = '<div class="fthumb"><img src="' + esc(src) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'(no img)\'"></div>';
+    } else {
+      thumb = '<div class="fthumb">(no img)</div>';
+    }
+    var verdict = c.vetter_verdict || '';
+    var rank = c.vetted_rank != null ? c.vetted_rank : '?';
+    var html = '<div class="final-item">';
+    html += thumb;
+    html += '<div class="fbody">';
+    html += '<div class="ftitle">' + esc(c.title || '(untitled)') + '</div>';
+    html += '<div class="fmeta">';
+    html += '<span class="pill ' + esc(verdict) + '">' + esc(verdict) + '</span>';
+    html += '<span class="badge">vetted #' + esc(rank) + '</span>';
+    html += '<span class="badge">' + esc(c.source_name || '') + '</span>';
+    html += '</div></div></div>';
+    return html;
+  }
+
+  function renderCard(c) {
+    var verdict = c.vetter_verdict || "ERROR";
+    var iverdict = c.interest_verdict || "";
+    var ipeak = c.interest_peak != null ? c.interest_peak : null;
+    var rejected = verdict === "REJECT" || verdict === "ERROR";
+    var finalPick = !!c.selected_for_publish;
+    var thumb;
+    if (c.image_url) {
+      var src = c.image_url;
+      // if relative (starts with "images/"), make it absolute within today's folder
+      if (!/^https?:/.test(src)) src = BASE + src;
+      thumb = '<div class="thumb"><img src="' + esc(src) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'(image load failed)\'"></div>';
+    } else {
+      thumb = '<div class="thumb">(no image)</div>';
+    }
+
+    var flagsHtml = "";
+    if (c.vetter_flags && c.vetter_flags.length) {
+      flagsHtml = '<span class="flags">' + c.vetter_flags.map(function (f) {
+        return '<span class="flag">' + esc(f) + '</span>';
+      }).join("") + '</span>';
+    }
+
+    var vettedRankHtml = c.vetted_rank != null ? '<span class="badge">vetted #' + c.vetted_rank + '</span>' : '';
+
+    var cardClass = 'card';
+    if (rejected) cardClass += ' rejected';
+    if (finalPick) cardClass += ' final-pick';
+    var inner = '';
+    inner += thumb;
+    inner += '<div class="body">';
+    if (finalPick) {
+      inner += '<div style="margin-bottom:6px;"><span class="final-badge">★ FINAL 3</span></div>';
+    }
+    inner += '<h3><a href="' + esc(c.source_url) + '" target="_blank" rel="noopener">' + esc(c.title) + '</a></h3>';
+    inner += '<div class="source">';
+    inner += '<span>' + esc(c.source_name) + '</span>';
+    inner += '<span class="badge">' + esc(c.discovery_lane) + '</span>';
+    if (c.discovery_group) {
+      inner += '<span class="badge">Group ' + esc(c.discovery_group) + '</span>';
+    }
+    inner += '<span class="badge">discovered #' + esc(c.discovered_rank) + '</span>';
+    inner += vettedRankHtml;
+    inner += '<span class="badge">' + esc(c.read_method || 'no-read') + '</span>';
+    if (c.image_match_source) {
+      inner += '<span class="badge">img:' + esc(c.image_match_source) + '</span>';
+    }
+    if (c.is_hot_duplicate) {
+      inner += '<span class="badge" style="background:#ffe0e0;color:#b22525;font-weight:700;">&#128293; HOT</span>';
+    }
+    if (c.alternate_promoted) {
+      inner += '<span class="badge" style="background:#e0f0ff;color:#1f5fd1;">alt-fallback</span>';
+    }
+    if (c.curator_reason) {
+      inner += '<span class="badge" title="' + esc(c.curator_reason) + '">curator</span>';
+    }
+    inner += '</div>';
+    inner += '<div class="score-row">';
+    inner += '<span class="pill ' + verdict + '">' + verdict + '</span> ';
+    inner += '<span class="score">Safety ' + (c.vetter_score != null ? c.vetter_score : '?') + '/40</span>';
+    if (iverdict) {
+      inner += ' <span class="pill int-' + esc(iverdict) + '">' + esc(iverdict) + '</span>';
+    }
+    if (ipeak != null) {
+      inner += ' <span class="score">Interest peak ' + esc(ipeak) + '/5</span>';
+    }
+    inner += flagsHtml;
+    inner += '</div>';
+    if (c.interest_scores) {
+      inner += '<div class="score-row">Interest: '
+        + 'importance=' + esc(c.interest_scores.importance) + ', '
+        + 'fun_factor=' + esc(c.interest_scores.fun_factor) + ', '
+        + 'kid_appeal=' + esc(c.interest_scores.kid_appeal)
+        + '</div>';
+    }
+
+    if (c.vetter_notes) {
+      inner += '<details><summary>Rewrite notes</summary><div class="det-body">' + esc(c.vetter_notes) + '</div></details>';
+    }
+    inner += '<details><summary>Snippet</summary><div class="det-body">' + esc(c.snippet || '(no snippet)') + '</div></details>';
+    if (c.raw_content) {
+      inner += '<details><summary>Full raw_content (' + c.raw_content.length + ' chars)</summary>';
+      inner += '<div class="det-body raw-content">' + esc(c.raw_content) + '</div></details>';
+    }
+    if (c.vetter_payload) {
+      inner += '<details><summary>Raw vetter payload</summary>';
+      inner += '<pre class="json">' + esc(JSON.stringify(c.vetter_payload, null, 2)) + '</pre></details>';
+    }
+    inner += '</div>';
+
+    // Non-selected cards are collapsed by default inside a <details>.
+    // Selected picks already appear in the final-picks section at top — render as expanded card here too.
+    if (finalPick) {
+      return '<article class="' + cardClass + '">' + inner + '</article>';
+    }
+    var summaryLine = esc(c.title || '(untitled)') + ' — ' + esc(verdict);
+    if (iverdict) summaryLine += ' / ' + esc(iverdict);
+    return '<details class="card-wrap" style="margin-bottom:14px;">'
+      + '<summary style="cursor:pointer; padding:8px 12px; background:#fff; border:1px solid var(--border); border-radius:6px; ' + (rejected ? 'opacity:0.7;' : '') + '">'
+      + summaryLine + '</summary>'
+      + '<article class="' + cardClass + '" style="margin-top:6px;">' + inner + '</article>'
+      + '</details>';
+  }
+
+  var loaded = { News: false, Science: false, Fun: false };
+  var catFile = { News: "news.json", Science: "science.json", Fun: "fun.json" };
+
+  function loadCategory(cat) {
+    if (loaded[cat]) return;
+    var pane = document.getElementById("pane-" + cat);
+    pane.innerHTML = '<div class="loading">loading ' + cat + '...</div>';
+    fetchJson(BASE + catFile[cat]).then(function (data) {
+      loaded[cat] = true;
+      renderCategory(cat, data);
+    }).catch(function (e) {
+      pane.innerHTML = '<div class="error-msg">Failed to load ' + cat + ': ' + esc(e.message) + '</div>';
+    });
+  }
+
+  function wireTabs() {
+    document.querySelectorAll(".tab-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var cat = btn.dataset.cat;
+        document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.toggle("active", b === btn); });
+        document.querySelectorAll(".pane").forEach(function (p) {
+          p.classList.toggle("active", p.id === "pane-" + cat);
+        });
+        loadCategory(cat);
+      });
+    });
+  }
+
+  function start() {
+    wireTabs();
+    fetchJson(BASE + "run_summary.json").then(function (summary) {
+      // If the server's date doesn't match today, re-derive BASE from summary.date.
+      if (summary && summary.date && summary.date !== DATE) {
+        DATE = summary.date;
+        BASE = "test_output/" + DATE + "/";
+        // reset loaded flags so data reloads from the correct path
+        loaded = { News: false, Science: false, Fun: false };
+      }
+      renderSummary(summary);
+      loadCategory("News");
+    }).catch(function (e) {
+      document.getElementById("meta").innerHTML =
+        '<span style="color:#b22525">Failed to load run_summary.json: ' + esc(e.message) + '</span>';
+      // still try to load News by date
+      loadCategory("News");
+    });
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>

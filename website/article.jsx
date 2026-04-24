@@ -22,11 +22,16 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
       .then(d => {
         if (cancelled) return;
         // Map v1 field shapes to the prototype's expected shape.
+        // v1 detail pattern: full body lives in `summary`; `background_read` is
+        // supplementary context (for the Analyze tab), not the body.
+        const bgRead = Array.isArray(d.background_read)
+          ? d.background_read.join('\n\n')
+          : (typeof d.background_read === 'string' ? d.background_read : '');
         const mapped = {
-          body: Array.isArray(d.background_read)
-            ? d.background_read.join('\n\n')
-            : (typeof d.background_read === 'string' ? d.background_read : (d.summary || '')),
+          body: d.summary || '',                        // FULL regenerated article body
           summary: d.summary || baseArticle.summary,
+          backgroundRead: bgRead,                       // shown on Analyze tab
+          whyItMatters: d.why_it_matters || '',
           keywords: (d.keywords || []).map(k => ({ term: k.term, def: k.explanation })),
           quiz: (d.questions || []).map(q => {
             const idx = q.options.findIndex(opt => opt === q.correct_answer);
@@ -50,6 +55,8 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
       ...baseArticle,
       summary: d.summary || baseArticle.summary,
       body: d.body || '',
+      backgroundRead: d.backgroundRead || '',
+      whyItMatters: d.whyItMatters || '',
       keywords: d.keywords || [],
       quiz: d.quiz || [],
       discussion: d.discussion || [],
@@ -225,20 +232,25 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
 }
 
 // ——— Highlight keywords in a text string ———
+// Matches base terms AND common English inflections (ban → banned, fine → fined).
+// The base term is captured as group 1 so we can look up the definition even
+// when the matched text is an inflected form like "banned".
 function highlightText(text, keywords, catColor) {
   if (!keywords || !keywords.length) return [text];
-  const parts = [];
-  let working = text;
   const termMap = {};
   keywords.forEach(k => { termMap[k.term.toLowerCase()] = k; });
-  const terms = keywords.map(k => k.term).sort((a,b)=>b.length-a.length);
-  const pattern = new RegExp(`\\b(${terms.map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')})\\b`, 'gi');
-  let last = 0, m;
+  // Sort longer-first so multi-word terms ("prediction market") win over
+  // single-word subsets ("prediction").
+  const terms = keywords.map(k => k.term).sort((a, b) => b.length - a.length);
+  const SUFFIX = '(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers)?';
+  const alt = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const pattern = new RegExp(`\\b(${alt})${SUFFIX}\\b`, 'gi');
   const result = [];
-  let idx = 0;
+  let last = 0, m, idx = 0;
   while ((m = pattern.exec(text)) !== null) {
     if (m.index > last) result.push(text.substring(last, m.index));
-    const kw = termMap[m[0].toLowerCase()];
+    const base = (m[1] || '').toLowerCase();   // captured base term
+    const kw = termMap[base];
     result.push(<KwTip key={`kw-${idx++}`} text={m[0]} def={kw?.def || ''} color={catColor}/>);
     last = m.index + m[0].length;
   }
@@ -273,6 +285,7 @@ function KwTip({ text, def, color }) {
 // ——————— READ & WORDS TAB (combined) ———————
 function ReadAndWordsTab({ article, paragraphs, expanded, setExpanded, onFinish }) {
   const catColor = getCatColor(article.category);
+  const [gameOpen, setGameOpen] = useStateA(false);
   return (
     <div style={{display:'grid', gridTemplateColumns:'1.6fr 1fr', gap:24}}>
       <div style={{background:'#fff', borderRadius:22, padding:'30px 34px', border:'2px solid #f0e8d8'}}>
@@ -306,24 +319,121 @@ function ReadAndWordsTab({ article, paragraphs, expanded, setExpanded, onFinish 
               <KeywordCard key={i} kw={k} idx={i} expanded={expanded===i} onToggle={()=>setExpanded(expanded===i ? null : i)}/>
             ))}
           </div>
+          {article.keywords.length >= 2 && (
+            <button onClick={()=>setGameOpen(true)} style={{
+              marginTop:12, width:'100%', background:`linear-gradient(135deg, ${catColor}, #1b1230)`,
+              color:'#fff', border:'none', borderRadius:12, padding:'10px 12px',
+              fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'Nunito, sans-serif',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              boxShadow:'0 2px 0 rgba(27,18,48,0.1)',
+            }}>🎮 Match the meanings</button>
+          )}
         </div>
-        <div style={{background:'#fff', border:'2px solid #f0e8d8', borderRadius:18, padding:16}}>
-          <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:15, marginBottom:10, color:'#1b1230'}}>🎧 Reading tools</div>
-          <button style={toolBtn}>🔊 Read aloud</button>
-          <button style={toolBtn}>🔤 Bigger text</button>
-          <button style={toolBtn}>🔖 Save for later</button>
-        </div>
+        {article.whyItMatters && (
+          <div style={{background:'#fff4c2', border:'2px solid #ffe28a', borderRadius:18, padding:18}}>
+            <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:10}}>
+              <div style={{fontSize:22}}>💡</div>
+              <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:16, color:'#1b1230'}}>Why it matters</div>
+            </div>
+            <p style={{fontSize:13.5, lineHeight:1.6, color:'#2a1f3d', margin:0, fontFamily:'Nunito, sans-serif'}}>
+              {highlightText(article.whyItMatters, article.keywords, catColor)}
+            </p>
+          </div>
+        )}
       </aside>
+      {gameOpen && <WordMatchGame keywords={article.keywords} catColor={catColor} onClose={()=>setGameOpen(false)}/>}
     </div>
   );
 }
 
-const toolBtn = {
-  width:'100%', textAlign:'left', background:'#fff9ef', border:'1.5px solid #f0e8d8',
-  borderRadius:12, padding:'9px 12px', marginBottom:6, fontWeight:700, fontSize:13,
-  cursor:'pointer', color:'#1b1230', display:'flex', alignItems:'center', gap:8,
-  fontFamily:'Nunito, sans-serif',
-};
+function WordMatchGame({ keywords, catColor, onClose }) {
+  // Shuffle definitions once per open so user matches term → meaning.
+  const shuffledDefs = useMemoA(() => {
+    const defs = keywords.map((k, i) => ({ def: k.def, idx: i }));
+    for (let i = defs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [defs[i], defs[j]] = [defs[j], defs[i]];
+    }
+    return defs;
+  }, [keywords]);
+  const [picks, setPicks] = useStateA(Array(keywords.length).fill(''));
+  const [checked, setChecked] = useStateA(false);
+  const correct = picks.filter((p, i) => String(p) === String(i)).length;
+  const total = keywords.length;
+  const stars = Math.round((correct / Math.max(total,1)) * 5);
+
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'rgba(27,18,48,0.5)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20,
+    }}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        background:'#fff', borderRadius:22, padding:'26px 28px', maxWidth:560, width:'100%',
+        maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(27,18,48,0.3)',
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
+          <div style={{fontSize:26}}>🎮</div>
+          <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:20, color:'#1b1230', margin:0, flex:1}}>Match the meanings</h2>
+          <button onClick={onClose} style={{background:'transparent', border:'none', fontSize:22, cursor:'pointer', color:'#6b5c80'}}>✕</button>
+        </div>
+        <p style={{fontSize:13, color:'#6b5c80', marginTop:0, marginBottom:16}}>Pick the right meaning for each word.</p>
+        <div style={{display:'flex', flexDirection:'column', gap:10}}>
+          {keywords.map((kw, i) => {
+            const isRight = checked && String(picks[i]) === String(i);
+            const isWrong = checked && picks[i] !== '' && String(picks[i]) !== String(i);
+            return (
+              <div key={i} style={{display:'flex', gap:10, alignItems:'center'}}>
+                <div style={{
+                  flex:'0 0 30%', background: catColor+'22', color: catColor,
+                  fontWeight:800, padding:'10px 12px', borderRadius:10, fontSize:14, textAlign:'center',
+                }}>{kw.term}</div>
+                <select value={picks[i]} disabled={checked} onChange={e=>{
+                  const v = e.target.value;
+                  setPicks(prev => { const n = [...prev]; n[i] = v; return n; });
+                }} style={{
+                  flex:1, padding:'10px 12px', borderRadius:10, fontSize:13,
+                  border: `2px solid ${isRight ? '#17b3a6' : isWrong ? '#ff6b5b' : '#f0e8d8'}`,
+                  background:'#fff9ef', color:'#1b1230', fontFamily:'Nunito, sans-serif', cursor: checked ? 'default' : 'pointer',
+                }}>
+                  <option value="">Pick a meaning…</option>
+                  {shuffledDefs.map(({ def, idx }) => (
+                    <option key={idx} value={idx}>{def}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+        {checked ? (
+          <div style={{marginTop:16, background: correct === total ? '#e0f6f3' : '#fff4c2', borderRadius:14, padding:'14px 16px', textAlign:'center'}}>
+            <div style={{fontSize:28, marginBottom:4}}>{'⭐'.repeat(stars)}{'☆'.repeat(5 - stars)}</div>
+            <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>
+              {correct} / {total} correct {correct === total ? '🎉' : ''}
+            </div>
+            <div style={{display:'flex', gap:8, marginTop:12, justifyContent:'center'}}>
+              <button onClick={()=>{setPicks(Array(total).fill('')); setChecked(false);}} style={{
+                background: catColor, color:'#fff', border:'none', borderRadius:10, padding:'10px 18px',
+                fontWeight:800, fontSize:13, cursor:'pointer',
+              }}>↻ Try again</button>
+              <button onClick={onClose} style={{
+                background:'#fff9ef', color:'#1b1230', border:'2px solid #f0e8d8', borderRadius:10, padding:'10px 18px',
+                fontWeight:800, fontSize:13, cursor:'pointer',
+              }}>Done</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{display:'flex', justifyContent:'flex-end', marginTop:16}}>
+            <button onClick={()=>setChecked(true)} disabled={picks.some(p => p === '')} style={{
+              background: picks.some(p => p === '') ? '#d8cfb8' : '#ffc83d',
+              color:'#1b1230', border:'none', borderRadius:10, padding:'10px 22px',
+              fontWeight:800, fontSize:14, cursor: picks.some(p => p === '') ? 'not-allowed' : 'pointer',
+            }}>Check answers</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function KeywordCard({ kw, idx, expanded, onToggle }) {
   const palette = [
@@ -351,19 +461,67 @@ function AnalyzeTab({ article, paragraphs, onNext }) {
   const [articleOpen, setArticleOpen] = useStateA(false);
   const catColor = getCatColor(article.category);
 
-  const bgText = `This story comes from ${article.source}, a ${article.category === 'Science' ? 'science source' : 'news source'} that covers stories for kids. Reporters gather facts by talking to scientists, officials, and people involved, then write what they learned. When you read, think about WHO is doing something, WHAT is happening, WHERE it takes place, WHY it matters, and WHEN it happened. Learning to spot these parts helps you become a sharp news reader!`;
+  const isTree = article.level === 'Tree';
 
-  // Parse Article_Structure entries like "WHO: ...", "WHAT: ...", "WHERE: ...",
-  // "WHY: ..." (and sometimes WHEN/HOW) into a label->value map.
-  const structure = {};
-  for (const line of (article.articleStructure || [])) {
-    const m = typeof line === 'string' ? line.match(/^\s*([A-Za-z]+)\s*:\s*(.*)$/) : null;
-    if (m) structure[m[1].toUpperCase()] = m[2].trim();
+  // Background paragraphs: prefer payload's background_read (deeper at middle,
+  // simpler at easy). Fall back to a generic intro sentence only if missing.
+  const bgParagraphs = (article.backgroundRead || '').trim()
+    ? article.backgroundRead.split(/\n\n+/).map(s => s.trim()).filter(Boolean)
+    : [`This story comes from ${article.source}, a ${article.category === 'Science' ? 'science source' : 'news source'} that covers stories for kids. When you read, think about WHO is doing something, WHAT is happening, WHERE it takes place, and WHY it matters.`];
+
+  // Easy level: parse WHO/WHAT/WHERE/WHY into a 5W grid.
+  // Tree level: render Article_Structure as a nested mind-tree preserving
+  // leading-whitespace + └─/├─ indentation from the payload.
+  let structureBlock = null;
+  if (isTree) {
+    structureBlock = (
+      <div style={{display:'flex', flexDirection:'column', gap:6}}>
+        {(article.articleStructure || []).map((line, i) => {
+          const raw = typeof line === 'string' ? line : String(line);
+          const m = raw.match(/^(\s*)(.*)$/);
+          const indent = m ? m[1].length : 0;
+          const text = m ? m[2] : raw;
+          // Split "LABEL: rest" so label can be bolded
+          const lm = text.match(/^([A-Z][A-Z \/]*[A-Z]|[A-Z][a-z]+):\s*(.*)$/);
+          return (
+            <div key={i} style={{
+              paddingLeft: indent * 8,
+              fontSize:14, lineHeight:1.55, color:'#2a1f3d',
+              fontFamily:'Nunito, sans-serif',
+            }}>
+              {lm ? (
+                <span>
+                  <span style={{fontWeight:800, color:'#1b1230'}}>{lm[1]}</span>
+                  <span>: </span>
+                  <span>{highlightText(lm[2], article.keywords, catColor)}</span>
+                </span>
+              ) : (
+                <span>{highlightText(text, article.keywords, catColor)}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else {
+    const structure = {};
+    for (const line of (article.articleStructure || [])) {
+      const m = typeof line === 'string' ? line.match(/^\s*([A-Za-z]+)\s*:\s*(.*)$/) : null;
+      if (m) structure[m[1].toUpperCase()] = m[2].trim();
+    }
+    const who = structure.WHO || (article.title.split(' ').slice(0, 3).join(' ') + '…');
+    const what = structure.WHAT || ((article.summary || '').split('.')[0] + '.');
+    const where = structure.WHERE || (article.category === 'Science' ? 'In labs, field studies, or around the world' : 'Mentioned in the story');
+    const why = structure.WHY || `It matters because it affects ${article.category === 'Science' ? 'how we understand the world' : 'people, animals, or the planet'}.`;
+    structureBlock = (
+      <div style={{display:'flex', flexDirection:'column', gap:10}}>
+        <WRow label="Who" emoji="👤" value={who}/>
+        <WRow label="What" emoji="💡" value={what}/>
+        <WRow label="Where" emoji="📍" value={where}/>
+        <WRow label="Why" emoji="❓" value={why}/>
+      </div>
+    );
   }
-  const who = structure.WHO || (article.title.split(' ').slice(0, 3).join(' ') + '…');
-  const what = structure.WHAT || ((article.summary || '').split('.')[0] + '.');
-  const where = structure.WHERE || (article.category === 'Science' ? 'In labs, field studies, or around the world' : 'Mentioned in the story');
-  const why = structure.WHY || `It matters because it affects ${article.category === 'Science' ? 'how we understand the world' : 'people, animals, or the planet'}.`;
 
   return (
     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
@@ -373,23 +531,20 @@ function AnalyzeTab({ article, paragraphs, onNext }) {
           <div style={{fontSize:26}}>🧭</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:20, color:'#1b1230', margin:0}}>Background you need</h2>
         </div>
-        <p style={{fontSize:15, lineHeight:1.7, color:'#2a1f3d', margin:0}}>
-          {highlightText(bgText, article.keywords, catColor)}
-        </p>
+        {bgParagraphs.map((p, i) => (
+          <p key={i} style={{fontSize:15, lineHeight:1.7, color:'#2a1f3d', margin: i === 0 ? 0 : '12px 0 0'}}>
+            {highlightText(p, article.keywords, catColor)}
+          </p>
+        ))}
       </div>
 
-      {/* Right: 5W Structure */}
+      {/* Right: Structure (5W for easy, mind-tree for middle) */}
       <div style={{background:'#fff', borderRadius:22, padding:'26px 30px', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
           <div style={{fontSize:26}}>🔍</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:20, color:'#1b1230', margin:0}}>Break it down</h2>
         </div>
-        <div style={{display:'flex', flexDirection:'column', gap:10}}>
-          <WRow label="Who" emoji="👤" value={who}/>
-          <WRow label="What" emoji="💡" value={what}/>
-          <WRow label="Where" emoji="📍" value={where}/>
-          <WRow label="Why" emoji="❓" value={why}/>
-        </div>
+        {structureBlock}
       </div>
 
       {/* Full-width: Article reference collapsible */}
@@ -555,7 +710,6 @@ function DiscussTab({ article, paragraphs, onDone }) {
 
         {article.discussion.map((d, i) => (
           <div key={i} style={{background:'#fff4c2', borderRadius:16, padding:'16px 18px', marginBottom:14, border:'2px solid #ffe28a'}}>
-            <div style={{fontSize:11, fontWeight:800, color:'#8a6d00', letterSpacing:'.1em', textTransform:'uppercase', marginBottom:6}}>Question {i+1}</div>
             <div style={{fontFamily:'Fraunces, serif', fontWeight:700, fontSize:18, color:'#1b1230', lineHeight:1.3}}>{d}</div>
           </div>
         ))}

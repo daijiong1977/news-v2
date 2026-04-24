@@ -1,0 +1,132 @@
+{
+  "title": "Art World Olympics: Drama, Boycotts, and a Historic First at the 2026 Venice Biennale",
+  "summary": "The Venice Biennale—often called the \"Art World Olympics\"—is back, and this year it's packed with political drama, historic firsts, and powerful statements. The main exhibition, titled \"In Minor Keys,\" was curated by Koyo Kouoh, the first African woman ever chosen for this prestigious role. After her sudden death last year, her team rallied to preserve her vision, which features 110 artists including Nick Cave, Wangechi Mutu, and Alfredo Jaar. The Biennale is divided into three main venues: the Giardini (the most prestigious area with 29 permanent national pavilions), the Arsenale (a temporary space rented by countries), and collateral events scattered across Venice. This year, Qatar will become the first country in 30 years to build a new permanent pavilion in the Giardini—a major soft-power move as the Gulf nation shifts away from fossil fuels. First-time participants include Vietnam, Somalia, Guinea, and Sierra Leone. But the biggest headlines come from controversy. South Africa withdrew after canceling \"Elegy,\" a video installation mourning victims of Israel's genocide in Gaza. That artwork will now be shown at a historic church. Israel is returning with a stipulation that its artist can't close the pavilion, while Russia is back after a boycott. The international judges announced they will not consider national pavilions of countries whose leaders are charged with crimes against humanity by the International Criminal Court—a direct reference to ongoing conflicts. The US pavilion, the only privately owned one in the Giardini, will feature Alma Allen after Barbara Chase-Riboud withdrew, saying, \"For me, as a world citizen, this was not the moment.\" Other highlights include Australia's Khaled Sabsabi, Canada's Abbas Akhavan, and Germany's pavilion exploring \"architecture, history, and psychology in productive tension.\" Austria's Florentina Holzinger has the best show title: \"Seaworld Venice,\" using mythological sea creatures to imagine Venice's future.",
+  "why_it_matters": "The Biennale matters because it shows how art becomes a battlefield for real-world issues—human rights, war, and identity—forcing you to confront questions that can't be answered with a simple like or share.",
+  "image_url": "/article_images/article_665724ba5f6f.webp",
+  "keywords": [
+    {
+      "term": "Venice Biennale",
+      "explanation": "Major art exhibition held every two years in Venice"
+    },
+    {
+      "term": "In Minor Keys",
+      "explanation": "Title of the main exhibition for 2026"
+    },
+    {
+      "term": "Koyo Kouoh",
+      "explanation": "First African woman to curate the main exhibition, who died suddenly"
+    },
+    {
+      "term": "Giardini",
+      "explanation": "Most prestigious area of the Biennale with permanent national pavilions"
+    },
+    {
+      "term": "Qatar",
+      "explanation": "Country building a new permanent pavilion in the Giardini"
+    },
+    {
+      "term": "International Criminal Court",
+      "explanation": "Court that prosecutes crimes against humanity; referenced in judges' rules"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is the main exhibition at the 2026 Venice Biennale called?",
+      "options": [
+        "In Major Keys",
+        "In Minor Keys",
+        "Art World Olympics",
+        "Seaworld Venice"
+      ],
+      "correct_answer": "In Minor Keys"
+    },
+    {
+      "question": "Who was the first African woman to curate the main exhibition?",
+      "options": [
+        "Barbara Chase-Riboud",
+        "Koyo Kouoh",
+        "Rasha Kotaiche",
+        "Florentina Holzinger"
+      ],
+      "correct_answer": "Koyo Kouoh"
+    },
+    {
+      "question": "Which of these is a venue at the Venice Biennale?",
+      "options": [
+        "Louvre",
+        "Giardini",
+        "Tate Modern",
+        "MOMA"
+      ],
+      "correct_answer": "Giardini"
+    },
+    {
+      "question": "Which country withdrew its pavilion because of the artwork 'Elegy'?",
+      "options": [
+        "Israel",
+        "South Africa",
+        "Russia",
+        "United States"
+      ],
+      "correct_answer": "South Africa"
+    },
+    {
+      "question": "Where will the artwork 'Elegy' now be shown?",
+      "options": [
+        "In a museum",
+        "In a historic church",
+        "In the Giardini",
+        "In Qatar's new pavilion"
+      ],
+      "correct_answer": "In a historic church"
+    },
+    {
+      "question": "Why did Barbara Chase-Riboud withdraw from the US pavilion?",
+      "options": [
+        "She was ill",
+        "She said as a world citizen this was not the moment",
+        "She didn't like the theme",
+        "She had another commitment"
+      ],
+      "correct_answer": "She said as a world citizen this was not the moment"
+    }
+  ],
+  "background_read": [
+    "The Venice Biennale was founded in 1895 and is one of the world's oldest and most prestigious art exhibitions.",
+    "The Giardini area contains 29 permanent national pavilions, and building a new one there is a major event.",
+    "The International Criminal Court (ICC) prosecutes individuals for genocide, war crimes, and crimes against humanity.",
+    "Qatar's new pavilion reflects its growing investment in culture and soft power as it shifts away from oil.",
+    "The Biennale has long been a site of political protest and debate, mirroring global tensions."
+  ],
+  "Article_Structure": [
+    "LEAD: Venice Biennale 2026 returns with political drama and historic firsts",
+    "  └─ specific: Called 'In Minor Keys', curated by Koyo Kouoh, first African woman to hold the role",
+    "KEY EVENT: Main exhibition features 110 artists; Qatar builds new permanent pavilion in Giardini",
+    "  ├─ WHO: Curator Koyo Kouoh, artists Nick Cave, Wangechi Mutu, Alfredo Jaar",
+    "  ├─ WHERE: Giardini, Arsenale, collateral events around Venice",
+    "  └─ NEW: Qatar's first new pavilion in 30 years; first-time participants Vietnam, Somalia, Guinea, Sierra Leone",
+    "TENSION / VIEWPOINTS: Political controversies dominate headlines",
+    "  ├─ ONE SIDE: Judges will not consider pavilions of countries whose leaders are charged by ICC (implied reference to Israel and others)",
+    "  └─ OTHER SIDE: South Africa withdrew 'Elegy' but it's now shown in church; Israel returns with restrictions; Russia back after boycott",
+    "EVIDENCE: Specific details about pavilions, artists, judges' rules, and withdrawals",
+    "OPEN QUESTION: How will these political tensions affect the Biennale's reputation and future editions?"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive",
+      "description": "The Biennale expands representation with new pavilions from Qatar and first-time participants from the Global South, giving more diverse voices a platform."
+    },
+    {
+      "perspective": "Negative / critical",
+      "description": "Critics may argue that the Biennale is becoming overly politicized, with boycotts and rules that could stifle artistic freedom and distract from the art itself."
+    },
+    {
+      "perspective": "Neutral / analytical",
+      "description": "The Biennale reflects broader shifts in the art world, from Western dominance to greater inclusion of non-Western countries, and often mirrors geopolitical tensions."
+    },
+    {
+      "perspective": "Forward-looking",
+      "description": "Future editions may face similar controversies as nations use pavilions for soft power, and the ICC ruling could set a precedent for how art institutions address international justice."
+    }
+  ]
+}

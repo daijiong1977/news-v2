@@ -1,0 +1,138 @@
+{
+  "title": "Dirty Air Crisis: Nearly Half of US Kids Breathing Dangerous Pollution, Report Warns",
+  "summary": "Nearly half of all children in the United States are breathing air that poses serious risks to their health, according to a new report from the American Lung Association (ALA). The 27th annual report, released on April 22, 2026, evaluated pollution levels across the country, focusing on ground-level ozone (smog) and particle pollution (soot). The data, collected between 2022 and 2024, paints a grim picture. \"Children's lungs are still developing. For their body size, they're breathing more air. And also, kids play outdoors, they're more active, they're breathing in more outdoor air,\" said Will Barrett, assistant vice-president of the ALA's Nationwide Clean Air Policy. \"Air pollution exposure in children can contribute to long-term developmental harm to their lungs, new cases of asthma, increased risks of respiratory illness.\" The report found that 38% of the US population — about 129.1 million people — were exposed to unhealthy ozone levels, the highest number in six years. Climate change is a major driver: extreme heat, drought, and wildfires have boosted pollution. Smoke from Canada's 2023 wildfires, for example, drifted into the US, worsening air quality. The report also highlighted a surprising new source of pollution: datacenters. These massive computer facilities consume about 4.4% of US electricity, a figure expected to rise to 12% within a decade. Many rely on fossil fuels like coal and methane gas, and their diesel backup generators emit cancer-causing particles. Communities of color are disproportionately affected. Although people of color make up 42.1% of the US population, they represent 54.2% of those living in counties with failing grades for air quality. A person of color is 2.42 times more likely than a white person to live in a community that fails all three pollution measures. The report comes amid a sweeping rollback of environmental protections by the Trump administration, which has initiated at least 70 actions to weaken climate and air quality rules. These include loosening limits on mercury and other toxic emissions from power plants, repealing vehicle standards, and disbanding EPA advisory committees on air quality. \"There's a devaluing of children's health by this EPA as they are weakening, delaying and repealing critical health protection,\" Barrett said. \"[There is] a wide-scale effort by the federal EPA to eliminate health protections while also distancing themselves from their own mission to protect public health.\"",
+  "why_it_matters": "For middle schoolers, this is personal: the air you breathe every day could be harming your lungs and increasing your risk of asthma and other diseases — and understanding the problem is the first step to demanding change from leaders who are supposed to protect you.",
+  "image_url": "/article_images/article_41611642a438.webp",
+  "keywords": [
+    {
+      "term": "children",
+      "explanation": "Kids under 18 whose health is threatened by air pollution."
+    },
+    {
+      "term": "ozone",
+      "explanation": "A gas that forms smog and can damage lungs at ground level."
+    },
+    {
+      "term": "particle pollution",
+      "explanation": "Tiny solid particles (soot) from burning fossil fuels that can be inhaled."
+    },
+    {
+      "term": "American Lung Association",
+      "explanation": "The non-profit that published the 27th annual State of the Air report."
+    },
+    {
+      "term": "datacenters",
+      "explanation": "Massive computer facilities that consume large amounts of electricity and produce pollution."
+    },
+    {
+      "term": "rollback",
+      "explanation": "The weakening or removal of environmental rules by the government."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What percentage of US children are exposed to unhealthy air according to the ALA report?",
+      "options": [
+        "Nearly 50%",
+        "38%",
+        "25%",
+        "12%"
+      ],
+      "correct_answer": "Nearly 50%"
+    },
+    {
+      "question": "What new source of pollution did the report highlight?",
+      "options": [
+        "Farming",
+        "Datacenters",
+        "Airports",
+        "Construction"
+      ],
+      "correct_answer": "Datacenters"
+    },
+    {
+      "question": "How many people were exposed to unhealthy ozone levels?",
+      "options": [
+        "129.1 million",
+        "100 million",
+        "200 million",
+        "50 million"
+      ],
+      "correct_answer": "129.1 million"
+    },
+    {
+      "question": "By what factor is a person of color more likely than a white person to live in a failing county?",
+      "options": [
+        "1.5 times",
+        "2.42 times",
+        "3 times",
+        "4 times"
+      ],
+      "correct_answer": "2.42 times"
+    },
+    {
+      "question": "What did the Trump administration do that contributed to the problem?",
+      "options": [
+        "Increased funding for clean air",
+        "Initiated at least 70 actions to weaken climate and air quality rules",
+        "Banned all new power plants",
+        "Strengthened EPA advisory committees"
+      ],
+      "correct_answer": "Initiated at least 70 actions to weaken climate and air quality rules"
+    },
+    {
+      "question": "What did Will Barrett mean by 'devaluing of children's health by this EPA'?",
+      "options": [
+        "The EPA is helping kids",
+        "The EPA is weakening health protections despite its mission to protect public health",
+        "The EPA has increased air quality research",
+        "The EPA is working with states to improve air"
+      ],
+      "correct_answer": "The EPA is weakening health protections despite its mission to protect public health"
+    }
+  ],
+  "background_read": [
+    "The Clean Air Act of 1970 authorized the EPA to set national air quality standards to protect public health and the environment.",
+    "Despite progress over the decades, recent rollbacks under the Trump administration have targeted limits on mercury, methane, and vehicle emissions.",
+    "Climate change is intensifying air pollution: hotter temperatures increase ground-level ozone, and droughts lead to more wildfires that produce soot.",
+    "Data centers have grown rapidly due to cloud computing and AI, and their energy use is expected to double by 2030, often relying on fossil fuels.",
+    "Environmental justice research shows that low-income communities and communities of color have historically been exposed to higher levels of pollution due to systemic inequities."
+  ],
+  "Article_Structure": [
+    "LEAD: Startling statistic – nearly half of US kids breathing dangerous air",
+    "  └─ specific: 'Nearly half of all children... according to a new report from the American Lung Association'",
+    "REPORT: 27th annual State of the Air, released April 22, 2026",
+    "  ├─ DATA: 2022-2024 pollution levels",
+    "  └─ MAIN POLLUTANTS: Ground-level ozone and particle pollution",
+    "HEALTH IMPACTS: Asthma, lung development harm, respiratory illness",
+    "  └─ QUOTE: Will Barrett explaining children's vulnerability",
+    "CLIMATE CHANGE: Heat, drought, wildfires increase pollution",
+    "  └─ EXAMPLE: Canadian wildfire smoke drifting into US",
+    "NEW SOURCE: Datacenters consuming 4.4% of US electricity, rising to 12%",
+    "  └─ IMPACT: Fossil fuel use and diesel backup generators emit cancer-causing particles",
+    "INEQUALITY: Communities of color disproportionately affected",
+    "  └─ STATS: 42.1% of population but 54.2% of those in failing counties; 2.42 times more likely",
+    "POLICY ROLLBACK: Trump administration's 70 actions to weaken environmental rules",
+    "  └─ EXAMPLES: Loosening limits on mercury, repealing vehicle standards, disbanding EPA advisory committees",
+    "QUOTE: Barrett criticizing EPA for devaluing children's health",
+    "OPEN QUESTION: Will public pressure lead to stronger protections?"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive",
+      "description": "The ALA report raises public awareness and provides detailed data that can be used by advocacy groups to push for cleaner air policies."
+    },
+    {
+      "perspective": "Negative / Critical",
+      "description": "The rollback of environmental protections is directly harming children's health, especially in communities of color. The EPA is failing its mission."
+    },
+    {
+      "perspective": "Neutral / Analytical",
+      "description": "Air pollution is a complex issue driven by climate change, energy demand, and policy choices. The rising contribution from datacenters reflects the tension between technological growth and environmental impact."
+    },
+    {
+      "perspective": "Forward-looking",
+      "description": "To protect children, the US must reverse regulatory rollbacks, invest in renewable energy, and enforce stricter pollution limits. States and cities may take action if federal leadership falters."
+    }
+  ]
+}

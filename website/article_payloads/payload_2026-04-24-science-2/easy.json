@@ -1,0 +1,119 @@
+{
+  "title": "This Cow Learned to Use a Brush as a Tool — and Scientists Are Amazed!",
+  "summary": "Have you ever seen a cow use a tool? Probably not — until now. Meet Veronika, a Brown Swiss cow who lives on a small farm in Austria. When she gets an itch, she doesn't just rub against a tree. Instead, she picks up a long-handled deck brush with her tongue, twists her neck, and scratches exactly the right spot. That might not sound like a big deal, but scientists say it's the first time a cow has been seen using a tool. And Veronika is even smarter than that. She uses both ends of the brush! For tough skin on her back, she uses the hard bristles. For sensitive spots like her belly button or udder, she uses the soft handle. Sometimes she even picks up the brush from the middle so she can switch ends without putting it down. \"At the beginning, I thought it was a mistake,\" said Antonio Osuna-Mascaró, the scientist who studied her. \"But after watching, it was so obvious that she was using both ends in different ways.\" This kind of cleverness has only been seen before in chimpanzees. So why can Veronika do this? Scientists think it's because she lives as a pet on a small farm, with lots of freedom to explore. Most cows on big farms don't get that chance. Veronika proves that cows are smarter than we think — they just need the right opportunity to show it!",
+  "why_it_matters": "This shows that animals we think aren't very smart, like cows, might actually be clever — we just haven't given them the chance to prove it.",
+  "image_url": "/article_images/article_4d246624b13b.webp",
+  "keywords": [
+    {
+      "term": "cow",
+      "explanation": "The animal that learned to use a brush as a tool."
+    },
+    {
+      "term": "tool",
+      "explanation": "An object used to help do something; cows were not known to use tools before."
+    },
+    {
+      "term": "Veronika",
+      "explanation": "The name of the Brown Swiss cow that uses a brush."
+    },
+    {
+      "term": "brush",
+      "explanation": "The long-handled deck brush that Veronika picks up with her tongue."
+    },
+    {
+      "term": "scientist",
+      "explanation": "Antonio Osuna-Mascaró, who studied Veronika's tool use."
+    },
+    {
+      "term": "Austria",
+      "explanation": "The country where Veronika lives on a small farm."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What is special about Veronika the cow?",
+      "options": [
+        "She can talk",
+        "She uses a brush as a tool to scratch",
+        "She can fly",
+        "She paints pictures"
+      ],
+      "correct_answer": "She uses a brush as a tool to scratch"
+    },
+    {
+      "question": "Where does Veronika live?",
+      "options": [
+        "On a big factory farm in the US",
+        "On a small farm in Austria",
+        "In a zoo in Germany",
+        "In the wild in Africa"
+      ],
+      "correct_answer": "On a small farm in Austria"
+    },
+    {
+      "question": "How does Veronika pick up the brush?",
+      "options": [
+        "With her hooves",
+        "With her tongue",
+        "With her tail",
+        "With her nose"
+      ],
+      "correct_answer": "With her tongue"
+    },
+    {
+      "question": "What does Veronika do with the brush?",
+      "options": [
+        "She throws it away",
+        "She uses both ends to scratch different spots",
+        "She eats it",
+        "She hides it"
+      ],
+      "correct_answer": "She uses both ends to scratch different spots"
+    },
+    {
+      "question": "Before Veronika, in which animals was tool use seen?",
+      "options": [
+        "Chimpanzees",
+        "Dolphins",
+        "Elephants",
+        "Cats"
+      ],
+      "correct_answer": "Chimpanzees"
+    },
+    {
+      "question": "Why do scientists think Veronika learned to use a tool?",
+      "options": [
+        "She is very hungry",
+        "She lives on a small farm with lots of freedom",
+        "She is trained by a circus",
+        "She saw other cows do it"
+      ],
+      "correct_answer": "She lives on a small farm with lots of freedom"
+    }
+  ],
+  "background_read": [
+    "For a long time, scientists thought only humans could use tools, but many animals can, like chimpanzees using sticks to get ants.",
+    "Cows are often thought of as not very smart, but Veronika shows that they can learn surprising things.",
+    "The farm where Veronika lives is small, so she has more time to explore and learn than cows on big farms."
+  ],
+  "Article_Structure": [
+    "WHO: Veronika, a Brown Swiss cow in Austria",
+    "WHAT: She uses a brush as a tool to scratch, using both bristles and handle",
+    "WHERE: A small farm in Austria",
+    "WHY: She learned because she has freedom to explore on her small farm"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Amazed",
+      "description": "Scientists are amazed because tool use in cows was never seen before. It shows cows are smarter than we thought."
+    },
+    {
+      "perspective": "Skeptical",
+      "description": "Veronika is just one cow. Not all cows can do this, and it might be a lucky accident."
+    },
+    {
+      "perspective": "Hopeful",
+      "description": "This discovery could encourage farmers to give cows more freedom so they can show their intelligence."
+    }
+  ]
+}

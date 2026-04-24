@@ -1,0 +1,131 @@
+{
+  "title": "‘Like a Tree Rooted in Soil’: London Exhibition Gives Voice to Southern Lebanon",
+  "summary": "In a room at London's Palestine House, a large screen plays news footage from southern Lebanon. Tanks and armored vehicles roll through hills and villages, interrupted by the sound of mortar fire. A visitor turns away and says, \"It's like watching the news now.\" The footage is actually from 2000—the year Israel withdrew from the region after an 18-year military occupation. But as co-curators Rasha Kotaiche and Ali Abou Khalil explain, the cycles of violence have made this exhibition, titled \"Forget Me Not: South Lebanon in Memory and Motion,\" painfully relevant. The show, which took place earlier this month, uses photographs, videos, and children's drawings to tell the story of a region that has often felt abandoned by its own government. \"The south has long been shaped by foreign intervention, occupation and deliberate neglect,\" says Abou Khalil. \"This produced a political culture rooted in self-reliance, resistance and deep mistrust of external authority.\" One powerful video testimonial, \"What Remains\" by Nor Nsralla, features residents who experienced Israel's invasion in October 2024. One interviewee describes their connection to the land: \"We are attached to this land just like a tree is rooted in its soil.\" The exhibition also includes drawings made by Lebanese schoolchildren celebrating independence day, and photos of pomegranates and oranges from Bint Jbeil, as well as the coastal shores of Naqoura and Tyre. Kotaiche says the project aims to \"educate the community on Lebanon—its history, its beauty and its resilience—and in a way, reclaiming a mainstream narrative on south Lebanon and exchanging it with one written by its people.\" After a ceasefire agreement in November 2024, hopes for peace were high, but UN peacekeepers reported multiple violations, mostly by Israeli forces. Abou Khalil says, \"Today, the mood has shifted from tension to alarm. For southerners, the border is literal and existential.\"",
+  "why_it_matters": "This exhibition matters because it challenges the simplified version of conflict you see on social media—it reminds you that real people, with deep roots and rich cultures, are caught in the middle of geopolitical struggles that are far more complex than a hashtag.",
+  "image_url": "/article_images/article_710be88f7604.webp",
+  "keywords": [
+    {
+      "term": "Forget Me Not",
+      "explanation": "Title of the exhibition about southern Lebanon"
+    },
+    {
+      "term": "southern Lebanon",
+      "explanation": "Region whose history and stories are featured"
+    },
+    {
+      "term": "Palestine House",
+      "explanation": "Venue in London where the exhibition took place"
+    },
+    {
+      "term": "Rasha Kotaiche",
+      "explanation": "Co-curator of the exhibition"
+    },
+    {
+      "term": "Ali Abou Khalil",
+      "explanation": "Co-curator of the exhibition"
+    },
+    {
+      "term": "ceasefire agreement",
+      "explanation": "A November 2024 agreement that ended hostilities, but with reported violations"
+    }
+  ],
+  "questions": [
+    {
+      "question": "What year did the news footage shown at the exhibition come from?",
+      "options": [
+        "2000",
+        "2024",
+        "1990",
+        "2010"
+      ],
+      "correct_answer": "2000"
+    },
+    {
+      "question": "What is the name of the video testimonial featured in the exhibition?",
+      "options": [
+        "Forget Me Not",
+        "What Remains",
+        "Tree Rooted in Soil",
+        "South Lebanon in Memory"
+      ],
+      "correct_answer": "What Remains"
+    },
+    {
+      "question": "Which organization reported violations of the ceasefire agreement?",
+      "options": [
+        "UN peacekeepers",
+        "Red Cross",
+        "Amnesty International",
+        "Human Rights Watch"
+      ],
+      "correct_answer": "UN peacekeepers"
+    },
+    {
+      "question": "What mood shift did Ali Abou Khalil describe?",
+      "options": [
+        "From hope to despair",
+        "From tension to alarm",
+        "From anger to peace",
+        "From fear to joy"
+      ],
+      "correct_answer": "From tension to alarm"
+    },
+    {
+      "question": "What did Ali Abou Khalil say about the border for southerners?",
+      "options": [
+        "It is open and safe",
+        "It is literal and existential",
+        "It is irrelevant",
+        "It is a tourist attraction"
+      ],
+      "correct_answer": "It is literal and existential"
+    },
+    {
+      "question": "Which Lebanese city is mentioned as a place where pomegranates and oranges grow?",
+      "options": [
+        "Beirut",
+        "Bint Jbeil",
+        "Tripoli",
+        "Sidon"
+      ],
+      "correct_answer": "Bint Jbeil"
+    }
+  ],
+  "background_read": [
+    "Israel occupied southern Lebanon from 1982 to 2000, an 18-year period marked by conflict and resistance.",
+    "The United Nations Interim Force in Lebanon (UNIFIL) has been monitoring the border since 1978.",
+    "The 'Forget Me Not' exhibition aims to counter mainstream narratives by sharing local perspectives through art.",
+    "In November 2024, a ceasefire agreement was reached, but UN peacekeepers reported multiple violations, primarily by Israeli forces."
+  ],
+  "Article_Structure": [
+    "LEAD: Description of 2000 news footage shown at exhibition, contrasted with present",
+    "  └─ specific: Visitor remarks it's like watching current news",
+    "KEY EVENT: Exhibition 'Forget Me Not' at London's Palestine House",
+    "  ├─ WHO: Co-curators Rasha Kotaiche and Ali Abou Khalil",
+    "  ├─ WHAT: Photographs, videos, children's drawings about southern Lebanon",
+    "  └─ WHEN: Earlier this month (November 2024)",
+    "TENSION / VIEWPOINTS: Cycles of violence and neglect",
+    "  ├─ ONE SIDE: Local perspective: 'We are attached to this land like a tree rooted in soil'",
+    "  └─ OTHER SIDE: External factors: foreign intervention, occupation, government neglect",
+    "EVIDENCE: Quotes from co-curators, video testimonial, descriptions of artworks",
+    "OPEN QUESTION: Will the ceasefire hold? UN reports violations by Israeli forces."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive",
+      "description": "The exhibition empowers southern Lebanese to tell their own stories, challenging mainstream narratives that often ignore their voices."
+    },
+    {
+      "perspective": "Negative / critical",
+      "description": "Critics may argue that art alone cannot replace political action, and that the exhibition might be seen as biased against Israel."
+    },
+    {
+      "perspective": "Neutral / analytical",
+      "description": "The region's history shows a pattern of conflict, occupation, and resistance—the exhibition documents this cycle and the human cost."
+    },
+    {
+      "perspective": "Forward-looking",
+      "description": "The ceasefire is fragile; the exhibition may help international audiences understand the human stakes and build pressure for lasting peace."
+    }
+  ]
+}

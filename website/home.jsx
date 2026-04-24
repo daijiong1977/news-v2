@@ -513,27 +513,37 @@ function ProgressBadge({ pct, size = 28 }) {
 }
 
 // ——————————— ARTICLE CARD ———————————
-// —— Highlights up to 5 keyword terms in an article summary ——
-// Matches each term as a whole-word (first occurrence only), case-insensitive.
-// Styled in a contrasty chip + dotted underline with a custom hover tooltip.
+// —— Highlights keyword terms in an article summary ——
+// Matches each term as a whole word OR with common English suffixes
+// (bet → bets/betting, ban → banned/banning, fine → fined). All occurrences
+// are highlighted. Case-insensitive. Styled with a chip + dotted underline.
 function HighlightedSummary({ text, keywords }) {
   if (!keywords || keywords.length === 0) return <>{text}</>;
-  // Find first occurrence of each term, sorted by position
-  const terms = keywords.slice(0, 5).map(k => {
-    const re = new RegExp(`\\b(${k.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'i');
-    const m = text.match(re);
-    return m ? { term: k.term, def: k.def, start: m.index, end: m.index + m[0].length, match: m[0] } : null;
-  }).filter(Boolean).sort((a,b) => a.start - b.start);
-  // Remove overlaps (keep earliest)
+  // Common English verb/noun suffixes so "ban" catches "banned/banning",
+  // "fine" catches "fined", "bet" catches "bets/betting", etc.
+  const SUFFIX = '(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers)?';
+  // Find every occurrence of every term, case-insensitive, global.
   const hits = [];
-  let cursor = 0;
-  for (const t of terms) {
-    if (t.start >= cursor) { hits.push(t); cursor = t.end; }
+  for (const k of keywords) {
+    const escaped = k.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\b(${escaped})${SUFFIX}\\b`, 'gi');
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      hits.push({ term: k.term, def: k.def, start: m.index, end: m.index + m[0].length, match: m[0] });
+      if (m.index === re.lastIndex) re.lastIndex++; // avoid zero-length loops
+    }
   }
-  if (hits.length === 0) return <>{text}</>;
+  // Sort by start; drop overlaps, preferring earliest/longest
+  hits.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+  const dedup = [];
+  let cursor = 0;
+  for (const h of hits) {
+    if (h.start >= cursor) { dedup.push(h); cursor = h.end; }
+  }
+  if (dedup.length === 0) return <>{text}</>;
   const parts = [];
   let i = 0;
-  hits.forEach((h, idx) => {
+  dedup.forEach((h, idx) => {
     if (h.start > i) parts.push(<React.Fragment key={'t'+idx}>{text.slice(i, h.start)}</React.Fragment>);
     parts.push(
       <KeywordTip key={'k'+idx} term={h.match} def={h.def}/>
@@ -640,7 +650,7 @@ function ArticleCard({ article, onOpen, read, pct, variant }) {
         transition:'all .2s cubic-bezier(.3,1.4,.6,1)',
         gridColumn: isFeature ? 'span 2' : 'auto',
         display:'flex',
-        flexDirection: isFeature ? 'row' : 'column',
+        flexDirection:'column',
         width: isTall ? '100%' : undefined,
         height: isTall ? '100%' : undefined,
       }}
@@ -648,22 +658,18 @@ function ArticleCard({ article, onOpen, read, pct, variant }) {
       <div style={{
         position:'relative',
         background:`url(${article.image}) center/cover`,
-        aspectRatio: isFeature ? 'auto' : (isTall ? 'auto' : '16/10'),
-        width: isFeature ? undefined : '100%',
-        flex: isFeature ? '0 0 55%' : (isTall ? '1 1 auto' : undefined),
-        flexShrink: isFeature ? 0 : undefined,
-        minHeight: isFeature ? 240 : (isTall ? 280 : 'auto'),
+        aspectRatio: isTall ? 'auto' : (isFeature ? '16/9' : '16/10'),
+        width:'100%',
+        flex: isTall ? '1 1 auto' : undefined,
+        minHeight: isTall ? 280 : 'auto',
       }}>
         {(read || (pct && pct > 0)) && (
           <div style={{position:'absolute', top:10, right:10}}>
             <ProgressBadge pct={read ? 100 : pct}/>
           </div>
         )}
-        <div style={{position:'absolute', top:10, left:10, display:'flex', gap:6}}>
-          <CatChip cat={article.category}/>
-        </div>
       </div>
-      <div style={{padding: (isFeature || isTall) ? '24px 26px' : '16px 18px 18px', flex: isFeature ? '1 1 0' : '0 0 auto', minWidth: isFeature ? 0 : undefined, display:'flex', flexDirection:'column', gap:8}}>
+      <div style={{padding: isFeature ? '26px 32px 24px' : (isTall ? '24px 26px' : '16px 18px 18px'), flex:'0 0 auto', display:'flex', flexDirection:'column', gap:10}}>
         <h3 style={{
           fontFamily:'Fraunces, serif',
           fontWeight:800,

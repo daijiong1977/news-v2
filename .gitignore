@@ -6,6 +6,18 @@ node_modules/
 *.tmp
 *.backup
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Local API-key helper scripts (interactive installers; never pushed)
+add-*-key.sh
+add-pipeline-keys.sh
+
+# Pipeline run output (not committed)
+website/test_output/
+
 # Prototype scratch (not part of repo history)
 newdesign/screenshots/
 newdesign/uploads/

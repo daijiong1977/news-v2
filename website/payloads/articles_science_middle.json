@@ -1,57 +1,30 @@
 {
   "articles": [
     {
-      "id": "f40b0b9547320f52",
-      "title": "Gut Reset Procedure May Prevent Weight Regain After Stopping GLP-1 Drugs",
-      "summary": "A new study presented at Digestive Disease Week 2026 suggests that a minimally invasive procedure called duodenal mucosal resurfacing (DMR) could help people maintain weight loss after stopping GLP-1 medications like Ozempic or Wegovy. About 70% of people who stop these drugs regain much of the weight within 18 months. The REMAIN-1 trial tested DMR in 45 participants who had lost at least 15% of their body weight using tirzepatide. Those who received the actual procedure regained significantly less weight after six months compared to the sham group. The procedure uses controlled heat to remove damaged tissue from the duodenum, promoting growth of healthier tissue. No serious complications were reported, and recovery takes about one day. The benefits appeared to increase over time, suggesting a lasting metabolic reset. This could address the huge unmet need for a treatment that allows patients to stop GLP-1 drugs without regaining weight.",
-      "source": "Science Daily",
-      "time_ago": "5 hours ago",
-      "image_url": "/article_images/article_f40b0b9547320f52_902fc2fdc528.webp",
+      "id": "2026-04-24-science-1",
+      "title": "Brain Secrets of SuperAgers: Why Some 80-Year-Olds Remember Like They're 50",
+      "summary": "Imagine being 80 years old with a memory as sharp as someone in their 50s. That's the reality for 'SuperAgers,' a group of remarkable seniors studied for over 25 years by researchers at Northwestern Medicine. These individuals, aged 80 and older, perform on memory tests as well as people 30 years younger, challenging the idea that mental decline is inevitable. Scientists discovered two key secrets in their brains: some SuperAgers are 'resistant,' lacking harmful proteins linked to Alzheimer's, while others are 'resilient,' having the proteins but still functioning normally. Their brains also have larger, healthier neurons in memory regions like the entorhinal cortex. Beyond biology, SuperAgers tend to be highly social and mentally active, building a 'cognitive reserve' that protects…",
+      "source": "ScienceDaily All",
+      "time_ago": "Thu, 23 Apr 2026 07:46:30 EDT",
+      "image_url": "/article_images/article_70eafbd186b1.webp",
       "category": "Science"
     },
     {
-      "id": "a98ebface9612f76",
-      "title": "Brain-Like Chip Could Cut AI Energy Use by 70%",
-      "summary": "Researchers at the University of Cambridge have developed a new type of chip that mimics the human brain, potentially reducing energy consumption in artificial intelligence systems by up to 70%. Current AI hardware consumes large amounts of electricity because it constantly moves data between separate memory and processing units. This new chip, based on a modified form of hafnium oxide, uses memristors that combine memory and processing in one place, similar to how neurons work in the brain. Unlike traditional memristors that rely on unpredictable filaments, the Cambridge design uses a controlled switching mechanism at the interface of thin films, making it more stable and reliable. In tests, the devices operated at extremely low currents and maintained hundreds of stable states, enabling brain-like learning. The innovation addresses a key challenge in AI: high energy demand. The team published their findings in Science Advances. This advancement could lead to more efficient AI hardware that learns and adapts naturally, with applications in various industries.",
-      "source": "Science Daily",
-      "time_ago": "6 hours ago",
-      "image_url": "/article_images/article_a98ebface9612f76_525b709dd016.webp",
+      "id": "2026-04-24-science-2",
+      "title": "Move Over, Chimps: This Cow Uses a Brush as a Tool — and Scientists Are Stunned",
+      "summary": "Meet Veronika, a Brown Swiss cow from Austria who is surprising scientists with a skill once thought unique to chimps: tool use. When she gets an itch, she picks up a long-handled brush with her tongue and scratches the exact spot. Even more amazing, she uses both ends — the hard bristles for her tough back and the soft handle for sensitive areas like her belly button. Animal cognition expert Antonio Osuna-Mascaró at the Messerli Research Institute in Vienna was stunned at first, but soon realized Veronika was deliberately choosing the right tool end. This makes her the first cow ever reported to use a tool, a finding published in Current Biology. Researchers think her life on a small farm…",
+      "source": "Science News Explores",
+      "time_ago": "Fri, 17 Apr 2026 10:30:00 +0000",
+      "image_url": "/article_images/article_4d246624b13b.webp",
       "category": "Science"
     },
     {
-      "id": "a9a3bd2bdde1150c",
-      "title": "Deep Mantle Deformation Linked to Ancient Slabs",
-      "summary": "Scientists have created a global map showing deformation in Earth's lowermost mantle, located just above the core-mantle boundary. Using over 16 million seismograms, they analyzed seismic anisotropy—the directional variation of shear wave speeds—to identify areas where mantle material has been stretched or distorted. The study, published in The Seismic Record, reveals that most deformation occurs in regions where ancient tectonic slabs have subducted and sunk over millions of years. This finding supports geodynamic simulations and provides new insight into mantle flow patterns. Lead author Jonathan Wolf noted that while upper mantle deformation is driven by plate drag, deep mantle flow is less understood. This research offers a large-scale view of deep Earth dynamics.",
-      "source": "Science Daily",
-      "time_ago": "6 hours ago",
-      "image_url": "/article_images/article_a9a3bd2bdde1150c_b65ad316dcba.webp",
-      "category": "Science"
-    },
-    {
-      "id": "4b884f86aa475d84",
-      "title": "Fatty Acid Injection Reverses Age-Related Vision Decline in Mice",
-      "summary": "Age-related vision loss, such as difficulty reading in low light, is common among older adults. Researchers at the University of California, Irvine have discovered a potential treatment that may reverse this decline. Their study, published in Science Translational Medicine, focused on a specific polyunsaturated fatty acid that, when injected into older mice, improved their visual performance. This effect was not achieved with DHA, a common omega-3 fatty acid. The research builds on previous work involving the ELOVL2 gene, which is known to regulate levels of very-long-chain polyunsaturated fatty acids (VLC-PUFAs) in the retina. As we age, ELOVL2 activity decreases, leading to lower levels of these essential fats and worsening vision. By directly supplying the retina with the missing fatty acid, the scientists bypassed the need for ELOVL2. The results suggest that this approach could potentially be developed into a therapy for age-related macular degeneration (AMD) and other vision problems. However, further studies are needed to confirm safety and efficacy in humans.",
-      "source": "Science Daily",
-      "time_ago": "11 hours ago",
-      "image_url": "/article_images/article_4b884f86aa475d84_8b3469ab1ed7.webp",
-      "category": "Science"
-    },
-    {
-      "id": "927180fbff2b63e6",
-      "title": "UK MPs Urge Ban on 'Forever Chemicals' in Everyday Products",
-      "summary": "A group of UK MPs has called for a ban on the use of PFAS, a group of man-made chemicals known as 'forever chemicals', in non-essential products such as school uniforms, frying pans, and food packaging. PFAS are valued for their ability to resist water, oil, and heat, making them useful in a wide range of items from raincoats to medical equipment. However, they do not break down in the environment and can accumulate in the human body, with some types linked to cancer and other health issues. The Environmental Audit Committee recommends phasing out non-essential uses by 2027, unless manufacturers can prove the chemicals are essential or there is no alternative. The government has its own PFAS plan focusing on monitoring, but the committee argues it does not go far enough to prevent contamination. Academics and environmental groups support the stricter measures. The public is advised not to panic, but action is needed to prevent further pollution. This issue highlights the trade-off between convenience and long-term environmental and health risks.",
-      "source": "BBC Science",
-      "time_ago": "13 hours ago",
-      "image_url": "/article_images/article_927180fbff2b63e6_4c6e712d612a.webp",
-      "category": "Science"
-    },
-    {
-      "id": "4b250c480fc84e1c",
-      "title": "Muon Mystery Solved: No Fifth Force Found",
-      "summary": "For 20 years, physicists observed a discrepancy in the magnetic properties of muons, suggesting a possible fifth force beyond the Standard Model. However, a new study published in Nature shows that the discrepancy was due to a calculation error, not new physics. The muon is a heavier cousin of the electron, and its magnetic moment is sensitive to virtual particles. The Muon g-2 experiment measured this anomaly, finding a 3.7-sigma discrepancy initially, later increased to 4.2 sigma. The new research focused on the hadronic vacuum polarization, using a hybrid method combining simulations and experimental data. The results align with Standard Model predictions, ruling out the fifth force. This reinforces our understanding of particle physics.",
-      "source": "Ars Science",
-      "time_ago": "20 hours ago",
-      "image_url": "/article_images/article_4b250c480fc84e1c_2f7f8abf43d6.webp",
+      "id": "2026-04-24-science-3",
+      "title": "Dirty Air Crisis: Nearly Half of US Kids Breathing Dangerous Pollution, Report Warns",
+      "summary": "Imagine nearly half of all kids in the U.S. breathing air that could hurt their lungs. That's what a new report from the American Lung Association warns. The report, released on April 22, 2026, looked at pollution from smog and soot across the country. It found that 129.1 million people are breathing unhealthy air — the highest number in six years. Why is this happening? Climate change plays a big role, with extreme heat, drought, and wildfires making pollution worse. Even smoke from Canada's 2023 wildfires drifted into the U.S. There's also a surprising new source: datacenters, which use lots of electricity and often run on fossil fuels. The report says communities of color are hit hardest, and that the…",
+      "source": "Guardian Environment",
+      "time_ago": "Wed, 22 Apr 2026 10:00:24 GMT",
+      "image_url": "/article_images/article_41611642a438.webp",
       "category": "Science"
     }
   ]

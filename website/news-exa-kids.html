@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Exa News Pipeline — 2026-04-23</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:960px;margin:24px auto;padding:0 20px;color:#222;line-height:1.5;}
+  h1{font-size:24px;margin:8px 0;}
+  h2{font-size:18px;margin:32px 0 12px;border-bottom:2px solid #eee;padding-bottom:6px;color:#444;}
+  h3{font-size:15px;margin:20px 0 8px;color:#555;}
+  .meta{color:#777;font-size:13px;margin-bottom:18px;}
+  .stats{background:#f6f6f6;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:13px;color:#555;}
+  .stats b{color:#222;}
+  table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:13px;}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #eee;vertical-align:top;}
+  th{background:#f0f0f0;font-weight:600;}
+  .host{font-size:11px;color:#1a6;background:#e6f5ec;padding:2px 6px;border-radius:3px;display:inline-block;}
+  .host.npr{color:#c35;background:#fbe7ec;}
+  .rejected{color:#a33;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+  .pill.kept{background:#d8f3e0;color:#266;}
+  .pill.reject{background:#f9d6d6;color:#933;}
+  .kids-article{background:#fff9ef;border:2px solid #ffc83d;border-radius:10px;padding:20px 24px;margin:24px 0;box-shadow:0 2px 6px rgba(0,0,0,.06);}
+  .kids-article .kheadline{font-size:22px;font-weight:800;color:#1b1230;margin:0 0 6px;font-family:Georgia,serif;}
+  .kids-article .ksrc{font-size:12px;color:#8a6d00;margin-bottom:8px;}
+  .kids-article img{max-width:100%;border-radius:6px;margin:10px 0;}
+  .kids-article .kbody{font-size:15px;line-height:1.6;color:#221a10;}
+  .kids-article .kbody p{margin:0 0 12px;}
+  .kids-article .kwim{background:#fff3c4;border-left:4px solid #e0a800;padding:10px 14px;margin-top:14px;border-radius:4px;font-style:italic;}
+  .kids-article .kwim b{color:#8a6d00;}
+  .wc{color:#666;font-size:12px;}
+  .reason{background:#eef6ff;border-left:3px solid #4a90e2;padding:6px 10px;margin:8px 0;font-size:13px;color:#204060;}
+  details{margin:8px 0;}
+  details summary{cursor:pointer;color:#07c;font-size:13px;}
+  details pre{white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;background:#fafafa;padding:10px;border-radius:6px;max-height:300px;overflow-y:auto;margin-top:6px;}
+  a{color:#07c;text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .highlights{background:#fffbea;border-left:3px solid #f0c050;padding:8px 12px;margin:8px 0;border-radius:4px;font-size:13px;}
+  .highlights p{margin:4px 0;color:#3a2d00;}
+</style>
+</head>
+<body>
+<h1>Exa News Pipeline — 2026-04-23</h1>
+<div class="meta">
+  Exa query: <code>top news stories today</code> · Domains: aljazeera.com, npr.org · filter: image + 800+ words · max=10
+</div>
+
+<div class="stats">
+  <b>Step 1 Exa:</b> 15 results ·
+  <b>Step 2 Filter:</b> 5 kept, 10 rejected ·
+  <b>Step 3 Curator:</b> 3 picks ·
+  <b>Step 4 Kids articles:</b> 3 generated
+</div>
+
+<h2>Step 1 → Step 2: Filter results</h2>
+<table>
+<thead><tr><th>#</th><th>Host</th><th>Title</th><th>Words</th><th>Img</th><th>Status</th></tr></thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td><a href="https://www.npr.org/2026/04/22/nx-s1-5793897/trump-extends-ceasefire-deadline-with-iran" target="_blank">Trump extends ceasefire deadline with Iran : NPR</a></td>
+  <td>801</td>
+  <td>✓</td>
+  <td><span class="pill kept">KEPT</span></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td><a href="https://www.aljazeera.com/features/2026/4/23/solutions-not-slogans-gaza-holds-first-election-in-21-years" target="_blank">‘Solutions, not slogans’: Gaza holds first election in 21 years | Elections News | Al Jazeera</a></td>
+  <td>1192</td>
+  <td>✓</td>
+  <td><span class="pill kept">KEPT</span></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td><a href="https://www.npr.org/2026/04/22/nx-s1-5792840/rfk-jr-senate-house-budget-hearings-vaccines-cdc-medicaid" target="_blank">RFK Jr. testifies before Senate on vaccines and more : NPR</a></td>
+  <td>1495</td>
+  <td>✓</td>
+  <td><span class="pill kept">KEPT</span></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td><a href="https://www.aljazeera.com/news/2026/4/23/us-to-shoot-and-kill-iranian-boats-laying-mines-in-hormuz-trump-says" target="_blank">US to &#x27;shoot and kill&#x27; Iranian boats laying mines in Hormuz, Trump says</a></td>
+  <td>962</td>
+  <td>✓</td>
+  <td><span class="pill kept">KEPT</span></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td><a href="https://www.aljazeera.com/amp/news/2026/4/23/us-senate-passes-ice-funding-resolution-after-vote-a-rama-whats-next" target="_blank">US Senate passes ICE funding resolution after &#x27;vote-a-rama&#x27;</a></td>
+  <td>1119</td>
+  <td>✓</td>
+  <td><span class="pill kept">KEPT</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td>U.S.-Iran peace talks still in limbo after Iran seizes ships in the Strait of Hormuz</td>
+  <td>1240</td>
+  <td>—</td>
+  <td><span class="pill reject">no image</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td>Tension In Two Ceasefires, Navy Secretary Out, Trump&#x27;s Slumping ...</td>
+  <td>515</td>
+  <td>✓</td>
+  <td><span class="pill reject">500w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td>European airlines cut thousands of flights as fuel costs soar - NPR</td>
+  <td>730</td>
+  <td>✓</td>
+  <td><span class="pill reject">721w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td>Where the peace process between the U.S. and Iran stands : State of the World from NPR : NPR</td>
+  <td>338</td>
+  <td>✓</td>
+  <td><span class="pill reject">320w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td>News | Today&#x27;s latest from Al Jazeera</td>
+  <td>128</td>
+  <td>✓</td>
+  <td><span class="pill reject">124w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td>Iran captures two vessels in Strait of Hormuz after ship comes under fire | US-Israel war on Iran News | Al Jazeera</td>
+  <td>758</td>
+  <td>✓</td>
+  <td><span class="pill reject">752w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td>US Senate passes $70bn funding plan for ICE, Border Patrol | Politics News | Al Jazeera</td>
+  <td>548</td>
+  <td>✓</td>
+  <td><span class="pill reject">542w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td>Iran war live: Air defences engaged over Tehran, reason unclear</td>
+  <td>270</td>
+  <td>✓</td>
+  <td><span class="pill reject">269w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host ">aljazeera.com</span></td>
+  <td>US halts shipment of Iraq’s oil dollars to curb Iran-linked groups: WSJ | US-Israel war on Iran News | Al Jazeera</td>
+  <td>474</td>
+  <td>✓</td>
+  <td><span class="pill reject">464w &lt; 800w</span></td>
+</tr>
+<tr class="rejected">
+  <td>–</td>
+  <td><span class="host npr">npr.org</span></td>
+  <td>Ships attacked in Strait of Hormuz after ceasefire extension</td>
+  <td>1696</td>
+  <td>—</td>
+  <td><span class="pill reject">no image</span></td>
+</tr>
+</tbody>
+</table>
+
+<h2>Step 3: Curator picks (DeepSeek from 10 briefs)</h2>
+<div class="reason"><b>Pick:</b> <a href="https://www.aljazeera.com/features/2026/4/23/solutions-not-slogans-gaza-holds-first-election-in-21-years" target="_blank">‘Solutions, not slogans’: Gaza holds first election in 21 years | Elections News | Al Jazeera</a> (aljazeera.com)<br>
+<b>Reason:</b> After 21 years, people in Gaza get to vote in local elections, showing hope for rebuilding their community.</div>
+<div class="reason"><b>Pick:</b> <a href="https://www.npr.org/2026/04/22/nx-s1-5793897/trump-extends-ceasefire-deadline-with-iran" target="_blank">Trump extends ceasefire deadline with Iran : NPR</a> (npr.org)<br>
+<b>Reason:</b> A deadline for peace with Iran is extended, which affects whether there will be war or calm in that region.</div>
+<div class="reason"><b>Pick:</b> <a href="https://www.npr.org/2026/04/22/nx-s1-5792840/rfk-jr-senate-house-budget-hearings-vaccines-cdc-medicaid" target="_blank">RFK Jr. testifies before Senate on vaccines and more : NPR</a> (npr.org)<br>
+<b>Reason:</b> A top health official answers questions about vaccines and health programs that keep kids safe.</div>
+<h2>Step 4: Generated kids articles (500 words each)</h2>
+<div class="kids-article">
+  <div class="ksrc">📰 Source: <a href="https://www.aljazeera.com/features/2026/4/23/solutions-not-slogans-gaza-holds-first-election-in-21-years" target="_blank">‘Solutions, not slogans’: Gaza holds first election in 21 years | Elections News | Al Jazeera</a> · aljazeera.com · <span class="wc">generated 531 words</span></div>
+  <img src="https://www.aljazeera.com/wp-content/uploads/2026/04/AFP__20260421__A8K484E__v3__HighRes__PalestinianIsraelConflictPoliticsElectionsGaza-1776937192.jpg?resize=1920%2C1440" alt=""/>
+  <div class="kheadline">Gaza Votes! First Election in 21 Years Brings Hope for Change</div>
+  <div class="kbody">
+    <p>Imagine not having a say in who runs your town for more than 20 years. That’s how long it had been for people in Deir el-Balah, a city in Gaza. But on April 25, 2026, something amazing happened: they held their first municipal election in 21 years!</p>
+    <p>A municipal election is when people vote for who will lead their local government—the people in charge of things like clean water, electricity, and fixing roads. About 70,000 people over age 18 were allowed to vote. They could cast their ballots from 7 a.m. to 5 p.m. at 12 voting centers set up in places like stadiums and women’s activity centers.</p>
+    <p>This election was a big deal because for the past 21 years, the group Hamas had been in charge without any elections. Now, residents wanted a change. “The citizen today is not looking for slogans, but for real solutions,” said Rabha al-Bhaisi, a local resident. She meant people are tired of fancy promises—they want clean water, electricity that works, and good sewage systems.</p>
+    <p>Four groups of candidates competed for seats on the local council. Their names were Peace and Construction, Deir el-Balah Brings Us Together, Future of Deir el-Balah, and Renaissance of Deir el-Balah. None of them were from big political parties like Hamas or Fatah. Instead, they were independent groups made up of local people, including tribal leaders and professionals. Each list had at least 15 candidates, and at least four had to be women.</p>
+    <p>Voters didn’t just pick one list. They chose a list, then picked five individual candidates from that list. This system is called a “closed party list.” It helps make sure the council represents many different voices.</p>
+    <p>The election was run by the Palestinian Central Elections Commission (CEC), an independent group that makes sure votes are fair. Jamil al-Khalidi, the CEC’s regional director, said this vote was part of a bigger plan that includes 420 local councils in the West Bank. But Deir el-Balah was the only place in Gaza holding an election this time.</p>
+    <p>Why did they choose Deir el-Balah? Because it had less damage from the recent war than other parts of Gaza. Still, the city suffered a lot. The municipal building was destroyed, and the former mayor was killed in 2024. So this election was also about rebuilding hope.</p>
+    <p>Candidates focused on practical solutions. Abu Nasser, head of the Peace and Construction list, said they need “practical, innovative solutions with a strong reliance on young people.” Faten Harb, a candidate from another list, promised to be transparent—meaning honest and open about how decisions are made.</p>
+    <p>Some people wondered if the election would really make a difference. Salem Abu Hassanein, a media director for one list, said, “The real bet is on producing a council capable of serving people, away from narrow political calculations.” He meant the goal is to help everyone, not just certain groups.</p>
+    <p>This election also matters because it shows that democracy—letting people vote for their leaders—can happen even in tough times. As one observer noted, the vote could be “the beginning of a gradual return to democracy” or just a small step. But for now, the people of Deir el-Balah have spoken.</p>
+  </div>
+  <div class="kwim"><b>Why it matters:</b> This election shows that even after hard times, people can use their voice to ask for change. It reminds us that voting is a powerful way to make your community better, and that every vote counts.</div>
+
+  <details><summary>Show source highlights (Exa)</summary>
+  <div class="highlights">
+  <p>• ‘Solutions, not slogans’: Gaza holds first election in 21 years | Elections News | Al Jazeera
+[...]
+Residents of Gaza’s Deir el-Balah are heading to the polls on Saturday for the territory’s first municipal elections in more than two decades, hoping to restore local governance while still reeling from Israel’s devastating war.
+[...]
+because it sustained less infrastructural damage
+[...]
+Today, the Palestinian Central Elections Commission (CEC) – the independent body responsible for administering elections across the Palestinian territories – views the vote as a pivotal milestone.
+[...]
+Jamil al-Khalidi, the CEC’s regional director, told Al Jazeera that the April 25 election will be part of a broader process, including 420 local councils in the occupied West Bank, with Deir el-Balah the sole participating municipality in Gaza.
+[...]
+It marks a significant departure from the policy of administrative appointments that has governed the Strip under Hamas leadership for the past 21 years.
+[...]
+About 70,000 eligible voters over the age of 18 can cast their ballots between 7am and 5pm (04:00-14:00 GMT). To ensure a smooth process, the CEC has launched a toll-free hotline for residents to verify their registration status. Voting will take place at 12 electoral centres in spaces such as local stadiums, women’s activity centres and former clinics. Each centre will be equipped with eight polling stations.
+[...]
+Four nominally independent lists of candidates are competing for council seats: Peace and Construction, Deir el-Balah Brings Us Together, Future of Deir el-Balah and Renaissance of Deir el-Balah.
+[...]
+Debate in
+[...]
+persists about candidates’
+[...]
+affiliations in a deeply
+[...]
+political landscape. Ultimately,
+[...]
+, for many war-weary
+[...]
+, the return to
+[...]
+ballot box is meaningless
+[...]
+improvements for Palestinians
+[...]
+“The citizen today is not looking for slogans, but for real solutions,” resident Rabha al-Bhaisi told Al Jazeera, pointing to the dire need for basic services such as clean water, electricity and sewage management.
+[...]
+Abu Nasser, head of the Peace and Construction list, has said the current recovery phase requires practical, innovative solutions with a strong reliance on young people. Faten Harb, a candidate for Renaissance of Deir el-Balah, has stressed that her group is running on a strictly national and service-oriented platform aimed at enhancing transparency.
+[...]
+Salem Abu Hassanein, media director for the Future of Deir el-Balah list, told Al Jazeera that the success of this democratic experiment must take precedence. “The real bet is on producing a council capable of serving
+[...]
+people, away from narrow political calculations,” he said.
+[...]
+Beyond the immediate need for public services, this election also intersects with intense international deliberation about the “ day after” in Gaza and the broader crisis of Palestinian governance.
+[...]
+In this regard, the vote is of particular significance for the Palestinian Authority (PA), analysts say. By simultaneously holding elections in the occupied West Bank – where Israel is accelerating land confiscation, illegal settlement expansion and the entrenchment of military rule – the Ramallah-based PA is attempting to assert its relevance.
+[...]
+Ultimately, observers like Bassam al-Far, a representative of the Arab Liberation Front, note that while factions in Gaza and the occupied West Bank broadly agree on the necessity of holding a vote, the real challenge will be whether any elected body can function effectively amid the harsh living conditions, closed border crossings and an ongoing political divide that has fractured Palestinian life.
+[...]
+For now, Deir el-Balah stands at a crossroads: Saturday’s vote will either serve as the beginning of a gradual return to democracy, or remain an isolated, highly symbolic experiment constrained by a reality far too complex for ballot boxes alone to fix.</p>
+  </div>
+  </details>
+</div>
+<div class="kids-article">
+  <div class="ksrc">📰 Source: <a href="https://www.npr.org/2026/04/22/nx-s1-5793897/trump-extends-ceasefire-deadline-with-iran" target="_blank">Trump extends ceasefire deadline with Iran : NPR</a> · npr.org · <span class="wc">generated 430 words</span></div>
+  <img src="https://media.npr.org/include/images/facebook-default-wide-s1400-c85.jpg" alt=""/>
+  <div class="kheadline">Ceasefire Confusion: Why Trump Extended the Deadline with Iran</div>
+  <div class="kbody">
+    <p>Imagine you’re playing a game of tug-of-war, and just when the rope is about to snap, someone yells, “Wait, let’s take a break!” That’s kind of what happened between the United States and Iran this week.</p>
+    <p>President Trump extended a ceasefire deadline with Iran. A ceasefire is a pause in fighting so both sides can try to make peace. But this pause has been full of twists and turns.</p>
+    <p>Just hours before the ceasefire was set to end, Trump announced he was extending it indefinitely. That means no set end date. He said the Iranian government is “seriously fractured,” or split apart, and that talks would continue “one way or the other.”</p>
+    <p>But here’s the tricky part: even though Trump extended the ceasefire, the U.S. military is staying put. And the U.S. naval blockade of Iranian ports continues. A blockade is when one country uses ships to block another country’s ports so no ships can get in or out. Iran says that’s an act of war.</p>
+    <p>On the same day, Iran attacked and seized two ships in the Strait of Hormuz. The Strait of Hormuz is a narrow waterway that’s super important for oil tankers and other ships. Iran has been blocking ships from passing through. A third ship was hit, according to Iranian news.</p>
+    <p>Iran’s Revolutionary Guard Corps said the attacks were a response to the U.S. blockade. Iran wants the U.S. to end its blockade before it will agree to peace talks.</p>
+    <p>So why did Trump extend the ceasefire? Pakistan is helping to mediate, which means they’re like a referee trying to get both sides to talk. Pakistan asked Trump to hold off on more attacks. Trump agreed.</p>
+    <p>But not everyone is happy. An Iranian adviser said the extension “means nothing.” He accused the U.S. of using the extension as a trick to buy time for a surprise attack. The U.S. says that’s not true.</p>
+    <p>Meanwhile, Vice President Vance was supposed to travel to Pakistan for peace talks, but Iran refused to meet because of the blockade. Iran’s nuclear capabilities are also a big concern, but right now the main fight is over who controls the Strait of Hormuz.</p>
+    <p>Before the war, ships could pass freely through the strait. Now they can’t. That’s a big problem for countries around the world that depend on oil and goods that travel through there.</p>
+    <p>So what happens next? No one knows for sure. Trump has been going back and forth between tough threats and offers to talk. Iran is watching closely. The ceasefire is extended, but the tension is still high.</p>
+  </div>
+  <div class="kwim"><b>Why it matters:</b> This story matters because the Strait of Hormuz is a highway for oil and goods that people all over the world use. When countries fight over it, prices can go up, and peace can feel far away. Understanding how leaders try to solve big problems—sometimes by talking, sometimes by threatening—helps you see how the world works.</div>
+
+  <details><summary>Show source highlights (Exa)</summary>
+  <div class="highlights">
+  <p>• Trump extends ceasefire deadline with Iran : NPR
+[...]
+Trump extends ceasefire deadline with Iran President Trump again backs down ahead of a critical ceasefire deadline with Iran.
+[...]
+# Trump extends ceasefire deadline with Iran
+[...]
+#### Trump extends ceasefire deadline with Iran
+[...]
+President Trump again backs down ahead of a critical ceasefire deadline with Iran.
+[...]
+Iran attacked and seized ships in the Strait of Hormuz today, casting doubt over efforts to end the war. The attacks came just hours after President Trump announced he was extending a ceasefire indefinitely. Iran&#x27;s Revolutionary Guard Corps says it seized two ships, and the semi-official Fars News Agency says a third was hit in response to a U.S. blockade of Iranian ports. Iran, which has blocked ships from passing through the strait, wants the U.S. to end its blockade before resuming peace talks.
+[...]
+ORDOÑEZ: Yeah. I mean, it&#x27;s a very stunning turnaround as well, and just hours from when the ceasefire was set to expire. I mean - but as you noted, he&#x27;s done this before, and despite his significant threats, he&#x27;s also made very clear through his actions that he&#x27;s very interested in ending this war. I mean, this time Trump again said Pakistan, which is, of course, mediating the talks, asked him to hold off on more attacks.
+[...]
+He also said the U.S. military would stick around and that its naval blockade of Iranian ports would continue. Trump argued that the extension actually was warranted due to a, quote, &quot;seriously fractured&quot; Iranian government, and that he was extending the ceasefire until talks were concluded, quote, &quot;one way or the other.&quot; So a very different tone from earlier in the day when he warned that he was not going to extend the ceasefire and the bombing would resume.
+[...]
+ORDOÑEZ: Yeah. I mean, and they&#x27;re staying on the offensive. An adviser took to social media where he said the extension means nothing. He said the losing side cannot dictate the terms, and he argued that the continuation of the blockade was basically the equivalent to more bombing. And he actually accused the U.S. of announcing this extension as a ploy to buy more time for a surprise attack.
+[...]
+ORDOÑEZ: I mean, so much of this right now is about control of the Strait of Hormuz, you know, the critical passageway that Iran has basically maintained a steel grip on over the last several weeks. I mean, the Trump administration has really tried everything to reopen the strait, including its own blockade, preventing Iranian-tied ships from entering or leaving. Vice President Vance, of course, was scheduled to travel to Pakistan yesterday for peace talks, and those are now off because the Iranians refused to meet, calling that blockade an act of war. So Iran&#x27;s nuclear capabilities are clearly an issue. But before the war, there was free passage through the strait. And that&#x27;s no longer the case, and it&#x27;s a really big concern around the world.
+[...]
+ORDOÑEZ: I mean, I think it&#x27;s about credibility and certainly the president&#x27;s credibility. You&#x27;re seeing that in the reaction from current Iranian leadership. I mean, they did not rush to a meeting yesterday again, despite Trump&#x27;s ongoing threats, where he warned again about more bombing, saying, no more Mr. Nice Guy. I mean, I think the Iranians understand that amid the rhetoric is, again, Trump&#x27;s strong desire to end this war. And it really remains to be seen if all of Trump&#x27;s vacillating between aggressive threats and forms of diplomacy is going to pay off in the long run.</p>
+  </div>
+  </details>
+</div>
+<div class="kids-article">
+  <div class="ksrc">📰 Source: <a href="https://www.npr.org/2026/04/22/nx-s1-5792840/rfk-jr-senate-house-budget-hearings-vaccines-cdc-medicaid" target="_blank">RFK Jr. testifies before Senate on vaccines and more : NPR</a> · npr.org · <span class="wc">generated 403 words</span></div>
+  <img src="https://npr.brightspotcdn.com/dims3/default/strip/false/crop/6000x3375+0+625/resize/1400/quality/85/format/jpeg/?url=http%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2F93%2F3f%2F125c54f941438b84ca3515b2b25d%2Fap26112575189617.jpg" alt=""/>
+  <div class="kheadline">Health Secretary Robert F. Kennedy Jr. Faces Tough Questions from Senators</div>
+  <div class="kbody">
+    <p>Imagine being asked tough questions by a room full of senators for hours. That’s exactly what happened to Robert F. Kennedy Jr., the new head of the Department of Health and Human Services (HHS). He testified before two Senate committees on Wednesday, facing questions about vaccines, drug prices, and more.</p>
+    <p>Kennedy’s job is to help keep Americans healthy. He leads HHS, which oversees things like food safety, medicine, and disease prevention. This was his first time testifying before Congress since September, and senators from both political parties had a lot to ask.</p>
+    <p>Some Republican senators praised Kennedy for his work on rural health and nutrition. They liked his efforts to encourage healthy eating and phase out certain artificial food dyes. But Democratic senators were more critical. They pushed him on several topics, including vaccine policy and the cost of promotional videos from his office.</p>
+    <p>One big topic was vaccines. Kennedy made changes to the childhood vaccine schedule without getting advice from outside experts. This means he changed which vaccines kids should get and when. Some senators were worried about this because the U.S. has seen more measles cases in 2025 than in the last 30 years. Measles is a serious disease that vaccines can prevent.</p>
+    <p>Kennedy also talked about his agency’s wins. He mentioned negotiating lower drug prices, releasing new Dietary Guidelines, expanding nutrition education in medical schools, and creating a Rural Health Transformation Fund to help people in the countryside get better healthcare.</p>
+    <p>Another topic was TrumpRx, a new website where people can find discounts on some prescription drugs. Senator Elizabeth Warren asked why some drugs on the site cost more than prices available elsewhere. Kennedy defended the program.</p>
+    <p>Senator Maggie Hassan questioned Kennedy about a pesticide called glyphosate. Before joining the government, Kennedy had sued the company that makes it, saying it was harmful. But President Trump signed an order to increase production of the pesticide. Kennedy said the order was needed for national security and that the president gave him $200 million to help reduce the country’s use of glyphosate.</p>
+    <p>Throughout the hearings, Kennedy defended his health agenda and his agency’s budget request for 2027. He said HHS has “delivered historic wins” in its first 15 months under his leadership.</p>
+    <p>These hearings were part of a busy week for Kennedy. He testified before seven different committees in seven days. Senators will keep watching his work closely as he leads HHS.</p>
+  </div>
+  <div class="kwim"><b>Why it matters:</b> This story matters because the decisions made by the Health Secretary affect your health—from the vaccines you get to the food you eat and the medicines your family might need. Understanding how leaders are questioned helps you see how our government works to keep people safe.</div>
+
+  <details><summary>Show source highlights (Exa)</summary>
+  <div class="highlights">
+  <p>• RFK Jr. testifies before Senate on vaccines and more : NPR
+[...]
+RFK Jr. testifies before Senate on vaccines and more Health Secretary Robert F. Kennedy Jr. faced tough questioning as he caps off seven hearings on the Hill in as many days. It&#x27;s the first time he has testified before Congress since September.
+[...]
+# Senators grill RFK Jr. on vaccines, drug prices and more at hearing
+[...]
+#### Senators grill RFK Jr. on vaccines, drug prices and more at hearing
+[...]
+In two hearings on Capitol Hill Wednesday, Health Secretary Robert F. Kennedy Jr. faced vigorous questioning from senators. He testified before the U.S. Senate Finance Committee and the Senate Committee on Health, Education, Labor and Pensions, or HELP.
+[...]
+While Republicans on the committees praised Kennedy for his agency&#x27;s investments in rural health and nutrition, exchanges with Democratic senators frequently became rancorous. Democrats pushed Kennedy to commit to making Trump administration deals with pharmaceutical companies public, grilled him on the measles and other vaccines, and asked him to account for the costs of recent promotional videos from his office, among other topics.
+[...]
+### RFK Jr. defends his health agenda and Trump&#x27;s proposed budget cuts in hearing
+[...]
+Kennedy&#x27;s appearances cap a week of testifying before various Congressional committees to discuss his leadership of the Department of Health and Human Services and his agency&#x27;s budget request for 2027.
+[...]
+In both hearings, Kennedy listed the work of the agency during his first 15 months leading it, saying it has &quot;delivered historic wins.&quot; He mentioned negotiating drug prices, releasing the new Dietary Guidelines, expanding nutrition education in medical schools, the push to phase out petroleum based food dyes and the Rural Health Transformation Fund.
+[...]
+Until last week, he hadn&#x27;t testified on
+[...]
+Hill since September.
+[...]
+### Vaccine rhetoric and health messaging
+[...]
+Kennedy made dramatic, sudden changes to the childhood vaccine schedule without input from outside advisors and did not appear before lawmakers to answer questions until now. He also hasn&#x27;t testified about measles outbreaks — in 2025 the U.S. recorded more measles cases than the country has had in three decades.
+[...]
+Energy and Commerce Health
+[...]
+whether the Trump administration had told him to say less publicly about vaccines, Kennedy said no. He
+[...]
+he was unaware of
+[...]
+by a Republican
+[...]
+his position on vaccines
+[...]
+unpopular and politically hazardous for the party heading into the midterm elections.
+[...]
+anti-vaccine
+[...]
+of last year,
+[...]
+But on Wednesday morning, in his first chance to publicly question Kennedy about these changes, Cassidy used his five minutes to ask about health savings accounts and Medicare Advantage.
+[...]
+Several senators asked about TrumpRx, the administration&#x27;s new drug discount site. Sen. Elizabeth Warren, D-Mass., wanted to know why some of the drugs there cost more than prices available elsewhere.
+[...]
+name drugs, not
+[...]
+Numerous Republican senators praised Kennedy for his progress on fighting to encourage healthy eating, including his work on phasing out certain synthetic food dyes. These are issues which appeal to his Make America Healthy Again base.
+[...]
+On Wednesday afternoon, Sen. Hassan sparred with Kennedy over the issue of glyphosate, a pesticide which his supporters in the MAHA movement have rallied against. Before joining the federal government, Kennedy sued chemical maker Monsanto over the health effects of glyphosate. Hassan noted that President Trump signed an executive order to increase production of the pesticide and to grant immunity from liability to the company that makes it.
+[...]
+Kennedy defended the executive order as necessary for national security, and said President Trump has &quot;given me $200 million to help get America off of glyphosate.&quot;</p>
+  </div>
+  </details>
+</div>
+</body>
+</html>
