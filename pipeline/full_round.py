@@ -123,21 +123,28 @@ def process_images(stories: list[dict], today: str, website_dir: Path) -> None:
 # -------------------------------------------------------------------
 
 def rewrite_for_category(stories: list[dict]) -> tuple[dict[int, dict], dict]:
-    """Tri-variant rewrite, then detail enrichment. Returns (variants_by_src_id, details_by_slot)."""
+    """Tri-variant rewrite, then detail enrichment. Returns
+    (variants_by_src_id, details_by_slot). Raises if either step ultimately
+    fails — callers decide whether that's fatal for the whole run."""
     if not stories:
         return {}, {}
     articles_for_rewrite = [(i, s["winner"]) for i, s in enumerate(stories)]
     rewrite_res = tri_variant_rewrite(articles_for_rewrite)
     variants = {a.get("source_id"): a for a in rewrite_res.get("articles") or []}
+    if len(variants) < len(stories):
+        raise RuntimeError(
+            f"rewrite returned {len(variants)} variants for {len(stories)} stories"
+        )
 
     # Phase D — detail enrichment (1 extra call per category)
-    details_by_slot: dict[str, dict] = {}
-    try:
-        enrich = detail_enrich(rewrite_res)
-        details_by_slot = enrich.get("details") or {}
-    except Exception as e:
-        log.warning("detail_enrich failed: %s — continuing with empty detail fields", e)
-
+    enrich = detail_enrich(rewrite_res)
+    details_by_slot = enrich.get("details") or {}
+    expected_slots = len(stories) * 2  # easy + middle per story
+    if len(details_by_slot) < expected_slots:
+        raise RuntimeError(
+            f"detail_enrich returned {len(details_by_slot)} slots, "
+            f"expected {expected_slots}"
+        )
     return variants, details_by_slot
 
 
@@ -366,12 +373,27 @@ def main() -> None:
     log.info("=== REWRITE (tri-variant + detail enrich, 2 calls per category) ===")
     variants_by_cat: dict[str, dict] = {}
     details_by_cat: dict[str, dict] = {}
+    failures: list[str] = []
     for cat, ws in stories_by_cat.items():
-        v, d = rewrite_for_category(ws)
-        variants_by_cat[cat] = v
-        details_by_cat[cat] = d
-        log.info("  [%s] rewrite: %d variants · detail slots: %d",
-                 cat, len(v), len(d))
+        try:
+            v, d = rewrite_for_category(ws)
+            variants_by_cat[cat] = v
+            details_by_cat[cat] = d
+            log.info("  [%s] rewrite: %d variants · detail slots: %d",
+                     cat, len(v), len(d))
+        except Exception as e:  # noqa: BLE001
+            log.error("  [%s] rewrite/enrich FAILED: %s", cat, e)
+            failures.append(f"{cat}: {e}")
+
+    if failures:
+        # Mark run as failed (if DB tracking on), don't upload a partial zip.
+        msg = f"{len(failures)} category failures: " + " | ".join(failures)
+        if run_id:
+            update_run(run_id, {"status": "failed",
+                                "finished_at": datetime.now(timezone.utc).isoformat(),
+                                "notes": msg})
+        log.error("Aborting — %s", msg)
+        raise SystemExit(1)
 
     log.info("=== EMIT v1-shape payload files ===")
     emit_v1_shape(stories_by_cat, variants_by_cat, details_by_cat, today, website_dir)

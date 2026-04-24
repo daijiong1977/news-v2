@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -237,22 +238,36 @@ Return ONLY valid JSON (no markdown fences):
 }}"""
 
 
-def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2) -> dict:
-    r = requests.post(DEEPSEEK_ENDPOINT,
-        json={
-            "model": "deepseek-chat",
-            "messages": [{"role": "system", "content": system},
-                         {"role": "user", "content": user}],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        },
-        headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
-        timeout=120)
-    r.raise_for_status()
-    content = r.json()["choices"][0]["message"]["content"]
-    content = re.sub(r"^```json\s*", "", content.strip())
-    content = re.sub(r"\s*```\s*$", "", content)
-    return json.loads(content)
+def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2,
+                  max_attempts: int = 3) -> dict:
+    """Call deepseek-chat with JSON output. Retries on JSON parse failure
+    (model occasionally emits malformed JSON) and transient HTTP errors."""
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = requests.post(DEEPSEEK_ENDPOINT,
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "system", "content": system},
+                                 {"role": "user", "content": user}],
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
+                timeout=120)
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"]
+            content = re.sub(r"^```json\s*", "", content.strip())
+            content = re.sub(r"\s*```\s*$", "", content)
+            return json.loads(content)
+        except (json.JSONDecodeError, requests.HTTPError, requests.ConnectionError,
+                requests.Timeout) as e:
+            last_err = e
+            log.warning("chat attempt %d/%d failed: %s",
+                        attempt, max_attempts, str(e)[:200])
+            if attempt < max_attempts:
+                time.sleep(2 * attempt)
+    raise RuntimeError(f"deepseek_call exhausted {max_attempts} attempts") from last_err
 
 
 def vet_curator_input(briefs: list[dict], pick_count: int) -> str:
@@ -612,32 +627,90 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
     return details
 
 
-def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000) -> dict:
-    """Call deepseek-reasoner (thinking mode). Returns parsed JSON from final content."""
-    r = requests.post(
-        DEEPSEEK_ENDPOINT,
-        json={
-            "model": "deepseek-reasoner",
-            "messages": [{"role": "system", "content": system},
-                         {"role": "user", "content": user}],
-            "max_tokens": max_tokens,
-        },
-        headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
-        timeout=300,
-    )
-    r.raise_for_status()
-    content = r.json()["choices"][0]["message"]["content"]
-    content = re.sub(r"^```json\s*", "", content.strip())
-    content = re.sub(r"\s*```\s*$", "", content)
-    return json.loads(content)
+def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
+                           max_attempts: int = 3) -> dict:
+    """Call deepseek-reasoner (thinking mode). Returns parsed JSON from final
+    content. Retries on JSON parse failure (model occasionally drops a comma
+    in large payloads) and on transient HTTP/network errors."""
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = requests.post(
+                DEEPSEEK_ENDPOINT,
+                json={
+                    "model": "deepseek-reasoner",
+                    "messages": [{"role": "system", "content": system},
+                                 {"role": "user", "content": user}],
+                    "max_tokens": max_tokens,
+                },
+                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
+                timeout=300,
+            )
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"]
+            content = re.sub(r"^```json\s*", "", content.strip())
+            content = re.sub(r"\s*```\s*$", "", content)
+            return json.loads(content)
+        except (json.JSONDecodeError, requests.HTTPError, requests.ConnectionError,
+                requests.Timeout) as e:
+            last_err = e
+            log.warning("reasoner attempt %d/%d failed: %s",
+                        attempt, max_attempts, str(e)[:200])
+            if attempt < max_attempts:
+                time.sleep(2 * attempt)  # 2s, 4s
+    raise RuntimeError(f"deepseek_reasoner_call exhausted {max_attempts} attempts") from last_err
+
+
+def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
+    """Build an input covering only easy OR only middle slots (3 slots total).
+    Smaller payload → less chance of malformed JSON under reasoner load."""
+    assert level in ("easy", "middle")
+    lines = [f"3 articles below. For EACH, generate detail fields ONLY for the "
+             f"{level} level.", ""]
+    for i, art in enumerate(rewrite_result.get("articles") or []):
+        v = art.get(f"{level}_en") or {}
+        lines.append(f"=== Article [id: {i}] ===")
+        lines.append(f"{level}_en headline: {v.get('headline','')}")
+        lines.append(f"{level}_en body ({len((v.get('body') or '').split())} words):")
+        lines.append((v.get("body") or ""))
+        lines.append("")
+    lines.append(f"Return JSON with 3 slots keyed as 0_{level}, 1_{level}, 2_{level}.")
+    return "\n".join(lines)
 
 
 def detail_enrich(rewrite_result: dict) -> dict:
-    """Deepseek-reasoner (thinking mode) + post-filter hallucinated keywords."""
-    res = deepseek_reasoner_call(DETAIL_ENRICH_PROMPT,
-                                 detail_enrich_input(rewrite_result),
-                                 max_tokens=16000)
-    details = res.get("details") or {}
+    """Detail enrichment with two-stage fallback:
+      1. Single 6-slot call (fast, cheaper).
+      2. If that fails JSON parse even after retries, split into TWO 3-slot
+         calls (easy-only + middle-only). Smaller prompts → higher chance of
+         well-formed JSON per call, and if one half still fails the other is
+         salvageable.
+    Post-filter hallucinated keywords at the end."""
+    try:
+        res = deepseek_reasoner_call(DETAIL_ENRICH_PROMPT,
+                                     detail_enrich_input(rewrite_result),
+                                     max_tokens=16000)
+        details = res.get("details") or {}
+        # Accept even partial success here (all 6 slots expected; caller checks).
+    except RuntimeError as e:
+        log.warning("detail_enrich 6-slot call failed after retries (%s) — "
+                    "falling back to split 3-slot batches", e)
+        details = {}
+        for level in ("easy", "middle"):
+            try:
+                res = deepseek_reasoner_call(
+                    DETAIL_ENRICH_PROMPT,
+                    _detail_enrich_input_single_level(rewrite_result, level),
+                    max_tokens=12000,
+                )
+                for k, v in (res.get("details") or {}).items():
+                    details[k] = v
+                log.info("split-batch %s: %d slots OK", level,
+                         len(res.get("details") or {}))
+            except RuntimeError as e2:
+                log.error("split-batch %s failed: %s", level, e2)
+                # Continue — the other level may still succeed.
+
     filter_keywords(details, rewrite_result)
     return {"details": details}
 
