@@ -316,6 +316,24 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
 
       {/* ——————————— FOOTER ——————————— */}
       <footer style={{textAlign:'center', padding:'28px 20px 40px', color:'#9a8d7a', fontSize:13}}>
+        {(() => {
+          // Use the freshest mined_at across all loaded articles as the "page
+          // generated" timestamp. Displayed in the reader's local timezone.
+          const ms = (ARTICLES || [])
+            .map(a => a.minedAt ? new Date(a.minedAt).getTime() : 0)
+            .filter(t => t > 0);
+          if (!ms.length) return null;
+          const d = new Date(Math.max(...ms));
+          const when = d.toLocaleString(undefined, {
+            year:'numeric', month:'short', day:'numeric',
+            hour:'numeric', minute:'2-digit',
+          });
+          return (
+            <div style={{marginBottom:6, fontSize:12, color:'#b0a490'}}>
+              📅 Page generated · {when}
+            </div>
+          );
+        })()}
         Made for curious kids · News Oh,Ye! 🎈
       </footer>
     </div>
