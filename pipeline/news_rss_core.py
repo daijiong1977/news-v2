@@ -873,38 +873,48 @@ def run_source_phase_a(source, html_tag_stripper=None) -> dict | None:
     for i, a in enumerate(alternates):
         candidate_ids.append((f"alternate_{i}", a.get("id")))
 
+    # Verify up to MAX_CANDIDATES_PER_SOURCE candidates — each must pass body
+    # + image checks. Downstream (past-dedup + cross-source-dedup) picks the
+    # best surviving candidate per source instead of cheaply taking choice_1.
+    MAX_CANDIDATES_PER_SOURCE = 4
+    candidates: list[dict] = []
     attempts: list[dict] = []
-    winner = None
-    winner_slot = None
     for slot, cid in candidate_ids:
+        if len(candidates) >= MAX_CANDIDATES_PER_SOURCE:
+            break
         if cid is None or cid >= len(briefs):
             continue
         art = dict(briefs[cid])
-        # Ensure body+image are populated
         if source.flow == "light" or not art.get("body"):
-            log.info("[%s]  fetching [%s id=%d] %s", source.name, slot, cid, art.get("link", "")[:80])
+            log.info("[%s]  fetching [%s id=%d] %s", source.name, slot, cid,
+                     art.get("link", "")[:80])
             art = _fetch_and_enrich(art)
         ok, reason = verify_article_content(art)
         attempts.append({"slot": slot, "id": cid, "title": art.get("title"),
                          "word_count": art.get("word_count"), "ok": ok, "reason": reason})
         if ok:
-            winner = art
-            winner["_vet_info"] = vet_by_id.get(cid)
-            winner_slot = slot
-            log.info("[%s]  ✓ winner [%s id=%d] %dw", source.name, slot, cid,
+            art["_vet_info"] = vet_by_id.get(cid)
+            candidates.append({"winner": art, "slot": slot})
+            log.info("[%s]  ✓ [%s id=%d] %dw", source.name, slot, cid,
                      art.get("word_count", 0))
-            break
-        log.info("[%s]  ✗ [%s id=%d] %s — %s", source.name, slot, cid,
-                 art.get("title", "")[:40], reason)
+        else:
+            log.info("[%s]  ✗ [%s id=%d] %s — %s", source.name, slot, cid,
+                     art.get("title", "")[:40], reason)
 
-    if not winner:
-        log.warning("[%s]  no viable winner after %d attempts", source.name, len(attempts))
+    if not candidates:
+        log.warning("[%s]  no viable candidate after %d attempts", source.name,
+                    len(attempts))
         return None
 
+    log.info("[%s]  → %d candidates ready", source.name, len(candidates))
+
+    # Back-compat fields for callers that still read .winner / .winner_slot.
+    top = candidates[0]
     return {
         "source": source,
-        "winner": winner,
-        "winner_slot": winner_slot,
+        "candidates": candidates,       # NEW: ranked list (up to 4)
+        "winner": top["winner"],        # legacy: first candidate
+        "winner_slot": top["slot"],     # legacy: first candidate's slot
         "batch_vet": batch_vet,
         "kept_briefs": briefs,
         "attempts": attempts,

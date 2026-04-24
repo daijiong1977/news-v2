@@ -38,44 +38,125 @@ log = logging.getLogger("full-round")
 # 1) Aggregate 3 categories
 # -------------------------------------------------------------------
 
-def aggregate_category(label: str, enabled: list, backups: list, runner) -> list[dict]:
-    """Run Phase A for each source; return winners list (without dedup/rewrite)."""
+def aggregate_category(label: str, enabled: list, backups: list, runner) -> dict[str, dict]:
+    """Run Phase A for each source; return `{source_name: {source, candidates}}`.
+    Each source contributes up to 4 ranked candidates (choice_1…). If the
+    primary source yields 0 candidates, rotates to a backup source (handled
+    inside `runner`)."""
     log.info("[%s] aggregating from %d sources", label, len(enabled))
     used_backups: set[str] = set()
-    winners: list[dict] = []
+    by_source: dict[str, dict] = {}
     for source in enabled:
         avail = [b for b in backups if b.name not in used_backups]
         res = runner(source, avail)
-        if res:
-            if res.get("used_backup"):
-                used_backups.add(res["source"].name)
-            winners.append(res)
-    return winners
+        if not res:
+            continue
+        # Supports both the new multi-candidate Phase A return shape and the
+        # legacy single-winner shape (some aggregator paths still produce
+        # the latter, e.g. after backup rotation).
+        cands = res.get("candidates")
+        if not cands and res.get("winner"):
+            cands = [{"winner": res["winner"], "slot": res.get("winner_slot") or "choice_1"}]
+        if not cands:
+            continue
+        src_obj = res["source"]
+        by_source[src_obj.name] = {"source": src_obj, "candidates": cands}
+        if res.get("used_backup"):
+            used_backups.add(src_obj.name)
+    return by_source
 
 
-def dedup_winners(winners: list[dict], backups: list | None = None,
-                  target_count: int = 3) -> list[dict]:
-    """Cross-source dedup with backup-source refill.
+def _normalize_title(t: str) -> str:
+    """lowercase + strip punctuation + collapse whitespace for similarity match."""
+    import re as _re
+    s = (t or "").lower()
+    s = _re.sub(r"[^\w\s]", " ", s)
+    s = _re.sub(r"\s+", " ", s).strip()
+    return s
 
-    When a duplicate pair is found, drop the weaker (higher-priority-number)
-    winner. If that leaves us below `target_count`, mine a fresh winner from
-    the category's backup pool and continue until target is met or backups
-    are exhausted."""
-    if len(winners) < 2:
-        return winners
-    backups = backups or []
-    used_backup_names = {w["source"].name for w in winners
-                         if w.get("used_backup")}
 
-    for _round in range(5):  # cap to prevent infinite loop on adversarial data
-        if len(winners) < 2:
+def _title_similarity(a: str, b: str) -> float:
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, _normalize_title(a), _normalize_title(b)).ratio()
+
+
+# Shape used by filter_past_duplicates + pick_winners_with_dedup:
+#   by_source = {
+#     <source_name>: {"source": <SourceObj>, "candidates": [{"winner": art, "slot": "choice_1"}, ...]},
+#     ...
+#   }
+
+
+def filter_past_duplicates(category: str, by_source: dict[str, dict],
+                           days: int = 3, threshold: float = 0.80) -> dict[str, dict]:
+    """Drop candidates whose title ≥threshold-matches any story this category
+    published in the last `days` days. Cheap — SequenceMatcher on a few
+    dozen title pairs is microseconds."""
+    from datetime import date, timedelta
+    from .supabase_io import client
+    try:
+        sb = client()
+    except Exception as e:
+        log.warning("past-dedup skipped — Supabase unreachable: %s", e)
+        return by_source
+    start = (date.today() - timedelta(days=days)).isoformat()
+    try:
+        r = sb.table("redesign_stories").select(
+            "source_title, category, published_date"
+        ).eq("category", category).gte("published_date", start).execute()
+        past_titles = [row.get("source_title") or "" for row in (r.data or [])]
+    except Exception as e:
+        log.warning("past-dedup query failed — skipping: %s", e)
+        return by_source
+
+    if not past_titles:
+        log.info("  [%s] past-dedup: no prior stories in last %d days", category, days)
+        return by_source
+
+    result: dict[str, dict] = {}
+    for name, bundle in by_source.items():
+        kept: list[dict] = []
+        for c in bundle["candidates"]:
+            t = (c["winner"].get("title") or "")
+            best = max((_title_similarity(t, pt) for pt in past_titles), default=0.0)
+            if best >= threshold:
+                log.info("  [%s/%s] past-dup drop %s (sim=%.2f) — %s",
+                         category, name, c.get("slot"), best, t[:60])
+            else:
+                kept.append(c)
+        result[name] = {"source": bundle["source"], "candidates": kept}
+    return result
+
+
+def pick_winners_with_dedup(by_source: dict[str, dict]) -> list[dict]:
+    """Pick the highest-ranked surviving candidate per source, then
+    cross-source dedup. When a pair of today's picks duplicates, drop the
+    weaker source's current pick and promote its NEXT candidate (no extra
+    DeepSeek-and-RSS round-trip — we already mined up to 4 per source)."""
+    ptrs: dict[str, int] = {name: 0 for name in by_source}
+    exhausted: set[str] = set()
+
+    def current_for(name: str) -> dict | None:
+        idx = ptrs.get(name, 0)
+        cands = by_source[name].get("candidates") or []
+        return cands[idx] if idx < len(cands) else None
+
+    for _round in range(8):
+        picks: list[tuple[str, dict]] = []
+        for name in by_source:
+            if name in exhausted:
+                continue
+            c = current_for(name)
+            if c:
+                picks.append((name, c))
+        if len(picks) < 2:
             break
         briefs = [
-            {"id": i, "title": w["winner"].get("title"),
-             "source_name": w["source"].name,
-             "source_priority": w["source"].priority,
-             "excerpt": (w["winner"].get("body") or "")[:400]}
-            for i, w in enumerate(winners)
+            {"id": i, "title": c["winner"].get("title"),
+             "source_name": name,
+             "source_priority": getattr(by_source[name]["source"], "priority", 9),
+             "excerpt": (c["winner"].get("body") or "")[:400]}
+            for i, (name, c) in enumerate(picks)
         ]
         dup = check_duplicates(briefs)
         if dup.get("verdict") != "DUP_FOUND":
@@ -83,34 +164,31 @@ def dedup_winners(winners: list[dict], backups: list | None = None,
         drop_id = dup.get("drop_suggestion")
         if drop_id is None and dup.get("duplicate_pairs"):
             pair = dup["duplicate_pairs"][0]["ids"]
-            drop_id = max(pair, key=lambda i: winners[i]["source"].priority)
-        if drop_id is None or drop_id >= len(winners):
+            drop_id = max(pair, key=lambda i: briefs[i]["source_priority"])
+        if drop_id is None or drop_id >= len(picks):
             break
-        dropped = winners[drop_id]
-        log.info("  dropping cross-source dup [%d] %s", drop_id,
-                 dropped["winner"].get("title", "")[:60])
-        winners = [w for i, w in enumerate(winners) if i != drop_id]
+        drop_name, drop_cand = picks[drop_id]
+        log.info("  cross-source dup — promoting next candidate for [%s] "
+                 "(was %s: %s)",
+                 drop_name, drop_cand["slot"],
+                 (drop_cand["winner"].get("title") or "")[:50])
+        ptrs[drop_name] += 1
+        if ptrs[drop_name] >= len(by_source[drop_name].get("candidates") or []):
+            log.warning("  [%s] exhausted all candidates — skipping", drop_name)
+            exhausted.add(drop_name)
 
-        # Refill from backups if we're now short of target.
-        if len(winners) < target_count:
-            avail = [b for b in backups if b.name not in used_backup_names]
-            refilled = False
-            for backup in avail:
-                log.info("  trying backup [%s] to refill dup-dropped slot",
-                         backup.name)
-                res = run_source_phase_a(backup)
-                if res:
-                    res["used_backup"] = True
-                    res["primary_source_name"] = dropped["source"].name
-                    used_backup_names.add(backup.name)
-                    winners.append(res)
-                    refilled = True
-                    break
-            if not refilled:
-                log.warning("  no backup available — continuing short (count=%d)",
-                            len(winners))
-                break
-    return winners
+    final: list[dict] = []
+    for name, bundle in by_source.items():
+        if name in exhausted:
+            continue
+        c = current_for(name)
+        if c:
+            final.append({
+                "source": bundle["source"],
+                "winner": c["winner"],
+                "winner_slot": c["slot"],
+            })
+    return final
 
 
 # -------------------------------------------------------------------
@@ -387,15 +465,20 @@ def main() -> None:
     if not run_id:
         log.warning("insert_run failed — continuing without DB persistence")
 
-    log.info("=== AGGREGATE ===")
-    news = aggregate_category("News", news_sources(), news_backups(), run_news)
-    science = aggregate_category("Science", science_sources(), sci_backups(), run_sci)
-    fun = aggregate_category("Fun", fun_sources(), fun_backups(), run_fun)
+    log.info("=== AGGREGATE (up to 4 candidates per source) ===")
+    news_bs = aggregate_category("News", news_sources(), news_backups(), run_news)
+    science_bs = aggregate_category("Science", science_sources(), sci_backups(), run_sci)
+    fun_bs = aggregate_category("Fun", fun_sources(), fun_backups(), run_fun)
 
-    log.info("=== DEDUP (per category) ===")
-    news = dedup_winners(news, news_backups())
-    science = dedup_winners(science, sci_backups())
-    fun = dedup_winners(fun, fun_backups())
+    log.info("=== PAST-DEDUP (3-day lookback · title ≥80%% similar = dup) ===")
+    news_bs = filter_past_duplicates("News", news_bs, days=3)
+    science_bs = filter_past_duplicates("Science", science_bs, days=3)
+    fun_bs = filter_past_duplicates("Fun", fun_bs, days=3)
+
+    log.info("=== PICK + CROSS-SOURCE DEDUP (promote next candidate on dup) ===")
+    news = pick_winners_with_dedup(news_bs)
+    science = pick_winners_with_dedup(science_bs)
+    fun = pick_winners_with_dedup(fun_bs)
     stories_by_cat = {"News": news, "Science": science, "Fun": fun}
     for cat, ws in stories_by_cat.items():
         log.info("  %s: %d winners", cat, len(ws))
