@@ -1,15 +1,22 @@
 """Pack `website/` into a zip and upload it to Supabase Storage as both
 `<YYYY-MM-DD>.zip` (immutable archive) and `latest.zip` (what the deploy repo's
-GitHub Action fetches).
+GitHub Action fetches). Also writes a `latest-manifest.json` (+ dated copy)
+with the version + content hash + story IDs so anyone inspecting the bucket
+knows what's inside without downloading.
 
 Validates today's content bundle BEFORE packing. If any listing or detail file
 is missing or incomplete, refuses to upload — the live site keeps yesterday's
-zip until the pipeline produces a fully-formed bundle."""
+zip until the pipeline produces a fully-formed bundle.
+
+After a successful upload, runs retention: keeps `latest.*` + the last
+`RETENTION_DAYS` dated archives; deletes older dated zips + manifests."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import re
 import sys
 import zipfile
 from datetime import datetime, timezone
@@ -30,6 +37,7 @@ for _line in (_envp.open() if _envp.exists() else []):
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "website"
 BUCKET = "redesign-daily-content"
+RETENTION_DAYS = 30  # dated archives older than this get deleted
 
 # Allowlist of top-level files/dirs that ship to production.
 INCLUDE_FILES = {"index.html", "article.jsx", "home.jsx", "components.jsx",
@@ -159,20 +167,102 @@ def build_zip() -> bytes:
     return buf.getvalue()
 
 
+def build_manifest(today: str, body: bytes) -> dict:
+    """Summarize what this zip contains — version + content hash + story IDs.
+    Consumers can compare manifest sha256 without downloading the zip."""
+    stories: list[dict] = []
+    for cat in CATS:
+        p = WEB / "payloads" / f"articles_{cat}_middle.json"
+        if not p.is_file():
+            continue
+        try:
+            for a in (json.loads(p.read_text()).get("articles") or []):
+                stories.append({
+                    "id": a.get("id"),
+                    "category": a.get("category"),
+                    "title": a.get("title"),
+                    "mined_at": a.get("mined_at"),
+                    "source": a.get("source"),
+                    "source_published_at": a.get("source_published_at"),
+                })
+        except Exception:
+            pass
+    return {
+        "version": today,
+        "packed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "git_sha": os.environ.get("GITHUB_SHA") or "",
+        "zip_bytes": len(body),
+        "zip_sha256": hashlib.sha256(body).hexdigest(),
+        "story_count": len(stories),
+        "stories": stories,
+    }
+
+
+DATED_ZIP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.zip$")
+DATED_MANIFEST_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-manifest\.json$")
+
+
+def cleanup_retention(sb, keep_days: int) -> None:
+    """Delete dated archives older than `keep_days`. Keeps `latest.*` always."""
+    from datetime import date, timedelta
+    cutoff = date.today() - timedelta(days=keep_days)
+    objs = sb.storage.from_(BUCKET).list("", {"limit": 1000})
+    to_delete: list[str] = []
+    for o in objs or []:
+        name = o.get("name") or ""
+        for rx in (DATED_ZIP_RE, DATED_MANIFEST_RE):
+            m = rx.match(name)
+            if not m:
+                continue
+            try:
+                day = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if day < cutoff:
+                to_delete.append(name)
+    if not to_delete:
+        log.info("retention: 0 old files (keep %d days)", keep_days)
+        return
+    sb.storage.from_(BUCKET).remove(to_delete)
+    log.info("retention: deleted %d files older than %s: %s",
+             len(to_delete), cutoff.isoformat(), to_delete)
+
+
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     validate_bundle(today)
     body = build_zip()
+    manifest = build_manifest(today, body)
+    manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
+    # Write zip in two locations: dated archive (immutable history) + latest.
     for key in (f"{today}.zip", "latest.zip"):
-        # Upsert: Supabase storage upload returns error if object exists unless upsert set.
-        res = sb.storage.from_(BUCKET).upload(
+        sb.storage.from_(BUCKET).upload(
             path=key,
             file=body,
             file_options={"content-type": "application/zip", "upsert": "true"},
         )
-        log.info("uploaded %s → %s", key, getattr(res, "path", key))
+        log.info("uploaded %s", key)
+
+    # Same for the manifest — dated archive + latest pointer.
+    for key in (f"{today}-manifest.json", "latest-manifest.json"):
+        sb.storage.from_(BUCKET).upload(
+            path=key,
+            file=manifest_bytes,
+            file_options={"content-type": "application/json", "upsert": "true"},
+        )
+        log.info("uploaded %s", key)
+
+    log.info("manifest: version=%s · zip_bytes=%d · zip_sha256=%s · stories=%d",
+             manifest["version"], manifest["zip_bytes"],
+             manifest["zip_sha256"][:12], manifest["story_count"])
+
+    # Retention sweep: delete dated archives older than RETENTION_DAYS.
+    try:
+        cleanup_retention(sb, RETENTION_DAYS)
+    except Exception as e:  # noqa: BLE001
+        log.warning("retention sweep failed (non-fatal): %s", e)
 
     pub = f"{os.environ['SUPABASE_URL']}/storage/v1/object/public/{BUCKET}/latest.zip"
     log.info("public URL: %s", pub)

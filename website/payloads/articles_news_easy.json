@@ -7,7 +7,8 @@
       "source": "PBS NewsHour",
       "time_ago": "Thu, 23 Apr 2026 19:05:03 -0400",
       "image_url": "/article_images/article_e70859ec15f4.webp",
-      "category": "News"
+      "category": "News",
+      "mined_at": "2026-04-24T01:01:41.723732+00:00"
     },
     {
       "id": "2026-04-24-news-2",
@@ -16,7 +17,8 @@
       "source": "NPR World",
       "time_ago": "Thu, 23 Apr 2026 12:46:53 -0400",
       "image_url": "/article_images/article_c9fd806dc459.webp",
-      "category": "News"
+      "category": "News",
+      "mined_at": "2026-04-24T01:01:42.087792+00:00"
     },
     {
       "id": "2026-04-24-news-3",
@@ -25,7 +27,8 @@
       "source": "Al Jazeera",
       "time_ago": "Thu, 23 Apr 2026 20:26:13 +0000",
       "image_url": "/article_images/article_23d2604d763b.webp",
-      "category": "News"
+      "category": "News",
+      "mined_at": "2026-04-24T01:01:42.32737+00:00"
     }
   ]
 }

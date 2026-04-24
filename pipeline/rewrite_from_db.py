@@ -167,32 +167,29 @@ def main() -> None:
             img_local = s.get("primary_image_local") or ""
             img_url = f"/{img_local}" if img_local else ""
 
-            per_level["easy"].append({
+            # Preserve the original mining timestamp — DB has it as created_at.
+            mined_at = s.get("created_at") or datetime.now(timezone.utc).isoformat()
+            source_pub = s.get("source_published_at") or ""
+            common_listing = {
                 "id": story_id,
+                "source": s.get("source_name", ""),
+                "time_ago": "",
+                "mined_at": mined_at,
+                "source_published_at": source_pub,
+                "image_url": img_url,
+                "category": cat,
+            }
+            per_level["easy"].append({**common_listing,
                 "title": easy.get("headline") or s.get("source_title") or "",
                 "summary": card_summary(easy),
-                "source": s.get("source_name", ""),
-                "time_ago": "",
-                "image_url": img_url,
-                "category": cat,
             })
-            per_level["middle"].append({
-                "id": story_id,
+            per_level["middle"].append({**common_listing,
                 "title": middle.get("headline") or s.get("source_title") or "",
                 "summary": card_summary(middle),
-                "source": s.get("source_name", ""),
-                "time_ago": "",
-                "image_url": img_url,
-                "category": cat,
             })
-            per_level["cn"].append({
-                "id": story_id,
+            per_level["cn"].append({**common_listing,
                 "title": zh.get("headline") or "",
                 "summary": zh.get("summary") or "",
-                "source": s.get("source_name", ""),
-                "time_ago": "",
-                "image_url": img_url,
-                "category": cat,
             })
 
             # Per-story detail files (easy + middle; no cn detail)
@@ -214,6 +211,10 @@ def main() -> None:
                     "background_read": bg,
                     "Article_Structure": det.get("Article_Structure") or [],
                     "perspectives": det.get("perspectives") or [],
+                    "mined_at": mined_at,
+                    "source_published_at": source_pub,
+                    "source_name": s.get("source_name", ""),
+                    "source_url": s.get("source_url", ""),
                 }
                 (story_dir / f"{lvl_key}.json").write_text(
                     json.dumps(detail, ensure_ascii=False, indent=2)

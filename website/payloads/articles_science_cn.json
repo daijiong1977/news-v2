@@ -7,7 +7,8 @@
       "source": "ScienceDaily All",
       "time_ago": "Thu, 23 Apr 2026 07:46:30 EDT",
       "image_url": "/article_images/article_70eafbd186b1.webp",
-      "category": "Science"
+      "category": "Science",
+      "mined_at": "2026-04-24T01:01:42.570832+00:00"
     },
     {
       "id": "2026-04-24-science-2",
@@ -16,7 +17,8 @@
       "source": "Science News Explores",
       "time_ago": "Fri, 17 Apr 2026 10:30:00 +0000",
       "image_url": "/article_images/article_4d246624b13b.webp",
-      "category": "Science"
+      "category": "Science",
+      "mined_at": "2026-04-24T01:01:42.840165+00:00"
     },
     {
       "id": "2026-04-24-science-3",
@@ -25,7 +27,8 @@
       "source": "Guardian Environment",
       "time_ago": "Wed, 22 Apr 2026 10:00:24 GMT",
       "image_url": "/article_images/article_41611642a438.webp",
-      "category": "Science"
+      "category": "Science",
+      "mined_at": "2026-04-24T01:01:43.107567+00:00"
     }
   ]
 }

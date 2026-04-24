@@ -7,7 +7,8 @@
       "source": "Smithsonian Arts",
       "time_ago": "",
       "image_url": "/article_images/article_59476443522b.webp",
-      "category": "Fun"
+      "category": "Fun",
+      "mined_at": "2026-04-24T01:01:43.355802+00:00"
     },
     {
       "id": "2026-04-24-fun-2",
@@ -16,7 +17,8 @@
       "source": "Colossal",
       "time_ago": "",
       "image_url": "/article_images/article_e63024572fa4.webp",
-      "category": "Fun"
+      "category": "Fun",
+      "mined_at": "2026-04-24T01:01:43.575543+00:00"
     },
     {
       "id": "2026-04-24-fun-3",
@@ -25,7 +27,8 @@
       "source": "Hyperallergic",
       "time_ago": "",
       "image_url": "/article_images/article_3eccd52c6e4a.webp",
-      "category": "Fun"
+      "category": "Fun",
+      "mined_at": "2026-04-24T01:01:43.778406+00:00"
     }
   ]
 }

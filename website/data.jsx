@@ -54,6 +54,8 @@ function listingToArticle(entry, cat, lvl) {
     category: categoryLabel,
     source: entry.source || "",
     time: entry.time_ago || "",
+    minedAt: entry.mined_at || "",              // ISO-8601 when pipeline captured this story
+    sourcePublishedAt: entry.source_published_at || "",  // RSS pubDate (may be absent for some feeds)
     readMins: isZh ? 2 : (lvl === "easy" ? 3 : 5),
     level: level,                     // null for Chinese cards
     language: isZh ? "zh" : "en",

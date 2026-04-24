@@ -197,6 +197,8 @@ def emit_v1_shape(stories_by_cat: dict[str, list[dict]],
     payloads_dir.mkdir(parents=True, exist_ok=True)
     details_dir.mkdir(parents=True, exist_ok=True)
 
+    mined_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
     for category in ("News", "Science", "Fun"):
         stories = stories_by_cat.get(category, [])
         variants = variants_by_cat.get(category, {})
@@ -218,32 +220,26 @@ def emit_v1_shape(stories_by_cat: dict[str, list[dict]],
             zh = var.get("zh") or {}
 
             # Listings (flat, v1-shape) — summary is short card blurb (≤120 words)
-            per_level_articles["easy"].append({
+            common_listing = {
                 "id": story_id,
+                "source": src_name,
+                "time_ago": time_ago,
+                "mined_at": mined_at,                  # when this pipeline run captured the story
+                "source_published_at": art.get("published") or "",
+                "image_url": f"/{img_local}" if img_local else "",
+                "category": category,
+            }
+            per_level_articles["easy"].append({**common_listing,
                 "title": easy.get("headline") or art.get("title") or "",
                 "summary": card_summary(easy),
-                "source": src_name,
-                "time_ago": time_ago,
-                "image_url": f"/{img_local}" if img_local else "",
-                "category": category,
             })
-            per_level_articles["middle"].append({
-                "id": story_id,
+            per_level_articles["middle"].append({**common_listing,
                 "title": middle.get("headline") or art.get("title") or "",
                 "summary": card_summary(middle),
-                "source": src_name,
-                "time_ago": time_ago,
-                "image_url": f"/{img_local}" if img_local else "",
-                "category": category,
             })
-            per_level_articles["cn"].append({
-                "id": story_id,
+            per_level_articles["cn"].append({**common_listing,
                 "title": zh.get("headline") or "",
                 "summary": zh.get("summary") or "",
-                "source": src_name,
-                "time_ago": time_ago,
-                "image_url": f"/{img_local}" if img_local else "",
-                "category": category,
             })
 
             # Detail payloads (per-story, per-level). Chinese is summary-only → no detail.
@@ -266,6 +262,10 @@ def emit_v1_shape(stories_by_cat: dict[str, list[dict]],
                     "background_read": bg,
                     "Article_Structure": det.get("Article_Structure") or [],
                     "perspectives": det.get("perspectives") or [],
+                    "mined_at": mined_at,
+                    "source_published_at": art.get("published") or "",
+                    "source_name": src_name,
+                    "source_url": src_url,
                 }
                 (story_detail_dir / f"{lvl_key}.json").write_text(
                     json.dumps(detail, ensure_ascii=False, indent=2)

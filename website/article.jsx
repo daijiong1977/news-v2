@@ -1,6 +1,15 @@
 // Article detail page — News Oh,Ye!
 const { useState: useStateA, useMemo: useMemoA, useEffect: useEffectA } = React;
 
+// Format an ISO-8601 timestamp as "Apr 24, 2026". Returns "" on bad input
+// so callers can safely conditionally render.
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
 function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
   const baseArticle = ARTICLES.find(a => a.id === articleId) || ARTICLES[0];
   const [tab, setTab] = useStateA('read');
@@ -168,10 +177,15 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
               <XpBadge xp={article.xp}/>
             </div>
             <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:40, lineHeight:1.05, color:'#1b1230', margin:'0 0 14px', letterSpacing:'-0.02em'}}>{article.title}</h1>
-            <div style={{display:'flex', gap:14, color:'#6b5c80', fontSize:13, fontWeight:700, flexWrap:'wrap'}}>
+            <div style={{display:'flex', gap:14, color:'#6b5c80', fontSize:13, fontWeight:700, flexWrap:'wrap', alignItems:'center'}}>
               <span>📰 {article.source}</span><span>·</span>
-              <span>{article.time}</span><span>·</span>
               <span>⏱ {article.readMins} min read</span>
+              {article.minedAt && (<>
+                <span>·</span>
+                <span title={`Mined ${article.minedAt}${article.sourcePublishedAt ? ' · source published ' + article.sourcePublishedAt : ''}`}>
+                  🗞 Mined {formatDate(article.minedAt)}
+                </span>
+              </>)}
             </div>
           </div>
           <div style={{borderRadius:22, overflow:'hidden', border:`3px solid ${catColor}`, background:`url(${article.image}) center/cover`, minHeight:220, position:'relative'}}>
