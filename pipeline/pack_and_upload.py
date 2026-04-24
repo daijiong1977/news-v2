@@ -243,6 +243,47 @@ def cleanup_retention(sb, keep_days: int) -> None:
              len(to_delete), cutoff.isoformat(), to_delete)
 
 
+def local_freshest_mined_at() -> str | None:
+    """ISO-8601 of the most recent mined_at across all today's listings."""
+    stamps: list[str] = []
+    for cat in CATS:
+        p = WEB / "payloads" / f"articles_{cat}_middle.json"
+        if not p.is_file():
+            continue
+        try:
+            for a in json.loads(p.read_text()).get("articles") or []:
+                if a.get("mined_at"):
+                    stamps.append(a["mined_at"])
+        except Exception:
+            continue
+    return max(stamps) if stamps else None
+
+
+def check_not_overwriting_newer(sb) -> None:
+    """Refuse to upload if the bucket already has a manifest whose packed_at
+    (or freshest story mined_at) is newer than our local content. Prevents a
+    local `pack_and_upload` from silently replacing CI-generated output."""
+    try:
+        body = sb.storage.from_(BUCKET).download("latest-manifest.json")
+        remote = json.loads(body.decode() if isinstance(body, bytes) else body)
+    except Exception:
+        return  # nothing remote yet — safe to upload
+    remote_stamps = [s.get("mined_at") for s in (remote.get("stories") or [])
+                     if s.get("mined_at")]
+    remote_freshest = max(remote_stamps) if remote_stamps else remote.get("packed_at")
+    local_freshest = local_freshest_mined_at()
+    if not (remote_freshest and local_freshest):
+        return
+    if local_freshest < remote_freshest:
+        msg = (f"REFUSE: remote manifest is newer than local. "
+               f"remote freshest={remote_freshest} · local freshest={local_freshest}. "
+               "If you really want to overwrite, set ALLOW_STALE_UPLOAD=1.")
+        if os.environ.get("ALLOW_STALE_UPLOAD") != "1":
+            log.error(msg)
+            raise SystemExit(1)
+        log.warning("ALLOW_STALE_UPLOAD=1 set — proceeding despite: %s", msg)
+
+
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     validate_bundle(today)
@@ -250,6 +291,7 @@ def main() -> None:
     manifest = build_manifest(today, body)
     manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    check_not_overwriting_newer(sb)
 
     # Write zip in two locations: dated archive (immutable history) + latest.
     for key in (f"{today}.zip", "latest.zip"):
