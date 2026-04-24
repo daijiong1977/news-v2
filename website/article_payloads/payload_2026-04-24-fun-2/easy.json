@@ -1,119 +1,119 @@
 {
-  "title": "London Exhibition Tells Stories of Southern Lebanon's People",
-  "summary": "Have you ever felt like nobody is listening to your story? That's how many people in southern Lebanon feel. But a new exhibition in London called \"Forget Me Not\" is making sure their voices are heard. The show features videos, photos, and drawings that tell the history of this region. It shows how people have survived wars and difficult times. One video shows a person saying, \"We are attached to this land just like a tree is rooted in its soil.\" That means they love their home and won't leave, no matter what. The exhibition was created by two people who have family roots in southern Lebanon: Rasha Kotaiche and Ali Abou Khalil. They wanted to share the real stories of their people—not just what you see on the news. There are drawings made by Lebanese schoolchildren celebrating their country's independence day. There are also photos of pomegranates and oranges from the region. The exhibition reminds us that behind every news story about war, there are real people with real lives, hopes, and dreams.",
-  "why_it_matters": "This exhibition shows that even when big countries fight, regular people—just like you and your family—are the ones who feel it most, and their stories deserve to be told.",
-  "image_url": "/article_images/article_710be88f7604.webp",
+  "title": "Peacocks Are Taking Over This California Town!",
+  "summary": "Have you ever seen a peacock in your backyard? In Arcadia, California, it's totally normal! Dozens of these beautiful birds walk around yards, sit on roofs, and even peck at cars. They make loud calls and show off their amazing feathers, especially in spring. But not everyone is happy about it.\n\nA businessman named Elias Lucky Baldwin brought peacocks to the area more than 100 years ago. Back then, there was lots of open space. But now, houses and stores fill the land. Some people love the peacocks and feed them. Others think they're too noisy and messy. They want the birds to be moved away.\n\nA new short film called \"Our Neighbors, the Peacocks\" tells this story. Filmmaker Callie Barlow talked to people who live there. Some love the birds. Some hate them. The film doesn't pick a side. It just asks: can we learn to live with animals that are different from us? The director says maybe we need to \"put aside your own discomforts to find a deeper meaning in nature.\" What do you think? Would you want peacocks as neighbors?",
+  "why_it_matters": "This story helps you think about how people and animals can share spaces, and whether we can learn to be patient with creatures that are different from us.",
+  "image_url": "/article_images/article_e63024572fa4.webp",
   "keywords": [
     {
-      "term": "Forget Me Not",
-      "explanation": "The name of the exhibition in London"
+      "term": "peacock",
+      "explanation": "a large, colorful bird with a long tail that can spread like a fan"
     },
     {
-      "term": "southern Lebanon",
-      "explanation": "The region whose people's stories are told in the exhibition"
+      "term": "Arcadia",
+      "explanation": "a city in California where peacocks live"
     },
     {
-      "term": "exhibition",
-      "explanation": "A show of photos, videos, and drawings"
+      "term": "Elias Lucky Baldwin",
+      "explanation": "the businessman who brought peacocks to the area more than 100 years ago"
     },
     {
-      "term": "London",
-      "explanation": "The city where the exhibition is held"
+      "term": "short film",
+      "explanation": "a movie that is not very long"
     },
     {
-      "term": "Rasha Kotaiche",
-      "explanation": "One of the creators of the exhibition"
+      "term": "Our Neighbors, the Peacocks",
+      "explanation": "the name of the short film about the peacocks"
     },
     {
-      "term": "Ali Abou Khalil",
-      "explanation": "The other creator of the exhibition"
+      "term": "neighbors",
+      "explanation": "people or animals that live near you"
     }
   ],
   "questions": [
     {
-      "question": "What is the name of the exhibition?",
+      "question": "What is the main problem described in the article?",
       "options": [
-        "Forget Me Not",
-        "Tree Rooted in Soil",
-        "Southern Lebanon Stories",
-        "London Showcase"
+        "Peacocks are too beautiful",
+        "People disagree about having peacocks in town",
+        "Peacocks have no feathers",
+        "The birds are endangered"
       ],
-      "correct_answer": "Forget Me Not"
+      "correct_answer": "People disagree about having peacocks in town"
     },
     {
-      "question": "Where is the exhibition held?",
+      "question": "Who brought the first peacocks to Arcadia?",
       "options": [
-        "Beirut",
-        "London",
-        "New York",
-        "Paris"
+        "The government",
+        "Elias Lucky Baldwin",
+        "Callie Barlow",
+        "A group of residents"
       ],
-      "correct_answer": "London"
+      "correct_answer": "Elias Lucky Baldwin"
     },
     {
-      "question": "Who created the exhibition?",
+      "question": "How long ago were peacocks brought to Arcadia?",
       "options": [
-        "Jacqueline Burke",
-        "Rasha Kotaiche and Ali Abou Khalil",
-        "Nor Nsralla",
-        "UN peacekeepers"
+        "10 years ago",
+        "50 years ago",
+        "more than 100 years ago",
+        "2 years ago"
       ],
-      "correct_answer": "Rasha Kotaiche and Ali Abou Khalil"
+      "correct_answer": "more than 100 years ago"
     },
     {
-      "question": "What does a person in a video say about the land?",
+      "question": "What do some people do to the peacocks that bothers others?",
       "options": [
-        "We want to leave",
-        "We are attached just like a tree is rooted in soil",
-        "The land is dangerous",
-        "We don't care about the land"
+        "They catch them",
+        "They feed them",
+        "They paint them",
+        "They move them away"
       ],
-      "correct_answer": "We are attached just like a tree is rooted in soil"
+      "correct_answer": "They feed them"
     },
     {
-      "question": "What kind of drawings are shown in the exhibition?",
+      "question": "What does the short film 'Our Neighbors, the Peacocks' do?",
       "options": [
-        "Drawings of war",
-        "Drawings by Lebanese schoolchildren",
-        "Drawings of animals",
-        "Drawings of London"
+        "tells people to get rid of the birds",
+        "shows only the good things about peacocks",
+        "doesn't pick a side, just tells different opinions",
+        "shows how to train peacocks"
       ],
-      "correct_answer": "Drawings by Lebanese schoolchildren"
+      "correct_answer": "doesn't pick a side, just tells different opinions"
     },
     {
-      "question": "What fruits are photographed in the exhibition?",
+      "question": "What does the director of the film suggest?",
       "options": [
-        "Apples and bananas",
-        "Pomegranates and oranges",
-        "Grapes and cherries",
-        "Lemons and limes"
+        "Peacocks should be removed",
+        "We should ignore peacocks",
+        "Maybe we need to put aside our own discomforts to find a deeper meaning in nature",
+        "People should only think about themselves"
       ],
-      "correct_answer": "Pomegranates and oranges"
+      "correct_answer": "Maybe we need to put aside our own discomforts to find a deeper meaning in nature"
     }
   ],
   "background_read": [
-    "Southern Lebanon has experienced many wars and a long occupation.",
-    "Many people from that region feel that the news doesn't tell their true stories.",
-    "This exhibition uses art to help people around the world understand what life is like there."
+    "Peacocks are native to India and Sri Lanka, but people have brought them to other countries as pets or decorations.",
+    "Some towns have lots of deer, geese, or other wild animals that cause similar conflicts.",
+    "Arcadia is a city near Los Angeles, California."
   ],
   "Article_Structure": [
-    "WHO: Rasha Kotaiche and Ali Abou Khalil, creators of the exhibition.",
-    "WHAT: An exhibition called 'Forget Me Not' that shares stories of southern Lebanon through videos, photos, and drawings.",
-    "WHERE: London, at Palestine House.",
-    "WHY: To give a voice to people from southern Lebanon and show their deep connection to their land."
+    "WHO: The people of Arcadia, California, and the peacocks",
+    "WHAT: Peacocks have become a controversial part of the town, with some people loving them and others disliking them",
+    "WHERE: Arcadia, California",
+    "WHY: The peacocks were brought by a businessman long ago, and as the town grew, the birds stayed, causing a debate about how to live together"
   ],
   "perspectives": [
     {
-      "perspective": "Positive",
-      "description": "The exhibition allows people from southern Lebanon to share their own stories and be heard."
+      "perspective": "Peacock lover",
+      "description": "Thinks the birds are beautiful and make the town special; enjoys feeding them."
     },
     {
-      "perspective": "Critical",
-      "description": "Some may argue that a short exhibition in London cannot fully capture the reality of life in southern Lebanon."
+      "perspective": "Peacock hater",
+      "description": "Finds them noisy and messy; wishes they would be moved somewhere else."
     },
     {
-      "perspective": "Neutral",
-      "description": "Art exhibitions can help raise awareness about neglected regions and humanize complex conflicts."
+      "perspective": "Neutral observer",
+      "description": "Thinks the conflict is interesting and that the film does a good job showing both sides without judging."
     }
   ]
 }

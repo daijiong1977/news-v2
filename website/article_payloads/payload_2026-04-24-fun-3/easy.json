@@ -1,119 +1,115 @@
 {
-  "title": "Art World Olympics: What's Cool at the 2026 Venice Biennale",
-  "summary": "Imagine the Olympics, but for art! That's the Venice Biennale (say \"bee-en-NAH-lay\"). It happens every two years in Venice, Italy, and this year it's packed with drama and amazing art. The main exhibition is called \"In Minor Keys.\" It was planned by a curator (the person who picks the art) named Koyo Kouoh, who was the first African woman to get this job. Sadly, she passed away last year, but her friends and team made sure her vision came to life. There are 110 artists showing their work. Some countries have their own buildings called \"pavilions.\" The United States pavilion is showing artist Alma Allen. But some countries are not happy. The judges said they won't give awards to any country whose leaders are charged with crimes against humanity (very serious crimes) by the International Criminal Court. That's a big deal! Also, a country called Qatar is building a brand-new pavilion in the best area—the first new one in 30 years! And for the first time, countries like Vietnam, Somalia, and Guinea are joining. There's even an artwork that mourns victims of the war in Gaza, which was originally canceled but is now on display in a historic church. Art can be a powerful way to speak up about important issues.",
-  "why_it_matters": "The Venice Biennale shows that art isn't just pretty pictures—it's a way for people from all over the world to share ideas, argue about big issues, and make you think.",
-  "image_url": "/article_images/article_665724ba5f6f.webp",
+  "title": "Venice Art Show Jury Says: No Awards for Russia or Israel",
+  "summary": "The Venice Biennale is one of the biggest art shows in the world. Countries build their own special rooms, called pavilions, to show off their best artists. It's like a giant art competition between nations. But this year, something big happened.\n\nThe jury that decides who wins the top prizes said they will NOT give awards to Russia or Israel. Why? Because the International Criminal Court (ICC) has charged the leaders of both countries with crimes against humanity. That means the court believes they did very bad things to people. Russia's President Vladimir Putin and Israel's Prime Minister Benjamin Netanyahu both have arrest warrants from the ICC.\n\nThe jury is made up of five women from different countries. They said they don't want to give awards to countries whose leaders are charged with such serious crimes. Many artists agreed. Almost 10,000 people signed a letter saying Russia shouldn't be in the show at all. The European Union even threatened to take away money from the Biennale because Russia was invited. Some people think the jury should have named Israel directly. But the jury says their decision is clear enough. It's a big debate about art and politics.",
+  "why_it_matters": "This story shows that art competitions can get involved in big world issues, and it asks you to think about whether artists and art shows should take sides in politics.",
+  "image_url": "/article_images/article_3eccd52c6e4a.webp",
   "keywords": [
     {
       "term": "Venice Biennale",
-      "explanation": "A big art event that happens every two years in Venice, Italy"
+      "explanation": "a big international art show held every two years in Venice, Italy"
     },
     {
-      "term": "In Minor Keys",
-      "explanation": "The name of the main art show at the Biennale"
+      "term": "pavilions",
+      "explanation": "special rooms or buildings that countries use to show their art"
     },
     {
-      "term": "Koyo Kouoh",
-      "explanation": "The person who planned the main exhibition"
+      "term": "jury",
+      "explanation": "a group of people who decide the winners"
     },
     {
-      "term": "Alma Allen",
-      "explanation": "The artist showing in the United States pavilion"
+      "term": "crimes against humanity",
+      "explanation": "very bad acts like murder or torture committed against many people"
     },
     {
-      "term": "Qatar",
-      "explanation": "A country building a new pavilion at the Biennale"
-    },
-    {
-      "term": "Gaza",
-      "explanation": "A place whose war victims are remembered in an artwork"
+      "term": "arrest warrants",
+      "explanation": "official orders to arrest someone"
     }
   ],
   "questions": [
     {
-      "question": "What is the Venice Biennale compared to?",
+      "question": "What event did the jury make a decision about?",
       "options": [
-        "A movie festival",
-        "The Olympics for art",
-        "A science fair",
-        "A music concert"
+        "the Oscars",
+        "the Venice Biennale art show",
+        "the Olympics",
+        "a music festival"
       ],
-      "correct_answer": "The Olympics for art"
+      "correct_answer": "the Venice Biennale art show"
     },
     {
-      "question": "Who planned the main exhibition called 'In Minor Keys'?",
+      "question": "Which two countries are affected by the jury's decision?",
       "options": [
-        "Alma Allen",
-        "Koyo Kouoh",
-        "Barbara Chase-Riboud",
-        "Florentina Holzinger"
+        "Russia and Israel",
+        "China and the US",
+        "India and Pakistan",
+        "France and Germany"
       ],
-      "correct_answer": "Koyo Kouoh"
+      "correct_answer": "Russia and Israel"
     },
     {
-      "question": "Which country is building a new pavilion in the best area?",
+      "question": "Why did the jury decide not to give awards to those countries?",
       "options": [
-        "United States",
-        "Qatar",
-        "Vietnam",
-        "Somalia"
+        "Because their art was not good enough",
+        "Because their leaders are charged with crimes against humanity by the ICC",
+        "Because the artists refused to participate",
+        "Because the countries withdrew from the show"
       ],
-      "correct_answer": "Qatar"
+      "correct_answer": "Because their leaders are charged with crimes against humanity by the ICC"
     },
     {
-      "question": "What did the judges say they won't give awards to?",
+      "question": "Who are the leaders charged by the ICC mentioned in the article?",
       "options": [
-        "Countries with small pavilions",
-        "Countries whose leaders are charged with crimes against humanity",
-        "Countries that don't speak Italian",
-        "Countries with no art"
+        "Joe Biden and Emmanuel Macron",
+        "Vladimir Putin and Benjamin Netanyahu",
+        "Xi Jinping and Narendra Modi",
+        "Volodymyr Zelensky and King Charles"
       ],
-      "correct_answer": "Countries whose leaders are charged with crimes against humanity"
+      "correct_answer": "Vladimir Putin and Benjamin Netanyahu"
     },
     {
-      "question": "What artwork was originally canceled but later shown in a church?",
+      "question": "How many people signed a letter saying Russia shouldn't be in the show?",
       "options": [
-        "Elegy",
-        "Seaworld Venice",
-        "The Punk Rockers",
-        "What Remains"
+        "almost 10,000",
+        "over 1,000",
+        "100",
+        "5,000"
       ],
-      "correct_answer": "Elegy"
+      "correct_answer": "almost 10,000"
     },
     {
-      "question": "Who is the artist showing in the United States pavilion?",
+      "question": "What did the European Union threaten to do?",
       "options": [
-        "Koyo Kouoh",
-        "Alma Allen",
-        "Barbara Chase-Riboud",
-        "Nick Cave"
+        "Ban all Russian artists",
+        "Take away money from the Biennale",
+        "Send their own artists",
+        "Close the show"
       ],
-      "correct_answer": "Alma Allen"
+      "correct_answer": "Take away money from the Biennale"
     }
   ],
   "background_read": [
-    "The Venice Biennale started in 1895 and is one of the most important art events in the world.",
-    "Countries build special buildings called pavilions to show their best art.",
-    "Sometimes politics affects art, like when judges refuse to award prizes to certain countries."
+    "The Venice Biennale started in 1895 and is one of the oldest and most famous art shows in the world.",
+    "The International Criminal Court (ICC) was established in 2002 to prosecute individuals for serious international crimes.",
+    "Art and politics have often mixed before; for example, during World War II, some countries were not allowed to participate in the Biennale."
   ],
   "Article_Structure": [
-    "WHO: Curator Koyo Kouoh (who passed away) and artists like Alma Allen.",
-    "WHAT: The 2026 Venice Biennale, with the main exhibition 'In Minor Keys' and many country pavilions.",
-    "WHERE: Venice, Italy, in places like the Giardini and Arsenale.",
-    "WHY: To showcase art from around the world and make statements about important issues like war and justice."
+    "WHO: The Venice Biennale jury (five women from different countries)",
+    "WHAT: They decided not to give awards to Russia or Israel because of ICC charges against their leaders",
+    "WHERE: Venice Biennale, an art show in Italy",
+    "WHY: The jury wants to uphold moral standards and not honor countries whose leaders face serious charges"
   ],
   "perspectives": [
     {
-      "perspective": "Positive",
-      "description": "The Biennale gives artists from many countries a chance to share their work and speak about important topics."
+      "perspective": "Supporter of jury's decision",
+      "description": "Believes it's right to stand up against serious crimes and not honor countries with such leaders."
     },
     {
-      "perspective": "Critical",
-      "description": "Some people think politics should not influence art awards, and that boycotts can limit creativity."
+      "perspective": "Critic of the decision",
+      "description": "Thinks art should stay separate from politics, and that punishing the whole country isn't fair to the artists."
     },
     {
-      "perspective": "Neutral",
-      "description": "The Biennale shows how art and world events are often connected, reflecting the time we live in."
+      "perspective": "Diplomatic observer",
+      "description": "Sees the decision as a strong statement, but notes that not naming Israel directly caused confusion and criticism."
     }
   ]
 }

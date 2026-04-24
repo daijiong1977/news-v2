@@ -1,8 +1,13 @@
 """Pack `website/` into a zip and upload it to Supabase Storage as both
 `<YYYY-MM-DD>.zip` (immutable archive) and `latest.zip` (what the deploy repo's
-GitHub Action fetches)."""
+GitHub Action fetches).
+
+Validates today's content bundle BEFORE packing. If any listing or detail file
+is missing or incomplete, refuses to upload — the live site keeps yesterday's
+zip until the pipeline produces a fully-formed bundle."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -48,6 +53,102 @@ def collect_files() -> list[tuple[Path, str]]:
     return out
 
 
+CATS = ("news", "science", "fun")
+# (field, min_count) — what a detail payload MUST contain to count as complete.
+DETAIL_MIN = [
+    ("keywords", 3),
+    ("questions", 3),
+    ("background_read", 1),
+    ("Article_Structure", 3),
+]
+
+
+def validate_bundle(today: str) -> None:
+    """Fail (SystemExit 1) if today's bundle is incomplete. Check:
+      · 9 listing files (3 cats × easy/middle/cn), each with exactly 3 articles
+      · 18 detail payloads (9 stories × easy/middle), each with non-empty
+        keywords/questions/background_read/Article_Structure
+      · 9 article images on disk (one per story id)
+    """
+    errs: list[str] = []
+
+    # Listing files
+    payloads = WEB / "payloads"
+    for cat in CATS:
+        for lvl in ("easy", "middle", "cn"):
+            p = payloads / f"articles_{cat}_{lvl}.json"
+            if not p.is_file():
+                errs.append(f"missing listing: {p.name}")
+                continue
+            try:
+                doc = json.loads(p.read_text())
+                arts = doc.get("articles") or []
+                if len(arts) != 3:
+                    errs.append(f"{p.name}: {len(arts)} articles (need 3)")
+                for a in arts:
+                    if not (a.get("title") and a.get("summary") and a.get("id")):
+                        errs.append(f"{p.name}: article {a.get('id','?')} missing title/summary/id")
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"{p.name}: parse error {e}")
+
+    # Detail payloads (easy + middle only; cn has no detail page)
+    details = WEB / "article_payloads"
+    for cat in CATS:
+        for slot in (1, 2, 3):
+            story_id = f"{today}-{cat}-{slot}"
+            story_dir = details / f"payload_{story_id}"
+            if not story_dir.is_dir():
+                errs.append(f"missing detail dir: payload_{story_id}")
+                continue
+            for lvl in ("easy", "middle"):
+                p = story_dir / f"{lvl}.json"
+                if not p.is_file():
+                    errs.append(f"missing detail: {story_id}/{lvl}.json")
+                    continue
+                try:
+                    d = json.loads(p.read_text())
+                    if not (d.get("summary") and len((d.get("summary") or "").split()) >= 50):
+                        errs.append(f"{story_id}/{lvl}: summary missing or <50 words")
+                    for field, min_n in DETAIL_MIN:
+                        if len(d.get(field) or []) < min_n:
+                            errs.append(
+                                f"{story_id}/{lvl}: {field} has "
+                                f"{len(d.get(field) or [])} (need ≥{min_n})"
+                            )
+                except Exception as e:  # noqa: BLE001
+                    errs.append(f"{story_id}/{lvl}: parse error {e}")
+
+    # Per-story images (same image used across easy/middle for a story)
+    images_dir = WEB / "article_images"
+    needed_images: set[str] = set()
+    for cat in CATS:
+        # Pull image_urls from today's listings — whichever level works
+        for lvl in ("middle", "easy"):
+            p = payloads / f"articles_{cat}_{lvl}.json"
+            if not p.is_file():
+                continue
+            try:
+                doc = json.loads(p.read_text())
+                for a in doc.get("articles") or []:
+                    url = a.get("image_url") or ""
+                    if url:
+                        needed_images.add(Path(url).name)
+                break
+            except Exception:
+                continue
+    for name in needed_images:
+        if not (images_dir / name).is_file():
+            errs.append(f"missing image: article_images/{name}")
+
+    if errs:
+        log.error("Bundle validation FAILED — refusing to pack/upload:")
+        for e in errs:
+            log.error("  · %s", e)
+        raise SystemExit(1)
+    log.info("Bundle validation OK: 9 listings · 18 details · %d images",
+             len(needed_images))
+
+
 def build_zip() -> bytes:
     buf = BytesIO()
     files = collect_files()
@@ -60,6 +161,7 @@ def build_zip() -> bytes:
 
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    validate_bundle(today)
     body = build_zip()
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 

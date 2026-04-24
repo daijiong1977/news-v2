@@ -37,13 +37,13 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "sunny",
   "showConfetti": true,
   "heroVariant": "daily15",
-  "userName": "Mia",
+  "userName": "",
   "avatar": "panda",
   "language": "en",
   "dailyGoal": 15,
   "level": "Sprout",
-  "streakDays": 7,
-  "xp": 240
+  "streakDays": 0,
+  "xp": 0
 }/*EDITMODE-END*/;
 
 function App() {
@@ -80,8 +80,15 @@ function App() {
     } catch { return { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} }; }
   });
 
-  // Tweaks / User Panel
-  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  // Tweaks / User Panel — persisted to localStorage so name/avatar/theme/etc.
+  // survive reloads. Defaults fill in any missing keys (forward-compat when
+  // we add new tweak fields later).
+  const [tweaks, setTweaks] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ohye_tweaks') || 'null');
+      return saved ? { ...TWEAK_DEFAULTS, ...saved } : TWEAK_DEFAULTS;
+    } catch { return TWEAK_DEFAULTS; }
+  });
   const [userPanelOpen, setUserPanelOpen] = useState(false);
 
   useEffect(() => { localStorage.setItem('ohye_route', JSON.stringify(route)); }, [route]);
@@ -92,6 +99,7 @@ function App() {
     else localStorage.removeItem('ohye_archive_day');
   }, [archiveDay]);
   useEffect(() => { localStorage.setItem('ohye_progress', JSON.stringify(progress)); }, [progress]);
+  useEffect(() => { localStorage.setItem('ohye_tweaks', JSON.stringify(tweaks)); }, [tweaks]);
 
   // Edit-mode wiring
   useEffect(() => {

@@ -97,6 +97,35 @@ def main() -> None:
             log.info("  [%s #%d] %dw · %s", cat, s["story_slot"], len(body.split()),
                      s["source_title"][:50] if s.get("source_title") else "")
 
+    # Ensure referenced images exist on local disk (CI may have produced them
+    # without syncing to this workstation). Pull any missing ones from the
+    # redesign-article-images bucket — dated subfolder first, then flat root.
+    log.info("=== SYNC IMAGES FROM SUPABASE (missing-only) ===")
+    images_dir = WEBSITE_DIR / "article_images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    sb_base = os.environ["SUPABASE_URL"].rstrip("/")
+    for cat, group in by_cat.items():
+        for s in group:
+            local = (s.get("primary_image_local") or "").strip()
+            if not local:
+                continue
+            fname = Path(local).name
+            dest = images_dir / fname
+            if dest.is_file():
+                continue
+            for subpath in (f"2026-04-24/{fname}", today + "/" + fname, fname):
+                url = f"{sb_base}/storage/v1/object/public/redesign-article-images/{subpath}"
+                try:
+                    r = requests.get(url, timeout=15)
+                    if r.status_code == 200 and len(r.content) > 1000:
+                        dest.write_bytes(r.content)
+                        log.info("  pulled %s (%d bytes)", fname, len(r.content))
+                        break
+                except Exception as e:
+                    log.warning("  image fetch %s: %s", url, e)
+            else:
+                log.warning("  MISSING image %s — live site will 404 until re-run", fname)
+
     # Build rewrite input shape
     log.info("=== REWRITE + ENRICH (2 calls per category) ===")
     details_dir = WEBSITE_DIR / "article_payloads"
