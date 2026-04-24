@@ -30,11 +30,12 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
   // Per-category displayable pool — only the first 3 stories of each category (what's shown on pages)
   const displayPool = useMemoH(() => {
     const out = [];
+    const lang = ARTICLES.filter(matchesLanguageLevel);
     for (const c of CATEGORIES) {
-      out.push(...todayArticles.filter(a => a.category === c.label).slice(0, 3));
+      out.push(...lang.filter(a => a.category === c.label).slice(0, 3));
     }
     return out;
-  }, [todayArticles]);
+  }, [isZh, level, archiveDay]);
   const poolIds = useMemoH(() => new Set(displayPool.map(a => a.id)), [displayPool]);
 
   // Pick 1 from each category by default, user can swap (only from the 3-per-category pool)
