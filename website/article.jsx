@@ -25,7 +25,12 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
     setDetail(null);
     setDetailError(null);
     const payloadLevel = baseArticle.level === 'Sprout' ? 'easy' : 'middle';
-    const url = `article_payloads/payload_${baseArticle.storyId}/${payloadLevel}.json`;
+    // Archive mode (baseArticle.archiveDate set) fetches from Supabase dated
+    // prefix; today's content stays local.
+    const detailBase = baseArticle.archiveDate
+      ? `${window.ARCHIVE_BASE}/${baseArticle.archiveDate}/article_payloads`
+      : 'article_payloads';
+    const url = `${detailBase}/payload_${baseArticle.storyId}/${payloadLevel}.json`;
     fetch(url)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(d => {

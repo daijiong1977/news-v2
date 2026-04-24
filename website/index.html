@@ -24,10 +24,10 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" src="data.jsx?v=20260424c"></script>
+<script type="text/babel" src="data.jsx?v=20260424e"></script>
 <script type="text/babel" src="components.jsx"></script>
-<script type="text/babel" src="home.jsx?v=20260424d"></script>
-<script type="text/babel" src="article.jsx?v=20260424c"></script>
+<script type="text/babel" src="home.jsx?v=20260424e"></script>
+<script type="text/babel" src="article.jsx?v=20260424e"></script>
 <script type="text/babel" src="user-panel.jsx"></script>
 
 <script type="text/babel">
@@ -68,8 +68,12 @@ function App() {
     return (v === 'Today' || v === 'Archive' || v === 'All') ? 'News' : v;
   });
   const [archiveDay, setArchiveDay] = useState(() => {
+    // archiveDay is now "YYYY-MM-DD" (string) or null for today.
+    // Migration: any legacy numeric value in localStorage is cleared.
     const v = localStorage.getItem('ohye_archive_day');
-    return v ? parseInt(v, 10) : null;
+    if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    if (v) localStorage.removeItem('ohye_archive_day');
+    return null;
   });
   const [progress, setProgress] = useState(() => {
     try {
@@ -97,6 +101,14 @@ function App() {
   useEffect(() => {
     if (archiveDay) localStorage.setItem('ohye_archive_day', String(archiveDay));
     else localStorage.removeItem('ohye_archive_day');
+    // Whenever archiveDay changes, re-load ARTICLES from the matching bundle
+    // (today's local files, or a past day's Supabase prefix).
+    if (typeof window.loadArchive === 'function') {
+      window.loadArchive(archiveDay).then(() => {
+        // Force a re-render by bumping a dummy state; route stays put.
+        setRoute(r => ({ ...r }));
+      });
+    }
   }, [archiveDay]);
   useEffect(() => { localStorage.setItem('ohye_progress', JSON.stringify(progress)); }, [progress]);
   useEffect(() => { localStorage.setItem('ohye_tweaks', JSON.stringify(tweaks)); }, [tweaks]);

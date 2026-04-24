@@ -11,18 +11,18 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     if (isZh) return a.language === 'zh';
     return a.language === 'en' && a.level === level;
   };
-  const isArchive = typeof archiveDay === 'number' && archiveDay > 0;
+  // archiveDay is now a date string "YYYY-MM-DD" (or null for today).
+  const isArchive = typeof archiveDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(archiveDay);
 
-  const todayArticles = useMemoH(() => ARTICLES.filter(a => (a.day||0) === 0 && matchesLanguageLevel(a)), [isZh, level]);
-  const archiveArticles = useMemoH(() => ARTICLES.filter(a => (a.day||0) === archiveDay && matchesLanguageLevel(a)), [isZh, level, archiveDay]);
-
-  const activeSet = isArchive ? archiveArticles : todayArticles;
+  // When archiveDay changes, ARTICLES is swapped wholesale by loadArchive()
+  // in index.html. Everything below filters the current ARTICLES in-memory.
   const filteredRaw = useMemoH(() => {
-    if (cat === 'All' || !cat) return activeSet;
-    return activeSet.filter(a => a.category === cat);
-  }, [activeSet, cat]);
-  // Cap today/category pages to 3 stories each; archive keeps all.
-  const filtered = useMemoH(() => isArchive ? filteredRaw : filteredRaw.slice(0, 3), [filteredRaw, isArchive]);
+    const matches = ARTICLES.filter(matchesLanguageLevel);
+    return (cat === 'All' || !cat) ? matches : matches.filter(a => a.category === cat);
+  }, [isZh, level, cat, archiveDay]);
+  // Cap today to 3 per category (editorial layout). Archive also 3 since
+  // each day's bundle only has 3 per category anyway.
+  const filtered = useMemoH(() => filteredRaw.slice(0, 3), [filteredRaw]);
 
   const [calendarOpen, setCalendarOpen] = useStateH(false);
   const [recentOpen, setRecentOpen] = useStateH(false);
@@ -341,16 +341,25 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
 }
 
 // ——————————— DATE POPOVER ———————————
+// archiveDay is a "YYYY-MM-DD" string.
 function archiveDayLabel(d) {
-  if (d === 1) return 'Yesterday';
-  const dt = new Date(); dt.setDate(dt.getDate() - d);
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
   return dt.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' });
 }
 
 function DatePopover({ onPick, onClose }) {
-  // Show last 14 days; enable only days that have any articles
-  const available = new Set(ARTICLES.filter(a => (a.day||0) > 0).map(a => a.day));
-  const days = Array.from({length:14}, (_,i) => i + 1);
+  // Fetch the list of archived days from Supabase. The newest entry is
+  // today; we exclude it so the picker only offers past editions.
+  const [index, setIndex] = useStateH({ dates: [] });
+  useStateH && React.useEffect(() => {
+    let cancelled = false;
+    window.loadArchiveIndex().then(r => { if (!cancelled) setIndex(r); });
+    return () => { cancelled = true; };
+  }, []);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const pastDates = (index.dates || []).filter(d => d !== todayStr).slice(0, 14);
+
   return (
     <>
       <div onClick={onClose} style={{position:'fixed', inset:0, zIndex:40, background:'transparent'}}/>
@@ -360,25 +369,29 @@ function DatePopover({ onPick, onClose }) {
         padding:16, boxShadow:'0 10px 0 rgba(27,18,48,0.12)', width:340,
       }}>
         <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230', marginBottom:4}}>📅 Pick a past day</div>
-        <div style={{fontSize:12, color:'#6b5c80', fontWeight:600, marginBottom:12}}>Each day we post a fresh edition. Catch up on what you missed.</div>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:6}}>
-          {days.map(d => {
-            const dt = new Date(); dt.setDate(dt.getDate() - d);
-            const has = available.has(d);
-            return (
-              <button key={d} disabled={!has} onClick={()=>onPick(d)} style={{
-                padding:'10px 4px', border: has ? '2px solid #f0e8d8' : '2px dashed #efe7d9',
-                background: has ? '#fff9ef' : '#f8f3e7', borderRadius:12,
-                cursor: has ? 'pointer':'not-allowed', opacity: has ? 1 : 0.4,
-                fontFamily:'Nunito, sans-serif',
-              }}>
-                <div style={{fontSize:10, fontWeight:800, color:'#9a8d7a', textTransform:'uppercase'}}>{dt.toLocaleDateString(undefined,{weekday:'short'}).slice(0,3)}</div>
-                <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20, color:'#1b1230'}}>{dt.getDate()}</div>
-                <div style={{fontSize:9, color:'#9a8d7a', fontWeight:700}}>{dt.toLocaleDateString(undefined,{month:'short'})}</div>
-              </button>
-            );
-          })}
+        <div style={{fontSize:12, color:'#6b5c80', fontWeight:600, marginBottom:12}}>
+          {pastDates.length === 0
+            ? "No past editions yet — check back tomorrow."
+            : "Catch up on editions you missed."}
         </div>
+        {pastDates.length > 0 && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:6}}>
+            {pastDates.map(d => {
+              const dt = new Date(d + 'T00:00:00');
+              return (
+                <button key={d} onClick={()=>onPick(d)} style={{
+                  padding:'10px 4px', border:'2px solid #f0e8d8',
+                  background:'#fff9ef', borderRadius:12, cursor:'pointer',
+                  fontFamily:'Nunito, sans-serif',
+                }}>
+                  <div style={{fontSize:10, fontWeight:800, color:'#9a8d7a', textTransform:'uppercase'}}>{dt.toLocaleDateString(undefined,{weekday:'short'}).slice(0,3)}</div>
+                  <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20, color:'#1b1230'}}>{dt.getDate()}</div>
+                  <div style={{fontSize:9, color:'#9a8d7a', fontWeight:700}}>{dt.toLocaleDateString(undefined,{month:'short'})}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );

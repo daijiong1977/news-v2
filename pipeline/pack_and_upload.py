@@ -215,17 +215,98 @@ def build_manifest(today: str, body: bytes) -> dict:
 
 DATED_ZIP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.zip$")
 DATED_MANIFEST_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-manifest\.json$")
+DATED_DIR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})$")
+
+
+def upload_dated_flat_files(sb, date_str: str, bundle: bytes | None = None) -> int:
+    """Upload each file under the website bundle to `<date>/<relpath>` in the
+    bucket so the UI can fetch past days' content directly (no zip parsing
+    in the browser). `bundle` is an optional zip body — if given, files are
+    extracted from it; otherwise read from local disk. Returns file count."""
+    uploaded = 0
+    if bundle is not None:
+        zf = zipfile.ZipFile(BytesIO(bundle))
+        members = [n for n in zf.namelist()
+                   if n.endswith(".json") or n.endswith(".webp")]
+        for name in members:
+            body = zf.read(name)
+            ctype = "application/json" if name.endswith(".json") else "image/webp"
+            sb.storage.from_(BUCKET).upload(
+                path=f"{date_str}/{name}",
+                file=body,
+                file_options={"content-type": ctype, "upsert": "true"},
+            )
+            uploaded += 1
+    else:
+        for p, arc in collect_files():
+            if not (arc.endswith(".json") or arc.endswith(".webp")):
+                continue  # skip HTML/JSX shell from dated flat copy
+            ctype = "application/json" if arc.endswith(".json") else "image/webp"
+            sb.storage.from_(BUCKET).upload(
+                path=f"{date_str}/{arc}",
+                file=p.read_bytes(),
+                file_options={"content-type": ctype, "upsert": "true"},
+            )
+            uploaded += 1
+    log.info("dated-flat: uploaded %d files under %s/", uploaded, date_str)
+    return uploaded
+
+
+def update_archive_index(sb, dates: list[str]) -> None:
+    """Merge `dates` into `archive-index.json` (descending, deduped, cap 30)."""
+    try:
+        body = sb.storage.from_(BUCKET).download("archive-index.json")
+        idx = json.loads(body.decode() if isinstance(body, bytes) else body)
+    except Exception:
+        idx = {"dates": []}
+    existing = set(idx.get("dates") or [])
+    existing.update(dates)
+    all_dates = sorted(existing, reverse=True)[:RETENTION_DAYS]
+    idx = {"dates": all_dates,
+           "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    sb.storage.from_(BUCKET).upload(
+        path="archive-index.json",
+        file=json.dumps(idx, ensure_ascii=False, indent=2).encode(),
+        file_options={"content-type": "application/json", "upsert": "true"},
+    )
+    log.info("archive-index updated: %d dates (newest=%s)",
+             len(all_dates), all_dates[0] if all_dates else "-")
+
+
+def backfill_missing_archive_dirs(sb, current_index: list[str]) -> list[str]:
+    """For any YYYY-MM-DD.zip in the bucket whose date isn't in the archive
+    index AND doesn't yet have its flat dir, extract the zip and upload
+    flat files. Returns list of backfilled dates."""
+    current_set = set(current_index)
+    objs = sb.storage.from_(BUCKET).list("", {"limit": 1000})
+    candidates = []
+    for o in objs or []:
+        m = DATED_ZIP_RE.match(o.get("name") or "")
+        if m and m.group(1) not in current_set:
+            candidates.append(m.group(1))
+    backfilled: list[str] = []
+    for d in sorted(candidates):
+        try:
+            body = sb.storage.from_(BUCKET).download(f"{d}.zip")
+            body = bytes(body) if not isinstance(body, bytes) else body
+            upload_dated_flat_files(sb, d, bundle=body)
+            backfilled.append(d)
+        except Exception as e:  # noqa: BLE001
+            log.warning("backfill %s failed: %s", d, e)
+    return backfilled
 
 
 def cleanup_retention(sb, keep_days: int) -> None:
-    """Delete dated archives older than `keep_days`. Keeps `latest.*` always."""
+    """Delete dated archives older than `keep_days`. Keeps `latest.*` always.
+    Also removes all files under `<date>/` prefix for expired dates."""
     from datetime import date, timedelta
     cutoff = date.today() - timedelta(days=keep_days)
+    expired: set[str] = set()
     objs = sb.storage.from_(BUCKET).list("", {"limit": 1000})
     to_delete: list[str] = []
     for o in objs or []:
         name = o.get("name") or ""
-        for rx in (DATED_ZIP_RE, DATED_MANIFEST_RE):
+        for rx in (DATED_ZIP_RE, DATED_MANIFEST_RE, DATED_DIR_RE):
             m = rx.match(name)
             if not m:
                 continue
@@ -234,13 +315,25 @@ def cleanup_retention(sb, keep_days: int) -> None:
             except ValueError:
                 continue
             if day < cutoff:
-                to_delete.append(name)
+                if rx is DATED_DIR_RE:
+                    expired.add(name)
+                else:
+                    to_delete.append(name)
+    # For each expired dir, list its files + delete them
+    for d in expired:
+        try:
+            subs = sb.storage.from_(BUCKET).list(d, {"limit": 1000})
+            for s in subs or []:
+                to_delete.append(f"{d}/{s.get('name')}")
+        except Exception as e:  # noqa: BLE001
+            log.warning("retention: listing %s/ failed: %s", d, e)
     if not to_delete:
         log.info("retention: 0 old files (keep %d days)", keep_days)
         return
+    # Supabase remove() takes a list of paths.
     sb.storage.from_(BUCKET).remove(to_delete)
-    log.info("retention: deleted %d files older than %s: %s",
-             len(to_delete), cutoff.isoformat(), to_delete)
+    log.info("retention: deleted %d files older than %s",
+             len(to_delete), cutoff.isoformat())
 
 
 def local_freshest_mined_at() -> str | None:
@@ -314,6 +407,29 @@ def main() -> None:
     log.info("manifest: version=%s · zip_bytes=%d · zip_sha256=%s · stories=%d",
              manifest["version"], manifest["zip_bytes"],
              manifest["zip_sha256"][:12], manifest["story_count"])
+
+    # Flat per-day files — the UI fetches these when user picks a past date.
+    try:
+        upload_dated_flat_files(sb, today)
+    except Exception as e:  # noqa: BLE001
+        log.warning("dated-flat upload failed (non-fatal): %s", e)
+
+    # Read existing archive-index, backfill any dated zip that doesn't yet
+    # have a flat dir, then update archive-index with both backfilled +
+    # today's date.
+    try:
+        body = sb.storage.from_(BUCKET).download("archive-index.json")
+        existing_idx = json.loads(body.decode() if isinstance(body, bytes) else body)
+        existing_dates = existing_idx.get("dates") or []
+    except Exception:
+        existing_dates = []
+    try:
+        backfilled = backfill_missing_archive_dirs(sb, existing_dates)
+        if backfilled:
+            log.info("archive backfill: %s", backfilled)
+        update_archive_index(sb, [today] + backfilled)
+    except Exception as e:  # noqa: BLE001
+        log.warning("archive-index update failed (non-fatal): %s", e)
 
     # Retention sweep: delete dated archives older than RETENTION_DAYS.
     try:
