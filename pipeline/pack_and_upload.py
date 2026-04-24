@@ -80,8 +80,10 @@ def validate_bundle(today: str) -> None:
     """
     errs: list[str] = []
 
-    # Listing files
+    # Listing files — 2 or 3 per cat/lvl acceptable (ideal=3; 2 after
+    # cross-source dup drops when all backups are exhausted). <2 is fatal.
     payloads = WEB / "payloads"
+    short_cats: set[str] = set()  # cats that shipped <3
     for cat in CATS:
         for lvl in ("easy", "middle", "cn"):
             p = payloads / f"articles_{cat}_{lvl}.json"
@@ -91,40 +93,53 @@ def validate_bundle(today: str) -> None:
             try:
                 doc = json.loads(p.read_text())
                 arts = doc.get("articles") or []
-                if len(arts) != 3:
-                    errs.append(f"{p.name}: {len(arts)} articles (need 3)")
+                if len(arts) < 2:
+                    errs.append(f"{p.name}: {len(arts)} articles (need ≥2)")
+                elif len(arts) < 3:
+                    short_cats.add(f"{cat}/{lvl}")
                 for a in arts:
                     if not (a.get("title") and a.get("summary") and a.get("id")):
                         errs.append(f"{p.name}: article {a.get('id','?')} missing title/summary/id")
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{p.name}: parse error {e}")
+    if short_cats:
+        log.warning("Shipping with <3 articles in: %s", sorted(short_cats))
 
-    # Detail payloads (easy + middle only; cn has no detail page)
+    # Detail payloads (easy + middle only; cn has no detail page) — iterate
+    # actual story IDs from the middle listing so 2-article cats validate
+    # cleanly.
     details = WEB / "article_payloads"
+    all_story_ids: list[str] = []
     for cat in CATS:
-        for slot in (1, 2, 3):
-            story_id = f"{today}-{cat}-{slot}"
-            story_dir = details / f"payload_{story_id}"
-            if not story_dir.is_dir():
-                errs.append(f"missing detail dir: payload_{story_id}")
+        p = payloads / f"articles_{cat}_middle.json"
+        if p.is_file():
+            try:
+                arts = json.loads(p.read_text()).get("articles") or []
+                all_story_ids.extend(a.get("id") for a in arts if a.get("id"))
+            except Exception:
+                pass
+    for story_id in all_story_ids:
+        story_dir = details / f"payload_{story_id}"
+        if not story_dir.is_dir():
+            errs.append(f"missing detail dir: payload_{story_id}")
+            continue
+        for lvl in ("easy", "middle"):
+            p = story_dir / f"{lvl}.json"
+            if not p.is_file():
+                errs.append(f"missing detail: {story_id}/{lvl}.json")
                 continue
-            for lvl in ("easy", "middle"):
-                p = story_dir / f"{lvl}.json"
-                if not p.is_file():
-                    errs.append(f"missing detail: {story_id}/{lvl}.json")
-                    continue
-                try:
-                    d = json.loads(p.read_text())
-                    if not (d.get("summary") and len((d.get("summary") or "").split()) >= 50):
-                        errs.append(f"{story_id}/{lvl}: summary missing or <50 words")
-                    for field, min_n in DETAIL_MIN:
-                        if len(d.get(field) or []) < min_n:
-                            errs.append(
-                                f"{story_id}/{lvl}: {field} has "
-                                f"{len(d.get(field) or [])} (need ≥{min_n})"
-                            )
-                except Exception as e:  # noqa: BLE001
-                    errs.append(f"{story_id}/{lvl}: parse error {e}")
+            try:
+                d = json.loads(p.read_text())
+                if not (d.get("summary") and len((d.get("summary") or "").split()) >= 50):
+                    errs.append(f"{story_id}/{lvl}: summary missing or <50 words")
+                for field, min_n in DETAIL_MIN:
+                    if len(d.get(field) or []) < min_n:
+                        errs.append(
+                            f"{story_id}/{lvl}: {field} has "
+                            f"{len(d.get(field) or [])} (need ≥{min_n})"
+                        )
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"{story_id}/{lvl}: parse error {e}")
 
     # Per-story images (same image used across easy/middle for a story)
     images_dir = WEB / "article_images"

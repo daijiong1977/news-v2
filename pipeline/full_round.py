@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .news_rss_core import detail_enrich, tri_variant_rewrite
+from .news_rss_core import (check_duplicates, detail_enrich,
+                              run_source_phase_a, tri_variant_rewrite)
 from .fun_sources import todays_enabled_sources as fun_sources
 from .fun_sources import todays_topic as fun_topic
 from .science_sources import todays_enabled_sources as science_sources
@@ -28,7 +29,6 @@ from .fun_aggregate import run_source_with_backups as run_fun
 from .news_sources import backup_sources as news_backups
 from .science_sources import todays_backup_sources as sci_backups
 from .fun_sources import todays_backup_sources as fun_backups
-from .news_rss_core import check_duplicates
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("full-round")
@@ -53,28 +53,63 @@ def aggregate_category(label: str, enabled: list, backups: list, runner) -> list
     return winners
 
 
-def dedup_winners(winners: list[dict]) -> list[dict]:
-    """One-pass cross-source dup check. If dup, drop weaker."""
+def dedup_winners(winners: list[dict], backups: list | None = None,
+                  target_count: int = 3) -> list[dict]:
+    """Cross-source dedup with backup-source refill.
+
+    When a duplicate pair is found, drop the weaker (higher-priority-number)
+    winner. If that leaves us below `target_count`, mine a fresh winner from
+    the category's backup pool and continue until target is met or backups
+    are exhausted."""
     if len(winners) < 2:
         return winners
-    briefs = [
-        {"id": i, "title": w["winner"].get("title"),
-         "source_name": w["source"].name,
-         "source_priority": w["source"].priority,
-         "excerpt": (w["winner"].get("body") or "")[:400]}
-        for i, w in enumerate(winners)
-    ]
-    dup = check_duplicates(briefs)
-    if dup.get("verdict") != "DUP_FOUND":
-        return winners
-    drop_id = dup.get("drop_suggestion")
-    if drop_id is None and dup.get("duplicate_pairs"):
-        pair = dup["duplicate_pairs"][0]["ids"]
-        drop_id = max(pair, key=lambda i: winners[i]["source"].priority)
-    if drop_id is not None and drop_id < len(winners):
+    backups = backups or []
+    used_backup_names = {w["source"].name for w in winners
+                         if w.get("used_backup")}
+
+    for _round in range(5):  # cap to prevent infinite loop on adversarial data
+        if len(winners) < 2:
+            break
+        briefs = [
+            {"id": i, "title": w["winner"].get("title"),
+             "source_name": w["source"].name,
+             "source_priority": w["source"].priority,
+             "excerpt": (w["winner"].get("body") or "")[:400]}
+            for i, w in enumerate(winners)
+        ]
+        dup = check_duplicates(briefs)
+        if dup.get("verdict") != "DUP_FOUND":
+            break
+        drop_id = dup.get("drop_suggestion")
+        if drop_id is None and dup.get("duplicate_pairs"):
+            pair = dup["duplicate_pairs"][0]["ids"]
+            drop_id = max(pair, key=lambda i: winners[i]["source"].priority)
+        if drop_id is None or drop_id >= len(winners):
+            break
+        dropped = winners[drop_id]
         log.info("  dropping cross-source dup [%d] %s", drop_id,
-                 winners[drop_id]["winner"].get("title", "")[:60])
+                 dropped["winner"].get("title", "")[:60])
         winners = [w for i, w in enumerate(winners) if i != drop_id]
+
+        # Refill from backups if we're now short of target.
+        if len(winners) < target_count:
+            avail = [b for b in backups if b.name not in used_backup_names]
+            refilled = False
+            for backup in avail:
+                log.info("  trying backup [%s] to refill dup-dropped slot",
+                         backup.name)
+                res = run_source_phase_a(backup)
+                if res:
+                    res["used_backup"] = True
+                    res["primary_source_name"] = dropped["source"].name
+                    used_backup_names.add(backup.name)
+                    winners.append(res)
+                    refilled = True
+                    break
+            if not refilled:
+                log.warning("  no backup available — continuing short (count=%d)",
+                            len(winners))
+                break
     return winners
 
 
@@ -358,9 +393,9 @@ def main() -> None:
     fun = aggregate_category("Fun", fun_sources(), fun_backups(), run_fun)
 
     log.info("=== DEDUP (per category) ===")
-    news = dedup_winners(news)
-    science = dedup_winners(science)
-    fun = dedup_winners(fun)
+    news = dedup_winners(news, news_backups())
+    science = dedup_winners(science, sci_backups())
+    fun = dedup_winners(fun, fun_backups())
     stories_by_cat = {"News": news, "Science": science, "Fun": fun}
     for cat, ws in stories_by_cat.items():
         log.info("  %s: %d winners", cat, len(ws))
