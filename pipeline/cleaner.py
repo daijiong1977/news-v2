@@ -10,9 +10,15 @@ from __future__ import annotations
 import html
 import re
 from typing import Iterable
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
+
+
+# Query params used by publisher CMSes (IEEE Spectrum, Squarespace, Imgix-style)
+# to pre-crop og:image to a 2:1 social-share banner. Stripping them yields
+# the natural-aspect source image — heads/feet stop getting chopped off.
+_BANNER_CROP_PARAMS = {"coordinates", "rect", "crop"}
 
 
 # ---------------------------------------------------------------------------
@@ -380,16 +386,36 @@ def _choose_best_from_srcset(srcset: str | None) -> str | None:
     return best_url
 
 
+def _strip_banner_crop_params(url: str) -> str:
+    """Strip publisher CMS pre-crop directives from an og:image URL.
+
+    IEEE Spectrum, Squarespace and Imgix-style URLs include query params
+    (`coordinates=`, `rect=`, `crop=`) that pre-crop the source image to a
+    2:1 social-share banner — frequently chopping heads/feet from portraits.
+    Removing these returns the natural-aspect original.
+    """
+    if not url or "?" not in url:
+        return url
+    try:
+        parts = urlparse(url)
+        kept = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+                if k.lower() not in _BANNER_CROP_PARAMS]
+        new_query = urlencode(kept)
+        return urlunparse(parts._replace(query=new_query))
+    except Exception:
+        return url
+
+
 def _extract_og_image(soup: BeautifulSoup) -> str | None:
     og = soup.find("meta", property="og:image")
     if og and og.get("content"):
-        return og.get("content")
+        return _strip_banner_crop_params(og.get("content"))
     tw = soup.find("meta", attrs={"name": "twitter:image"})
     if tw and tw.get("content"):
-        return tw.get("content")
+        return _strip_banner_crop_params(tw.get("content"))
     link_img = soup.find("link", rel=lambda x: x and "image_src" in x)
     if link_img and link_img.get("href"):
-        return link_img.get("href")
+        return _strip_banner_crop_params(link_img.get("href"))
     return None
 
 
