@@ -44,6 +44,33 @@ def _strip_md_bold(s: str) -> str:
     return re.sub(r"\*\*([^*]+)\*\*", r"\1", s or "")
 
 
+# Common English suffixes — same pattern the UI uses for highlightText().
+# Keeps "ban" → "banned" / "banning" matched.
+_KW_SUFFIX = r"(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers|ion|ions|ly)?"
+
+
+def _bold_keywords_in_text(text: str, keyword_terms: list[str]) -> str:
+    """Wrap each keyword (and common inflections) in `**...**` so fpdf2's
+    markdown=True renders them bold in the body. Caller MUST first strip
+    any pre-existing `**` to avoid double-wrapping."""
+    if not text or not keyword_terms:
+        return text
+    cleaned = _strip_md_bold(text)
+    # Sort longest-first so substrings don't shadow longer matches
+    terms = sorted({t.strip() for t in keyword_terms if t and t.strip()},
+                   key=len, reverse=True)
+    for term in terms:
+        # Build a word-boundary, suffix-tolerant, case-insensitive pattern
+        escaped = re.escape(term)
+        pat = re.compile(rf"\b({escaped}{_KW_SUFFIX})\b", re.IGNORECASE)
+        # Use a lambda so we don't accidentally bold something already bolded.
+        cleaned = pat.sub(lambda m: f"**{m.group(1)}**", cleaned)
+    # Collapse any accidental `****` (a word that ends right before another
+    # word starting with the same term — uncommon but possible).
+    cleaned = re.sub(r"\*{4,}", "**", cleaned)
+    return cleaned
+
+
 # fpdf2's built-in Helvetica is Latin-1 only. Articles use smart quotes,
 # em dashes, ellipses, etc. Map them to Latin-1 safe equivalents so we
 # don't have to embed a unicode font (saves ~750 KB per PDF).
@@ -138,54 +165,62 @@ class ArticlePDF(FPDF):
                   new_x=XPos.RIGHT, new_y=YPos.TOP)
         self.cell(0, 0.18, f"Page {page_no} / {{nb}}", align="R")
 
-    def heading(self, text: str, size: int = 14):
+    def heading(self, text: str, size: int = 16):
+        # Pages 1/2/4 use 16; Page 3 (quiz) callers can pass 14 explicitly.
         self.set_text_color(*INK)
         self.set_font("Helvetica", "B", size)
-        self.cell(0, 0.28, _to_latin1(text), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.cell(0, 0.32, _to_latin1(text), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(0.04)
 
     def subheading(self, text: str):
         self.set_text_color(*self._cat_color)
-        self.set_font("Helvetica", "B", 11)
-        self.cell(0, 0.22, _to_latin1(text), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.set_font("Helvetica", "B", 13)
+        self.cell(0, 0.24, _to_latin1(text), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(0.02)
 
-    def body_text(self, text: str, size: float = 11):
+    def body_text(self, text: str, size: float = 13, markdown: bool = False):
         self.set_text_color(*INK)
         self.set_font("Helvetica", "", size)
-        self.multi_cell(0, 0.2, _to_latin1(text))
+        # markdown=True enables fpdf2's `**bold**` inline syntax — used for
+        # keyword highlighting in the article body.
+        self.multi_cell(0, 0.22, _to_latin1(text), markdown=markdown)
         self.ln(0.04)
 
-    def body_paragraphs(self, paragraphs: list[str], size: float = 11):
+    def body_paragraphs(self, paragraphs: list[str], size: float = 13,
+                        markdown: bool = False):
         for p in paragraphs:
-            self.body_text(p, size=size)
+            self.body_text(p, size=size, markdown=markdown)
 
     # ─── Page 1: Read & Words ────────────────────────────────────────
     def render_page_read(self, detail: dict, source: str, mined_at: str, read_mins: int):
         self.add_page()
         self.header_bar("Step 1  ·  Read & Words")
 
-        # Title
+        # Title (bumped 18 → 20)
         self.set_text_color(*INK)
-        self.set_font("Helvetica", "B", 18)
-        self.multi_cell(0, 0.32, _to_latin1(self._title))
+        self.set_font("Helvetica", "B", 20)
+        self.multi_cell(0, 0.36, _to_latin1(self._title))
         self.ln(0.05)
 
-        # Meta
+        # Meta (bumped 9 → 10)
         self.set_text_color(*MUTED)
-        self.set_font("Helvetica", "", 9)
+        self.set_font("Helvetica", "", 10)
         meta = f"From: {source}"
         if mined_at:
             meta += f"   Mined: {mined_at}"
         meta += f"   {read_mins} min read"
-        self.cell(0, 0.18, _to_latin1(meta), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.cell(0, 0.20, _to_latin1(meta), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(0.12)
 
-        # Body
+        # Body — wrap each keyword in `**...**` so fpdf2 renders them bold
+        # via markdown=True. Makes the keywords pop in the printed copy
+        # so kids can spot them while reading.
         body = _strip_md_bold(detail.get("summary") or "")
-        self.body_paragraphs(_wrap_para_breaks(body), size=11)
+        keyword_terms = [(k.get("term") or "") for k in (detail.get("keywords") or [])]
+        body_with_bold = _bold_keywords_in_text(body, keyword_terms)
+        self.body_paragraphs(_wrap_para_breaks(body_with_bold), size=13, markdown=True)
 
-        # Word Treasure
+        # Word Treasure (term 11→13, explanation 11→13)
         keywords = detail.get("keywords") or []
         if keywords:
             self.ln(0.05)
@@ -196,13 +231,13 @@ class ArticlePDF(FPDF):
                 term_safe = _to_latin1(term)
                 # Term
                 self.set_text_color(*self._cat_color)
-                self.set_font("Helvetica", "B", 11)
+                self.set_font("Helvetica", "B", 13)
                 term_w = self.get_string_width(term_safe) + 0.05
-                self.cell(term_w, 0.2, term_safe, new_x=XPos.RIGHT, new_y=YPos.TOP)
+                self.cell(term_w, 0.22, term_safe, new_x=XPos.RIGHT, new_y=YPos.TOP)
                 # Separator + explanation
                 self.set_text_color(*INK)
-                self.set_font("Helvetica", "", 11)
-                self.multi_cell(0, 0.2, _to_latin1(" -- " + expl))
+                self.set_font("Helvetica", "", 13)
+                self.multi_cell(0, 0.22, _to_latin1(" -- " + expl))
                 self.ln(0.02)
 
     # ─── Page 2: Background ───────────────────────────────────────────
@@ -226,7 +261,8 @@ class ArticlePDF(FPDF):
         if struct:
             self.heading("Break it down")
             self.set_text_color(*INK)
-            self.set_font("Helvetica", "", 10.5)
+            # Bumped 10.5 → 12.5 (+2)
+            self.set_font("Helvetica", "", 12.5)
             for line in struct:
                 if not isinstance(line, str):
                     line = str(line)
@@ -238,18 +274,18 @@ class ArticlePDF(FPDF):
                 lm = re.match(r"^([A-Z][A-Z \\/]*[A-Z]|[A-Z][a-z]+):\s*(.*)$", content)
                 self.set_x(0.5 + indent)
                 if lm:
-                    self.set_font("Helvetica", "B", 10.5)
+                    self.set_font("Helvetica", "B", 12.5)
                     self.set_text_color(*INK)
                     label = lm.group(1) + ":"
                     label_safe = _to_latin1(label)
                     label_w = self.get_string_width(label_safe) + 0.04
-                    self.cell(label_w, 0.18, label_safe,
+                    self.cell(label_w, 0.20, label_safe,
                               new_x=XPos.RIGHT, new_y=YPos.TOP)
-                    self.set_font("Helvetica", "", 10.5)
-                    self.multi_cell(0, 0.18, _to_latin1(" " + lm.group(2)))
+                    self.set_font("Helvetica", "", 12.5)
+                    self.multi_cell(0, 0.20, _to_latin1(" " + lm.group(2)))
                 else:
-                    self.set_font("Helvetica", "", 10.5)
-                    self.multi_cell(0, 0.18, _to_latin1(content))
+                    self.set_font("Helvetica", "", 12.5)
+                    self.multi_cell(0, 0.20, _to_latin1(content))
                 self.ln(0.01)
             self.ln(0.06)
 
@@ -259,11 +295,14 @@ class ArticlePDF(FPDF):
             self.body_text(_strip_md_bold(wim))
 
     # ─── Page 3: Quiz ────────────────────────────────────────────────
+    # Quiz page keeps its original (smaller) font sizes — the +2 bump is
+    # for the reading/background/think pages only, since the quiz already
+    # has tight per-question layout that gets cramped at larger sizes.
     def render_page_quiz(self, detail: dict):
         self.add_page()
         self.header_bar("Step 3  ·  Quiz")
 
-        self.heading("Test what you remember")
+        self.heading("Test what you remember", size=14)
         self.ln(0.04)
 
         questions = detail.get("questions") or []
@@ -341,24 +380,24 @@ class ArticlePDF(FPDF):
                 questions.append(str(p))
 
         for i, q in enumerate(questions):
-            # Yellow box per question
+            # Yellow box per question (font 11→13, +2)
             self.set_fill_color(*QUESTION_BG)
             self.set_draw_color(*QUESTION_BORDER)
             self.set_text_color(*INK)
-            self.set_font("Helvetica", "B", 11)
+            self.set_font("Helvetica", "B", 13)
             x0 = self.get_x()
             y0 = self.get_y()
             # Multi-cell with fill
             self.set_x(0.5)
-            self.multi_cell(0, 0.22, _to_latin1(f"{i + 1}.  {_strip_md_bold(q)}"),
+            self.multi_cell(0, 0.26, _to_latin1(f"{i + 1}.  {_strip_md_bold(q)}"),
                             border=1, fill=True)
             self.ln(0.06)
 
-        # Ruled lines for handwriting
+        # Ruled lines for handwriting (label 10→12, +2)
         self.ln(0.08)
         self.set_text_color(*MUTED)
-        self.set_font("Helvetica", "B", 10)
-        self.cell(0, 0.2, "MY THOUGHTS (at least 20 words):",
+        self.set_font("Helvetica", "B", 12)
+        self.cell(0, 0.22, "MY THOUGHTS (at least 20 words):",
                   new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         self.ln(0.04)
         self.set_draw_color(*RULE)
