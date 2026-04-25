@@ -78,9 +78,18 @@ function App() {
   const [progress, setProgress] = useState(() => {
     // Fresh users start with empty progress — no pre-filled mock reads.
     // Old MOCK_USER readToday["a2"] inflated the count + showed phantom reads.
+    const todayKey = new Date().toDateString();  // local "Sat Apr 25 2026"
     const saved = ss.getJSON('ohye_progress');
-    const base = { readToday: [], minutesToday: 0, articleProgress: {} };
+    const base = {
+      readToday: [], minutesToday: 0,
+      articleProgress: {},  // { [id]: { steps: ['read','analyze',...], lastTab: 'analyze' } }
+      dayKey: todayKey,
+    };
     if (!saved) return base;
+    // Day-rollover reset — readToday/minutesToday/articleProgress are
+    // per-day stats; dayKey lets us detect a new local day on load. Keep
+    // tweaks etc. (those live in ohye_tweaks, not progress).
+    if (saved.dayKey !== todayKey) return base;
     return { ...base, ...saved, articleProgress: saved.articleProgress || {} };
   });
 

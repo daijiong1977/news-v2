@@ -12,8 +12,17 @@ function formatDate(iso) {
 
 function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
   const baseArticle = ARTICLES.find(a => a.id === articleId) || ARTICLES[0];
-  const [tab, setTab] = useStateA('read');
-  const [tabsVisited, setTabsVisited] = useStateA({ read: true });
+  // Resume at the tab the user was last on for this article (issue #2).
+  const _savedAP = (progress && progress.articleProgress && progress.articleProgress[articleId]) || null;
+  const _resumeTab = _savedAP && _savedAP.lastTab ? _savedAP.lastTab : 'read';
+  const [tab, setTab] = useStateA(_resumeTab);
+  // tabsVisited covers what's been opened — used by the stepper UI to color
+  // already-seen tabs. Hydrate from saved steps so the dots stay filled
+  // when returning to an article mid-flow.
+  const _initVisited = { read: true };
+  for (const s of (_savedAP && _savedAP.steps) || []) _initVisited[s] = true;
+  if (_resumeTab) _initVisited[_resumeTab] = true;
+  const [tabsVisited, setTabsVisited] = useStateA(_initVisited);
   const [detail, setDetail] = useStateA(null);
   const [detailError, setDetailError] = useStateA(null);
 
@@ -78,18 +87,30 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
     };
   }, [articleId, detail]);
 
-  // Each step completion bumps progress by 25%: read→25, analyze→50, quiz→75, discuss→100
-  const bumpProgress = (pct) => {
+  // Per-step progress: each step finished = +1 toward the 15-point daily
+  // goal (3 articles × 4 steps × 1 + 1 completion bonus = 15). Idempotent
+  // — finishing the same step twice doesn't double-count.
+  const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'];
+  const bumpStep = (stageId) => {
     setProgress(p => {
       const ap = p.articleProgress || {};
-      const cur = ap[article.id] || 0;
-      if (cur >= pct) return p;
-      const next = { ...p, articleProgress: { ...ap, [article.id]: pct } };
-      // When reaching 100, mark as fully read + add minutes
-      if (pct === 100 && !p.readToday.includes(article.id)) {
+      const cur = ap[article.id] || { steps: [], lastTab: 'read' };
+      const curSteps = cur.steps || [];
+      if (curSteps.includes(stageId)) return p;  // already counted
+
+      const newSteps = [...curSteps, stageId];
+      const fullyDone = STEP_IDS.every(s => newSteps.includes(s));
+      const newAP = { ...cur, steps: newSteps };
+
+      // +1 for this step. +1 more when this step completes the article.
+      let delta = 1;
+      const next = { ...p };
+      if (fullyDone && !p.readToday.includes(article.id)) {
+        delta += 1;
         next.readToday = [...p.readToday, article.id];
-        next.minutesToday = (p.minutesToday || 0) + article.readMins;
       }
+      next.articleProgress = { ...ap, [article.id]: newAP };
+      next.minutesToday = (p.minutesToday || 0) + delta;
       return next;
     });
   };
@@ -127,6 +148,13 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
   const switchTab = (id) => {
     setTab(id);
     setTabsVisited(v => ({...v, [id]: true}));
+    // Persist last-visited tab so re-opening the article resumes here.
+    setProgress(p => {
+      const ap = p.articleProgress || {};
+      const cur = ap[article.id] || { steps: [], lastTab: 'read' };
+      if (cur.lastTab === id) return p;
+      return { ...p, articleProgress: { ...ap, [article.id]: { ...cur, lastTab: id } } };
+    });
   };
 
   // Block tabs until detail is loaded. Header/title block still render so the
@@ -150,9 +178,9 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
           <div style={{flex:1}}/>
           <div style={{display:'flex', alignItems:'center', gap:6}}>
             {stages.map((s, i) => {
-              const curPct = (progress.articleProgress || {})[article.id] || 0;
-              const stepPct = (i + 1) * 25;
-              const stepDone = curPct >= stepPct;
+              const curAP = (progress.articleProgress || {})[article.id] || null;
+              const doneSteps = (curAP && curAP.steps) || [];
+              const stepDone = doneSteps.includes(s.id);
               return (
                 <React.Fragment key={s.id}>
                   <button onClick={()=>switchTab(s.id)} style={{
@@ -222,12 +250,12 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
             paragraphs={paragraphs}
             expanded={expandedKw}
             setExpanded={setExpandedKw}
-            onFinish={() => { bumpProgress(25); switchTab('analyze'); }}
+            onFinish={() => { bumpStep('read'); switchTab('analyze'); }}
           />
         )}
 
         {detailReady && tab === 'analyze' && (
-          <AnalyzeTab article={article} paragraphs={paragraphs} onNext={()=>{ bumpProgress(50); switchTab('quiz'); }} />
+          <AnalyzeTab article={article} paragraphs={paragraphs} onNext={()=>{ bumpStep('analyze'); switchTab('quiz'); }} />
         )}
 
         {detailReady && tab === 'quiz' && (
@@ -236,12 +264,12 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
             quizIdx={quizIdx} setQuizIdx={setQuizIdx}
             quizAns={quizAns} setQuizAns={setQuizAns}
             quizShow={quizShow} setQuizShow={setQuizShow}
-            onFinish={() => { bumpProgress(75); setConfetti(true); setTimeout(()=>setConfetti(false), 1800); switchTab('discuss'); }}
+            onFinish={() => { bumpStep('quiz'); setConfetti(true); setTimeout(()=>setConfetti(false), 1800); switchTab('discuss'); }}
           />
         )}
 
         {detailReady && tab === 'discuss' && (
-          <DiscussTab article={article} paragraphs={paragraphs} onDone={()=>{ bumpProgress(100); onComplete(); }} />
+          <DiscussTab article={article} paragraphs={paragraphs} onDone={()=>{ bumpStep('discuss'); onComplete(); }} />
         )}
       </div>
 
