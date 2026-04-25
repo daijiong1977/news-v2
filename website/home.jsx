@@ -635,6 +635,100 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Today's-pick sticky banner — sits below the header, follows scroll.
+// Shows total daily progress + a context-aware Continue/Start CTA so
+// the kid always has a one-tap path back into today's read.
+//   · Pre-start  ........... "Start your 21 minutes ▶" (open first card)
+//   · Mid-read   ........... "Continue Story 2 ▶"     (re-enter the
+//                              article whose steps[] is partial)
+//   · Done       ........... "🎉 All done — see you tomorrow"
+// ────────────────────────────────────────────────────────────────────
+function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen }) {
+  if (!daily3 || daily3.length === 0) return null;
+
+  // Find first article with partial progress (steps started, not all done).
+  const partial = daily3.find(a => {
+    const ap = (progress.articleProgress || {})[a.id];
+    if (!ap || typeof ap !== 'object') return false;
+    const steps = ap.steps || [];
+    return steps.length > 0 && steps.length < 4;
+  });
+  const unread = daily3.find(a => !progress.readToday.includes(a.id));
+  const target = partial || unread;
+  const allDone = !target;
+
+  const targetIdx = target ? daily3.findIndex(a => a.id === target.id) + 1 : 0;
+  const pct = Math.min(100, Math.round((minutesToday / dailyGoal) * 100));
+  const targetCat = target ? (CATEGORIES.find(c => c.label === target.category) || CATEGORIES[0]) : null;
+
+  let label, action;
+  if (allDone) {
+    label = '🎉 All done — see you tomorrow';
+    action = null;
+  } else if (partial) {
+    label = `Continue Story ${targetIdx} ▶`;
+    action = () => onOpen(target.id);
+  } else {
+    label = `▶ Start Story ${targetIdx}`;
+    action = () => onOpen(target.id);
+  }
+
+  return (
+    <div style={{
+      position:'sticky', top: 0, zIndex: 25,
+      background: 'rgba(255,249,239,0.96)', backdropFilter:'blur(8px)',
+      borderBottom:`1.5px solid ${theme.chip}`,
+      padding:'10px 28px',
+    }}>
+      <div style={{
+        maxWidth:1180, margin:'0 auto',
+        display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
+      }}>
+        {/* Left: progress text + thin bar */}
+        <div style={{flex:1, minWidth:240}}>
+          <div style={{
+            fontSize:12, fontWeight:900, color:'#1b1230', letterSpacing:'.04em',
+            textTransform:'uppercase', marginBottom:4, fontFamily:'Nunito, sans-serif',
+          }}>
+            <span style={{fontSize:16, marginRight:6}}>⏱️</span>
+            Today's read · <span style={{color: theme.heroTextAccent}}>{minutesToday}</span>/{dailyGoal} min
+            {!allDone && <span style={{fontWeight:600, color:'#9a8d7a', marginLeft:8}}>· {dailyGoal - minutesToday} min left</span>}
+          </div>
+          <div style={{
+            height:5, background:'#f0e8d8', borderRadius:999, overflow:'hidden',
+          }}>
+            <div style={{
+              width: `${pct}%`, height:'100%',
+              background:`linear-gradient(90deg, ${theme.accent}, #ff8a3d)`,
+              borderRadius:999, transition:'width .3s ease',
+            }}/>
+          </div>
+        </div>
+
+        {/* Right: CTA */}
+        {action ? (
+          <button onClick={action} style={{
+            background: targetCat?.color || '#1b1230', color:'#fff', border:'none',
+            borderRadius:14, padding:'10px 18px', fontWeight:900, fontSize:13.5,
+            fontFamily:'Nunito, sans-serif', cursor:'pointer', letterSpacing:'.02em',
+            boxShadow:'0 3px 0 rgba(27,18,48,0.18)',
+            display:'inline-flex', alignItems:'center', gap:8,
+          }}>
+            <span style={{fontSize:14}}>{targetCat?.emoji}</span>
+            {label}
+          </button>
+        ) : (
+          <span style={{
+            background:'#0e8d82', color:'#fff', padding:'10px 16px', borderRadius:14,
+            fontWeight:900, fontSize:13.5, letterSpacing:'.02em',
+          }}>{label}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
@@ -774,6 +868,18 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     <div style={{background: theme.bg, minHeight:'100vh'}}>
       {/* ——————————— HEADER ——————————— */}
       <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} />
+
+      {/* ——————————— TODAY'S PROGRESS BANNER (only when picks are locked) ——————————— */}
+      {!isArchive && picksLocked && (
+        <TodayBanner
+          daily3={daily3}
+          progress={progress}
+          theme={theme}
+          dailyGoal={goal}
+          minutesToday={minutesToday}
+          onOpen={onOpen}
+        />
+      )}
 
       {/* ——————————— ARCHIVE BANNER (when viewing an old day) ——————————— */}
       {isArchive && (
