@@ -835,6 +835,27 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
                          sid[:8], category, slot, art.get("title", "")[:50])
             else:
                 log.warning("  insert failed: %s", art.get("title", "")[:60])
+
+    # Stamp last_used_at for every source whose article shipped today.
+    # Powers the rotation in db_config.load_sources — least-recently-used
+    # sources surface first on the next run.
+    used_source_names: set[str] = set()
+    for category, stories in stories_by_cat.items():
+        for s in stories:
+            n = (s.get("source") and s["source"].name) or ""
+            if n: used_source_names.add(n)
+    if used_source_names:
+        try:
+            from .supabase_io import client
+            now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            client().table("redesign_source_configs") \
+                .update({"last_used_at": now_iso}) \
+                .in_("name", list(used_source_names)) \
+                .execute()
+            log.info("  stamped last_used_at on %d source(s): %s",
+                     len(used_source_names), sorted(used_source_names))
+        except Exception as e:  # noqa: BLE001
+            log.warning("  last_used_at stamp failed: %s", e)
     return count
 
 

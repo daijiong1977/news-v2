@@ -124,7 +124,18 @@ def _ensure_src_cache() -> dict[str, list[dict]]:
 
 
 def load_sources(category_name: str, *, today_weekday: int | None = None) -> list[NewsSource]:
-    """Enabled non-backup sources for `category_name`, weekday-filtered.
+    """Enabled non-backup sources for `category_name`.
+
+    Selection rules (in order):
+      1. enabled = true
+      2. is_backup = false
+      3. active_weekdays — HARD pin if set (e.g. "Sport only on weekends");
+         empty/null means every day (default).
+      4. ORDER BY last_used_at NULLS FIRST, priority ASC
+         → least-recently-used sources surface first, breaking ties by
+         the manual priority column. Pipeline downstream usually picks
+         the top N from this list (max_per_source × N), so rotation
+         emerges naturally.
 
     `today_weekday` lets callers pin a specific day (testing). When
     omitted, uses today's UTC weekday (Mon=0).
@@ -136,14 +147,18 @@ def load_sources(category_name: str, *, today_weekday: int | None = None) -> lis
              else datetime.now(timezone.utc).weekday()
         out: dict[str, list[NewsSource]] = {}
         for cat, rows in raw_by_cat.items():
-            kept: list[NewsSource] = []
+            kept: list[tuple[str, int, NewsSource]] = []  # (last_used_iso_or_blank, priority, src)
             for r in rows:
                 if not r.get("enabled"): continue
                 if r.get("is_backup"):  continue
                 if not _weekday_active(r.get("active_weekdays"), wd): continue
-                kept.append(_row_to_source(r))
-            kept.sort(key=lambda s: s.priority)
-            out[cat] = kept
+                last_used = r.get("last_used_at") or ""   # NULL → "" sorts before any iso string
+                pri = int(r.get("priority") or 99)
+                kept.append((last_used, pri, _row_to_source(r)))
+            # Sort primarily by last_used_at (asc, NULL/blank first = least-recently-used);
+            # break ties by manual priority.
+            kept.sort(key=lambda t: (t[0], t[1]))
+            out[cat] = [s for _, _, s in kept]
         _src_cache = out
     return _src_cache.get(category_name, [])
 

@@ -296,6 +296,18 @@ function VerifiedBadge({ iso }) {
   return <span className="pill pill-on" title={`last verified ${iso}`}>{d}d</span>;
 }
 
+// Last-used freshness — shown alongside the verify badge so the editor
+// can see at a glance which sources are due for rotation. The pipeline
+// already prefers least-recently-used (NULLs first).
+function LastUsedBadge({ iso }) {
+  const d = daysSince(iso);
+  if (d === null) return <span className="pill pill-on" title="never picked yet — top of rotation">fresh</span>;
+  if (d === 0)    return <span className="pill" style={{background:'#fff4e0', color:'#c9931f'}} title={`last used ${iso}`}>today</span>;
+  if (d === 1)    return <span className="pill pill-warn" title={`last used ${iso}`}>yesterday</span>;
+  if (d <= 7)     return <span className="pill" style={{background:'#fbf6ec', color:'#6b5c80'}} title={`last used ${iso}`}>{d}d ago</span>;
+  return <span className="pill pill-on" title={`last used ${iso}`}>{d}d ago</span>;
+}
+
 // ── SOURCES TAB ──────────────────────────────────────────────────────
 function SourcesTab({ flash, categories }) {
   const [rows, setRows] = useState(null);
@@ -405,12 +417,20 @@ function SourcesTab({ flash, categories }) {
       <div className="card">
         <table>
           <thead><tr>
-            <th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Focus</th><th>Days</th><th>State</th><th>Verified</th><th></th>
+            <th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Focus</th><th>Days</th><th>State</th><th>Verified</th><th>Last used</th><th></th>
           </tr></thead>
           <tbody>
             {rows?.map(r => (
               <tr key={r.id}>
-                <td>{r.category}</td>
+                <td>
+                  {/* Editable category — pipeline reads from this column, so a
+                      single dropdown change moves the source to the new cat
+                      next run. */}
+                  <select value={r.category} onChange={e=>updateRow(r.id, { category: e.target.value })}
+                          style={{padding:'4px 6px', fontSize:12, maxWidth:100}}>
+                    {categories.map(c => <option key={c.slug} value={c.name}>{c.name}</option>)}
+                  </select>
+                </td>
                 <td><input style={{width:'100%'}} defaultValue={r.name} onBlur={e=>e.target.value!==r.name && updateRow(r.id, { name:e.target.value })}/></td>
                 <td><input style={{width:'100%'}} defaultValue={r.rss_url} onBlur={e=>e.target.value!==r.rss_url && updateRow(r.id, { rss_url:e.target.value })}/></td>
                 <td><input type="number" style={{width:55}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
@@ -422,6 +442,7 @@ function SourcesTab({ flash, categories }) {
                   </span>
                 </td>
                 <td><VerifiedBadge iso={r.last_verified_at}/></td>
+                <td><LastUsedBadge iso={r.last_used_at}/></td>
                 <td>
                   <span className="row" style={{gap:4, justifyContent:'flex-end'}}>
                     <button className="btn btn-sm btn-ghost"
@@ -439,7 +460,7 @@ function SourcesTab({ flash, categories }) {
                 </td>
               </tr>
             ))}
-            {rows && rows.length === 0 && <tr><td colSpan="9" className="empty">No sources yet.</td></tr>}
+            {rows && rows.length === 0 && <tr><td colSpan="10" className="empty">No sources yet.</td></tr>}
           </tbody>
         </table>
       </div>
