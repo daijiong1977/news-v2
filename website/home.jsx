@@ -679,35 +679,40 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen 
       position:'sticky', top: 0, zIndex: 25,
       background: 'rgba(255,249,239,0.96)', backdropFilter:'blur(8px)',
       borderBottom:`2px solid ${theme.chip}`,
-      padding:'18px 28px 16px',
+      padding:'26px 28px 24px',   // ~40% taller than the previous version
     }}>
       <div style={{maxWidth:1180, margin:'0 auto'}}>
-        {/* Top row: progress text */}
+        {/* Top row: progress text — bigger + breathier */}
         <div style={{
           fontFamily:'Nunito, sans-serif',
-          fontSize:14, fontWeight:900, color:'#1b1230', letterSpacing:'.04em',
-          textTransform:'uppercase', marginBottom:10,
-          display:'flex', alignItems:'baseline', gap:12, flexWrap:'wrap',
+          fontSize:16, fontWeight:900, color:'#1b1230', letterSpacing:'.04em',
+          textTransform:'uppercase', marginBottom:14,
+          display:'flex', alignItems:'baseline', gap:14, flexWrap:'wrap',
         }}>
-          <span style={{fontSize:18}}>⏱️</span>
+          <span style={{fontSize:22}}>⏱️</span>
           <span>Today's read</span>
           <span style={{
-            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:24,
-            color: theme.heroTextAccent, letterSpacing:'-0.01em',
-            textTransform:'none',
+            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:32,
+            color: theme.heroTextAccent, letterSpacing:'-0.015em',
+            textTransform:'none', lineHeight:1,
           }}>{minutesToday} / {dailyGoal} min</span>
           {!allDone && (
             <span style={{
-              fontWeight:700, color:'#6b5c80', fontSize:12,
+              fontWeight:700, color:'#6b5c80', fontSize:13,
               textTransform:'none', letterSpacing:'.02em',
             }}>· {dailyGoal - minutesToday} min left today</span>
           )}
+          {allDone && (
+            <span style={{
+              fontWeight:900, color:'#0e8d82', fontSize:14,
+              textTransform:'none', letterSpacing:'.02em',
+            }}>· 🎉 all done — see you tomorrow</span>
+          )}
         </div>
 
-        {/* Middle row: thicker progress bar */}
+        {/* Bottom row: progress bar fills the width */}
         <div style={{
-          height:8, background:'#f0e8d8', borderRadius:999, overflow:'hidden',
-          marginBottom:14,
+          height:10, background:'#f0e8d8', borderRadius:999, overflow:'hidden',
         }}>
           <div style={{
             width: `${pct}%`, height:'100%',
@@ -715,27 +720,6 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen 
             borderRadius:999, transition:'width .3s ease',
           }}/>
         </div>
-
-        {/* Bottom row: full-width CTA */}
-        {action ? (
-          <button onClick={action} style={{
-            width:'100%',
-            background: targetCat?.color || '#1b1230', color:'#fff', border:'none',
-            borderRadius:14, padding:'14px 22px', fontWeight:900, fontSize:16,
-            fontFamily:'Nunito, sans-serif', cursor:'pointer', letterSpacing:'.02em',
-            boxShadow:'0 4px 0 rgba(27,18,48,0.18)',
-            display:'inline-flex', alignItems:'center', justifyContent:'center', gap:10,
-          }}>
-            <span style={{fontSize:18}}>{targetCat?.emoji}</span>
-            {label}
-          </button>
-        ) : (
-          <div style={{
-            width:'100%', textAlign:'center',
-            background:'#0e8d82', color:'#fff', padding:'14px 22px', borderRadius:14,
-            fontWeight:900, fontSize:16, letterSpacing:'.02em',
-          }}>{label}</div>
-        )}
       </div>
     </div>
   );
@@ -978,7 +962,11 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
               </>
             ) : (
               <>
-                <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:52, lineHeight:1.02, color:'#1b1230', margin:'0 0 8px', letterSpacing:'-0.02em'}}>
+                <h1 style={{
+                  fontFamily:'Fraunces, serif', fontWeight:900, fontSize:48, lineHeight:1.02,
+                  color:'#1b1230', margin:'0 0 8px', letterSpacing:'-0.02em',
+                  whiteSpace:'nowrap',   // keep "Today's 21 minutes" on one line
+                }}>
                   Today's <span style={{background: theme.accent, padding:'0 10px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>{goal} minutes</span>
                 </h1>
                 <p style={{
@@ -1004,11 +992,13 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
             </div>
           </div>
 
-          {/* Daily 3 stack — swappable picks */}
+          {/* Daily 3 stack — swappable picks. Header text was removed
+              (duplicate of "Today's 21 minutes" in the hero); a small
+              toolbar with the Pick-again button + swap hint stays
+              right-aligned. */}
           <div style={{display:'flex', flexDirection:'column', gap:10, position:'relative'}}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:10, flexWrap:'wrap'}}>
-              <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>⚡ Today's {window.SITE_CONFIG?.storiesPerDay ?? 3} · {window.SITE_CONFIG?.perArticleMinutes ?? 7} min each</div>
-              <div className="row" style={{display:'flex', gap:8, alignItems:'center'}}>
+            {(picksLocked || true) && (
+              <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:8, flexWrap:'wrap'}}>
                 {picksLocked && (
                   <button onClick={resetPicks} style={{
                     background:'transparent', border:'1.5px solid #f0e8d8',
@@ -1019,7 +1009,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                 )}
                 <div style={{fontSize:11, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
               </div>
-            </div>
+            )}
             {daily3.map((a, i) => {
               const catColor = CATEGORIES.find(c => c.label === a.category)?.color || '#1b1230';
               const alternates = displayPool.filter(x => x.category === a.category && !activePicks.includes(x.id));
@@ -1075,10 +1065,14 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                     <button onClick={()=>onOpen(a.id)} style={{
                       flex:1, minWidth:0, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0,
                     }}>
-                      <div style={{fontWeight:800, fontSize:14, color:'#1b1230', lineHeight:1.25, marginBottom:4, display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:2, overflow:'hidden'}}>
+                      <div style={{fontWeight:800, fontSize:15, color:'#1b1230', lineHeight:1.3, marginBottom:6, display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:3, overflow:'hidden'}}>
                         {a.title}
                       </div>
-                      <div style={{display:'flex', gap:6, alignItems:'center', fontSize:11, color:'#6b5c80'}}>
+                      {/* Category + minutes badge removed — duplicate of the hero
+                          "Today's 21 minutes" headline + the category-color slot
+                          number on the left. Card now leans into the title +
+                          summary with more breathing room. */}
+                      <div style={{display:'none', gap:6, alignItems:'center', fontSize:11, color:'#6b5c80'}}>
                         <CatChip cat={a.category} small/>
                         <span>· {a.readMins} min</span>
                       </div>
