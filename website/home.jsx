@@ -13,6 +13,215 @@ function _articlePct(ap) {
   return Math.min(100, steps.length * 25);
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Pick-3 daily ritual screen
+// ────────────────────────────────────────────────────────────────────
+// First-load-of-the-day surface. Kid taps to pick exactly 3 stories
+// from a small candidate pool (up to 9), then locks them in for the
+// day — locking transitions to the standard home view. This converts
+// a passive feed into an active daily commitment, defending against
+// scroll-mode habits.
+function PickScreen({ pool, onLock, theme, tweaks, dateLabel }) {
+  const cfg = window.SITE_CONFIG || {};
+  const targetCount = cfg.storiesPerDay ?? 3;
+  const perStoryMins = cfg.perArticleMinutes ?? 7;
+  const dailyGoal = cfg.dailyGoalMinutes ?? 21;
+
+  const [selected, setSelected] = useStateH([]);   // ordered ids
+  const ready = selected.length === targetCount;
+
+  const toggle = (id) => {
+    setSelected(s => {
+      if (s.includes(id)) return s.filter(x => x !== id);
+      if (s.length >= targetCount) return s;       // soft cap
+      return [...s, id];
+    });
+  };
+
+  return (
+    <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
+      {/* — Header strip with the kidsnews lockup — */}
+      <div style={{
+        background: theme.bg, borderBottom:`2px solid ${theme.chip}`,
+        padding:'14px 28px', display:'flex', alignItems:'center', gap:16,
+      }}>
+        <div style={{maxWidth:1180, margin:'0 auto', display:'flex', alignItems:'center', flex:1}}>
+          <KidsNewsLockup size={44}/>
+        </div>
+      </div>
+
+      {/* — Hero band: date + headline + tagline + tracker — */}
+      <div style={{
+        background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
+        padding:'32px 28px 28px', borderBottom:`2px solid ${theme.border}`,
+      }}>
+        <div style={{maxWidth:1180, margin:'0 auto', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap'}}>
+          <div style={{flex:1, minWidth:320}}>
+            <div style={{
+              fontSize:12, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase',
+              color: theme.heroTextAccent, marginBottom:6,
+            }}>
+              {dateLabel}{tweaks?.userName ? ` · Hi ${tweaks.userName} 👋` : ''}
+            </div>
+            <h1 style={{
+              fontFamily:'Fraunces, serif', fontWeight:900, fontSize:42, lineHeight:1.0,
+              color:'#1b1230', margin:'0 0 4px', letterSpacing:'-0.025em',
+            }}>
+              Pick your <span style={{
+                background: theme.accent, padding:'0 10px', borderRadius:12,
+                display:'inline-block', transform:'rotate(-1.5deg)',
+              }}>{targetCount} stories</span> for today
+            </h1>
+            <div style={{
+              fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
+              fontSize:20, color:'#c14e2a', marginTop:10, letterSpacing:'-0.01em',
+            }}>
+              {cfg.tagline || 'Little daily, big magic.'}
+            </div>
+          </div>
+
+          {/* Tracker card — fills as the kid picks */}
+          <div style={{
+            background:'#fff', borderRadius:18, padding:'14px 18px', minWidth:300,
+            border:'2px solid #fff', boxShadow:'0 3px 0 rgba(27,18,48,0.08)',
+          }}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
+              <div style={{fontWeight:900, fontSize:12, color:'#1b1230', letterSpacing:'.08em', textTransform:'uppercase'}}>
+                Your {targetCount}
+              </div>
+              <div style={{fontSize:11, color:'#9a8d7a', fontWeight:700}}>
+                {selected.length}/{targetCount} picked · {selected.length * perStoryMins}/{dailyGoal} min
+              </div>
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              {Array.from({length: targetCount}).map((_, i) => {
+                const id = selected[i];
+                const story = id ? pool.find(s => s.id === id) : null;
+                if (story) {
+                  const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
+                  return (
+                    <div key={i} style={{
+                      flex:1, aspectRatio:'1', borderRadius:12,
+                      background:c.color, color:'#fff', position:'relative',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:24,
+                    }}>{i + 1}</div>
+                  );
+                }
+                return (
+                  <div key={i} style={{
+                    flex:1, aspectRatio:'1', borderRadius:12,
+                    border:`2px dashed ${theme.chip}`, background:'#fffaf0',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    color:'#9a8d7a', fontWeight:700,
+                  }}>—</div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* — Card grid: pool of 9 — */}
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'28px'}}>
+        {pool.length === 0 ? (
+          <div style={{
+            textAlign:'center', padding:'40px 20px', color:'#9a8d7a',
+            background:'#fff', borderRadius:16, border:'2px dashed #f0e8d8',
+          }}>
+            <div style={{fontSize:36, marginBottom:8}}>🌱</div>
+            <div style={{fontWeight:800, color:'#1b1230', marginBottom:4}}>No stories available right now</div>
+            <div style={{fontSize:13}}>Tomorrow's batch arrives daily.</div>
+          </div>
+        ) : (
+          <div style={{
+            display:'grid',
+            gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',
+            gap:18,
+          }}>
+            {pool.map(story => {
+              const picked = selected.includes(story.id);
+              const slot = picked ? selected.indexOf(story.id) + 1 : null;
+              const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
+              return (
+                <button key={story.id} onClick={()=>toggle(story.id)} style={{
+                  position:'relative', textAlign:'left', cursor:'pointer',
+                  background: picked ? c.bg : '#fff',
+                  border: picked ? `3px solid ${c.color}` : `2px solid ${theme.chip}`,
+                  borderRadius:18, padding:0, overflow:'hidden',
+                  boxShadow: picked ? `0 4px 0 ${c.color}` : '0 2px 0 rgba(27,18,48,0.06)',
+                  transform: picked ? 'translateY(-2px)' : 'none',
+                  transition:'transform .15s, box-shadow .15s, background .15s',
+                  fontFamily:'Nunito, sans-serif',
+                }}>
+                  {picked && (
+                    <div style={{
+                      position:'absolute', top:10, right:10, zIndex:2,
+                      width:32, height:32, borderRadius:999, background:c.color, color:'#fff',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:17,
+                      boxShadow:'0 2px 0 rgba(27,18,48,0.2)',
+                    }}>{slot}</div>
+                  )}
+                  <div style={{
+                    aspectRatio:'16/10',
+                    background: story.image
+                      ? `url(${story.image}) center/cover, ${c.color}`
+                      : c.color,
+                  }}/>
+                  <div style={{padding:'14px 16px 16px'}}>
+                    <div style={{
+                      display:'inline-flex', alignItems:'center', gap:5,
+                      background: picked ? '#fff' : c.bg, color:c.color,
+                      padding:'3px 10px', borderRadius:999, fontWeight:800, fontSize:11,
+                      marginBottom:8,
+                    }}>
+                      <span style={{fontSize:13}}>{c.emoji}</span>{story.category} · {story.readMins} min
+                    </div>
+                    <div style={{
+                      fontFamily:'Fraunces, serif', fontWeight:700, fontSize:16,
+                      lineHeight:1.2, color:'#1b1230', letterSpacing:'-0.01em',
+                      marginBottom:6,
+                    }}>{story.title}</div>
+                    <div style={{
+                      fontSize:12.5, color:'#5a4a6e', lineHeight:1.5, fontWeight:600,
+                    }}>{story.summary?.slice(0, 100)}{story.summary && story.summary.length > 100 ? '…' : ''}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* — Bottom CTA — */}
+        <div style={{
+          marginTop:32, display:'flex', justifyContent:'center', gap:12,
+          flexWrap:'wrap', alignItems:'center',
+        }}>
+          <button
+            onClick={() => ready && onLock(selected)}
+            disabled={!ready}
+            style={{
+              background: ready ? '#1b1230' : '#e8dfd3',
+              color: ready ? '#fff' : '#9a8d7a',
+              border:'none', borderRadius:16,
+              padding:'16px 28px', fontWeight:900, fontSize:17,
+              fontFamily:'Nunito, sans-serif',
+              cursor: ready ? 'pointer' : 'not-allowed',
+              boxShadow: ready ? '0 5px 0 rgba(27,18,48,0.18)' : 'none',
+              letterSpacing:'.01em',
+              transition:'all .12s',
+            }}>
+            {ready
+              ? `▶ Start your ${dailyGoal} minutes`
+              : `Pick ${targetCount - selected.length} more`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, theme, heroVariant, tweaks, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
@@ -50,6 +259,26 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
   }, [isZh, level, archiveDay]);
   const poolIds = useMemoH(() => new Set(displayPool.map(a => a.id)), [displayPool]);
 
+  // ── Pick-3 lock state (per-day) ─────────────────────────────────────
+  // The brand promise is "Today's 21 minutes" — a finite, chosen ritual.
+  // First load each day shows a pick screen ("choose your 3 from 9");
+  // once locked, the rest of the home renders with those 3 as the daily
+  // stack. Cleared on day rollover (dayKey mismatch). MUST be defined
+  // AFTER poolIds because picksLocked validates the saved ids against
+  // the current pool.
+  const [picksLock, setPicksLock] = useStateH(() => {
+    const s = window.safeStorage?.getJSON('ohye_picks_lock_v1');
+    return (s && s.dayKey && Array.isArray(s.ids)) ? s : { dayKey: null, ids: [] };
+  });
+  useEffectH(() => { window.safeStorage?.setJSON('ohye_picks_lock_v1', picksLock); }, [picksLock]);
+  const todayKeyLocal = (new Date()).toDateString();
+  const picksLocked = !isArchive
+    && picksLock.dayKey === todayKeyLocal
+    && picksLock.ids.length === 3
+    && picksLock.ids.every(id => poolIds.has(id));
+  const lockPicks = (ids) => setPicksLock({ dayKey: todayKeyLocal, ids });
+  const resetPicks = () => setPicksLock({ dayKey: null, ids: [] });
+
   // Pick 1 from each category by default, user can swap (only from the 3-per-category pool)
   const [dailyPicks, setDailyPicks] = useStateH(() => {
     const s = window.safeStorage?.getJSON('ohye_daily_picks_v3'); if (s && s.length === 3) return s;
@@ -63,7 +292,11 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     }
     return out.slice(0, 3);
   }, [displayPool]);
-  const activePicks = (dailyPicks && dailyPicks.every(id => poolIds.has(id))) ? dailyPicks : defaultPicks;
+  // After pick-3 lock, the locked IDs are the daily 3. Falls back to
+  // legacy `dailyPicks`/`defaultPicks` when not locked (e.g. archive view).
+  const activePicks = picksLocked
+    ? picksLock.ids
+    : ((dailyPicks && dailyPicks.every(id => poolIds.has(id))) ? dailyPicks : defaultPicks);
   useEffectH(() => { window.safeStorage?.setJSON('ohye_daily_picks_v3', activePicks); }, [activePicks]);
   const swapPick = (idx, newId) => {
     const next = [...activePicks]; next[idx] = newId; setDailyPicks(next);
@@ -76,6 +309,26 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     CATEGORIES.forEach(c => { m[c.label] = ARTICLES.filter(a => a.category === c.label); });
     return m;
   }, []);
+
+  // ── Pick-3 gate ────────────────────────────────────────────────────
+  // Today, not archive, picks not yet locked → render pick screen and
+  // bypass the rest of home. Archive mode keeps the standard browse.
+  // MUST come after every hook call above to satisfy Rules of Hooks.
+  if (!isArchive && !picksLocked && displayPool.length >= 3) {
+    const dateLabel = new Date().toLocaleDateString('en-US',
+      { weekday:'long', month:'short', day:'numeric' });
+    // Pool of up to 9 candidates for the kid to choose from.
+    const pickPool = displayPool.slice(0, 9);
+    return (
+      <PickScreen
+        pool={pickPool}
+        onLock={lockPicks}
+        theme={theme}
+        tweaks={tweaks}
+        dateLabel={dateLabel}
+      />
+    );
+  }
 
   // All user stats come from REAL state: progress.* (reading data) +
   // tweaks.* (preferences). MOCK_USER is no longer read here — it was
