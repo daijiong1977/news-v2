@@ -16,8 +16,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .news_rss_core import (CALL_STATS, check_duplicates, detail_enrich,
-                              reset_call_stats, run_source_phase_a,
-                              tri_variant_rewrite)
+                              filter_safe_rewrites, reset_call_stats,
+                              run_source_phase_a, tri_variant_rewrite)
 from .fun_sources import todays_enabled_sources as fun_sources
 from .fun_sources import todays_topic as fun_topic
 from .science_sources import todays_enabled_sources as science_sources
@@ -445,6 +445,139 @@ def _pick_with_dedup_unified(
 
 def _short_hash(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:12]
+
+
+# ─── Mega pipeline helpers ─────────────────────────────────────────────
+
+def phase_a_light(category: str, sources, max_per_source: int = 10) -> list[dict]:
+    """Light Phase A for the mega path: RSS metadata only — NO body fetch,
+    NO LLM. Returns a flat list of brief dicts annotated with _source +
+    _category. Bodies + og:images are fetched lazily after the curator
+    has narrowed the pool to ranks 1-4.
+    """
+    import feedparser
+    briefs: list[dict] = []
+    for source in sources:
+        try:
+            feed = feedparser.parse(source.rss_url)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[%s] RSS fetch failed: %s", source.name, e)
+            continue
+        for entry in feed.entries[:max_per_source]:
+            briefs.append({
+                "title": getattr(entry, "title", "") or "",
+                "summary": getattr(entry, "summary", "") or "",
+                "link": getattr(entry, "link", "") or "",
+                "published": getattr(entry, "published", "")
+                              or getattr(entry, "updated", "") or "",
+                "_source_name": source.name,
+                "_source": source,
+                "_category": category,
+            })
+    log.info("  [%s] phase_a_light: %d briefs from %d sources",
+             category, len(briefs), len(sources))
+    return briefs
+
+
+def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
+                       max_top: int = 4,
+                       min_body_words: int = 250) -> dict[str, list[dict]]:
+    """For each category's top-`max_top` ranked picks, fetch HTML body +
+    og:image and verify. If a rank-1..4 pick fails, promote rank 5/6.
+    Returns {cat: [story_dict_with_winner, ...]} where story_dict has
+    `winner`, `source`, `winner_slot`, `_rank`. Includes the verified
+    spares too (so Stage 3 can promote them on safety reject).
+    """
+    from .news_rss_core import _fetch_and_enrich, verify_article_content
+
+    out: dict[str, list[dict]] = {}
+    for cat, ranked in ranked_by_cat.items():
+        verified: list[dict] = []
+        used: set[int] = set()
+        # Walk in rank order; verify each. We aim to fill up to max_top
+        # AND keep all ranks beyond as un-verified spares (verify lazily
+        # later if Stage 3 needs them).
+        for r in ranked:
+            if len(verified) >= max_top:
+                # Don't body-verify spares yet — Stage 3 promotion does it
+                # if/when needed.
+                break
+            cid = r.get("id")
+            if cid in used:
+                continue
+            brief = r["brief"]
+            art = _fetch_and_enrich(dict(brief))
+            ok, reason = verify_article_content(art)
+            if not ok:
+                log.info("  [%s] rank %s body-verify FAIL: %s",
+                         cat, r.get("rank"), reason)
+                continue
+            if (art.get("word_count") or 0) < min_body_words:
+                log.info("  [%s] rank %s too thin: %dw < %d",
+                         cat, r.get("rank"), art.get("word_count", 0), min_body_words)
+                continue
+            used.add(cid)
+            verified.append({
+                "source": r["source"],
+                "winner": art,
+                "winner_slot": f"rank_{r.get('rank')}",
+                "_rank": r.get("rank"),
+                "_curator_id": cid,
+                "_brief": brief,
+            })
+            log.info("  [%s] rank %s ✓ verified %s (%dw)",
+                     cat, r.get("rank"), r["source"].name,
+                     art.get("word_count", 0))
+        # Append remaining un-verified spares (rank 5+). Stage 3 promotes
+        # one of these only if a top-4 article gets safety-rejected.
+        for r in ranked:
+            cid = r.get("id")
+            if cid in used:
+                continue
+            verified.append({
+                "_unverified_spare": True,
+                "source": r["source"],
+                "_winner_brief": r["brief"],
+                "_rank": r.get("rank"),
+                "_curator_id": cid,
+            })
+        out[cat] = verified
+    return out
+
+
+def promote_spare_and_rewrite(cat: str, spares: list[dict]) -> tuple[dict | None, dict | None]:
+    """Pop the next un-verified spare for `cat`, body+image verify, then
+    run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
+    on success or (None, None) if no spare survives verify+rewrite+vet.
+    """
+    from .news_rss_core import _fetch_and_enrich, verify_article_content
+
+    while spares:
+        spare = spares.pop(0)
+        if not spare.get("_unverified_spare"):
+            continue
+        brief = spare.get("_winner_brief") or {}
+        art = _fetch_and_enrich(dict(brief))
+        ok, _ = verify_article_content(art)
+        if not ok:
+            continue
+        # Rewrite (single article)
+        rewrite_res = tri_variant_rewrite([(0, art)])
+        kept, _ = filter_safe_rewrites(rewrite_res)
+        if not kept:
+            log.warning("  [%s] spare rank %s passed body-verify but failed Stage 3 vet",
+                        cat, spare.get("_rank"))
+            continue
+        log.info("  [%s] spare rank %s promoted (%s)",
+                 cat, spare.get("_rank"), spare["source"].name)
+        return ({
+            "source": spare["source"],
+            "winner": art,
+            "winner_slot": f"rank_{spare.get('_rank')}",
+            "_rank": spare.get("_rank"),
+            "_curator_id": spare.get("_curator_id"),
+        }, kept[0])
+    return None, None
 
 
 def process_images(stories: list[dict], today: str, website_dir: Path) -> None:
@@ -927,5 +1060,255 @@ def main() -> None:
         raise SystemExit(2)
 
 
+# ─── Mega orchestrator (PIPELINE_VARIANT=mega) ─────────────────────────
+
+def main_mega() -> None:
+    """Mega-pipeline path: light Phase A → forbidden filter → mega-curator
+    → body verify → rewrite-with-safety → Stage 3 Python filter → enrich.
+
+    Reuses emit_v1_shape, persist_to_supabase, and pack_and_upload from
+    the current path. Selection logic is the only thing that changes.
+    """
+    import os
+    from .forbidden_filter import filter_briefs
+    from .mega_curator import mega_curate
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    website_dir = Path(__file__).resolve().parent.parent / "website"
+
+    reset_call_stats()
+    telemetry: dict[str, object] = {
+        "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "phases": {}, "per_category": {}, "warnings": [],
+        "llm_calls": dict(CALL_STATS), "version": "mega-1",
+    }
+    t_run = time.monotonic()
+    run_id = insert_run({"run_date": today, "status": "running"})
+
+    def _set_phase(name: str, t0: float, **extra) -> None:
+        telemetry["phases"][name] = {"seconds": _phase(t0), **extra}
+        if run_id:
+            update_run(run_id, {"telemetry": telemetry})
+
+    # ---- Phase A* light: RSS only, no body, no LLM ----
+    t = time.monotonic()
+    log.info("=== MEGA Phase A* (light RSS fetch) ===")
+    briefs_by_cat: dict[str, list[dict]] = {
+        "News": phase_a_light("News", news_sources()),
+        "Science": phase_a_light("Science", science_sources()),
+        "Fun": phase_a_light("Fun", fun_sources()),
+    }
+    _set_phase("phase_a_light", t,
+               counts={c: len(b) for c, b in briefs_by_cat.items()})
+
+    # ---- Stage 1: forbidden-word filter (Python) ----
+    t = time.monotonic()
+    log.info("=== MEGA Stage 1 — forbidden-word filter ===")
+    rejected_total = 0
+    for cat in briefs_by_cat:
+        kept, rejected = filter_briefs(briefs_by_cat[cat])
+        briefs_by_cat[cat] = kept
+        rejected_total += len(rejected)
+    _set_phase("stage1_forbidden", t, dropped=rejected_total)
+    log.info("  total kept after forbidden filter: %d (dropped %d)",
+             sum(len(b) for b in briefs_by_cat.values()), rejected_total)
+
+    # ---- Stage 2: mega-curator (1 LLM call, 6 ranked per cat) ----
+    t = time.monotonic()
+    log.info("=== MEGA Stage 2 — curator picks 6 ranked per cat ===")
+    ranked_by_cat, _vet, _reasoning = mega_curate(briefs_by_cat)
+    _set_phase("stage2_curator", t,
+               picks={c: len(p) for c, p in ranked_by_cat.items()})
+
+    # ---- Body + og:image verify on rank 1-4 (lazy fetch) ----
+    t = time.monotonic()
+    log.info("=== MEGA verify body + og:image on rank 1-4 ===")
+    stories_by_cat = verify_picks_lazy(ranked_by_cat, max_top=4)
+    verified_counts = {c: sum(1 for s in v if not s.get("_unverified_spare"))
+                       for c, v in stories_by_cat.items()}
+    _set_phase("verify", t, verified=verified_counts)
+    for cat, ws in stories_by_cat.items():
+        verified = [s for s in ws if not s.get("_unverified_spare")]
+        log.info("  [%s] %d verified + %d spare ranks",
+                 cat, len(verified), len(ws) - len(verified))
+
+    # ---- Image optimize + upload to Supabase Storage ----
+    t = time.monotonic()
+    log.info("=== MEGA images (verified picks only) ===")
+    for cat, ws in stories_by_cat.items():
+        verified_only = [s for s in ws if not s.get("_unverified_spare")]
+        process_images(verified_only, today, website_dir)
+    _set_phase("images", t)
+
+    # ---- Phase C: rewrite up to 4 per cat (with self-scored safety) ----
+    t = time.monotonic()
+    log.info("=== MEGA rewrite (4 per cat, with safety scores) ===")
+    rewrites_by_cat: dict[str, dict] = {}
+    for cat, ws in stories_by_cat.items():
+        verified = [s for s in ws if not s.get("_unverified_spare")][:4]
+        if not verified:
+            log.warning("  [%s] no verified picks to rewrite", cat)
+            rewrites_by_cat[cat] = {"articles": [], "_winners": []}
+            continue
+        articles = [(i, w["winner"]) for i, w in enumerate(verified)]
+        try:
+            rewrite_res = tri_variant_rewrite(articles)
+        except Exception as e:  # noqa: BLE001
+            log.error("  [%s] rewrite failed: %s", cat, e)
+            rewrite_res = {"articles": []}
+        rewrites_by_cat[cat] = {**rewrite_res, "_winners": verified}
+    _set_phase("rewrite", t)
+
+    # ---- Stage 3: Python safety filter on rewritten bodies ----
+    t = time.monotonic()
+    log.info("=== MEGA Stage 3 — Python safety filter (any_dim ≥ 3 = REJECT) ===")
+    final_stories_by_cat: dict[str, list[dict]] = {}
+    final_variants_by_cat: dict[str, dict[int, dict]] = {}
+    for cat, bundle in rewrites_by_cat.items():
+        winners = bundle.get("_winners") or []
+        rewrite_res = {"articles": bundle.get("articles") or []}
+        kept, rejected = filter_safe_rewrites(rewrite_res)
+        # Map source_id → kept article entry
+        kept_by_sid: dict[int, dict] = {a["source_id"]: a for a in kept
+                                         if isinstance(a.get("source_id"), int)}
+        # Pair up: winners that survived
+        survived_winners: list[dict] = []
+        survived_articles: list[dict] = []
+        for i, w in enumerate(winners):
+            if i in kept_by_sid:
+                survived_winners.append(w)
+                survived_articles.append(kept_by_sid[i])
+        # Promote spares while we have <3
+        spare_pool = [s for s in stories_by_cat.get(cat, [])
+                      if s.get("_unverified_spare")]
+        promotions = 0
+        while len(survived_winners) < 3 and spare_pool:
+            promoted_winner, promoted_article = promote_spare_and_rewrite(cat, spare_pool)
+            if not promoted_winner:
+                break
+            survived_winners.append(promoted_winner)
+            survived_articles.append(promoted_article)
+            promotions += 1
+            if promotions >= 3:  # cap to avoid runaway promotion
+                break
+        final_stories_by_cat[cat] = survived_winners[:3]
+        final_variants_by_cat[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+        if promotions:
+            telemetry["warnings"].append(
+                f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot")
+        if len(survived_winners) < 3:
+            telemetry["warnings"].append(
+                f"{cat}: only {len(survived_winners)} stories shipped after Stage 3")
+        log.info("  [%s] final: %d stories (%d rejected, %d promoted)",
+                 cat, len(survived_winners), len(rejected), promotions)
+    _set_phase("stage3_safety", t)
+
+    # Process images for any newly promoted spares (their image hasn't
+    # been processed yet — verify_picks_lazy only ran image-fetch on the
+    # initial rank-1..4 picks).
+    for cat, stories in final_stories_by_cat.items():
+        unprocessed = [s for s in stories if not s.get("_image_local")]
+        if unprocessed:
+            log.info("[%s] processing %d promoted spare images", cat, len(unprocessed))
+            process_images(unprocessed, today, website_dir)
+
+    # ---- Phase D: enrich the 9 survivors ----
+    t = time.monotonic()
+    log.info("=== MEGA Phase D — enrich 9 survivors only ===")
+    final_details_by_cat: dict[str, dict] = {}
+    failures: list[str] = []
+    for cat, stories in final_stories_by_cat.items():
+        if not stories:
+            final_details_by_cat[cat] = {}
+            continue
+        articles = [final_variants_by_cat[cat][i] for i in range(len(stories))]
+        try:
+            enrich = detail_enrich({"articles": articles})
+            details = enrich.get("details") or {}
+            expected = len(articles) * 2
+            if len(details) < expected:
+                log.warning("  [%s] enrich returned %d slots, expected %d",
+                            cat, len(details), expected)
+                telemetry["warnings"].append(
+                    f"{cat}: partial enrich ({len(details)}/{expected})")
+            final_details_by_cat[cat] = details
+        except Exception as e:  # noqa: BLE001
+            log.error("  [%s] enrich failed: %s", cat, e)
+            failures.append(f"{cat}: {e}")
+    _set_phase("enrich", t)
+
+    if failures:
+        msg = f"{len(failures)} enrich failures: " + " | ".join(failures)
+        if run_id:
+            update_run(run_id, {"status": "failed",
+                                 "finished_at": datetime.now(timezone.utc).isoformat(),
+                                 "notes": msg, "telemetry": telemetry})
+        log.error("Aborting — %s", msg)
+        raise SystemExit(1)
+
+    # ---- Reuse emit + persist + pack from the current path ----
+    t = time.monotonic()
+    log.info("=== EMIT + PERSIST + PACK (shared with current pipeline) ===")
+    emit_v1_shape(final_stories_by_cat, final_variants_by_cat,
+                  final_details_by_cat, today, website_dir)
+    _set_phase("emit", t)
+
+    t = time.monotonic()
+    count = 0
+    if run_id:
+        count = persist_to_supabase(final_stories_by_cat,
+                                     final_variants_by_cat, today, run_id)
+        update_run(run_id, {"status": "persisted",
+                             "notes": f"stories persisted: {count}",
+                             "telemetry": telemetry})
+    _set_phase("persist", t, stories_persisted=count)
+
+    t = time.monotonic()
+    log.info("=== PACK + UPLOAD ZIP ===")
+    upload_ok = False
+    upload_err: str | None = None
+    try:
+        from .pack_and_upload import main as _pack_upload
+        _pack_upload()
+        upload_ok = True
+    except SystemExit as e:
+        upload_err = f"pack_and_upload aborted (SystemExit {e.code})"
+    except Exception as e:  # noqa: BLE001
+        upload_err = f"pack_and_upload exception: {e}"
+    if upload_err:
+        log.error(upload_err)
+    _set_phase("pack_upload", t, ok=upload_ok, error=upload_err)
+
+    telemetry["llm_calls"] = dict(CALL_STATS)
+    if run_id:
+        terminal = {"finished_at": datetime.now(timezone.utc).isoformat(),
+                    "telemetry": telemetry}
+        if upload_ok:
+            terminal["status"] = ("completed_with_warnings" if telemetry["warnings"]
+                                   else "completed")
+            terminal["notes"] = (f"stories persisted: {count}; deployed "
+                                  f"({len(telemetry['warnings'])} warnings)")
+        else:
+            terminal["status"] = "deploy_failed"
+            terminal["notes"] = (f"stories persisted: {count}; "
+                                  f"deploy failed: {upload_err}")
+        update_run(run_id, terminal)
+
+    log.info("=== MEGA DONE (%.1fs) · %d total stories · LLM calls: %s",
+             _phase(t_run),
+             sum(len(v) for v in final_stories_by_cat.values()),
+             {k: v for k, v in CALL_STATS.items() if v})
+    for w in telemetry["warnings"]:
+        log.warning("  ⚠  %s", w)
+    if not upload_ok:
+        raise SystemExit(2)
+
+
 if __name__ == "__main__":
-    main()
+    import os as _os
+    variant = (_os.environ.get("PIPELINE_VARIANT") or "current").lower()
+    if variant == "mega":
+        log.info(">>> PIPELINE_VARIANT=mega — running mega orchestrator")
+        main_mega()
+    else:
+        main()

@@ -600,6 +600,25 @@ RULES (all variants):
   · NO dry summary tone — you're a kid reporter excited about a story,
     not a wire-service editor.
 
+POST-WRITE SAFETY SCORING (REQUIRED):
+Score the MIDDLE_EN body on 8 safety dimensions. Score CONSERVATIVELY —
+better to flag a borderline article than miss something a parent would
+object to. Each dim 0-5 (lower=safer). We only score middle_en because
+easy_en is a simplified subset (shorter sentences, plainer words, same
+facts) so if middle passes, easy is safe by construction. The zh summary
+is for parents/grown-ups reading with kids, so safety scoring isn't
+applied there.
+
+  Dimensions (score on middle_en body):
+    violence       — gory imagery, harm to people/animals
+    sexual         — sexual themes, innuendo, explicit references
+    substance      — drugs, alcohol, vaping, addiction
+    language       — strong / crude / offensive language
+    fear           — content that could scare a young reader
+    adult_themes   — divorce, infidelity, abuse, financial ruin, death
+    distress       — heavy emotional content (grief, despair)
+    bias           — unbalanced or one-sided framing
+
 OUTPUT — valid JSON only (no markdown fences):
 {
   "articles": [
@@ -607,7 +626,9 @@ OUTPUT — valid JSON only (no markdown fences):
       "source_id": <int>,
       "easy_en":   {"headline": "...", "card_summary": "...", "body": "..."},
       "middle_en": {"headline": "...", "card_summary": "...", "body": "..."},
-      "zh":        {"headline": "...", "summary": "..."}
+      "zh":        {"headline": "...", "summary": "..."},
+      "safety":    {"violence":N,"sexual":N,"substance":N,"language":N,
+                     "fear":N,"adult_themes":N,"distress":N,"bias":N}
     },
     ... one entry per input article ...
   ]
@@ -639,7 +660,60 @@ def tri_variant_rewriter_input(articles_with_ids: list[tuple[int, dict]]) -> str
 def tri_variant_rewrite(articles_with_ids: list[tuple[int, dict]]) -> dict:
     return deepseek_call(TRI_VARIANT_REWRITER_PROMPT,
                          tri_variant_rewriter_input(articles_with_ids),
-                         max_tokens=5000, temperature=0.5)
+                         max_tokens=8000, temperature=0.5)
+
+
+# Stage 3 of the mega pipeline: Python-only safety filter on the rewriter's
+# self-scored output. Stricter threshold than the source-vet (any_dim ≥ 3
+# instead of ≥ 4) because the rewriter has already softened the source
+# language for kids — anything still flagged at 3+ is a real concern.
+#
+# We only check the middle_en safety scores. The rewriter is told to
+# produce easy_en as a simplified subset (shorter sentences, plainer
+# words, same facts), so if middle passes, easy is safe by construction.
+# zh is for adult consumption (parents reading with kids) and not vetted.
+STRICT_REJECT_THRESHOLD = 3
+
+
+def evaluate_rewriter_safety(article_entry: dict) -> dict:
+    """For one rewriter output article, returns:
+        {"verdict": "PASS"|"REJECT", "reason": "...", "scores": {...}}
+    Verdict is determined by middle_en's safety scores (the single
+    `safety` field on the article entry). Strict any_dim ≥ 3 → REJECT.
+    """
+    scores = article_entry.get("safety") or {}
+    if not scores:
+        return {"verdict": "REJECT",
+                "reason": "no safety scores returned",
+                "scores": {}}
+    max_dim = max(((scores.get(d, 0) or 0) for d in SAFETY_DIMS), default=0)
+    total = sum((scores.get(d, 0) or 0) for d in SAFETY_DIMS)
+    if max_dim >= STRICT_REJECT_THRESHOLD:
+        return {
+            "verdict": "REJECT",
+            "reason": f"any_dim ≥ {STRICT_REJECT_THRESHOLD} (max={max_dim}, total={total})",
+            "scores": scores,
+        }
+    return {"verdict": "PASS",
+            "reason": f"max_dim={max_dim} total={total}",
+            "scores": scores}
+
+
+def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
+    """Split rewriter articles into (kept, rejected) by Stage 3 safety
+    (middle_en scores). Returns articles annotated with `_safety_eval`."""
+    kept: list[dict] = []
+    rejected: list[dict] = []
+    for art in (rewrite_result.get("articles") or []):
+        ev = evaluate_rewriter_safety(art)
+        ann = {**art, "_safety_eval": ev}
+        if ev["verdict"] == "PASS":
+            kept.append(ann)
+        else:
+            log.warning("  Stage 3 REJECT source_id=%s · %s",
+                        art.get("source_id"), ev.get("reason", ""))
+            rejected.append(ann)
+    return kept, rejected
 
 
 # ---------------------------------------------------------------------------
