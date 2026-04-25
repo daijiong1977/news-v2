@@ -818,24 +818,91 @@ function RunsTab({ flash }) {
   );
 }
 
+// ── CRON ⇄ LOCAL-TIME HELPERS ────────────────────────────────────────
+// All cron storage is UTC (GitHub Actions, pg_cron, our 30-min poll all
+// interpret it as UTC). The admin picks a wall-clock time in their
+// timezone; we convert here. America/New_York handles DST; pure UTC and
+// fixed-offset US zones are also listed.
+const TZ_OPTIONS = [
+  { id: 'America/New_York',    label: 'Eastern (EST/EDT, follows DST)' },
+  { id: 'America/Chicago',     label: 'Central (CST/CDT)' },
+  { id: 'America/Denver',      label: 'Mountain (MST/MDT)' },
+  { id: 'America/Los_Angeles', label: 'Pacific (PST/PDT)' },
+  { id: 'UTC',                 label: 'UTC' },
+  { id: 'Asia/Shanghai',       label: 'China Standard Time (CST/UTC+8)' },
+];
+
+const _pad2 = (n) => String(n).padStart(2, '0');
+
+// Returns the offset (in minutes east of UTC) for the named timezone at
+// "now" — Intl.formatToParts is the only way to get this without a library.
+function tzOffsetMinutes(tz) {
+  const date = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false,
+  }).formatToParts(date);
+  const get = (k) => parseInt(parts.find(p => p.type === k).value, 10);
+  // Note: hour can come back as 24 right at midnight in some locales.
+  const hh = get('hour') === 24 ? 0 : get('hour');
+  const tzMs = Date.UTC(get('year'), get('month') - 1, get('day'),
+                         hh, get('minute'), get('second'));
+  return Math.round((tzMs - date.getTime()) / 60000);
+}
+
+// Parse "M H * * *" → {minute, hour} in UTC. Returns null for any
+// non-daily-at-fixed-time pattern.
+function parseDailyCron(expr) {
+  const parts = (expr || '').trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const [m, h, dom, mon, dow] = parts;
+  if (dom !== '*' || mon !== '*' || dow !== '*') return null;
+  const mn = parseInt(m, 10), hr = parseInt(h, 10);
+  if (Number.isNaN(mn) || Number.isNaN(hr) || hr < 0 || hr > 23 || mn < 0 || mn > 59) return null;
+  return { minute: mn, hour: hr };
+}
+
+function utcToLocalHHMM({minute, hour}, tz) {
+  const offset = tzOffsetMinutes(tz);
+  let total = (hour * 60 + minute + offset + 1440) % 1440;
+  return `${_pad2(Math.floor(total / 60))}:${_pad2(total % 60)}`;
+}
+
+function localHHMMToUTC(hhmm, tz) {
+  const [hh, mm] = (hhmm || '').split(':').map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+  const offset = tzOffsetMinutes(tz);
+  let total = (hh * 60 + mm - offset + 1440) % 1440;
+  return { hour: Math.floor(total / 60), minute: total % 60 };
+}
+
+function buildDailyCron({hour, minute}) {
+  return `${minute} ${hour} * * *`;
+}
+
 // ── PIPELINE / CRON TAB ──────────────────────────────────────────────
 function PipelineTab({ flash }) {
   const [cfg, setCfg] = useState(null);
+  // Default to Eastern — user said this is easier for them. localStorage
+  // remembers per-device picks.
+  const [tz, setTz] = useState(() => localStorage.getItem('admin_tz') || 'America/New_York');
+  const [advanced, setAdvanced] = useState(false);
+
+  useEffect(() => { localStorage.setItem('admin_tz', tz); }, [tz]);
+
   const load = async () => {
     const { data, error } = await sb.from('redesign_cron_config').select('*').eq('name','daily-pipeline').single();
     if (error) flash('err', error.message); else setCfg(data);
   };
   useEffect(() => { load(); }, []);
 
-  // Basic client-side check: 5 whitespace-separated fields, each made of
-  // digits / `*` / `,` / `-` / `/`. Catches typos like "20 6 * *" (4 fields)
-  // or "20a 6 * * *" before they break every scheduled run.
   const validCronShape = (expr) => {
     if (typeof expr !== 'string') return false;
     const fields = expr.trim().split(/\s+/);
     if (fields.length !== 5) return false;
     return fields.every(f => /^[0-9*,\-\/]+$/.test(f));
   };
+
   const save = async () => {
     if (!validCronShape(cfg.cron_expression)) {
       flash('err', 'Cron expression must be 5 whitespace-separated fields (m h dom mon dow), digits or * , - / only.');
@@ -851,29 +918,97 @@ function PipelineTab({ flash }) {
 
   if (!cfg) return <div className="empty">Loading…</div>;
 
+  const parsed = parseDailyCron(cfg.cron_expression);
+  const localTime = parsed ? utcToLocalHHMM(parsed, tz) : '';
+  // Compute the UTC equivalent for display, so the user can sanity-check.
+  const showUtcEquivalent = parsed ? `${_pad2(parsed.hour)}:${_pad2(parsed.minute)} UTC` : '(custom expr)';
+
+  const onTimeChange = (hhmm) => {
+    const u = localHHMMToUTC(hhmm, tz);
+    if (!u) return;
+    setCfg({ ...cfg, cron_expression: buildDailyCron(u) });
+  };
+  const onTzChange = (newTz) => {
+    setTz(newTz);
+    // Re-render only — the underlying UTC cron expression doesn't change
+    // when the user just switches their viewing timezone.
+  };
+
   return (
     <div className="col" style={{gap:18}}>
       <div className="card">
         <h3 style={{marginTop:0}}>🔧 Daily-pipeline schedule</h3>
         <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
-          GitHub Actions polls this row every 30 min and fires the run when "now" lands within ±15 min of the configured time. Cron is in UTC.
+          GitHub Actions polls this row every 30 min and fires the run when "now" lands within ±15 min of the configured time.
+          Pick a time in your local timezone — we store it as UTC under the hood.
         </p>
-        <div className="grid2">
-          <div className="col">
-            <span className="label">Cron expression (UTC)</span>
-            <input value={cfg.cron_expression} onChange={e=>setCfg({...cfg, cron_expression:e.target.value})} placeholder="20 6 * * *"/>
-            <span style={{fontSize:11, color:'#6b5c80'}}>
-              <span className="pre">m h dom mon dow</span> — e.g. <span className="pre">20 6 * * *</span> = 06:20 UTC daily.
-            </span>
-          </div>
-          <div className="col">
-            <span className="label">Pipeline variant</span>
-            <select value={cfg.pipeline_variant} onChange={e=>setCfg({...cfg, pipeline_variant:e.target.value})}>
-              <option value="current">current (per-source vet)</option>
-              <option value="mega">mega (Stage 1-3 holistic)</option>
-            </select>
-          </div>
+
+        {parsed && !advanced ? (
+          <>
+            <div className="grid2">
+              <div className="col">
+                <span className="label">Run daily at (local time)</span>
+                <input type="time" value={localTime} onChange={e=>onTimeChange(e.target.value)}
+                       style={{fontSize:16, padding:'10px 12px'}}/>
+                <span style={{fontSize:11, color:'#6b5c80'}}>
+                  → stored as <span className="pre">{cfg.cron_expression}</span> ({showUtcEquivalent})
+                </span>
+              </div>
+              <div className="col">
+                <span className="label">Timezone</span>
+                <select value={tz} onChange={e=>onTzChange(e.target.value)}>
+                  {TZ_OPTIONS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+                <span style={{fontSize:11, color:'#6b5c80'}}>
+                  Saved per device. Eastern handles DST automatically; pure UTC if you want stable absolute time.
+                </span>
+              </div>
+              <div className="col">
+                <span className="label">Pipeline variant</span>
+                <select value={cfg.pipeline_variant} onChange={e=>setCfg({...cfg, pipeline_variant:e.target.value})}>
+                  <option value="current">current (per-source vet)</option>
+                  <option value="mega">mega (Stage 1-3 holistic)</option>
+                </select>
+              </div>
+              <div className="col" style={{justifyContent:'flex-end'}}>
+                <button className="btn btn-ghost btn-sm" type="button" onClick={()=>setAdvanced(true)}>
+                  Switch to raw cron expression…
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid2">
+              <div className="col">
+                <span className="label">Cron expression (UTC)</span>
+                <input value={cfg.cron_expression} onChange={e=>setCfg({...cfg, cron_expression:e.target.value})} placeholder="20 6 * * *"/>
+                <span style={{fontSize:11, color:'#6b5c80'}}>
+                  <span className="pre">m h dom mon dow</span> — supports patterns the time picker can't (weekly, weekday-only, etc.).
+                </span>
+              </div>
+              <div className="col">
+                <span className="label">Pipeline variant</span>
+                <select value={cfg.pipeline_variant} onChange={e=>setCfg({...cfg, pipeline_variant:e.target.value})}>
+                  <option value="current">current (per-source vet)</option>
+                  <option value="mega">mega (Stage 1-3 holistic)</option>
+                </select>
+              </div>
+              {parsed && (
+                <div className="col" style={{justifyContent:'flex-end'}}>
+                  <button className="btn btn-ghost btn-sm" type="button" onClick={()=>setAdvanced(false)}>
+                    Switch to time picker…
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <div style={{marginTop:14, fontSize:11, color:'#6b5c80', background:'#fff4e0', border:'1.5px solid #f4c4ad', borderRadius:8, padding:'8px 10px'}}>
+          <b>⚠️ DST note:</b> "America/New_York" mode keeps the local fire time stable across DST boundaries — but only after you re-save here, since the underlying UTC cron is fixed once written. Switch to UTC if you'd rather pin the absolute fire time.
         </div>
+
         <div className="row" style={{justifyContent:'space-between', marginTop:14}}>
           <label className="row" style={{gap:6, fontSize:13}}>
             <input type="checkbox" checked={cfg.enabled} onChange={e=>setCfg({...cfg, enabled:e.target.checked})}/> enabled
