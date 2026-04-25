@@ -713,11 +713,69 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
 }
 
 // ——————— DISCUSS TAB ———————
+const MIN_WORDS = 20;
+
+function countWords(s) {
+  return (s || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+// Render rewrite text with **kid-contributed** bold spans highlighted.
+function RewriteText({ text }) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>{parts.map((p, i) => {
+      const m = p.match(/^\*\*([^*]+)\*\*$/);
+      if (m) return <mark key={i} style={{background:'#ffec99', padding:'1px 4px', borderRadius:4, fontWeight:700}}>{m[1]}</mark>;
+      return <span key={i}>{p}</span>;
+    })}</>
+  );
+}
+
 function DiscussTab({ article, paragraphs, onDone }) {
-  const [answer, setAnswer] = useStateA('');
-  const [submitted, setSubmitted] = useStateA(false);
+  // Restore last saved draft for THIS article — survives reloads.
+  const draftKey = `ohye_response_${article.storyId}_${article.level || 'unk'}`;
+  const ss = window.safeStorage;
+  const initial = (ss && ss.getJSON(draftKey)) || {};
+
+  const [answer, setAnswer] = useStateA(initial.text || '');
+  const [submitted, setSubmitted] = useStateA(!!initial.savedAt);
   const [articleOpen, setArticleOpen] = useStateA(false);
+  const [aiState, setAiState] = useStateA(initial.aiResult ? 'ready' : 'idle');
+  // 'idle' | 'loading' | 'ready' | 'error'
+  const [aiResult, setAiResult] = useStateA(initial.aiResult || null);
+  const [aiError, setAiError] = useStateA(null);
   const catColor = getCatColor(article.category);
+
+  // Persist text + AI result on every change so a reload doesn't lose work.
+  useEffectA(() => {
+    if (!ss) return;
+    ss.setJSON(draftKey, {
+      text: answer,
+      savedAt: submitted ? (initial.savedAt || new Date().toISOString()) : null,
+      aiResult,
+    });
+  }, [answer, submitted, aiResult]);
+
+  const wordCount = countWords(answer);
+  const meetsMin = wordCount >= MIN_WORDS;
+
+  const onGetFeedback = async () => {
+    if (!meetsMin || aiState === 'loading') return;
+    setAiState('loading'); setAiError(null);
+    const res = await window.fetchAIFeedback({
+      text: answer,
+      articleId: article.id,
+      articleTitle: article.title,
+      articleSummary: (article.summary || '').slice(0, 1500),
+      level: article.level,
+    });
+    if (res.error) {
+      setAiError(res.error); setAiState('error');
+    } else {
+      setAiResult(res); setAiState('ready');
+    }
+  };
 
   return (
     <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:24}}>
@@ -733,17 +791,73 @@ function DiscussTab({ article, paragraphs, onDone }) {
           </div>
         ))}
 
-        <label style={{display:'block', fontWeight:800, fontSize:13, color:'#6b5c80', marginBottom:8, letterSpacing:'.05em', textTransform:'uppercase', marginTop:8}}>Your thoughts</label>
-        <textarea value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Type your answer here..." rows={4}
-          style={{width:'100%', border:'2px solid #f0e8d8', borderRadius:14, padding:'12px 14px', fontSize:14.5, fontFamily:'Nunito, sans-serif', resize:'vertical', outline:'none', background:'#fff9ef', color:'#1b1230'}}/>
+        <label style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', fontWeight:800, fontSize:13, color:'#6b5c80', marginBottom:8, letterSpacing:'.05em', textTransform:'uppercase', marginTop:8}}>
+          <span>Your thoughts</span>
+          <span style={{fontSize:11, color: meetsMin ? '#17b3a6' : '#c14e2a', textTransform:'none', letterSpacing:0, fontWeight:700}}>
+            {wordCount} / {MIN_WORDS}+ words {meetsMin ? '✓' : ''}
+          </span>
+        </label>
+        <textarea value={answer} onChange={e=>setAnswer(e.target.value)}
+          placeholder={`Write at least ${MIN_WORDS} words. What surprised you? What do you think should happen next?`}
+          rows={5}
+          style={{width:'100%', border:`2px solid ${meetsMin ? '#cfe6cd' : '#f0e8d8'}`, borderRadius:14, padding:'12px 14px', fontSize:14.5, fontFamily:'Nunito, sans-serif', resize:'vertical', outline:'none', background:'#fff9ef', color:'#1b1230', lineHeight:1.55}}/>
+
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:12, flexWrap:'wrap', gap:10}}>
-          <div style={{fontSize:12, color:'#9a8d7a'}}>💡 Your answers are private — just for you!</div>
-          {submitted ? (
-            <BigButton bg="#17b3a6" color="#fff" onClick={onDone}>✓ All done! Back to home →</BigButton>
-          ) : (
-            <BigButton bg="#ffc83d" color="#1b1230" onClick={()=>setSubmitted(true)} disabled={!answer.trim()}>Save my answer</BigButton>
-          )}
+          <div style={{fontSize:12, color:'#9a8d7a'}}>
+            💾 Saved as you type · {meetsMin ? '✨ AI feedback unlocked' : `Add ${MIN_WORDS - wordCount} more word${MIN_WORDS - wordCount === 1 ? '' : 's'} to unlock AI feedback`}
+          </div>
+          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+            <BigButton bg={meetsMin ? '#9061f9' : '#d8cfb8'} color="#fff" onClick={onGetFeedback} disabled={!meetsMin || aiState === 'loading'}>
+              {aiState === 'loading' ? '✨ Thinking…' : '✨ Get AI feedback'}
+            </BigButton>
+            {submitted ? (
+              <BigButton bg="#17b3a6" color="#fff" onClick={onDone}>✓ All done →</BigButton>
+            ) : (
+              <BigButton bg="#ffc83d" color="#1b1230" onClick={()=>setSubmitted(true)} disabled={!meetsMin}>Save my answer</BigButton>
+            )}
+          </div>
         </div>
+
+        {aiError && (
+          <div style={{marginTop:14, background:'#ffece8', border:'2px solid #ff9b8a', borderRadius:14, padding:'14px 18px', color:'#a3321b', fontWeight:600, fontSize:14}}>
+            ⚠️ {aiError}
+          </div>
+        )}
+
+        {aiResult && aiState !== 'loading' && (
+          <div style={{marginTop:18, background:'linear-gradient(135deg, #f0ebff, #fff9ef)', border:'2px solid #c9b8ff', borderRadius:18, padding:'22px 24px'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:12}}>
+              <div style={{fontSize:24}}>✨</div>
+              <h3 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230', margin:0}}>What the coach thinks</h3>
+              {aiResult.scores && (
+                <div style={{marginLeft:'auto', display:'flex', gap:8, fontSize:11, color:'#6b5c80', fontWeight:700}}>
+                  {['clarity','evidence','voice','depth'].map(k => (
+                    <span key={k} style={{background:'#fff', padding:'3px 8px', borderRadius:999, border:'1.5px solid #e5dcf5'}}>
+                      {k}: <b style={{color:'#9061f9'}}>{aiResult.scores[k] ?? '–'}</b>/5
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p style={{fontSize:14.5, lineHeight:1.6, color:'#2a1f3d', margin:'0 0 14px'}}>{aiResult.feedback}</p>
+
+            <div style={{background:'#fff', border:'2px solid #e5dcf5', borderRadius:14, padding:'14px 16px'}}>
+              <div style={{fontSize:11, fontWeight:800, color:'#9061f9', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:6}}>
+                Your draft, polished
+              </div>
+              <p style={{fontSize:14.5, lineHeight:1.65, color:'#1b1230', margin:0}}>
+                <RewriteText text={aiResult.rewrite}/>
+              </p>
+              <button onClick={()=>{ if (aiResult.rewrite) { setAnswer(aiResult.rewrite.replace(/\*\*/g, '')); }}}
+                      style={{marginTop:12, background:'#9061f9', color:'#fff', border:'none', borderRadius:10, padding:'8px 14px', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'Nunito, sans-serif'}}>
+                ↑ Use this rewrite
+              </button>
+            </div>
+            <div style={{fontSize:11, color:'#9a8d7a', marginTop:10}}>
+              💡 The coach's job is to help you grow — your original is yours forever.
+            </div>
+          </div>
+        )}
 
         <div style={{marginTop:18, background:'#fff9ef', border:'2px solid #f0e8d8', borderRadius:16, overflow:'hidden'}}>
           <button onClick={()=>setArticleOpen(!articleOpen)} style={{width:'100%', background:'transparent', border:'none', padding:'12px 16px', display:'flex', alignItems:'center', gap:8, cursor:'pointer', color:'#1b1230', fontFamily:'Nunito, sans-serif'}}>

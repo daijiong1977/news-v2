@@ -149,6 +149,49 @@ async function loadArchive(date) {
   return list;
 }
 
+// Anonymous client_id — generated once per browser, persisted in localStorage.
+// Used by the feedback-rewrite edge function to attribute saved responses
+// without requiring login. NOT a tracking id; never sent to anywhere
+// outside our own Supabase.
+function getClientId() {
+  let id = safeStorage.get('ohye_client_id');
+  if (!id) {
+    id = (crypto.randomUUID && crypto.randomUUID()) ||
+         (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+    safeStorage.set('ohye_client_id', id);
+  }
+  return id;
+}
+
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxma25zdmF2aGlxcnNhc2RmeXJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3MzMwMjcsImV4cCI6MjA3ODMwOTAyN30.2YPvOkZOWi4hDjtwZYkVt9a-RwYSnfotjV6Raj24ZjE';
+const FEEDBACK_FN = `${SUPABASE_URL}/functions/v1/feedback-rewrite`;
+
+// Call the feedback-rewrite edge function. Returns either
+//   { feedback, rewrite, scores, word_count, saved_id }
+// on success, or
+//   { error: "..." }
+// on validation failure (status 400) or upstream error (502).
+async function fetchAIFeedback({ text, articleId, articleTitle, articleSummary, level }) {
+  try {
+    const r = await fetch(FEEDBACK_FN, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        text, articleId, articleTitle, articleSummary, level,
+        clientId: getClientId(),
+      }),
+    });
+    const body = await r.json();
+    if (!r.ok) return { error: body.error || `HTTP ${r.status}`, ...body };
+    return body;
+  } catch (e) {
+    return { error: 'Network error: ' + (e.message || String(e)) };
+  }
+}
+
 window.CATEGORIES = CATEGORIES;
 window.LEVELS = LEVELS;
 window.MOCK_USER = MOCK_USER;
@@ -157,6 +200,8 @@ window.__archiveDate = null;
 window.ARCHIVE_BASE = ARCHIVE_BASE;
 window.loadArchive = loadArchive;
 window.loadArchiveIndex = loadArchiveIndex;
+window.fetchAIFeedback = fetchAIFeedback;
+window.getClientId = getClientId;
 window.__payloadsLoaded = loadPayloads().then(list => {
   window.ARTICLES = list;
   return list;
