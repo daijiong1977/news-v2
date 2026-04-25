@@ -638,6 +638,9 @@ You will receive N source articles. For EACH, produce THREE variants:
      words — enough that a kid understands the story without clicking. Uses
      one or two concrete details (names, numbers, places). NOT a restatement
      of the headline. Ends with punctuation.
+     # TODO(pick-3): tighten this to ≤50 words once we've validated the
+     # pick-3 flow with current 120-word summaries. Frontend currently
+     # truncates client-side to 50 in the pick screen.
 
 2. middle_en — English. READER IS A MIDDLE SCHOOLER (grade 7-8, age 12-14).
    · body: 320-350 words (STRICT — if under 320, add MORE vivid details,
@@ -651,6 +654,8 @@ You will receive N source articles. For EACH, produce THREE variants:
      the tension or stakes. Include 2-3 concrete details (names, numbers,
      places, quotes) so a middle-schooler can grasp the story without
      clicking. NOT a restatement of the headline. Ends with punctuation.
+     # TODO(pick-3): tighten this to ≤50 words once we've validated the
+     # pick-3 flow with current 120-word summaries.
 
 3. zh — 简体中文. 摘要卡片 only (no body, no quiz, no keywords).
    · headline: 有意思的中文标题 (可保留 CEO / iPhone / iPad 等专有名词为英文)

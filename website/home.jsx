@@ -14,107 +14,251 @@ function _articlePct(ap) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Pick-3 daily ritual screen
+// Pick-3 daily ritual flow — three sequential category screens
 // ────────────────────────────────────────────────────────────────────
-// First-load-of-the-day surface. Kid taps to pick exactly 3 stories
-// from a small candidate pool (up to 9), then locks them in for the
-// day — locking transitions to the standard home view. This converts
-// a passive feed into an active daily commitment, defending against
-// scroll-mode habits.
-function PickScreen({ pool, onLock, theme, tweaks, dateLabel }) {
+// First-load-of-the-day surface. Kid sees one category at a time
+// (News → Science → Fun) with the editorial 1-big-2-small layout.
+// Tap a card to choose, tap a different card to swap. Click "Next →"
+// to advance. On the last screen, "▶ Start your 21 minutes" locks all
+// three picks for the day.
+//
+// This frames the experience as a deliberate ritual instead of a
+// passive feed — defending against scroll-mode habits.
+
+// Truncate a summary to ≤ N words so the pick screen stays scannable.
+// Pipeline-side enforcement is a future tightening.
+function _shortHook(s, max = 50) {
+  if (!s) return '';
+  const words = s.trim().split(/\s+/);
+  if (words.length <= max) return s.trim();
+  return words.slice(0, max).join(' ') + '…';
+}
+
+// One pick card. `variant` controls layout:
+//   · 'feature' — large hero card with image left + content right
+//   · 'normal'  — compact card stacked image-on-top
+function PickCard({ story, picked, variant, onSelect }) {
+  const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
+  const baseStyle = {
+    position:'relative', textAlign:'left', cursor:'pointer',
+    background: picked ? c.bg : '#fff',
+    border: picked ? `3px solid ${c.color}` : `2px solid #f0e8d8`,
+    borderRadius:18, padding:0, overflow:'hidden',
+    boxShadow: picked ? `0 4px 0 ${c.color}` : '0 2px 0 rgba(27,18,48,0.06)',
+    transform: picked ? 'translateY(-2px)' : 'none',
+    transition:'transform .15s, box-shadow .15s, background .15s',
+    fontFamily:'Nunito, sans-serif',
+    width:'100%',
+  };
+  const checkBadge = picked ? (
+    <div style={{
+      position:'absolute', top:12, right:12, zIndex:2,
+      width:34, height:34, borderRadius:999, background:c.color, color:'#fff',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18,
+      boxShadow:'0 2px 0 rgba(27,18,48,0.2)',
+    }}>✓</div>
+  ) : null;
+  const catChip = (
+    <div style={{
+      display:'inline-flex', alignItems:'center', gap:5,
+      background: picked ? '#fff' : c.bg, color:c.color,
+      padding:'3px 10px', borderRadius:999, fontWeight:800,
+      fontSize: variant === 'feature' ? 12 : 11,
+      marginBottom: variant === 'feature' ? 10 : 8,
+    }}>
+      <span style={{fontSize: variant === 'feature' ? 14 : 13}}>{c.emoji}</span>
+      {story.category} · {story.readMins} min
+    </div>
+  );
+
+  if (variant === 'feature') {
+    return (
+      <button onClick={onSelect} style={baseStyle}>
+        {checkBadge}
+        <div style={{
+          display:'grid', gridTemplateColumns:'minmax(240px, 1.1fr) 1.4fr',
+          gap:0,
+        }}>
+          <div style={{
+            aspectRatio:'4/3', minHeight:220,
+            background: story.image
+              ? `url(${story.image}) center/cover, ${c.color}`
+              : c.color,
+          }}/>
+          <div style={{padding:'22px 26px 24px', display:'flex', flexDirection:'column', justifyContent:'center'}}>
+            {catChip}
+            <div style={{
+              fontFamily:'Fraunces, serif', fontWeight:800, fontSize:24,
+              lineHeight:1.15, color:'#1b1230', letterSpacing:'-0.015em',
+              marginBottom:10,
+            }}>{story.title}</div>
+            <div style={{
+              fontSize:14, color:'#3a2a4a', lineHeight:1.5, fontWeight:500,
+            }}>{_shortHook(story.summary, 50)}</div>
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <button onClick={onSelect} style={baseStyle}>
+      {checkBadge}
+      <div style={{
+        aspectRatio:'16/10',
+        background: story.image
+          ? `url(${story.image}) center/cover, ${c.color}`
+          : c.color,
+      }}/>
+      <div style={{padding:'14px 16px 16px'}}>
+        {catChip}
+        <div style={{
+          fontFamily:'Fraunces, serif', fontWeight:700, fontSize:16,
+          lineHeight:1.22, color:'#1b1230', letterSpacing:'-0.01em',
+          marginBottom:6,
+        }}>{story.title}</div>
+        <div style={{
+          fontSize:12.5, color:'#5a4a6e', lineHeight:1.5, fontWeight:600,
+        }}>{_shortHook(story.summary, 30)}</div>
+      </div>
+    </button>
+  );
+}
+
+function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
   const cfg = window.SITE_CONFIG || {};
-  const targetCount = cfg.storiesPerDay ?? 3;
-  const perStoryMins = cfg.perArticleMinutes ?? 7;
   const dailyGoal = cfg.dailyGoalMinutes ?? 21;
 
-  const [selected, setSelected] = useStateH([]);   // ordered ids
-  const ready = selected.length === targetCount;
+  // Group the pool into one bucket per category, in CATEGORIES order.
+  const groups = useMemoH(() => CATEGORIES.map(c => ({
+    cat: c,
+    candidates: pool.filter(a => a.category === c.label).slice(0, 3),
+  })).filter(g => g.candidates.length > 0), [pool]);
 
-  const toggle = (id) => {
-    setSelected(s => {
-      if (s.includes(id)) return s.filter(x => x !== id);
-      if (s.length >= targetCount) return s;       // soft cap
-      return [...s, id];
-    });
+  const [step, setStep] = useStateH(0);
+  const [selections, setSelections] = useStateH({});  // { 'News': storyId, ... }
+
+  // If the pool changes (level/lang switch) and previously-current step
+  // has no candidates, snap back to step 0.
+  useEffectH(() => {
+    if (step >= groups.length) setStep(Math.max(0, groups.length - 1));
+  }, [groups.length, step]);
+
+  if (groups.length === 0) {
+    return (
+      <div style={{minHeight:'100vh', background:theme.bg, padding:'80px 20px', textAlign:'center'}}>
+        <div style={{fontSize:48, marginBottom:12}}>🌱</div>
+        <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:24, color:'#1b1230', marginBottom:8}}>
+          No stories available yet
+        </div>
+        <div style={{color:'#6b5c80'}}>Tomorrow's batch arrives daily.</div>
+      </div>
+    );
+  }
+
+  const cur = groups[step];
+  const selectedId = selections[cur.cat.label];
+  const ready = !!selectedId;
+  const isLast = step === groups.length - 1;
+  const allReady = groups.every(g => selections[g.cat.label]);
+
+  const select = (id) => {
+    setSelections(prev => ({ ...prev, [cur.cat.label]: id }));
   };
+  const next = () => {
+    if (isLast) {
+      // Lock in CATEGORIES order so the daily-3 stack stays consistent.
+      const ids = CATEGORIES.map(c => selections[c.label]).filter(Boolean);
+      onLock(ids);
+    } else {
+      setStep(step + 1);
+    }
+  };
+  const back = () => { if (step > 0) setStep(step - 1); };
+
+  // Big feature = first candidate by current order; small two = the rest.
+  // (Ordering already follows source priority + last-used rotation upstream.)
+  const [featureCandidate, ...smallCandidates] = cur.candidates;
 
   return (
     <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
-      {/* — Header strip with the kidsnews lockup — */}
+      {/* — Header strip — */}
       <div style={{
         background: theme.bg, borderBottom:`2px solid ${theme.chip}`,
-        padding:'14px 28px', display:'flex', alignItems:'center', gap:16,
+        padding:'14px 28px',
       }}>
-        <div style={{maxWidth:1180, margin:'0 auto', display:'flex', alignItems:'center', flex:1}}>
+        <div style={{maxWidth:1180, margin:'0 auto'}}>
           <KidsNewsLockup size={44}/>
         </div>
       </div>
 
-      {/* — Hero band: date + headline + tagline + tracker — */}
+      {/* — Hero band: date + step heading + tagline + clickable tracker — */}
       <div style={{
         background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-        padding:'32px 28px 28px', borderBottom:`2px solid ${theme.border}`,
+        padding:'24px 28px 22px', borderBottom:`2px solid ${theme.border}`,
       }}>
-        <div style={{maxWidth:1180, margin:'0 auto', display:'flex', alignItems:'center', gap:24, flexWrap:'wrap'}}>
-          <div style={{flex:1, minWidth:320}}>
-            <div style={{
-              fontSize:12, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase',
-              color: theme.heroTextAccent, marginBottom:6,
-            }}>
-              {dateLabel}{tweaks?.userName ? ` · Hi ${tweaks.userName} 👋` : ''}
-            </div>
-            <h1 style={{
-              fontFamily:'Fraunces, serif', fontWeight:900, fontSize:42, lineHeight:1.0,
-              color:'#1b1230', margin:'0 0 4px', letterSpacing:'-0.025em',
-            }}>
-              Pick your <span style={{
-                background: theme.accent, padding:'0 10px', borderRadius:12,
-                display:'inline-block', transform:'rotate(-1.5deg)',
-              }}>{targetCount} stories</span> for today
-            </h1>
-            <div style={{
-              fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
-              fontSize:20, color:'#c14e2a', marginTop:10, letterSpacing:'-0.01em',
-            }}>
-              {cfg.tagline || 'Little daily, big magic.'}
-            </div>
-          </div>
-
-          {/* Tracker card — fills as the kid picks */}
+        <div style={{maxWidth:1180, margin:'0 auto'}}>
           <div style={{
-            background:'#fff', borderRadius:18, padding:'14px 18px', minWidth:300,
-            border:'2px solid #fff', boxShadow:'0 3px 0 rgba(27,18,48,0.08)',
+            fontSize:12, fontWeight:800, letterSpacing:'.12em', textTransform:'uppercase',
+            color: theme.heroTextAccent, marginBottom:8,
           }}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
-              <div style={{fontWeight:900, fontSize:12, color:'#1b1230', letterSpacing:'.08em', textTransform:'uppercase'}}>
-                Your {targetCount}
-              </div>
-              <div style={{fontSize:11, color:'#9a8d7a', fontWeight:700}}>
-                {selected.length}/{targetCount} picked · {selected.length * perStoryMins}/{dailyGoal} min
+            {dateLabel}{tweaks?.userName ? ` · Hi ${tweaks.userName} 👋` : ''}
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:24, flexWrap:'wrap'}}>
+            <div style={{flex:1, minWidth:280}}>
+              <h1 style={{
+                fontFamily:'Fraunces, serif', fontWeight:900, fontSize:36, lineHeight:1.0,
+                color:'#1b1230', margin:'0', letterSpacing:'-0.025em',
+              }}>
+                Pick your <span style={{
+                  background: cur.cat.color, color:'#fff', padding:'2px 12px',
+                  borderRadius:10, display:'inline-block', transform:'rotate(-1deg)',
+                }}>{cur.cat.emoji} {cur.cat.label}</span> story
+              </h1>
+              <div style={{
+                fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
+                fontSize:18, color:'#c14e2a', marginTop:8, letterSpacing:'-0.01em',
+              }}>
+                {cfg.tagline || 'Little daily, big magic.'} ({step + 1} of {groups.length})
               </div>
             </div>
+
+            {/* Tracker pills — clickable to jump back */}
             <div style={{display:'flex', gap:8}}>
-              {Array.from({length: targetCount}).map((_, i) => {
-                const id = selected[i];
-                const story = id ? pool.find(s => s.id === id) : null;
-                if (story) {
-                  const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
-                  return (
-                    <div key={i} style={{
-                      flex:1, aspectRatio:'1', borderRadius:12,
-                      background:c.color, color:'#fff', position:'relative',
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:24,
-                    }}>{i + 1}</div>
-                  );
-                }
+              {groups.map((g, i) => {
+                const sel = selections[g.cat.label];
+                const isCurrent = i === step;
+                const story = sel ? g.candidates.find(s => s.id === sel) : null;
                 return (
-                  <div key={i} style={{
-                    flex:1, aspectRatio:'1', borderRadius:12,
-                    border:`2px dashed ${theme.chip}`, background:'#fffaf0',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    color:'#9a8d7a', fontWeight:700,
-                  }}>—</div>
+                  <button key={g.cat.label} type="button"
+                    onClick={() => setStep(i)}
+                    style={{
+                      cursor:'pointer', border:'none',
+                      background:'#fff', borderRadius:14,
+                      padding:'10px 14px', minWidth:130,
+                      borderTop: isCurrent ? `4px solid ${g.cat.color}` : '4px solid transparent',
+                      borderLeft: sel ? `3px solid ${g.cat.color}` : '3px solid transparent',
+                      boxShadow: isCurrent ? '0 4px 0 rgba(27,18,48,0.12)' : '0 2px 0 rgba(27,18,48,0.06)',
+                      transform: isCurrent ? 'translateY(-1px)' : 'none',
+                      transition:'all .15s', textAlign:'left',
+                      fontFamily:'Nunito, sans-serif',
+                    }}>
+                    <div style={{
+                      fontSize:10, fontWeight:900, letterSpacing:'.08em',
+                      textTransform:'uppercase', color: g.cat.color,
+                    }}>
+                      {g.cat.emoji} {g.cat.label}
+                    </div>
+                    <div style={{
+                      fontSize:11.5, color: sel ? '#1b1230' : '#9a8d7a',
+                      fontWeight: sel ? 700 : 500, marginTop:3,
+                      whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+                      maxWidth:160,
+                    }}>
+                      {story ? story.title : '— pending —'}
+                    </div>
+                  </button>
                 );
               })}
             </div>
@@ -122,99 +266,59 @@ function PickScreen({ pool, onLock, theme, tweaks, dateLabel }) {
         </div>
       </div>
 
-      {/* — Card grid: pool of 9 — */}
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'28px'}}>
-        {pool.length === 0 ? (
-          <div style={{
-            textAlign:'center', padding:'40px 20px', color:'#9a8d7a',
-            background:'#fff', borderRadius:16, border:'2px dashed #f0e8d8',
-          }}>
-            <div style={{fontSize:36, marginBottom:8}}>🌱</div>
-            <div style={{fontWeight:800, color:'#1b1230', marginBottom:4}}>No stories available right now</div>
-            <div style={{fontSize:13}}>Tomorrow's batch arrives daily.</div>
-          </div>
-        ) : (
+      {/* — Big feature + 2 small compagnion cards — */}
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 28px'}}>
+        {featureCandidate && (
+          <PickCard
+            story={featureCandidate} variant="feature"
+            picked={selectedId === featureCandidate.id}
+            onSelect={() => select(featureCandidate.id)}
+          />
+        )}
+        {smallCandidates.length > 0 && (
           <div style={{
             display:'grid',
-            gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',
-            gap:18,
+            gridTemplateColumns: smallCandidates.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+            gap:18, marginTop:18,
           }}>
-            {pool.map(story => {
-              const picked = selected.includes(story.id);
-              const slot = picked ? selected.indexOf(story.id) + 1 : null;
-              const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
-              return (
-                <button key={story.id} onClick={()=>toggle(story.id)} style={{
-                  position:'relative', textAlign:'left', cursor:'pointer',
-                  background: picked ? c.bg : '#fff',
-                  border: picked ? `3px solid ${c.color}` : `2px solid ${theme.chip}`,
-                  borderRadius:18, padding:0, overflow:'hidden',
-                  boxShadow: picked ? `0 4px 0 ${c.color}` : '0 2px 0 rgba(27,18,48,0.06)',
-                  transform: picked ? 'translateY(-2px)' : 'none',
-                  transition:'transform .15s, box-shadow .15s, background .15s',
-                  fontFamily:'Nunito, sans-serif',
-                }}>
-                  {picked && (
-                    <div style={{
-                      position:'absolute', top:10, right:10, zIndex:2,
-                      width:32, height:32, borderRadius:999, background:c.color, color:'#fff',
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:17,
-                      boxShadow:'0 2px 0 rgba(27,18,48,0.2)',
-                    }}>{slot}</div>
-                  )}
-                  <div style={{
-                    aspectRatio:'16/10',
-                    background: story.image
-                      ? `url(${story.image}) center/cover, ${c.color}`
-                      : c.color,
-                  }}/>
-                  <div style={{padding:'14px 16px 16px'}}>
-                    <div style={{
-                      display:'inline-flex', alignItems:'center', gap:5,
-                      background: picked ? '#fff' : c.bg, color:c.color,
-                      padding:'3px 10px', borderRadius:999, fontWeight:800, fontSize:11,
-                      marginBottom:8,
-                    }}>
-                      <span style={{fontSize:13}}>{c.emoji}</span>{story.category} · {story.readMins} min
-                    </div>
-                    <div style={{
-                      fontFamily:'Fraunces, serif', fontWeight:700, fontSize:16,
-                      lineHeight:1.2, color:'#1b1230', letterSpacing:'-0.01em',
-                      marginBottom:6,
-                    }}>{story.title}</div>
-                    <div style={{
-                      fontSize:12.5, color:'#5a4a6e', lineHeight:1.5, fontWeight:600,
-                    }}>{story.summary?.slice(0, 100)}{story.summary && story.summary.length > 100 ? '…' : ''}</div>
-                  </div>
-                </button>
-              );
-            })}
+            {smallCandidates.map(s => (
+              <PickCard key={s.id} story={s} variant="normal"
+                picked={selectedId === s.id}
+                onSelect={() => select(s.id)}
+              />
+            ))}
           </div>
         )}
 
-        {/* — Bottom CTA — */}
+        {/* — Bottom nav: Back / progress hint / Next-or-Start — */}
         <div style={{
-          marginTop:32, display:'flex', justifyContent:'center', gap:12,
-          flexWrap:'wrap', alignItems:'center',
+          marginTop:28, display:'flex', justifyContent:'space-between',
+          alignItems:'center', flexWrap:'wrap', gap:12,
         }}>
-          <button
-            onClick={() => ready && onLock(selected)}
-            disabled={!ready}
-            style={{
-              background: ready ? '#1b1230' : '#e8dfd3',
-              color: ready ? '#fff' : '#9a8d7a',
-              border:'none', borderRadius:16,
-              padding:'16px 28px', fontWeight:900, fontSize:17,
-              fontFamily:'Nunito, sans-serif',
-              cursor: ready ? 'pointer' : 'not-allowed',
-              boxShadow: ready ? '0 5px 0 rgba(27,18,48,0.18)' : 'none',
-              letterSpacing:'.01em',
-              transition:'all .12s',
-            }}>
-            {ready
-              ? `▶ Start your ${dailyGoal} minutes`
-              : `Pick ${targetCount - selected.length} more`}
+          <button onClick={back} disabled={step === 0} style={{
+            background:'transparent', border:'2px solid #e8dfd3',
+            borderRadius:14, padding:'12px 20px',
+            color: step === 0 ? '#cbbfa9' : '#1b1230',
+            fontWeight:800, fontSize:14, fontFamily:'Nunito, sans-serif',
+            cursor: step === 0 ? 'not-allowed' : 'pointer',
+          }}>← Back</button>
+
+          <div style={{fontSize:12, color:'#6b5c80', fontWeight:700, letterSpacing:'.05em'}}>
+            {Object.keys(selections).length}/{groups.length} chosen · {Object.keys(selections).length * (cfg.perArticleMinutes ?? 7)}/{dailyGoal} min
+          </div>
+
+          <button onClick={next} disabled={!ready || (isLast && !allReady)} style={{
+            background: ready ? '#1b1230' : '#e8dfd3',
+            color: ready ? '#fff' : '#9a8d7a',
+            border:'none', borderRadius:16,
+            padding:'14px 26px', fontWeight:900, fontSize:16,
+            fontFamily:'Nunito, sans-serif',
+            cursor: ready ? 'pointer' : 'not-allowed',
+            boxShadow: ready ? '0 5px 0 rgba(27,18,48,0.18)' : 'none',
+            transition:'all .12s',
+          }}>
+            {!ready ? 'Choose one to continue' :
+              isLast ? `▶ Start your ${dailyGoal} minutes` : 'Next →'}
           </button>
         </div>
       </div>
@@ -320,7 +424,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     // Pool of up to 9 candidates for the kid to choose from.
     const pickPool = displayPool.slice(0, 9);
     return (
-      <PickScreen
+      <PickFlow
         pool={pickPool}
         onLock={lockPicks}
         theme={theme}
