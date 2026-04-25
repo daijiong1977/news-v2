@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>News Oh,Ye! · Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@800;900&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Nunito', system-ui, sans-serif; background:#fff9ef; color:#1b1230; min-height:100vh; }
+  .row { display:flex; gap:12px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:8px; }
+  .card { background:#fff; border-radius:14px; padding:18px 20px; box-shadow:0 2px 0 rgba(27,18,48,0.05); border:1.5px solid #f0e8d8; }
+  button { font-family:inherit; }
+  input, select, textarea {
+    font-family:inherit; font-size:14px; padding:8px 10px;
+    border:1.5px solid #e8dfd3; border-radius:10px; background:#fff;
+    color:#1b1230; outline:none;
+  }
+  input:focus, select:focus, textarea:focus { border-color:#1b1230; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:#6b5c80; font-weight:700; padding:8px 10px; border-bottom:2px solid #f0e8d8; text-transform:uppercase; letter-spacing:.04em; }
+  td { padding:10px 10px; font-size:14px; border-bottom:1px solid #f7f0e3; vertical-align:middle; }
+  tr:hover td { background:#fffaef; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:800; letter-spacing:.02em; }
+  .pill-on  { background:#e0f6f3; color:#0e8d82; }
+  .pill-off { background:#f4eee5; color:#9a8d7a; }
+  .pill-warn{ background:#fff4e0; color:#c9931f; }
+  .danger { color:#c14e2a; }
+  .btn {
+    background:#1b1230; color:#fff; border:none; border-radius:10px;
+    padding:9px 16px; font-weight:800; font-size:13px; cursor:pointer;
+    box-shadow:0 3px 0 rgba(27,18,48,0.15);
+  }
+  .btn:hover  { transform:translateY(-1px); }
+  .btn:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(27,18,48,0.15); }
+  .btn-ghost { background:transparent; color:#1b1230; border:1.5px solid #e8dfd3; box-shadow:none; }
+  .btn-danger{ background:#c14e2a; }
+  .btn-sm    { padding:5px 10px; font-size:12px; box-shadow:0 2px 0 rgba(27,18,48,0.15); }
+  .tab {
+    background:transparent; border:none; padding:14px 18px; font-weight:800;
+    font-size:14px; color:#6b5c80; border-bottom:3px solid transparent;
+    cursor:pointer;
+  }
+  .tab.active { color:#1b1230; border-bottom-color:#ffc83d; }
+  .tab:hover  { color:#1b1230; }
+  .empty { text-align:center; padding:40px 20px; color:#9a8d7a; font-size:14px; }
+  .pre   { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; background:#1b1230; color:#ffe2a8; padding:6px 10px; border-radius:6px; }
+  pre.json { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; background:#fbf6ec; padding:10px; border-radius:8px; max-height:240px; overflow:auto; margin:0; }
+  .err { color:#c14e2a; background:#fff0e8; padding:10px 14px; border-radius:10px; font-size:13px; border:1.5px solid #f4c4ad; }
+  .ok  { color:#0e8d82; background:#e0f6f3; padding:10px 14px; border-radius:10px; font-size:13px; border:1.5px solid #8fd6cd; }
+  .label { font-size:11px; color:#6b5c80; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+</style>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react,env" data-type="module">
+const { useState, useEffect, useMemo, useRef } = React;
+
+// ─────────────────────────────────────────────────────────────────────
+// Supabase init — publishable (anon-equivalent) key. Auth + RLS gate
+// every write; the key alone gives no admin power.
+// ─────────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://lfknsvavhiqrsasdfyrs.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_C0UF9RR0ui0XnmF5OdYwGg_W7628Yex';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Tiny helpers
+// ─────────────────────────────────────────────────────────────────────
+const fmt = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleString('en-US', {
+    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit',
+  });
+};
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+};
+const dur = (sec) => sec >= 60 ? `${(sec/60).toFixed(1)}m` : `${sec.toFixed(1)}s`;
+
+const useNotice = () => {
+  const [notice, setNotice] = useState(null);  // { kind:'ok'|'err', msg }
+  const flash = (kind, msg, ms=4000) => {
+    setNotice({ kind, msg });
+    setTimeout(() => setNotice(null), ms);
+  };
+  return [notice, flash];
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// AUTH HEADER
+// ─────────────────────────────────────────────────────────────────────
+function AuthHeader({ session, onSignIn, onSignOut }) {
+  return (
+    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18}}>
+      <div>
+        <h1 style={{margin:0, fontFamily:'Fraunces, serif', fontSize:30, letterSpacing:'-.01em'}}>
+          📊 News Oh,Ye! · Admin
+        </h1>
+        <div style={{fontSize:13, color:'#6b5c80', marginTop:4}}>
+          v2 pipeline / sources / providers / users / cron
+        </div>
+      </div>
+      <div className="row">
+        {session
+          ? <>
+              <span style={{fontSize:13, color:'#1b1230'}}>{session.user.email}</span>
+              <button className="btn btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>
+            </>
+          : <button className="btn btn-sm" onClick={onSignIn}>Sign in with Google</button>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// NOTICE BAR
+// ─────────────────────────────────────────────────────────────────────
+function Notice({ notice }) {
+  if (!notice) return null;
+  return <div className={notice.kind === 'ok' ? 'ok' : 'err'} style={{marginBottom:14}}>{notice.msg}</div>;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BOOTSTRAP MODE — runs when redesign_admin_users is empty
+// ─────────────────────────────────────────────────────────────────────
+function BootstrapWizard({ session, onDone }) {
+  const [email, setEmail] = useState(session?.user?.email || '');
+  const [name, setName] = useState(session?.user?.user_metadata?.full_name || '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    if (!email) { setErr('Email is required'); return; }
+    setBusy(true);
+    setErr(null);
+    const { error } = await sb.from('redesign_admin_users').insert({ email, name: name || null });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onDone();
+  };
+
+  return (
+    <div className="card" style={{maxWidth:520, margin:'40px auto'}}>
+      <h2 style={{marginTop:0}}>👋 No admins yet — set one up</h2>
+      <p style={{color:'#6b5c80', fontSize:14, lineHeight:1.5}}>
+        Once you save the first email here, the admin page will require Google
+        sign-in for that email on every visit. Make sure it's a Google account
+        you'll always have access to.
+      </p>
+      <div className="col" style={{gap:12, marginTop:14}}>
+        <div className="col">
+          <span className="label">Google email</span>
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@gmail.com" />
+        </div>
+        <div className="col">
+          <span className="label">Display name (optional)</span>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
+        </div>
+        {err && <div className="err">{err}</div>}
+        <div className="row" style={{justifyContent:'flex-end', marginTop:6}}>
+          <button className="btn" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Make me admin'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// AUTH GATE — when bootstrap is done and user is not signed in / not allowed
+// ─────────────────────────────────────────────────────────────────────
+function SignInPanel({ onSignIn, accessDenied, deniedEmail }) {
+  return (
+    <div className="card" style={{maxWidth:480, margin:'40px auto', textAlign:'center'}}>
+      <h2 style={{marginTop:0}}>🔒 Admin access required</h2>
+      {accessDenied
+        ? <>
+            <div className="err" style={{marginBottom:14}}>
+              <b>Access denied.</b> {deniedEmail} isn't on the admin list. An
+              existing admin needs to add this email first.
+            </div>
+            <button className="btn" onClick={onSignIn}>Try a different Google account</button>
+          </>
+        : <>
+            <p style={{color:'#6b5c80'}}>Sign in with the Google account you registered as admin.</p>
+            <button className="btn" onClick={onSignIn}>Sign in with Google</button>
+          </>
+      }
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CRUD TAB SCAFFOLD — list + add form + per-row edit/delete
+// ─────────────────────────────────────────────────────────────────────
+function ConfirmButton({ children, onConfirm, label='Delete', className='btn btn-sm btn-danger' }) {
+  const [armed, setArmed] = useState(false);
+  if (!armed) return <button className={className} onClick={()=>setArmed(true)}>{children || label}</button>;
+  return (
+    <span className="row" style={{gap:6}}>
+      <span className="pill pill-warn">sure?</span>
+      <button className={className} onClick={()=>{ setArmed(false); onConfirm(); }}>Yes</button>
+      <button className="btn btn-ghost btn-sm" onClick={()=>setArmed(false)}>No</button>
+    </span>
+  );
+}
+
+// ── SOURCES TAB ──────────────────────────────────────────────────────
+function SourcesTab({ flash, categories }) {
+  const [rows, setRows] = useState(null);
+  const [draft, setDraft] = useState({ category: '', name: '', rss_url: '', priority: 1, active: true });
+
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_source_configs').select('*').order('category').order('priority');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.category || !draft.name || !draft.rss_url) { flash('err', 'category, name, rss_url are required'); return; }
+    const { error } = await sb.from('redesign_source_configs').insert(draft);
+    if (error) flash('err', error.message);
+    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, active:true }); load(); }
+  };
+
+  const updateRow = async (id, patch) => {
+    const { error } = await sb.from('redesign_source_configs').update(patch).eq('id', id);
+    if (error) flash('err', error.message); else { load(); }
+  };
+
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_source_configs').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add source</h3>
+        <div className="grid3">
+          <div className="col"><span className="label">Category</span>
+            <select value={draft.category} onChange={e=>setDraft({...draft, category:e.target.value})}>
+              <option value="">—</option>
+              {categories.map(c => <option key={c.slug} value={c.name}>{c.emoji} {c.name}</option>)}
+            </select>
+          </div>
+          <div className="col"><span className="label">Display name</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
+          <div className="col"><span className="label">Priority</span>
+            <input type="number" value={draft.priority} onChange={e=>setDraft({...draft, priority:parseInt(e.target.value||0)})}/></div>
+        </div>
+        <div className="col" style={{marginTop:10}}>
+          <span className="label">RSS URL</span>
+          <input value={draft.rss_url} onChange={e=>setDraft({...draft, rss_url:e.target.value})} placeholder="https://…/feed.rss"/>
+        </div>
+        <div className="row" style={{justifyContent:'space-between', marginTop:12}}>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <input type="checkbox" checked={draft.active} onChange={e=>setDraft({...draft, active:e.target.checked})}/> active
+          </label>
+          <button className="btn" onClick={add}>Add source</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.category}</td>
+                <td><input style={{width:'100%'}} defaultValue={r.name} onBlur={e=>e.target.value!==r.name && updateRow(r.id, { name:e.target.value })}/></td>
+                <td><input style={{width:'100%'}} defaultValue={r.rss_url} onBlur={e=>e.target.value!==r.rss_url && updateRow(r.id, { rss_url:e.target.value })}/></td>
+                <td><input type="number" style={{width:60}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
+                <td><input type="checkbox" checked={r.active} onChange={e=>updateRow(r.id, { active:e.target.checked })}/></td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="6" className="empty">No sources yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── CATEGORIES TAB ───────────────────────────────────────────────────
+function CategoriesTab({ flash, onChanged }) {
+  const [rows, setRows] = useState(null);
+  const [draft, setDraft] = useState({ slug:'', name:'', emoji:'', color:'#1b1230', display_order:99, active:true });
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_categories').select('*').order('display_order');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.slug || !draft.name) { flash('err', 'slug + name required'); return; }
+    const { error } = await sb.from('redesign_categories').insert(draft);
+    if (error) flash('err', error.message);
+    else { flash('ok', 'Category added'); setDraft({ slug:'', name:'', emoji:'', color:'#1b1230', display_order:99, active:true }); load(); onChanged?.(); }
+  };
+  const updateRow = async (id, patch) => {
+    const { error } = await sb.from('redesign_categories').update(patch).eq('id', id);
+    if (error) flash('err', error.message); else { load(); onChanged?.(); }
+  };
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_categories').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); onChanged?.(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add category</h3>
+        <div className="grid3">
+          <div className="col"><span className="label">Slug (lowercase)</span>
+            <input value={draft.slug} onChange={e=>setDraft({...draft, slug:e.target.value.toLowerCase()})} placeholder="news"/></div>
+          <div className="col"><span className="label">Display name</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
+          <div className="col"><span className="label">Emoji</span>
+            <input value={draft.emoji} onChange={e=>setDraft({...draft, emoji:e.target.value})} maxLength={4}/></div>
+          <div className="col"><span className="label">Color (hex)</span>
+            <input value={draft.color} onChange={e=>setDraft({...draft, color:e.target.value})}/></div>
+          <div className="col"><span className="label">Order</span>
+            <input type="number" value={draft.display_order} onChange={e=>setDraft({...draft, display_order:parseInt(e.target.value||0)})}/></div>
+          <div className="col"><span className="label">Active</span>
+            <input type="checkbox" checked={draft.active} onChange={e=>setDraft({...draft, active:e.target.checked})}/></div>
+        </div>
+        <div className="row" style={{justifyContent:'flex-end', marginTop:12}}>
+          <button className="btn" onClick={add}>Add category</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Slug</th><th>Name</th><th>Emoji</th><th>Color</th><th>Order</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td><span className="pre">{r.slug}</span></td>
+                <td><input style={{width:'100%'}} defaultValue={r.name} onBlur={e=>e.target.value!==r.name && updateRow(r.id, { name:e.target.value })}/></td>
+                <td><input style={{width:60}} defaultValue={r.emoji||''} onBlur={e=>updateRow(r.id, { emoji:e.target.value })}/></td>
+                <td><input style={{width:90}} defaultValue={r.color||''} onBlur={e=>updateRow(r.id, { color:e.target.value })}/></td>
+                <td><input type="number" style={{width:60}} defaultValue={r.display_order} onBlur={e=>updateRow(r.id, { display_order:parseInt(e.target.value||0) })}/></td>
+                <td><input type="checkbox" checked={r.active} onChange={e=>updateRow(r.id, { active:e.target.checked })}/></td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="7" className="empty">No categories yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── AI PROVIDERS TAB ─────────────────────────────────────────────────
+function AIProvidersTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const empty = { name:'', base_url:'https://api.deepseek.com', model_id:'deepseek-chat', api_key_secret:'DEEPSEEK_API_KEY', role:'any', enabled:true, priority:100, max_tokens_default:null, temperature_default:null };
+  const [draft, setDraft] = useState(empty);
+
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_ai_providers').select('*').order('role').order('priority');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.name || !draft.base_url || !draft.model_id || !draft.api_key_secret) { flash('err', 'name, base_url, model_id, api_key_secret required'); return; }
+    const { error } = await sb.from('redesign_ai_providers').insert(draft);
+    if (error) flash('err', error.message); else { flash('ok', 'Provider added'); setDraft(empty); load(); }
+  };
+  const updateRow = async (id, patch) => {
+    const { error } = await sb.from('redesign_ai_providers').update(patch).eq('id', id);
+    if (error) flash('err', error.message); else load();
+  };
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_ai_providers').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add AI provider</h3>
+        <div className="grid3">
+          <div className="col"><span className="label">Name</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})} placeholder="DeepSeek V4"/></div>
+          <div className="col"><span className="label">Base URL</span>
+            <input value={draft.base_url} onChange={e=>setDraft({...draft, base_url:e.target.value})}/></div>
+          <div className="col"><span className="label">Model ID</span>
+            <input value={draft.model_id} onChange={e=>setDraft({...draft, model_id:e.target.value})}/></div>
+          <div className="col"><span className="label">API key secret name (env var)</span>
+            <input value={draft.api_key_secret} onChange={e=>setDraft({...draft, api_key_secret:e.target.value})} placeholder="DEEPSEEK_API_KEY"/></div>
+          <div className="col"><span className="label">Role</span>
+            <select value={draft.role} onChange={e=>setDraft({...draft, role:e.target.value})}>
+              <option value="any">any</option>
+              <option value="curator">curator</option>
+              <option value="rewriter">rewriter</option>
+              <option value="enricher">enricher</option>
+            </select></div>
+          <div className="col"><span className="label">Priority (lower = preferred)</span>
+            <input type="number" value={draft.priority} onChange={e=>setDraft({...draft, priority:parseInt(e.target.value||0)})}/></div>
+        </div>
+        <div className="row" style={{justifyContent:'space-between', marginTop:12}}>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <input type="checkbox" checked={draft.enabled} onChange={e=>setDraft({...draft, enabled:e.target.checked})}/> enabled
+          </label>
+          <button className="btn" onClick={add}>Add provider</button>
+        </div>
+        <div style={{marginTop:8, fontSize:11, color:'#6b5c80'}}>
+          The API key value lives in env vars or Supabase Vault; <i>only the name</i> is stored here.
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Pri</th><th>Model</th><th>Key env</th><th>Enabled</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.name}</td>
+                <td><select value={r.role} onChange={e=>updateRow(r.id, { role:e.target.value })}><option value="any">any</option><option value="curator">curator</option><option value="rewriter">rewriter</option><option value="enricher">enricher</option></select></td>
+                <td><input type="number" style={{width:60}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
+                <td><span className="pre">{r.model_id}</span></td>
+                <td><span className="pre">{r.api_key_secret}</span></td>
+                <td><input type="checkbox" checked={r.enabled} onChange={e=>updateRow(r.id, { enabled:e.target.checked })}/></td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="7" className="empty">No providers yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── ADMIN USERS TAB ──────────────────────────────────────────────────
+function AdminUsersTab({ flash, session }) {
+  const [rows, setRows] = useState(null);
+  const [draft, setDraft] = useState({ email:'', name:'' });
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_admin_users').select('*').order('created_at');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.email) { flash('err', 'email required'); return; }
+    const { error } = await sb.from('redesign_admin_users').insert(draft);
+    if (error) flash('err', error.message); else { flash('ok', 'Admin added'); setDraft({ email:'', name:'' }); load(); }
+  };
+  const remove = async (id, email) => {
+    if (email === session?.user?.email) { flash('err', "Can't delete yourself."); return; }
+    const { error } = await sb.from('redesign_admin_users').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add admin</h3>
+        <div className="grid2">
+          <div className="col"><span className="label">Google email</span>
+            <input value={draft.email} onChange={e=>setDraft({...draft, email:e.target.value})}/></div>
+          <div className="col"><span className="label">Display name (optional)</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
+        </div>
+        <div className="row" style={{justifyContent:'flex-end', marginTop:12}}>
+          <button className="btn" onClick={add}>Add admin</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Email</th><th>Name</th><th>Added</th><th>Last login</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.email}{r.email === session?.user?.email && <span className="pill pill-on" style={{marginLeft:8}}>you</span>}</td>
+                <td>{r.name || '—'}</td>
+                <td>{fmtDate(r.created_at)}</td>
+                <td>{fmt(r.last_login_at)}</td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id, r.email)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="5" className="empty">No admins.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── STORIES TAB ──────────────────────────────────────────────────────
+function StoriesTab({ flash, categories }) {
+  const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState({ date: '', category: 'all', archived: 'active' });
+
+  const load = async () => {
+    let q = sb.from('redesign_stories').select('id, published_date, category, story_slot, source_name, source_title, archived').order('published_date', {ascending:false}).order('category').order('story_slot').limit(200);
+    if (filter.date) q = q.eq('published_date', filter.date);
+    if (filter.category !== 'all') q = q.eq('category', filter.category);
+    if (filter.archived === 'active') q = q.eq('archived', false);
+    if (filter.archived === 'archived') q = q.eq('archived', true);
+    const { data, error } = await q;
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, [filter]);
+
+  const archive = async (id, archived) => {
+    const { error } = await sb.from('redesign_stories').update({ archived }).eq('id', id);
+    if (error) flash('err', error.message);
+    else { flash('ok', archived ? 'Archived' : 'Restored'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <div className="row" style={{justifyContent:'space-between', flexWrap:'wrap', gap:12}}>
+          <div className="row" style={{gap:8}}>
+            <input type="date" value={filter.date} onChange={e=>setFilter({...filter, date:e.target.value})}/>
+            <select value={filter.category} onChange={e=>setFilter({...filter, category:e.target.value})}>
+              <option value="all">all categories</option>
+              {categories.map(c => <option key={c.slug} value={c.name}>{c.name}</option>)}
+            </select>
+            <select value={filter.archived} onChange={e=>setFilter({...filter, archived:e.target.value})}>
+              <option value="active">active only</option>
+              <option value="archived">archived only</option>
+              <option value="any">any</option>
+            </select>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setFilter({ date:'', category:'all', archived:'active' })}>Reset</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Date</th><th>Cat / Slot</th><th>Title</th><th>Source</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.published_date}</td>
+                <td>{r.category} #{r.story_slot}</td>
+                <td>{r.source_title}</td>
+                <td>{r.source_name}</td>
+                <td>{r.archived ? <span className="pill pill-off">archived</span> : <span className="pill pill-on">active</span>}</td>
+                <td>
+                  {r.archived
+                    ? <button className="btn btn-sm btn-ghost" onClick={()=>archive(r.id, false)}>Restore</button>
+                    : <ConfirmButton label="Archive" onConfirm={()=>archive(r.id, true)}>Archive</ConfirmButton>}
+                </td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="6" className="empty">No stories matching the filter.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── FEEDBACK TAB ─────────────────────────────────────────────────────
+function FeedbackTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_user_responses').select('*').order('created_at', { ascending: false }).limit(200);
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_user_responses').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="card">
+      <table>
+        <thead><tr><th>When</th><th>Story</th><th>Client</th><th>Response</th><th></th></tr></thead>
+        <tbody>
+          {rows?.map(r => (
+            <tr key={r.id}>
+              <td>{fmt(r.created_at)}</td>
+              <td><span className="pre">{r.story_id}</span></td>
+              <td><span className="pre">{(r.client_id||'').slice(0,8)}</span></td>
+              <td style={{maxWidth:520, whiteSpace:'pre-wrap'}}>{r.response_text || r.body || '—'}</td>
+              <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+            </tr>
+          ))}
+          {rows && rows.length === 0 && <tr><td colSpan="5" className="empty">No feedback yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── RUNS TAB ─────────────────────────────────────────────────────────
+function RunsTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_runs').select('*').order('started_at', { ascending: false }).limit(30);
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="card">
+      <div className="row" style={{justifyContent:'space-between', marginBottom:10}}>
+        <h3 style={{margin:0}}>Recent pipeline runs</h3>
+        <button className="btn btn-ghost btn-sm" onClick={load}>Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Status</th><th>Started</th><th>Finished</th><th>Stories</th><th>Notes</th></tr></thead>
+        <tbody>
+          {rows?.map(r => (
+            <React.Fragment key={r.id}>
+              <tr style={{cursor:'pointer'}} onClick={()=>setOpenId(openId===r.id?null:r.id)}>
+                <td>{r.run_date}</td>
+                <td>{r.status === 'persisted' ? <span className="pill pill-on">persisted</span> : <span className="pill pill-off">{r.status}</span>}</td>
+                <td>{fmt(r.started_at)}</td>
+                <td>{fmt(r.finished_at)}</td>
+                <td>{r.stories_persisted ?? '—'}</td>
+                <td style={{maxWidth:300, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{r.notes || ''}</td>
+              </tr>
+              {openId === r.id && r.telemetry && (
+                <tr><td colSpan="6"><pre className="json">{JSON.stringify(r.telemetry, null, 2)}</pre></td></tr>
+              )}
+            </React.Fragment>
+          ))}
+          {rows && rows.length === 0 && <tr><td colSpan="6" className="empty">No runs yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── PIPELINE / CRON TAB ──────────────────────────────────────────────
+function PipelineTab({ flash }) {
+  const [cfg, setCfg] = useState(null);
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_cron_config').select('*').eq('name','daily-pipeline').single();
+    if (error) flash('err', error.message); else setCfg(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    const { error } = await sb.from('redesign_cron_config').update({
+      cron_expression: cfg.cron_expression,
+      pipeline_variant: cfg.pipeline_variant,
+      enabled: cfg.enabled,
+    }).eq('id', cfg.id);
+    if (error) flash('err', error.message); else flash('ok', 'Saved. Effective on the next 30-min poll.');
+  };
+
+  if (!cfg) return <div className="empty">Loading…</div>;
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>🔧 Daily-pipeline schedule</h3>
+        <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
+          GitHub Actions polls this row every 30 min and fires the run when "now" lands within ±15 min of the configured time. Cron is in UTC.
+        </p>
+        <div className="grid2">
+          <div className="col">
+            <span className="label">Cron expression (UTC)</span>
+            <input value={cfg.cron_expression} onChange={e=>setCfg({...cfg, cron_expression:e.target.value})} placeholder="20 6 * * *"/>
+            <span style={{fontSize:11, color:'#6b5c80'}}>
+              <span className="pre">m h dom mon dow</span> — e.g. <span className="pre">20 6 * * *</span> = 06:20 UTC daily.
+            </span>
+          </div>
+          <div className="col">
+            <span className="label">Pipeline variant</span>
+            <select value={cfg.pipeline_variant} onChange={e=>setCfg({...cfg, pipeline_variant:e.target.value})}>
+              <option value="current">current (per-source vet)</option>
+              <option value="mega">mega (Stage 1-3 holistic)</option>
+            </select>
+          </div>
+        </div>
+        <div className="row" style={{justifyContent:'space-between', marginTop:14}}>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <input type="checkbox" checked={cfg.enabled} onChange={e=>setCfg({...cfg, enabled:e.target.checked})}/> enabled
+          </label>
+          <button className="btn" onClick={save}>Save schedule</button>
+        </div>
+        {cfg.last_fired_at && <div style={{marginTop:10, fontSize:12, color:'#6b5c80'}}>Last fired: {fmt(cfg.last_fired_at)}</div>}
+      </div>
+
+      <div className="card">
+        <h3 style={{marginTop:0}}>Manual run</h3>
+        <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
+          For an instant run that bypasses the schedule, use:
+        </p>
+        <pre className="json">gh workflow run daily-pipeline.yml --repo daijiong1977/news-v2 -f pipeline_variant={cfg.pipeline_variant}</pre>
+        <p style={{fontSize:12, color:'#6b5c80'}}>
+          (A "Trigger now" button from the admin UI requires storing a GitHub PAT — deferred to v2 of this admin.)
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ADMIN UI — main app
+// ─────────────────────────────────────────────────────────────────────
+function AdminUI({ session, onSignOut, onSignIn }) {
+  const [tab, setTab] = useState('sources');
+  const [notice, flash] = useNotice();
+  const [categories, setCategories] = useState([]);
+
+  const loadCategories = async () => {
+    const { data } = await sb.from('redesign_categories').select('*').order('display_order');
+    setCategories(data || []);
+  };
+  useEffect(() => { loadCategories(); }, []);
+
+  const tabs = [
+    ['sources',    '📡 Sources'],
+    ['categories', '🏷️ Categories'],
+    ['providers',  '🤖 AI Providers'],
+    ['admins',     '👥 Admins'],
+    ['stories',    '📰 Stories'],
+    ['feedback',   '💬 Feedback'],
+    ['runs',       '🏃 Runs'],
+    ['pipeline',   '🔧 Pipeline'],
+  ];
+
+  return (
+    <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+      <AuthHeader session={session} onSignIn={onSignIn} onSignOut={onSignOut}/>
+      <Notice notice={notice}/>
+      <div className="card" style={{padding:0, marginBottom:18, overflow:'hidden'}}>
+        <div className="row" style={{flexWrap:'wrap', gap:0, padding:'0 6px'}}>
+          {tabs.map(([k,label]) => (
+            <button key={k} className={'tab' + (tab===k?' active':'')} onClick={()=>setTab(k)}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'sources'    && <SourcesTab flash={flash} categories={categories}/>}
+      {tab === 'categories' && <CategoriesTab flash={flash} onChanged={loadCategories}/>}
+      {tab === 'providers'  && <AIProvidersTab flash={flash}/>}
+      {tab === 'admins'     && <AdminUsersTab flash={flash} session={session}/>}
+      {tab === 'stories'    && <StoriesTab flash={flash} categories={categories}/>}
+      {tab === 'feedback'   && <FeedbackTab flash={flash}/>}
+      {tab === 'runs'       && <RunsTab flash={flash}/>}
+      {tab === 'pipeline'   && <PipelineTab flash={flash}/>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// TOP-LEVEL APP — handles bootstrap detection + auth gating
+// ─────────────────────────────────────────────────────────────────────
+function App() {
+  const [bootState, setBootState] = useState({ loading: true, adminCount: 0, allowed: false });
+  const [session, setSession] = useState(null);
+
+  // Listen for auth changes
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = sb.auth.onAuthStateChange((_evt, s) => setSession(s));
+    return () => sub.subscription?.unsubscribe();
+  }, []);
+
+  // Re-check bootstrap state + allowlist when session changes
+  const recheck = async () => {
+    const { count } = await sb.from('redesign_admin_users').select('*', { count: 'exact', head: true });
+    let allowed = false;
+    if (session?.user?.email) {
+      const { data } = await sb.from('redesign_admin_users').select('id').eq('email', session.user.email).maybeSingle();
+      allowed = !!data;
+      if (allowed) {
+        // best-effort last-login bump (RLS-allowed since user is admin)
+        await sb.from('redesign_admin_users').update({ last_login_at: new Date().toISOString() }).eq('email', session.user.email);
+      }
+    }
+    setBootState({ loading: false, adminCount: count || 0, allowed });
+  };
+  useEffect(() => { recheck(); }, [session]);
+
+  const signIn = async () => {
+    const redirectTo = window.location.origin + window.location.pathname;
+    await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+  };
+  const signOut = async () => { await sb.auth.signOut(); setSession(null); };
+
+  if (bootState.loading) return <div className="empty">Loading…</div>;
+
+  // Bootstrap: no admins yet → open access; let user (signed in or not) add the first admin
+  if (bootState.adminCount === 0) {
+    return (
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+        <AuthHeader session={session} onSignIn={signIn} onSignOut={signOut}/>
+        <BootstrapWizard session={session} onDone={recheck}/>
+      </div>
+    );
+  }
+
+  // Has admins, but caller isn't authed or isn't on the list
+  if (!session) {
+    return (
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+        <AuthHeader session={null} onSignIn={signIn} onSignOut={signOut}/>
+        <SignInPanel onSignIn={signIn}/>
+      </div>
+    );
+  }
+  if (!bootState.allowed) {
+    return (
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+        <AuthHeader session={session} onSignIn={signIn} onSignOut={signOut}/>
+        <SignInPanel onSignIn={signIn} accessDenied={true} deniedEmail={session.user.email}/>
+      </div>
+    );
+  }
+
+  return <AdminUI session={session} onSignIn={signIn} onSignOut={signOut}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

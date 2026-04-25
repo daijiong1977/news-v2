@@ -41,7 +41,7 @@ RETENTION_DAYS = 30  # dated archives older than this get deleted
 
 # Allowlist of top-level files/dirs that ship to production.
 INCLUDE_FILES = {"index.html", "article.jsx", "home.jsx", "components.jsx",
-                 "data.jsx", "user-panel.jsx"}
+                 "data.jsx", "user-panel.jsx", "admin.html"}
 INCLUDE_DIRS = {"payloads", "article_payloads", "article_images", "article_pdfs", "assets"}
 
 
