@@ -515,27 +515,33 @@ function buildPrintableHTML(article, paragraphs) {
   <div class="footer"><span>News Oh,Ye! · Step 4 of 4</span><span>${escHtml(today)}</span></div>
 </div>
 
-<script>
-  // Auto-open the print dialog after fonts load. The kid still sees the
-  // page on screen first and can re-trigger via the "Print / Save as PDF"
-  // floating button.
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => setTimeout(() => window.print(), 400));
-  } else {
-    setTimeout(() => window.print(), 800);
-  }
-</script>
+  <!-- No auto-print — kid reads on screen first, prints only if they want. -->
 </body>
 </html>`;
 }
 
+// Slugify the title for the filename
+function slugify(s) {
+  return String(s || 'article').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+}
+
+// Save a standalone HTML file the kid can open offline. They double-click
+// the file → opens in any browser → reads on screen, or hits the "Print /
+// Save as PDF" button inside the page when they want a paper copy.
+// No images are embedded — text-only, tiny file (~10-20 KB), prints fast.
 function downloadOfflinePDF(article, paragraphs) {
   const html = buildPrintableHTML(article, paragraphs);
-  const w = window.open('', '_blank');
-  if (!w) { alert('Pop-up blocked — allow pop-ups to download offline.'); return; }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `news-ohye-${slugify(article.title)}-${date}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ——————— READ & WORDS TAB (combined) ———————
@@ -550,14 +556,14 @@ function ReadAndWordsTab({ article, paragraphs, expanded, setExpanded, onFinish 
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:22, color:'#1b1230', margin:0}}>The Story</h2>
           <div style={{flex:1}}/>
           <button onClick={()=>downloadOfflinePDF(article, paragraphs)}
-            title="Download a 4-page printable PDF — story, background, quiz, and a worksheet for your answer."
+            title="Download a 4-page text-only file (story, background, quiz, worksheet) for offline reading. No images. Open it later in any browser; print or save as PDF from there."
             style={{
               background:'#fff', color:'#1b1230', border:`2px solid ${catColor}`,
               borderRadius:999, padding:'6px 14px', fontWeight:800, fontSize:12,
               cursor:'pointer', fontFamily:'Nunito, sans-serif',
               display:'flex', alignItems:'center', gap:6,
             }}>
-            📥 Save offline (PDF)
+            📥 Save offline
           </button>
           <div style={{fontSize:12, color:'#9a8d7a', fontWeight:700}}>Hover the colored words!</div>
         </div>
