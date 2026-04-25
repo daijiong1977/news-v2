@@ -267,8 +267,64 @@ def _retry_sleep_for(err: Exception, attempt: int) -> float:
     return 2.0 * attempt
 
 
-def _deepseek_post(payload: dict, timeout: int) -> dict:
-    """Single HTTP call to DeepSeek; raises on bad status or unparseable JSON."""
+def _try_repair_json(text: str) -> tuple[dict | None, str | None]:
+    """Best-effort deterministic JSON repair for near-valid output.
+    Returns (parsed, repair_kind) or (None, None) if all attempts fail.
+
+    Handles:
+      · trailing commas before } or ]
+      · Python-style True/False/None
+      · single-quoted strings (on top-level structural tokens only)
+      · stray content after the closing brace (truncated explanation, etc.)
+    Does NOT attempt to recover from `finish_reason: length` truncation —
+    callers should detect that separately and split-batch instead.
+    """
+    if not text:
+        return None, None
+    # 1) Trailing commas
+    candidate = re.sub(r",\s*([}\]])", r"\1", text)
+    try:
+        return json.loads(candidate), "trailing-commas"
+    except json.JSONDecodeError:
+        pass
+    # 2) Python literals
+    candidate2 = candidate.replace(": True", ": true").replace(
+        ": False", ": false").replace(": None", ": null")
+    try:
+        return json.loads(candidate2), "python-literals"
+    except json.JSONDecodeError:
+        pass
+    # 3) Trim trailing junk after the last balanced }
+    last = text.rfind("}")
+    if last > 0:
+        try:
+            return json.loads(text[: last + 1]), "trim-trailing-junk"
+        except json.JSONDecodeError:
+            pass
+    return None, None
+
+
+class DeepSeekResult:
+    """Container for a single DeepSeek call's parsed output + metadata."""
+    __slots__ = ("parsed", "raw_content", "finish_reason",
+                 "parse_error", "repair_kind", "usage")
+
+    def __init__(self, parsed: dict | None, raw_content: str,
+                 finish_reason: str, parse_error: Exception | None = None,
+                 repair_kind: str | None = None, usage: dict | None = None):
+        self.parsed = parsed
+        self.raw_content = raw_content
+        self.finish_reason = finish_reason
+        self.parse_error = parse_error
+        self.repair_kind = repair_kind
+        self.usage = usage or {}
+
+
+def _deepseek_post(payload: dict, timeout: int) -> DeepSeekResult:
+    """Single HTTP call to DeepSeek. Raises on bad HTTP status. On valid HTTP
+    response, returns a DeepSeekResult — `parsed` is None if JSON parse + repair
+    both fail, in which case `parse_error` carries the original exception.
+    Callers can check `finish_reason == "length"` to detect truncation."""
     r = requests.post(
         DEEPSEEK_ENDPOINT,
         json=payload,
@@ -276,16 +332,31 @@ def _deepseek_post(payload: dict, timeout: int) -> dict:
         timeout=timeout,
     )
     r.raise_for_status()
-    content = r.json()["choices"][0]["message"]["content"]
-    content = re.sub(r"^```json\s*", "", content.strip())
-    content = re.sub(r"\s*```\s*$", "", content)
-    return json.loads(content)
+    body = r.json()
+    choice = (body.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    raw = msg.get("content") or ""
+    finish_reason = choice.get("finish_reason") or "unknown"
+    usage = body.get("usage") or {}
+    cleaned = re.sub(r"^```json\s*", "", raw.strip())
+    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+    try:
+        parsed = json.loads(cleaned)
+        return DeepSeekResult(parsed, raw, finish_reason, None, None, usage)
+    except json.JSONDecodeError as e:
+        repaired, kind = _try_repair_json(cleaned)
+        if repaired is not None:
+            log.info("repaired malformed JSON via %s (finish_reason=%s)",
+                     kind, finish_reason)
+            return DeepSeekResult(repaired, raw, finish_reason, None, kind, usage)
+        return DeepSeekResult(None, raw, finish_reason, e, None, usage)
 
 
 def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2,
-                  max_attempts: int = 3) -> dict:
-    """Call deepseek-chat with JSON output. Retries with per-class backoff
-    (429 honors Retry-After, 5xx/network exponential, JSON parse quick)."""
+                  max_attempts: int = 3, json_mode: bool = True) -> dict:
+    """Call deepseek-chat with JSON output. JSON mode (response_format) on by
+    default — eliminates the malformed-JSON failure class for most calls.
+    Retries with per-class backoff."""
     payload = {
         "model": "deepseek-chat",
         "messages": [{"role": "system", "content": system},
@@ -293,12 +364,29 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
-            return _deepseek_post(payload, timeout=120)
-        except (json.JSONDecodeError, requests.HTTPError, requests.ConnectionError,
-                requests.Timeout) as e:
+            res = _deepseek_post(payload, timeout=120)
+            if res.parsed is not None:
+                return res.parsed
+            # JSON parse failed even after repair. If output was truncated
+            # (finish_reason: length), the same prompt will keep failing —
+            # surface immediately so caller can shrink payload.
+            if res.finish_reason == "length":
+                raise RuntimeError(
+                    f"chat output truncated (max_tokens={max_tokens} hit); "
+                    "repair failed — caller should reduce payload"
+                )
+            last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
+            log.warning("chat attempt %d/%d: JSON parse failed (finish=%s)",
+                        attempt, max_attempts, res.finish_reason)
+            if attempt < max_attempts:
+                time.sleep(_retry_sleep_for(last_err, attempt))
+        except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
             last_err = e
             wait = _retry_sleep_for(e, attempt)
             log.warning("chat attempt %d/%d failed (%s): waiting %.1fs",
@@ -678,29 +766,65 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
 
 
 def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
-                           max_attempts: int = 3) -> dict:
-    """Call deepseek-reasoner (thinking mode). Same per-class retry policy
-    as deepseek_call. Reasoner has bigger payloads → more JSON-corruption
-    cases; the split-batch fallback in detail_enrich() handles that."""
+                           max_transport_attempts: int = 4,
+                           max_content_attempts: int = 2) -> dict:
+    """Call deepseek-reasoner (thinking mode).
+
+    Tiered retry policy:
+      · Transport failures (429 / 5xx / network): up to max_transport_attempts
+        full retries — these are idempotent, retrying helps.
+      · Content failures (JSON parse after repair): only max_content_attempts
+        full rerolls. Reasoner content failures are usually shape problems
+        that won't fix with another expensive thinking pass; better to
+        bubble up so the caller can shrink the payload (split-batch).
+      · Truncation (finish_reason='length'): immediate raise, never reroll —
+        the same prompt will hit the same length cap.
+    """
     payload = {
         "model": "deepseek-reasoner",
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
         "max_tokens": max_tokens,
     }
+    transport_attempts = 0
+    content_attempts = 0
     last_err: Exception | None = None
-    for attempt in range(1, max_attempts + 1):
+    while True:
         try:
-            return _deepseek_post(payload, timeout=300)
-        except (json.JSONDecodeError, requests.HTTPError, requests.ConnectionError,
-                requests.Timeout) as e:
+            res = _deepseek_post(payload, timeout=300)
+            if res.parsed is not None:
+                if res.repair_kind:
+                    log.info("reasoner: parse OK after repair (%s, finish=%s)",
+                             res.repair_kind, res.finish_reason)
+                return res.parsed
+            # JSON parse failed even after repair.
+            if res.finish_reason == "length":
+                raise RuntimeError(
+                    f"reasoner output truncated (max_tokens={max_tokens} hit); "
+                    "split-batch fallback in caller will shrink the payload"
+                )
+            content_attempts += 1
+            last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
+            log.warning("reasoner content attempt %d/%d: JSON parse failed (finish=%s)",
+                        content_attempts, max_content_attempts, res.finish_reason)
+            if content_attempts >= max_content_attempts:
+                raise RuntimeError(
+                    f"reasoner: {max_content_attempts} content attempts failed — "
+                    "caller should split-batch"
+                ) from last_err
+            time.sleep(_retry_sleep_for(last_err, content_attempts))
+        except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
+            transport_attempts += 1
             last_err = e
-            wait = _retry_sleep_for(e, attempt)
-            log.warning("reasoner attempt %d/%d failed (%s): waiting %.1fs",
-                        attempt, max_attempts, type(e).__name__, wait)
-            if attempt < max_attempts:
-                time.sleep(wait)
-    raise RuntimeError(f"deepseek_reasoner_call exhausted {max_attempts} attempts") from last_err
+            wait = _retry_sleep_for(e, transport_attempts)
+            log.warning("reasoner transport attempt %d/%d failed (%s): waiting %.1fs",
+                        transport_attempts, max_transport_attempts,
+                        type(e).__name__, wait)
+            if transport_attempts >= max_transport_attempts:
+                raise RuntimeError(
+                    f"reasoner: {max_transport_attempts} transport attempts failed"
+                ) from last_err
+            time.sleep(wait)
 
 
 def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
