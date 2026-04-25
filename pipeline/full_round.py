@@ -14,8 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .news_rss_core import (check_duplicates, detail_enrich,
-                              run_source_phase_a, tri_variant_rewrite)
+from .news_rss_core import (CALL_STATS, check_duplicates, detail_enrich,
+                              reset_call_stats, run_source_phase_a,
+                              tri_variant_rewrite)
 from .fun_sources import todays_enabled_sources as fun_sources
 from .fun_sources import todays_topic as fun_topic
 from .science_sources import todays_enabled_sources as science_sources
@@ -456,38 +457,103 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
 # Orchestrator
 # -------------------------------------------------------------------
 
+def _category_summary(cat: str, by_source: dict, winners: list[dict]) -> dict:
+    """Per-category telemetry snapshot — answers 'was this run healthy?'."""
+    candidate_total = sum(len(b.get("candidates") or []) for b in by_source.values())
+    winners_used_split = bool(by_source.get("_split_batch_used"))  # placeholder
+    used_backup = sum(1 for w in winners if w.get("used_backup"))
+    sources_with_zero = [name for name, b in by_source.items()
+                         if not (b.get("candidates") or [])]
+    return {
+        "category": cat,
+        "winners": len(winners),
+        "sources_active": len(by_source),
+        "sources_exhausted": sources_with_zero,
+        "winners_used_backup_source": used_backup,
+        "total_candidates_mined": candidate_total,
+    }
+
+
+def _phase(t0: float) -> float:
+    """Seconds elapsed since t0, rounded to 0.1."""
+    return round(time.monotonic() - t0, 1)
+
+
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     website_dir = Path(__file__).resolve().parent.parent / "website"
 
-    # Start run record
+    # Telemetry — every phase / category event lands here. Persisted to
+    # `redesign_runs.telemetry` (jsonb) so we can answer "was this run
+    # healthy?" without grepping CI logs.
+    reset_call_stats()
+    telemetry: dict[str, object] = {
+        "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "phases": {},          # phase_name → {seconds: float, notes: str|None}
+        "per_category": {},    # cat → snapshot dict
+        "warnings": [],        # human-readable list of degraded paths
+        "llm_calls": dict(CALL_STATS),  # filled in at end
+        "version": "1",
+    }
+    t_run = time.monotonic()
+
     run_id = insert_run({"run_date": today, "status": "running"})
     if not run_id:
         log.warning("insert_run failed — continuing without DB persistence")
 
+    def _set_phase(name: str, t0: float, **extra) -> None:
+        telemetry["phases"][name] = {"seconds": _phase(t0), **extra}
+        if run_id:
+            update_run(run_id, {"telemetry": telemetry})
+
+    # ---- AGGREGATE ----
+    t = time.monotonic()
     log.info("=== AGGREGATE (up to 4 candidates per source) ===")
     news_bs = aggregate_category("News", news_sources(), news_backups(), run_news)
     science_bs = aggregate_category("Science", science_sources(), sci_backups(), run_sci)
     fun_bs = aggregate_category("Fun", fun_sources(), fun_backups(), run_fun)
+    _set_phase("aggregate", t,
+               candidate_counts={"News": sum(len(b["candidates"]) for b in news_bs.values()),
+                                 "Science": sum(len(b["candidates"]) for b in science_bs.values()),
+                                 "Fun": sum(len(b["candidates"]) for b in fun_bs.values())})
 
+    # ---- PAST-DEDUP ----
+    t = time.monotonic()
     log.info("=== PAST-DEDUP (3-day lookback · title ≥80%% similar = dup) ===")
     news_bs = filter_past_duplicates("News", news_bs, days=3)
     science_bs = filter_past_duplicates("Science", science_bs, days=3)
     fun_bs = filter_past_duplicates("Fun", fun_bs, days=3)
+    _set_phase("past_dedup", t)
 
+    # ---- PICK + CROSS-SOURCE DEDUP ----
+    t = time.monotonic()
     log.info("=== PICK + CROSS-SOURCE DEDUP (promote next candidate on dup) ===")
     news = pick_winners_with_dedup(news_bs)
     science = pick_winners_with_dedup(science_bs)
     fun = pick_winners_with_dedup(fun_bs)
     stories_by_cat = {"News": news, "Science": science, "Fun": fun}
+    cat_buckets = {"News": news_bs, "Science": science_bs, "Fun": fun_bs}
     for cat, ws in stories_by_cat.items():
         log.info("  %s: %d winners", cat, len(ws))
+        snapshot = _category_summary(cat, cat_buckets[cat], ws)
+        telemetry["per_category"][cat] = snapshot
+        if snapshot["winners"] < 3:
+            telemetry["warnings"].append(
+                f"{cat}: shipped {snapshot['winners']} (<3) "
+                f"after dedup — {len(snapshot['sources_exhausted'])} exhausted"
+            )
+    _set_phase("pick", t)
 
+    # ---- IMAGES ----
+    t = time.monotonic()
     log.info("=== IMAGES (optimize + upload) ===")
     for cat, ws in stories_by_cat.items():
         log.info("[%s] processing %d images", cat, len(ws))
         process_images(ws, today, website_dir)
+    _set_phase("images", t)
 
+    # ---- REWRITE + ENRICH ----
+    t = time.monotonic()
     log.info("=== REWRITE (tri-variant + detail enrich, 2 calls per category) ===")
     variants_by_cat: dict[str, dict] = {}
     details_by_cat: dict[str, dict] = {}
@@ -499,32 +565,49 @@ def main() -> None:
             details_by_cat[cat] = d
             log.info("  [%s] rewrite: %d variants · detail slots: %d",
                      cat, len(v), len(d))
+            telemetry["per_category"].setdefault(cat, {}).update({
+                "variants": len(v), "detail_slots": len(d),
+            })
+            # Detect partial enrichment (split-batch produced fewer than ideal).
+            ideal = len(ws) * 2
+            if len(d) < ideal:
+                w = (f"{cat}: enrich produced {len(d)}/{ideal} slots — "
+                     "split-batch path or partial recovery")
+                telemetry["warnings"].append(w)
+                telemetry["per_category"][cat]["partial_enrich"] = True
         except Exception as e:  # noqa: BLE001
             log.error("  [%s] rewrite/enrich FAILED: %s", cat, e)
             failures.append(f"{cat}: {e}")
+    _set_phase("rewrite_enrich", t)
 
     if failures:
-        # Mark run as failed (if DB tracking on), don't upload a partial zip.
         msg = f"{len(failures)} category failures: " + " | ".join(failures)
+        telemetry["warnings"].append(msg)
         if run_id:
             update_run(run_id, {"status": "failed",
                                 "finished_at": datetime.now(timezone.utc).isoformat(),
-                                "notes": msg})
+                                "notes": msg, "telemetry": telemetry})
         log.error("Aborting — %s", msg)
         raise SystemExit(1)
 
+    # ---- EMIT + PERSIST ----
+    t = time.monotonic()
     log.info("=== EMIT v1-shape payload files ===")
     emit_v1_shape(stories_by_cat, variants_by_cat, details_by_cat, today, website_dir)
+    _set_phase("emit", t)
 
+    t = time.monotonic()
     log.info("=== PERSIST TO SUPABASE ===")
     count = 0
     if run_id:
         count = persist_to_supabase(stories_by_cat, variants_by_cat, today, run_id)
-        # Intermediate state: rows are written but the deploy zip hasn't shipped
-        # yet. We only flip to `completed` after pack+upload returns cleanly.
         update_run(run_id, {"status": "persisted",
-                            "notes": f"stories persisted: {count}"})
+                            "notes": f"stories persisted: {count}",
+                            "telemetry": telemetry})
+    _set_phase("persist", t, stories_persisted=count)
 
+    # ---- PACK + UPLOAD ----
+    t = time.monotonic()
     log.info("=== PACK + UPLOAD ZIP (deploy trigger) ===")
     upload_ok = False
     upload_err: str | None = None
@@ -533,30 +616,51 @@ def main() -> None:
         _pack_upload()
         upload_ok = True
     except SystemExit as e:
-        # validate_bundle / check_not_overwriting_newer raised SystemExit(1)
         upload_err = f"pack_and_upload aborted (SystemExit {e.code})"
         log.error(upload_err)
     except Exception as e:  # noqa: BLE001
         upload_err = f"pack_and_upload exception: {e}"
         log.error(upload_err)
+    _set_phase("pack_upload", t, ok=upload_ok, error=upload_err)
 
+    # ---- TERMINAL STATUS ----
+    telemetry["llm_calls"] = dict(CALL_STATS)
+    if any(CALL_STATS.get(k, 0) for k in ("reasoner_truncated", "reasoner_repaired")):
+        if CALL_STATS.get("reasoner_truncated"):
+            telemetry["warnings"].append(
+                f"reasoner truncated {CALL_STATS['reasoner_truncated']} time(s) "
+                "— hit max_tokens, split-batch path used"
+            )
+        if CALL_STATS.get("reasoner_repaired"):
+            telemetry["warnings"].append(
+                f"reasoner repaired {CALL_STATS['reasoner_repaired']} time(s) "
+                "(deterministic JSON fix)"
+            )
     if run_id:
-        terminal = {"finished_at": datetime.now(timezone.utc).isoformat()}
+        terminal = {"finished_at": datetime.now(timezone.utc).isoformat(),
+                    "telemetry": telemetry}
         if upload_ok:
-            terminal["status"] = "completed"
-            terminal["notes"] = f"stories persisted: {count}; deployed"
+            if telemetry["warnings"]:
+                terminal["status"] = "completed_with_warnings"
+                terminal["notes"] = (f"stories persisted: {count}; deployed; "
+                                       f"warnings: {len(telemetry['warnings'])}")
+            else:
+                terminal["status"] = "completed"
+                terminal["notes"] = f"stories persisted: {count}; deployed"
         else:
             terminal["status"] = "deploy_failed"
             terminal["notes"] = (f"stories persisted: {count}; "
                                   f"deploy failed: {upload_err}")
         update_run(run_id, terminal)
 
-    log.info("=== DONE ===")
+    log.info("=== DONE (%.1fs total) ===", _phase(t_run))
     total_stories = sum(len(ws) for ws in stories_by_cat.values())
-    log.info("Run: %s · Stories: %d · DB persisted: %d · Deployed: %s",
-             run_id or "(no DB)", total_stories, count, upload_ok)
+    log.info("Run: %s · Stories: %d · DB persisted: %d · Deployed: %s · Warnings: %d",
+             run_id or "(no DB)", total_stories, count, upload_ok,
+             len(telemetry["warnings"]))
+    for w in telemetry["warnings"]:
+        log.warning("  ⚠  %s", w)
     if not upload_ok:
-        # Make the workflow show red so it's surfaced in GH Actions UI.
         raise SystemExit(2)
 
 

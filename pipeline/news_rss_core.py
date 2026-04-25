@@ -240,6 +240,21 @@ Return ONLY valid JSON (no markdown fences):
 }}"""
 
 
+# Lightweight per-process counters — orchestrator reads these into the
+# `telemetry` blob written to redesign_runs. Never gates control flow.
+CALL_STATS: dict[str, int] = {
+    "chat_calls": 0, "chat_retries": 0, "chat_repaired": 0,
+    "reasoner_calls": 0, "reasoner_content_retries": 0,
+    "reasoner_transport_retries": 0, "reasoner_repaired": 0,
+    "reasoner_truncated": 0,
+}
+
+
+def reset_call_stats() -> None:
+    for k in CALL_STATS:
+        CALL_STATS[k] = 0
+
+
 def _retry_sleep_for(err: Exception, attempt: int) -> float:
     """Tiered backoff per failure class:
       · 429 rate limit → honor Retry-After header, fall back to 30s × attempt
@@ -367,27 +382,29 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
+    CALL_STATS["chat_calls"] += 1
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             res = _deepseek_post(payload, timeout=120)
             if res.parsed is not None:
+                if res.repair_kind:
+                    CALL_STATS["chat_repaired"] += 1
                 return res.parsed
-            # JSON parse failed even after repair. If output was truncated
-            # (finish_reason: length), the same prompt will keep failing —
-            # surface immediately so caller can shrink payload.
             if res.finish_reason == "length":
                 raise RuntimeError(
                     f"chat output truncated (max_tokens={max_tokens} hit); "
                     "repair failed — caller should reduce payload"
                 )
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
+            CALL_STATS["chat_retries"] += 1
             log.warning("chat attempt %d/%d: JSON parse failed (finish=%s)",
                         attempt, max_attempts, res.finish_reason)
             if attempt < max_attempts:
                 time.sleep(_retry_sleep_for(last_err, attempt))
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
             last_err = e
+            CALL_STATS["chat_retries"] += 1
             wait = _retry_sleep_for(e, attempt)
             log.warning("chat attempt %d/%d failed (%s): waiting %.1fs",
                         attempt, max_attempts, type(e).__name__, wait)
@@ -786,6 +803,7 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
                      {"role": "user", "content": user}],
         "max_tokens": max_tokens,
     }
+    CALL_STATS["reasoner_calls"] += 1
     transport_attempts = 0
     content_attempts = 0
     last_err: Exception | None = None
@@ -794,16 +812,18 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
             res = _deepseek_post(payload, timeout=300)
             if res.parsed is not None:
                 if res.repair_kind:
+                    CALL_STATS["reasoner_repaired"] += 1
                     log.info("reasoner: parse OK after repair (%s, finish=%s)",
                              res.repair_kind, res.finish_reason)
                 return res.parsed
-            # JSON parse failed even after repair.
             if res.finish_reason == "length":
+                CALL_STATS["reasoner_truncated"] += 1
                 raise RuntimeError(
                     f"reasoner output truncated (max_tokens={max_tokens} hit); "
                     "split-batch fallback in caller will shrink the payload"
                 )
             content_attempts += 1
+            CALL_STATS["reasoner_content_retries"] += 1
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
             log.warning("reasoner content attempt %d/%d: JSON parse failed (finish=%s)",
                         content_attempts, max_content_attempts, res.finish_reason)
@@ -815,6 +835,7 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
             time.sleep(_retry_sleep_for(last_err, content_attempts))
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
             transport_attempts += 1
+            CALL_STATS["reasoner_transport_retries"] += 1
             last_err = e
             wait = _retry_sleep_for(e, transport_attempts)
             log.warning("reasoner transport attempt %d/%d failed (%s): waiting %.1fs",
