@@ -1031,6 +1031,11 @@ def detail_enrich(rewrite_result: dict) -> dict:
                 # Continue — the other level may still succeed.
 
     filter_keywords(details, rewrite_result)
+    # Augment with Python-extracted keywords (deterministic, body-guaranteed).
+    # LLM-emitted keywords keep their explanations; Python-added ones have
+    # empty explanations. Done last so it runs after the hallucination filter.
+    from .keyword_extractor import augment_details_with_keywords
+    augment_details_with_keywords(details, rewrite_result)
     return {"details": details}
 
 
