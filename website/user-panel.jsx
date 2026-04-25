@@ -343,7 +343,7 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
 
               <Section label="Your progress" sub="">
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-                  <BigStat icon="🔥" val={`${tweaks.streakDays ?? 0}`} label="Day streak"/>
+                  <BigStat icon="🔥" val={`${tweaks.streakDays ?? 0}`} label="Day streak" brand/>
                   <BigStat icon="⭐" val={`${tweaks.xp ?? 0}`} label="XP earned"/>
                   <BigStat icon="📖" val={`${storiesRead}`} label="Stories today"/>
                   <BigStat icon="🏆" val={`${badges}`} label="Badges"/>
@@ -402,15 +402,23 @@ function MiniStat({ icon, val }) {
   );
 }
 
-function BigStat({ icon, val, label }) {
+function BigStat({ icon, val, label, brand }) {
+  // The streak stat carries the parent-badge color pair (ink bg + gold
+  // text) per the brand audit step 5 — same treatment as the parent
+  // badge, signalling streak as the brand's long-game.
+  const bg = brand ? 'var(--twentyone-ink, #1b1230)' : '#fff';
+  const num = brand ? 'var(--twentyone-gold, #ffc83d)' : '#1b1230';
+  const lbl = brand ? 'rgba(255,200,61,0.72)' : '#6b5c80';
   return (
     <div style={{
-      background:'#fff', border:'2px solid #f0e8d8', borderRadius:14,
-      padding:'14px', textAlign:'center',
+      background: bg,
+      border: brand ? 'none' : '2px solid #f0e8d8',
+      borderRadius:14, padding:'14px', textAlign:'center',
+      boxShadow: brand ? '0 3px 0 rgba(27,18,48,0.18)' : 'none',
     }}>
       <div style={{fontSize:24, marginBottom:2}}>{icon}</div>
-      <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:26, color:'#1b1230', lineHeight:1}}>{val}</div>
-      <div style={{fontSize:11, color:'#6b5c80', fontWeight:700, marginTop:4, textTransform:'uppercase', letterSpacing:'.05em'}}>{label}</div>
+      <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:26, color:num, lineHeight:1}}>{val}</div>
+      <div style={{fontSize:11, color:lbl, fontWeight:700, marginTop:4, textTransform:'uppercase', letterSpacing:'.05em'}}>{label}</div>
     </div>
   );
 }

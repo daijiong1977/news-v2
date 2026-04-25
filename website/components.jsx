@@ -1,60 +1,50 @@
-// Shared components for News Oh,Ye!
+// Shared components for kidsnews · 21mins
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ————————————————————————————————————————————————————————————
-// LOGO — happy newspaper + "Ye!" + broadcast waves (latest news for kids)
+// KIDSNEWS LOCKUP — sun-face mark + "kids/news" wordmark + endorsement
+// (Renders the locked brand from `21mins-brand` handoff. SunFace21 is the
+//  canonical mark; the wordmark + endorsement are styled inline below.)
 // ————————————————————————————————————————————————————————————
-function OhYeLogo({ size = 40 }) {
+function KidsNewsLockup({ size = 44, compact = false, hideEndorsement = false }) {
+  const cfg = window.SITE_CONFIG || {};
+  const wordHi = cfg.brandWordHi || 'news';   // "news" by default
+  const brand = cfg.brand || 'kidsnews';
+  // brand = "kidsnews" → split into hi="news" prefix="kids"
+  const prefix = brand.toLowerCase().endsWith(wordHi.toLowerCase())
+    ? brand.slice(0, brand.length - wordHi.length)
+    : brand;
+  const wordSize = compact ? Math.round(size * 0.42) : Math.round(size * 0.50);
+
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" style={{display:'block'}}>
-      <defs>
-        <linearGradient id="logoSky" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor="#ffc83d" />
-          <stop offset="1" stopColor="#ffa23d" />
-        </linearGradient>
-      </defs>
-
-      {/* Broadcast waves — "latest news" signal radiating from top-right */}
-      <g stroke="#ff6b5b" strokeWidth="1.8" strokeLinecap="round" fill="none" opacity="0.85">
-        <path d="M54 14 q3 -1 4 -4"/>
-        <path d="M57 19 q5 -1 7 -6"/>
-      </g>
-      {/* little sparkles */}
-      <g fill="#ffb82e">
-        <circle cx="6" cy="12" r="1.4"/>
-        <circle cx="10" cy="8" r="1.1"/>
-      </g>
-
-      {/* Folded newspaper body — tilted like it's being held */}
-      <g transform="rotate(-6 32 36)">
-        {/* Back page (peeking) */}
-        <rect x="11" y="17" width="42" height="38" rx="4" fill="#fff3d6" stroke="#1b1230" strokeWidth="2"/>
-        {/* Front page */}
-        <rect x="8" y="20" width="42" height="38" rx="4" fill="#ffffff" stroke="#1b1230" strokeWidth="2"/>
-        {/* Masthead bar with "NEWS" */}
-        <rect x="12" y="24" width="34" height="7" rx="2" fill="url(#logoSky)"/>
-        <text x="29" y="29.8" textAnchor="middle" fontSize="6" fontWeight="900" fill="#1b1230" fontFamily="Fraunces, serif" letterSpacing="1">NEWS</text>
-        {/* Headline lines */}
-        <rect x="12" y="34.5" width="26" height="2.2" rx="1" fill="#d9cdb7"/>
-        <rect x="12" y="39.2" width="20" height="2.2" rx="1" fill="#d9cdb7"/>
-        {/* Smiling eyes on the paper (kids touch) */}
-        <circle cx="19" cy="49" r="2" fill="#1b1230"/>
-        <circle cx="27" cy="49" r="2" fill="#1b1230"/>
-        {/* Smile */}
-        <path d="M17 52.5 q6 4 12 0" stroke="#1b1230" strokeWidth="2" strokeLinecap="round" fill="none"/>
-        {/* Rosy cheeks */}
-        <circle cx="15" cy="52" r="1.3" fill="#ff9eb5" opacity="0.85"/>
-        <circle cx="31" cy="52" r="1.3" fill="#ff9eb5" opacity="0.85"/>
-      </g>
-
-      {/* Speech bubble "Ye!" popping out (the happy/excited reaction) */}
-      <g transform="rotate(8 48 16)">
-        <path d="M38 6 h18 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-10 l-4 4 -1 -4 h-3 a4 4 0 0 1 -4 -4 v-10 a4 4 0 0 1 4 -4 z"
-              fill="#ff6b5b" stroke="#1b1230" strokeWidth="2" strokeLinejoin="round"/>
-        <text x="47" y="20" textAnchor="middle" fontSize="12" fontWeight="900" fill="#fff" fontFamily="Fraunces, serif">Ye!</text>
-      </g>
-    </svg>
+    <div style={{display:'inline-flex', alignItems:'center', gap: compact ? 8 : 12}}>
+      <SunFace21 size={size} />
+      <div style={{display:'flex', flexDirection:'column', gap: 2, lineHeight: 1}}>
+        <div style={{
+          fontFamily:'Fraunces, serif', fontWeight: 700,
+          fontSize: wordSize, letterSpacing: '-0.02em',
+          color: 'var(--twentyone-ink, #1b1230)',
+        }}>
+          {prefix}<span style={{color: 'var(--twentyone-coral, #ff6b5b)'}}>{wordHi}</span>
+        </div>
+        {!hideEndorsement && cfg.endorsement && (
+          <div style={{
+            fontFamily:'Nunito, sans-serif', fontWeight: 800,
+            fontSize: compact ? 8.5 : 9.5, letterSpacing: '.18em',
+            textTransform:'uppercase', color: 'var(--twentyone-muted, #9a8d7a)',
+          }}>
+            {cfg.endorsement}
+          </div>
+        )}
+      </div>
+    </div>
   );
+}
+
+// Backward-compat shim — many call sites still reference `OhYeLogo`.
+// Route through the new lockup until every callsite is migrated.
+function OhYeLogo({ size = 40 }) {
+  return <KidsNewsLockup size={size} compact={size < 40} hideEndorsement={size < 36}/>;
 }
 
 // ————————————————————————————————————————————————————————————

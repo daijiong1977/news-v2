@@ -1,20 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="brand-kidsnews">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>21 minutes every day · Kids News</title>
+<title>kidsnews · today's 21 minutes</title>
+<meta name="description" content="Three smart stories every day for curious kids 8–13. Little daily, big magic.">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon-kidsnews.svg">
+
+<!-- Open Graph / share previews -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="kidsnews · little daily, big magic">
+<meta property="og:description" content="The daily news habit for curious kids 8–13. Three stories, 21 minutes, read · think · learn.">
+<meta property="og:image" content="/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="kidsnews · little daily, big magic">
+<meta name="twitter:description" content="The daily news habit for curious kids 8–13.">
+<meta name="twitter:image" content="/assets/og-image.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800;9..144,900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
 <style>
-  html, body { margin:0; padding:0; font-family: 'Nunito', sans-serif; background:#fff9ef; color:#1b1230; }
+  html, body { margin:0; padding:0; font-family: var(--twentyone-sans); background: var(--twentyone-cream); color: var(--twentyone-ink); }
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
-  button { font-family: 'Nunito', sans-serif; }
-  ::selection { background:#ffc83d; color:#1b1230; }
+  button { font-family: var(--twentyone-sans); }
+  ::selection { background: var(--twentyone-gold); color: var(--twentyone-ink); }
   /* Scrollbar - subtle */
   ::-webkit-scrollbar { width:10px; height:10px; }
-  ::-webkit-scrollbar-track { background:#fff9ef; }
+  ::-webkit-scrollbar-track { background: var(--twentyone-cream); }
   ::-webkit-scrollbar-thumb { background:#e8dcc6; border-radius:10px; }
 </style>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -24,11 +40,13 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" src="data.jsx?v=20260425f"></script>
-<script type="text/babel" src="components.jsx"></script>
-<script type="text/babel" src="home.jsx?v=20260425f"></script>
-<script type="text/babel" src="article.jsx?v=20260425f"></script>
-<script type="text/babel" src="user-panel.jsx"></script>
+<script type="text/babel" src="data.jsx?v=20260425g"></script>
+<script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
+<script type="text/babel" src="components/Big21.jsx?v=20260425g"></script>
+<script type="text/babel" src="components.jsx?v=20260425g"></script>
+<script type="text/babel" src="home.jsx?v=20260425g"></script>
+<script type="text/babel" src="article.jsx?v=20260425g"></script>
+<script type="text/babel" src="user-panel.jsx?v=20260425g"></script>
 
 <script type="text/babel">
 const { useState, useEffect } = React;

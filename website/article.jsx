@@ -224,7 +224,23 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
             <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:40, lineHeight:1.05, color:'#1b1230', margin:'0 0 14px', letterSpacing:'-0.02em'}}>{article.title}</h1>
             <div style={{display:'flex', gap:14, color:'#6b5c80', fontSize:13, fontWeight:700, flexWrap:'wrap', alignItems:'center'}}>
               <span>📰 {article.source}</span><span>·</span>
-              <span>⏱ {article.readMins} min read</span>
+              {/* Brand-aligned time pill: positions THIS story inside the
+                  21-min daily ritual instead of just stating its length.
+                  "Story 1 of 3 · 7 min" feels journey-shaped, not transactional. */}
+              {(() => {
+                const total = window.SITE_CONFIG?.storiesPerDay ?? 3;
+                // We don't know which slot this is just from `article` —
+                // best-effort by category + level. For now use article.readMins
+                // and total to show the share of daily budget.
+                return (
+                  <span style={{
+                    background:'var(--twentyone-paper, #fffaf0)',
+                    border:'1.5px solid var(--twentyone-border, #ece2d0)',
+                    padding:'4px 10px', borderRadius:'var(--twentyone-r-pill, 999px)',
+                    color:'var(--twentyone-ink, #1b1230)', fontWeight:800,
+                  }}>⏱ {article.readMins} min · part of your {window.SITE_CONFIG?.dailyGoalMinutes ?? 21}</span>
+                );
+              })()}
               {article.minedAt && (<>
                 <span>·</span>
                 <span title={`Mined ${article.minedAt}${article.sourcePublishedAt ? ' · source published ' + article.sourcePublishedAt : ''}`}>

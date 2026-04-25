@@ -166,11 +166,18 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
               </>
             ) : (
               <>
-                <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:52, lineHeight:1.02, color:'#1b1230', margin:'0 0 12px', letterSpacing:'-0.02em'}}>
+                <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:52, lineHeight:1.02, color:'#1b1230', margin:'0 0 8px', letterSpacing:'-0.02em'}}>
                   Today's <span style={{background: theme.accent, padding:'0 10px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>{goal} minutes</span>
                 </h1>
+                <p style={{
+                  fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
+                  fontSize:22, color:'#c14e2a', margin:'0 0 14px',
+                  letterSpacing:'-0.01em',
+                }}>
+                  {window.SITE_CONFIG?.tagline || 'Little daily, big magic.'}
+                </p>
                 <p style={{fontSize:17, color:'#3a2a4a', margin:'0 0 18px', lineHeight:1.5, maxWidth:480}}>
-                  Read 3 smart stories, learn new words, and win your streak. You've read <b>{readCount} of 3</b> today.
+                  Three smart stories. Read, think, and earn your streak. You've read <b>{readCount} of {window.SITE_CONFIG?.storiesPerDay ?? 3}</b> today.
                 </p>
               </>
             )}
@@ -188,7 +195,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
           {/* Daily 3 stack — swappable picks */}
           <div style={{display:'flex', flexDirection:'column', gap:10, position:'relative'}}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline'}}>
-              <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>⚡ Today's {window.SITE_CONFIG?.storiesPerDay ?? 3} · {window.SITE_CONFIG?.perArticleMinutes ?? 7} min</div>
+              <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>⚡ Today's {window.SITE_CONFIG?.storiesPerDay ?? 3} · {window.SITE_CONFIG?.perArticleMinutes ?? 7} min each</div>
               <div style={{fontSize:11, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
             </div>
             {daily3.map((a, i) => {
@@ -427,15 +434,8 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
       position:'sticky', top:0, zIndex:30, backdropFilter:'blur(6px)',
     }}>
       <div style={{maxWidth:1180, margin:'0 auto', padding:'14px 28px', display:'flex', alignItems:'center', gap:16}}>
-        <div style={{display:'flex', alignItems:'center', gap:10}}>
-          <OhYeLogo size={44}/>
-          <div style={{lineHeight:1}}>
-            <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:22, color:'#1b1230', letterSpacing:'-0.01em'}}>
-              News Oh<span style={{color:'#ff6b5b'}}>,</span>Ye<span style={{color:'#ff6b5b'}}>!</span>
-            </div>
-            <div style={{fontSize:11, color:'#9a8d7a', fontWeight:700, marginTop:2, letterSpacing:'.08em'}}>READ · THINK · LEARN</div>
-          </div>
-        </div>
+        {/* New brand lockup — kidsnews mark + wordmark + "a 21mins channel" */}
+        <KidsNewsLockup size={44}/>
 
         <div style={{flex:1}}/>
 
