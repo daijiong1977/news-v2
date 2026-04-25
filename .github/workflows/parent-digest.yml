@@ -1,0 +1,61 @@
+# Parent dashboard digest cron
+#
+# Hits the send-digest Supabase Edge Function once a day. The function
+# itself decides whether each parent is due (based on digest_cadence +
+# digest_last_sent_at), so daily polling cleanly covers both daily and
+# weekly digests.
+#
+# send-digest forwards each email through the existing send-email-v2
+# function (Gmail SMTP, GMAIL_ADDRESS / GMAIL_APP_PASSWORD already in
+# public.secrets) — no extra mail-provider setup needed.
+#
+# Required secrets:
+#   - SUPABASE_PROJECT_REF      e.g. "lfknsvavhiqrsasdfyrs"
+#   - SUPABASE_FUNCTION_TOKEN   anon (publishable) key for the project
+#
+# Optional override:
+#   - DIGEST_FORCE              workflow_dispatch input; reserved for
+#                               future use.
+
+name: parent-digest
+
+on:
+  schedule:
+    # 10:00 UTC daily — that's 3-6am US, 6-9pm in East Asia. Weekly
+    # parents will only fire on day 7 (the function gates on
+    # digest_last_sent_at). Adjust here if the user wants a different
+    # delivery hour.
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force-send (skip cadence gate)"
+        required: false
+        default: "0"
+
+jobs:
+  send-digests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke send-digest edge function
+        env:
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          FN_TOKEN:    ${{ secrets.SUPABASE_FUNCTION_TOKEN }}
+        run: |
+          if [ -z "${PROJECT_REF}" ] || [ -z "${FN_TOKEN}" ]; then
+            echo "::warning::SUPABASE_PROJECT_REF or SUPABASE_FUNCTION_TOKEN not set — skipping (no-op)."
+            exit 0
+          fi
+          URL="https://${PROJECT_REF}.functions.supabase.co/send-digest"
+          echo "POST ${URL}"
+          # The function returns JSON; we capture and echo for the run log.
+          STATUS=$(curl -s -o /tmp/digest_out.json -w "%{http_code}" \
+            -X POST "${URL}" \
+            -H "Authorization: Bearer ${FN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"force":"${{ github.event.inputs.force }}"}')
+          echo "HTTP ${STATUS}"
+          cat /tmp/digest_out.json || true
+          # Don't fail the workflow for a non-2xx — pre-launch this is
+          # expected (RESEND_API_KEY may be unset). Just surface the body
+          # in the run output.

@@ -40,6 +40,11 @@
 <body>
 <div id="root"></div>
 
+<!-- kidsync — vanilla JS bridge that mirrors localStorage writes to
+     Supabase RPCs (parent dashboard cloud mode). Loaded BEFORE data.jsx
+     so window.kidsync is available everywhere downstream. -->
+<script src="kidsync.js?v=20260425k"></script>
+
 <script type="text/babel" src="data.jsx?v=20260425g"></script>
 <script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
 <script type="text/babel" src="components/Big21.jsx?v=20260425g"></script>
@@ -182,7 +187,14 @@ function App() {
     document.addEventListener('visibilitychange', checkRollover);
     return () => document.removeEventListener('visibilitychange', checkRollover);
   }, []);
-  useEffect(() => { ss.setJSON('ohye_tweaks', tweaks); }, [tweaks]);
+  useEffect(() => {
+    ss.setJSON('ohye_tweaks', tweaks);
+    // Mirror to cloud (no-op if unavailable). Light touch: only the
+    // profile-shaped fields, never streak/xp counters.
+    if (window.kidsync && typeof window.kidsync.upsertKidProfile === 'function') {
+      window.kidsync.upsertKidProfile(tweaks);
+    }
+  }, [tweaks]);
 
   // Edit-mode wiring
   useEffect(() => {

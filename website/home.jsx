@@ -644,7 +644,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 //                              article whose steps[] is partial)
 //   · Done       ........... "🎉 All done — see you tomorrow"
 // ────────────────────────────────────────────────────────────────────
-function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen }) {
+function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen, tweaks }) {
   if (!daily3 || daily3.length === 0) return null;
 
   // Find first article with partial progress (steps started, not all done).
@@ -682,12 +682,21 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen 
       padding:'26px 28px 24px',   // ~40% taller than the previous version
     }}>
       <div style={{maxWidth:1180, margin:'0 auto'}}>
-        {/* Top row: progress text — bigger + breathier */}
+        {/* Greeting row: "Hi {name}! 👋 · {date}" — moved up from the hero. */}
+        <div style={{
+          fontFamily:'Nunito, sans-serif', fontWeight:800,
+          color: theme.heroTextAccent, fontSize:13,
+          letterSpacing:'.1em', textTransform:'uppercase', marginBottom:8,
+        }}>
+          Hi {tweaks?.userName || 'friend'}! 👋 &nbsp;·&nbsp; {new Date().toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}
+        </div>
+
+        {/* Progress row: progress text + CTA button — bigger + breathier */}
         <div style={{
           fontFamily:'Nunito, sans-serif',
           fontSize:16, fontWeight:900, color:'#1b1230', letterSpacing:'.04em',
           textTransform:'uppercase', marginBottom:14,
-          display:'flex', alignItems:'baseline', gap:14, flexWrap:'wrap',
+          display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
         }}>
           <span style={{fontSize:22}}>⏱️</span>
           <span>Today's read</span>
@@ -707,6 +716,18 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen 
               fontWeight:900, color:'#0e8d82', fontSize:14,
               textTransform:'none', letterSpacing:'.02em',
             }}>· 🎉 all done — see you tomorrow</span>
+          )}
+          {/* CTA — Continue or Start, mirrors the hero's old button.
+              Pushed to the right; collapses below on narrow widths via flex-wrap. */}
+          {!allDone && action && (
+            <button onClick={action} style={{
+              marginLeft:'auto',
+              background:'#1b1230', color:'#fff', border:'none',
+              borderRadius:14, padding:'10px 18px',
+              fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:15,
+              letterSpacing:'.02em', textTransform:'none', cursor:'pointer',
+              boxShadow:'0 4px 0 rgba(0,0,0,0.18)',
+            }}>{label}</button>
           )}
         </div>
 
@@ -882,6 +903,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
           dailyGoal={goal}
           minutesToday={minutesToday}
           onOpen={onOpen}
+          tweaks={tweaks}
         />
       )}
 
@@ -909,107 +931,49 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
         </section>
       )}
 
-      {/* ——————————— TODAY'S 15 HERO (hidden in archive) ——————————— */}
+      {/* ——————————— TODAY'S PICK BANNER (hidden in archive) ———————————
+          Single column, full-width. Title row on top, 3 cards stacked
+          full-width below. Greeting moved to the sticky TodayBanner. */}
       {!isArchive && (
       <section style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 0'}}>
         <div style={{
           background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
           borderRadius:28,
-          padding:'28px 32px',
-          display:'grid',
-          // Daily-3 column gets ~2/3 of width so cards have room to breathe;
-          // welcome text gets the remaining ~1/3.
-          gridTemplateColumns: heroVariant === 'streak' ? '1fr 1fr' : '1fr 2fr',
-          gap:28,
-          alignItems:'center',
+          padding:'40px 48px',   // ~40% bigger than the previous 28×32
           position:'relative',
           overflow:'hidden',
           border:`2px solid ${theme.border}`,
         }}>
-          {/* doodles */}
+          {/* doodle */}
           <svg style={{position:'absolute', right:-20, bottom:-30, opacity:.18}} width="240" height="240" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" stroke="#1b1230" strokeWidth="2" fill="none"/><circle cx="50" cy="50" r="28" stroke="#1b1230" strokeWidth="2" fill="none" strokeDasharray="4 6"/></svg>
 
-          <div style={{position:'relative'}}>
-            <div style={{fontFamily:'Nunito, sans-serif', fontWeight:800, color: theme.heroTextAccent, fontSize:13, letterSpacing:'.1em', textTransform:'uppercase', marginBottom:6}}>
-              Hi {tweaks.userName || 'friend'}! 👋 &nbsp;·&nbsp; {new Date().toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}
-            </div>
-            {heroVariant === 'streak' ? (
-              <>
-                <div style={{display:'inline-flex', alignItems:'center', gap:8, background:'#1b1230', color:'#ffc83d', padding:'6px 14px', borderRadius:999, fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:12, letterSpacing:'.1em', textTransform:'uppercase', marginBottom:12}}>
-                  🔥 Streak mode
-                </div>
-                <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:64, lineHeight:0.95, color:'#1b1230', margin:'0 0 10px', letterSpacing:'-0.03em'}}>
-                  {streak} days<br/><span style={{color: theme.heroTextAccent, fontStyle:'italic'}}>on fire.</span>
-                </h1>
-                <p style={{fontSize:17, color:'#3a2a4a', margin:'0 0 14px', lineHeight:1.5, maxWidth:480}}>
-                  {streak > 0
-                    ? <>Read today to hit <b>day {streak+1}</b>. You've practiced <b>{minutesToday} of {goal} min</b>.</>
-                    : <>Read your first story today to start a streak. Today's goal: <b>{goal} min</b>.</>
-                  }
-                </p>
-                {/* mini calendar of last 7 days */}
-                <div style={{display:'flex', gap:6, marginBottom:16}}>
-                  {Array.from({length:7}).map((_,i)=>{
-                    const done = i < 6;
-                    return (
-                      <div key={i} style={{width:36, height:44, borderRadius:10, background: done ? '#1b1230' : 'rgba(255,255,255,0.65)', color: done ? '#ffc83d' : '#9a8d7a', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:11, border: i===6 ? `2px dashed ${theme.heroTextAccent}` : 'none'}}>
-                        <div style={{fontSize:9, opacity:0.7}}>{['M','T','W','T','F','S','S'][i]}</div>
-                        <div style={{fontSize:14}}>{done ? '✓' : '·'}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <>
-                <h1 style={{
-                  fontFamily:'Fraunces, serif', fontWeight:900, fontSize:48, lineHeight:1.02,
-                  color:'#1b1230', margin:'0 0 8px', letterSpacing:'-0.02em',
-                  whiteSpace:'nowrap',   // keep "Today's 21 minutes" on one line
-                }}>
-                  Today's <span style={{background: theme.accent, padding:'0 10px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>{goal} minutes</span>
-                </h1>
-                <p style={{
-                  fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
-                  fontSize:22, color:'#c14e2a', margin:'0 0 14px',
-                  letterSpacing:'-0.01em',
-                }}>
-                  {window.SITE_CONFIG?.tagline || 'Little daily, big magic.'}
-                </p>
-                <p style={{fontSize:17, color:'#3a2a4a', margin:'0 0 18px', lineHeight:1.5, maxWidth:480}}>
-                  Three smart stories. Read, think, and earn your streak. You've read <b>{readCount} of {window.SITE_CONFIG?.storiesPerDay ?? 3}</b> today.
-                </p>
-              </>
-            )}
-            <div style={{display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
-              <BigButton bg="#1b1230" color="#fff" onClick={() => onOpen(daily3.find(a => !progress.readToday.includes(a.id))?.id || daily3[0].id)}>
-                ▶ &nbsp;Start today's read
-              </BigButton>
-              <div style={{display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'rgba(255,255,255,0.65)', borderRadius:14, fontWeight:700, fontSize:14}}>
-                <span style={{fontSize:18}}>⏱️</span>
-                <span>{minutesToday}/{goal} min today</span>
-              </div>
+          {/* Title row: headline + pick-again / swap-hint toolbar */}
+          <div style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            flexWrap:'wrap', gap:14, marginBottom:22, position:'relative',
+          }}>
+            <h1 style={{
+              fontFamily:'Fraunces, serif', fontWeight:900, fontSize:48, lineHeight:1.02,
+              color:'#1b1230', margin:0, letterSpacing:'-0.02em',
+            }}>
+              Today's <span style={{background: theme.accent, padding:'0 12px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>Top 3 Pick</span>
+            </h1>
+            <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+              {picksLocked && (
+                <button onClick={resetPicks} style={{
+                  background:'transparent', border:'1.5px solid #f0e8d8',
+                  borderRadius:999, padding:'7px 14px', cursor:'pointer',
+                  fontSize:12, fontWeight:800, color:'#1b1230',
+                  fontFamily:'Nunito, sans-serif', letterSpacing:'.02em',
+                }} title="Re-open the pick screen for today">🔄 Pick again</button>
+              )}
+              <div style={{fontSize:12, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
             </div>
           </div>
 
-          {/* Daily 3 stack — swappable picks. Header text was removed
-              (duplicate of "Today's 21 minutes" in the hero); a small
-              toolbar with the Pick-again button + swap hint stays
-              right-aligned. */}
-          <div style={{display:'flex', flexDirection:'column', gap:10, position:'relative'}}>
-            {(picksLocked || true) && (
-              <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:8, flexWrap:'wrap'}}>
-                {picksLocked && (
-                  <button onClick={resetPicks} style={{
-                    background:'transparent', border:'1.5px solid #f0e8d8',
-                    borderRadius:999, padding:'5px 12px', cursor:'pointer',
-                    fontSize:11, fontWeight:800, color:'#1b1230',
-                    fontFamily:'Nunito, sans-serif', letterSpacing:'.02em',
-                  }} title="Re-open the pick screen for today">🔄 Pick again</button>
-                )}
-                <div style={{fontSize:11, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
-              </div>
-            )}
+          {/* 3 cards stacked vertically, full-width row layout. Larger image
+              and a 4-line summary so each pick reads like a real teaser. */}
+          <div style={{display:'flex', flexDirection:'column', gap:14, position:'relative'}}>
             {daily3.map((a, i) => {
               const catColor = CATEGORIES.find(c => c.label === a.category)?.color || '#1b1230';
               const alternates = displayPool.filter(x => x.category === a.category && !activePicks.includes(x.id));
@@ -1019,26 +983,26 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                 <div key={a.id} style={{position:'relative'}}>
                   {isSwapping ? (
                     <div style={{
-                      background:'#1b1230', borderRadius:16, padding:10,
+                      background:'#1b1230', borderRadius:16, padding:14,
                       boxShadow:'0 4px 0 rgba(27,18,48,0.15)',
                     }}>
-                      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'2px 6px 8px'}}>
-                        <div style={{fontSize:10, fontWeight:800, color:'#ffc83d', textTransform:'uppercase', letterSpacing:'.08em'}}>Pick a different {a.category} story</div>
+                      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'2px 6px 10px'}}>
+                        <div style={{fontSize:11, fontWeight:800, color:'#ffc83d', textTransform:'uppercase', letterSpacing:'.08em'}}>Pick a different {a.category} story</div>
                         <button onClick={()=>setSwapOpen(null)} style={{
-                          background:'transparent', border:'none', color:'#ffc83d', fontWeight:900, cursor:'pointer', fontSize:16, padding:'0 4px',
+                          background:'transparent', border:'none', color:'#ffc83d', fontWeight:900, cursor:'pointer', fontSize:18, padding:'0 4px',
                         }} title="Close">✕</button>
                       </div>
                       {alternates.map(alt => (
                         <button key={alt.id} onClick={()=>{swapPick(i, alt.id); setSwapOpen(null);}} style={{
-                          display:'flex', alignItems:'center', gap:10, width:'100%', textAlign:'left',
+                          display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left',
                           background:'rgba(255,255,255,0.06)', color:'#fff',
-                          border:'none', padding:8, borderRadius:10, cursor:'pointer',
-                          marginBottom:6,
+                          border:'none', padding:10, borderRadius:10, cursor:'pointer',
+                          marginBottom:8,
                         }} onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.14)'} onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.06)'}>
-                          <div style={{width:44, height:44, borderRadius:10, flexShrink:0, background:`url(${alt.image}) center/cover, ${catColor}`}}/>
+                          <div style={{width:56, height:56, borderRadius:10, flexShrink:0, background:`url(${alt.image}) center/cover, ${catColor}`}}/>
                           <div style={{flex:1, minWidth:0}}>
-                            <div style={{fontWeight:800, fontSize:13, lineHeight:1.25}}>{alt.title}</div>
-                            <div style={{fontSize:10, opacity:0.7, fontWeight:700, marginTop:3}}>{alt.readMins} min · {alt.tag}</div>
+                            <div style={{fontWeight:800, fontSize:14, lineHeight:1.25}}>{alt.title}</div>
+                            <div style={{fontSize:11, opacity:0.7, fontWeight:700, marginTop:3}}>{alt.readMins} min · {alt.tag}</div>
                           </div>
                         </button>
                       ))}
@@ -1048,50 +1012,58 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                     </div>
                   ) : (
                   <div style={{
-                    background:'#fff', border:'2px solid #fff', borderRadius:16,
-                    padding:'10px 12px', display:'flex', gap:12, alignItems:'center',
+                    background:'#fff', border:'2px solid #fff', borderRadius:18,
+                    padding:'18px 22px', display:'flex', gap:20, alignItems:'flex-start',
                     boxShadow:'0 2px 0 rgba(27,18,48,0.08)',
                   }}>
                     <div style={{
-                      width:36, height:36, borderRadius:12, flexShrink:0,
+                      width:56, height:56, borderRadius:16, flexShrink:0,
                       background: catColor, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center',
-                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18,
+                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:26,
                     }}>{i+1}</div>
                     <div style={{
-                      width:52, height:52, borderRadius:12, flexShrink:0,
+                      width:196, height:196, borderRadius:16, flexShrink:0,
                       background:`url(${a.image}) center/cover, ${catColor}`,
                       border:`2px solid ${catColor}`,
                     }}/>
                     <button onClick={()=>onOpen(a.id)} style={{
                       flex:1, minWidth:0, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0,
+                      display:'flex', flexDirection:'column', gap:8,
                     }}>
-                      <div style={{fontWeight:800, fontSize:15, color:'#1b1230', lineHeight:1.3, marginBottom:6, display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:3, overflow:'hidden'}}>
+                      <div style={{
+                        fontFamily:'Fraunces, serif', fontWeight:900,
+                        fontSize:24, color:'#1b1230', lineHeight:1.2,
+                        display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:2, overflow:'hidden',
+                      }}>
                         {a.title}
                       </div>
-                      {/* Category + minutes badge removed — duplicate of the hero
-                          "Today's 21 minutes" headline + the category-color slot
-                          number on the left. Card now leans into the title +
-                          summary with more breathing room. */}
-                      <div style={{display:'none', gap:6, alignItems:'center', fontSize:11, color:'#6b5c80'}}>
-                        <CatChip cat={a.category} small/>
-                        <span>· {a.readMins} min</span>
+                      <div style={{
+                        fontSize:16, color:'#3a2a4a', lineHeight:1.5,
+                        display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:4, overflow:'hidden',
+                      }}>
+                        {_shortHook(a.summary, 60)}
                       </div>
+                      {/* Category + read-time line removed — duplicate of the
+                          colored slot number on the left and the global "21 min"
+                          headline above. Card now leans entirely on title + summary. */}
                     </button>
-                    {(() => {
-                      const p = _articlePct((progress.articleProgress||{})[a.id]);
-                      const done = progress.readToday.includes(a.id);
-                      if (done) return <span style={{fontSize:22, color:'#17b3a6'}}>✓</span>;
-                      if (p > 0) return <span style={{fontSize:11, fontWeight:800, color:'#f4a24c', background:'#fff4e0', padding:'3px 8px', borderRadius:999, border:'1.5px solid #f4a24c'}}>{p}%</span>;
-                      return null;
-                    })()}
-                    {canSwap && (
-                      <button onClick={()=>setSwapOpen(i)} title={`Pick a different ${a.category} story`} style={{
-                        background:'transparent', color:'#6b5c80',
-                        border:'2px solid #f0e8d8', borderRadius:10,
-                        width:32, height:32, cursor:'pointer', fontSize:14, fontWeight:900,
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                      }}>⇆</button>
-                    )}
+                    <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:10, flexShrink:0}}>
+                      {(() => {
+                        const p = _articlePct((progress.articleProgress||{})[a.id]);
+                        const done = progress.readToday.includes(a.id);
+                        if (done) return <span style={{fontSize:28, color:'#17b3a6'}}>✓</span>;
+                        if (p > 0) return <span style={{fontSize:12, fontWeight:800, color:'#f4a24c', background:'#fff4e0', padding:'4px 10px', borderRadius:999, border:'1.5px solid #f4a24c'}}>{p}%</span>;
+                        return null;
+                      })()}
+                      {canSwap && (
+                        <button onClick={()=>setSwapOpen(i)} title={`Pick a different ${a.category} story`} style={{
+                          background:'transparent', color:'#6b5c80',
+                          border:'2px solid #f0e8d8', borderRadius:10,
+                          width:36, height:36, cursor:'pointer', fontSize:16, fontWeight:900,
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                        }}>⇆</button>
+                      )}
+                    </div>
                   </div>
                   )}
                 </div>

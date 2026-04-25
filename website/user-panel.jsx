@@ -91,6 +91,107 @@ function UserButton({ tweaks, onClick, streak, level }) {
   );
 }
 
+// —————————— PAIRING EXPANDER ——————————
+// "Pair with parent" — for the cross-device case where the parent is on
+// their own phone, not on the kid's tablet. Calls window.kidsync's RPC,
+// shows the 6-digit code with a 10-min countdown. Defined at module
+// scope so React doesn't unmount it on each panel re-render (which
+// would lose the code as soon as it's generated).
+function PairingExpander() {
+  const [open, setOpen] = useStateU(false);
+  const [busy, setBusy] = useStateU(false);
+  const [code, setCode] = useStateU(null);
+  const [expiresAt, setExpiresAt] = useStateU(null);
+  const [err, setErr] = useStateU(null);
+  const [tick, setTick] = useStateU(0);
+
+  // 1-second tick so the countdown stays live.
+  React.useEffect(() => {
+    if (!expiresAt) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  const remaining = expiresAt
+    ? Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1000))
+    : 0;
+  const remLabel = remaining > 0
+    ? `${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`
+    : 'expired';
+
+  const generate = async () => {
+    setBusy(true); setErr(null); setCode(null); setExpiresAt(null);
+    try {
+      if (!window.kidsync || !window.kidsync.generatePairingCode) {
+        throw new Error('Cloud sync not available on this device.');
+      }
+      const r = await window.kidsync.generatePairingCode();
+      if (!r || !r.code) throw new Error('Could not generate a code. Check your connection.');
+      setCode(r.code);
+      setExpiresAt(r.expiresAt);
+    } catch (e) {
+      setErr(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: '100%', background: '#fff', border: '2px solid #f0e8d8',
+        borderRadius: 14, padding: '12px 16px', cursor: 'pointer',
+        fontWeight: 800, fontSize: 14, color: '#1b1230',
+        fontFamily: 'Nunito, sans-serif', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 20 }}>🔗</span>
+        <span style={{ flex: 1 }}>Pair with parent on another device</span>
+        <span style={{ color: '#9a8d7a', transform: open ? 'rotate(180deg)' : 'rotate(0)' }}>⌄</span>
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 8, padding: '14px 16px',
+          background: '#fff9ef', border: '1.5px dashed #c9b99a', borderRadius: 14,
+          fontSize: 13, color: '#3a2a4a', lineHeight: 1.5,
+        }}>
+          <div style={{ marginBottom: 10 }}>
+            On the parent's phone, sign in to the parent dashboard, then enter this code:
+          </div>
+          {!code && (
+            <button onClick={generate} disabled={busy} style={{
+              background: '#1b1230', color: '#ffc83d', border: 'none', borderRadius: 12,
+              padding: '10px 16px', fontWeight: 900, fontSize: 14, cursor: busy ? 'wait' : 'pointer',
+              fontFamily: 'Nunito, sans-serif',
+            }}>{busy ? 'Generating…' : 'Generate code'}</button>
+          )}
+          {code && (
+            <div>
+              <div style={{
+                fontFamily: 'Fraunces, serif', fontWeight: 900, fontSize: 36, letterSpacing: '.2em',
+                color: '#1b1230', textAlign: 'center', padding: '12px 0', userSelect: 'all',
+              }}>{code}</div>
+              <div style={{ textAlign: 'center', fontSize: 12, color: remaining > 0 ? '#0e8d82' : '#b22525', fontWeight: 700 }}>
+                ⏱ Expires in {remLabel}
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <button onClick={generate} disabled={busy} style={{
+                  background: 'transparent', border: '1.5px solid #f0e8d8',
+                  borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                  color: '#6b5c80', cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
+                }}>↻ New code</button>
+              </div>
+            </div>
+          )}
+          {err && (
+            <div style={{ marginTop: 10, color: '#b22525', fontSize: 12 }}>{err}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // —————————— USER PANEL (slide-in drawer) ——————————
 function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) {
   const av = getAvatar(tweaks.avatar);
@@ -351,17 +452,23 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
               </Section>
 
               <Section label="Parent / teacher" sub="">
-                <button style={{
-                  width:'100%', background:'#fff', border:'2px solid #f0e8d8',
-                  borderRadius:14, padding:'12px 16px', cursor:'pointer',
-                  fontWeight:800, fontSize:14, color:'#1b1230',
-                  fontFamily:'Nunito, sans-serif', textAlign:'left',
-                  display:'flex', alignItems:'center', gap:10,
-                }}>
+                <a
+                  href="parent.html"
+                  target="_blank"
+                  rel="noopener"
+                  style={{
+                    width:'100%', background:'#fff', border:'2px solid #f0e8d8',
+                    borderRadius:14, padding:'12px 16px', cursor:'pointer',
+                    fontWeight:800, fontSize:14, color:'#1b1230',
+                    fontFamily:'Nunito, sans-serif', textAlign:'left',
+                    textDecoration:'none',
+                    display:'flex', alignItems:'center', gap:10,
+                  }}>
                   <span style={{fontSize:20}}>👨‍👩‍👧</span>
                   <span style={{flex:1}}>Parent dashboard</span>
-                  <span style={{color:'#9a8d7a'}}>›</span>
-                </button>
+                  <span style={{color:'#9a8d7a'}}>↗</span>
+                </a>
+                <PairingExpander/>
               </Section>
             </>
           )}
