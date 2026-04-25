@@ -353,7 +353,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
             </div>
           );
         })()}
-        Made for curious kids · News Oh,Ye! 🎈
+        Made for curious kids · {window.SITE_CONFIG?.brand || '21 minutes every day'} 🎈
       </footer>
     </div>
   );

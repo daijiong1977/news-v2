@@ -24,7 +24,7 @@ const ARCHIVE_BASE = `${SUPABASE_URL}/storage/v1/object/public/redesign-daily-co
 // dailyGoalMinutes  =  storiesPerDay  ×  sum(stepWeights)
 // 21               =  3              ×  (2+1+2+2)
 const SITE_CONFIG = {
-  brand:        "News Oh,Ye!",
+  brand:        "21 minutes every day",
   audience:     "Kids age 8-13",
   domain:       "kidsnews.21mins.com",   // production target
   vertical:     "kidsnews",

@@ -185,7 +185,7 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
           }}>← Back</button>
           <div style={{display:'flex', alignItems:'center', gap:10}}>
             <OhYeLogo size={32}/>
-            <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>News Oh,Ye!</div>
+            <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>{window.SITE_CONFIG?.brand || '21 minutes every day'}</div>
           </div>
           <div style={{flex:1}}/>
           <div style={{display:'flex', alignItems:'center', gap:6}}>
