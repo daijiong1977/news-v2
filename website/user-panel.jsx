@@ -69,7 +69,19 @@ function UserButton({ tweaks, onClick, streak, level }) {
       <div style={{textAlign:'left', lineHeight:1.1}}>
         <div style={{fontWeight:900, fontSize:14, color:'#1b1230'}}>{tweaks.userName || 'Me'}</div>
         <div style={{fontSize:11, color:'#6b5c80', fontWeight:700, display:'flex', gap:6, alignItems:'center'}}>
-          <span>{lvl.emoji} {lvl.id}</span>
+          {tweaks.language === 'zh' ? (
+            // Chinese mode: show flag + 中文; level is irrelevant
+            // (Chinese variants are summary-only at Sprout level only).
+            <span>🇨🇳 中文</span>
+          ) : (
+            // English mode: show language flag + reading level so users
+            // see at a glance both axes of their choice.
+            <>
+              <span>🇬🇧 EN</span>
+              <span style={{color:'#d0c4b4'}}>·</span>
+              <span>{lvl.emoji} {lvl.id}</span>
+            </>
+          )}
           <span style={{color:'#d0c4b4'}}>·</span>
           <span>🔥 {streak}</span>
         </div>
