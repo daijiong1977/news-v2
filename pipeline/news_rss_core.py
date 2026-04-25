@@ -41,17 +41,76 @@ for _line in (_envp.open() if _envp.exists() else []):
         _k, _v = _line.strip().split("=", 1)
         os.environ[_k] = _v
 
-DEEPSEEK_KEY = os.environ["DEEPSEEK_API_KEY"]
+DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions"
 
-# Model selection (DeepSeek V4 family — older `deepseek-chat` /
-# `deepseek-reasoner` aliases will be deprecated). The same model serves
-# both modes — thinking is on by default; we disable it for the chat
-# (rewrite) path with `thinking: {type: 'disabled'}`. Override per-env
-# via DEEPSEEK_MODEL_CHAT / DEEPSEEK_MODEL_REASONER if you need to A/B
-# test other variants (e.g. deepseek-v4-pro).
+# Default model for the env-fallback path. The DB-driven provider lookup
+# (db_config.select_provider) is the primary path; these defaults apply
+# only when the redesign_ai_providers table is empty/unavailable.
 DEEPSEEK_MODEL_CHAT = os.environ.get("DEEPSEEK_MODEL_CHAT", "deepseek-v4-flash")
 DEEPSEEK_MODEL_REASONER = os.environ.get("DEEPSEEK_MODEL_REASONER", "deepseek-v4-flash")
+
+
+# Provider resolution — module-level cache; populated lazily on first
+# use. To force a fresh lookup (e.g. between admin edits), call
+# `pipeline.db_config.reset_caches()`.
+_resolved_chat: tuple[str, str, str] | None = None       # (api_key, endpoint, model)
+_resolved_reasoner: tuple[str, str, str] | None = None
+
+
+def _provider_to_tuple(p) -> tuple[str, str, str]:
+    """Provider → (api_key, endpoint, model). Endpoint = base_url + /chat/completions."""
+    return (p.api_key, p.base_url + "/chat/completions", p.model_id)
+
+
+def _resolve_chat_provider() -> tuple[str, str, str]:
+    """Pick the chat-side provider once, cache. Roles: rewriter > any.
+    Falls back to env-var DeepSeek if the table is empty or lookup fails."""
+    global _resolved_chat
+    if _resolved_chat is not None:
+        return _resolved_chat
+    try:
+        from .db_config import select_provider
+        p = select_provider("rewriter") or select_provider("any")
+        if p:
+            _resolved_chat = _provider_to_tuple(p)
+            log.info("chat provider: %s (%s) via DB", p.name, p.model_id)
+            return _resolved_chat
+    except Exception as e:  # noqa: BLE001
+        log.warning("chat provider DB lookup failed (%s); using env defaults", e)
+    if not DEEPSEEK_KEY:
+        raise RuntimeError("no chat provider available — DB has none and DEEPSEEK_API_KEY is unset")
+    _resolved_chat = (DEEPSEEK_KEY, DEEPSEEK_ENDPOINT, DEEPSEEK_MODEL_CHAT)
+    return _resolved_chat
+
+
+def _resolve_reasoner_provider() -> tuple[str, str, str]:
+    """Pick the reasoner-side provider. Roles: enricher > curator > any."""
+    global _resolved_reasoner
+    if _resolved_reasoner is not None:
+        return _resolved_reasoner
+    try:
+        from .db_config import select_provider
+        p = select_provider("enricher") or select_provider("curator") or select_provider("any")
+        if p:
+            _resolved_reasoner = _provider_to_tuple(p)
+            log.info("reasoner provider: %s (%s) via DB", p.name, p.model_id)
+            return _resolved_reasoner
+    except Exception as e:  # noqa: BLE001
+        log.warning("reasoner provider DB lookup failed (%s); using env defaults", e)
+    if not DEEPSEEK_KEY:
+        raise RuntimeError("no reasoner provider available — DB has none and DEEPSEEK_API_KEY is unset")
+    _resolved_reasoner = (DEEPSEEK_KEY, DEEPSEEK_ENDPOINT, DEEPSEEK_MODEL_REASONER)
+    return _resolved_reasoner
+
+
+def reset_provider_resolution() -> None:
+    """Invalidate the cached provider tuples — used between pipeline runs
+    if the admin edited the registry mid-process. Most pipeline runs are
+    one-shot so this is rarely needed."""
+    global _resolved_chat, _resolved_reasoner
+    _resolved_chat = None
+    _resolved_reasoner = None
 
 MIN_WORDS_DEFAULT = 500
 MAX_RSS_DEFAULT = 25
@@ -344,15 +403,19 @@ class DeepSeekResult:
         self.usage = usage or {}
 
 
-def _deepseek_post(payload: dict, timeout: int) -> DeepSeekResult:
-    """Single HTTP call to DeepSeek. Raises on bad HTTP status. On valid HTTP
-    response, returns a DeepSeekResult — `parsed` is None if JSON parse + repair
-    both fail, in which case `parse_error` carries the original exception.
-    Callers can check `finish_reason == "length"` to detect truncation."""
+def _deepseek_post(payload: dict, timeout: int,
+                    *, api_key: str | None = None, endpoint: str | None = None) -> DeepSeekResult:
+    """Single HTTP call to a DeepSeek-compatible provider. Pass `api_key`
+    + `endpoint` to override the env-default DeepSeek; the DB-driven
+    callers do this. Raises on bad HTTP status. Returns DeepSeekResult —
+    `parsed` is None if JSON parse + repair both fail; callers detect
+    truncation via `finish_reason == 'length'`."""
+    api_key = api_key or DEEPSEEK_KEY
+    endpoint = endpoint or DEEPSEEK_ENDPOINT
     r = requests.post(
-        DEEPSEEK_ENDPOINT,
+        endpoint,
         json=payload,
-        headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
+        headers={"Authorization": f"Bearer {api_key}"},
         timeout=timeout,
     )
     r.raise_for_status()
@@ -378,11 +441,13 @@ def _deepseek_post(payload: dict, timeout: int) -> DeepSeekResult:
 
 def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2,
                   max_attempts: int = 3, json_mode: bool = True) -> dict:
-    """Call deepseek-chat with JSON output. JSON mode (response_format) on by
+    """Call the active chat provider (resolved from `redesign_ai_providers`,
+    falling back to env-var DeepSeek). JSON mode (response_format) on by
     default — eliminates the malformed-JSON failure class for most calls.
     Retries with per-class backoff."""
+    api_key, endpoint, model = _resolve_chat_provider()
     payload = {
-        "model": DEEPSEEK_MODEL_CHAT,
+        "model": model,
         # Disable thinking — V4 default is on; chat/rewrite is faithful
         # restatement, doesn't need reasoning tokens.
         "thinking": {"type": "disabled"},
@@ -398,7 +463,7 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
-            res = _deepseek_post(payload, timeout=120)
+            res = _deepseek_post(payload, timeout=120, api_key=api_key, endpoint=endpoint)
             if res.parsed is not None:
                 if res.repair_kind:
                     CALL_STATS["chat_repaired"] += 1
@@ -892,8 +957,9 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
       · Truncation (finish_reason='length'): immediate raise, never reroll —
         the same prompt will hit the same length cap.
     """
+    api_key, endpoint, model = _resolve_reasoner_provider()
     payload = {
-        "model": DEEPSEEK_MODEL_REASONER,
+        "model": model,
         # thinking is default on V4 — explicit so the intent is clear
         "thinking": {"type": "enabled"},
         "messages": [{"role": "system", "content": system},
@@ -906,7 +972,7 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
     last_err: Exception | None = None
     while True:
         try:
-            res = _deepseek_post(payload, timeout=300)
+            res = _deepseek_post(payload, timeout=300, api_key=api_key, endpoint=endpoint)
             if res.parsed is not None:
                 if res.repair_kind:
                     CALL_STATS["reasoner_repaired"] += 1

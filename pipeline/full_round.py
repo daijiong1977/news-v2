@@ -32,6 +32,11 @@ from .news_sources import backup_sources as news_backups
 from .science_sources import todays_backup_sources as sci_backups
 from .fun_sources import todays_backup_sources as fun_backups
 
+# Phase 2: DB-driven config + checkpoints. Imported as a module so we can
+# refer to e.g. `db_config.load_sources` per-call without re-importing.
+from . import checkpoints as ckpt
+from . import db_config
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("full-round")
 
@@ -1090,47 +1095,93 @@ def main_mega() -> None:
         if run_id:
             update_run(run_id, {"telemetry": telemetry})
 
+    # ---- Resume / DB-config bootstrap ----
+    # Categories + sources are now DB-driven. Tables: redesign_categories
+    # + redesign_source_configs (admin-editable). Hardcoded News/Science/Fun
+    # is gone from this code path; if the admin disables a category or
+    # adds a 4th, this loop reflects that immediately.
+    categories = db_config.load_categories()
+    if not categories:
+        raise SystemExit("no active rows in redesign_categories — pipeline cannot run")
+    cat_names = [c["name"] for c in categories]
+    log.info("=== MEGA active categories from DB: %s ===", cat_names)
+
+    # Build a {(name, rss_url): NewsSource} map across every category's
+    # primary + backup feed list. Checkpoint hydration uses this to
+    # resurrect Source dataclass instances from JSON refs.
+    all_sources_for_lookup = []
+    for cat_name in cat_names:
+        all_sources_for_lookup.extend(db_config.load_sources(cat_name))
+        all_sources_for_lookup.extend(db_config.load_backup_sources(cat_name))
+    source_lookup = ckpt.build_source_lookup(all_sources_for_lookup)
+
+    resume_target = ckpt.resume_from()
+    if resume_target:
+        log.info("=== RESUMING: skipping all stages before '%s' ===", resume_target)
+
+    def _load_or_run(stage: str, runner):
+        """If we're resuming past `stage`, load the stage's checkpoint.
+        Otherwise run `runner()`, save the result, return it."""
+        if resume_target and ckpt.STAGES.index(stage) < ckpt.STAGES.index(resume_target):
+            log.info("  [%s] resume: loading checkpoint", stage)
+            return ckpt.load(stage, source_lookup, run_date=today)
+        result = runner()
+        ckpt.save(stage, result, run_date=today)
+        return result
+
     # ---- Phase A* light: RSS only, no body, no LLM ----
-    t = time.monotonic()
-    log.info("=== MEGA Phase A* (light RSS fetch) ===")
-    briefs_by_cat: dict[str, list[dict]] = {
-        "News": phase_a_light("News", news_sources()),
-        "Science": phase_a_light("Science", science_sources()),
-        "Fun": phase_a_light("Fun", fun_sources()),
-    }
-    _set_phase("phase_a_light", t,
-               counts={c: len(b) for c, b in briefs_by_cat.items()})
+    def _phase_a_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA Phase A* (light RSS fetch) ===")
+        out = {}
+        for cat_name in cat_names:
+            srcs = db_config.load_sources(cat_name)
+            out[cat_name] = phase_a_light(cat_name, srcs)
+        _set_phase("phase_a_light", t0,
+                   counts={c: len(b) for c, b in out.items()})
+        return out
+    briefs_by_cat: dict[str, list[dict]] = _load_or_run("phase_a", _phase_a_runner)
 
     # ---- Stage 1: forbidden-word filter (Python) ----
-    t = time.monotonic()
-    log.info("=== MEGA Stage 1 — forbidden-word filter ===")
-    rejected_total = 0
-    for cat in briefs_by_cat:
-        kept, rejected = filter_briefs(briefs_by_cat[cat])
-        briefs_by_cat[cat] = kept
-        rejected_total += len(rejected)
-    _set_phase("stage1_forbidden", t, dropped=rejected_total)
-    log.info("  total kept after forbidden filter: %d (dropped %d)",
-             sum(len(b) for b in briefs_by_cat.values()), rejected_total)
+    def _stage1_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA Stage 1 — forbidden-word filter ===")
+        rejected_total = 0
+        out = {}
+        for cat in briefs_by_cat:
+            kept, rejected = filter_briefs(briefs_by_cat[cat])
+            out[cat] = kept
+            rejected_total += len(rejected)
+        _set_phase("stage1_forbidden", t0, dropped=rejected_total)
+        log.info("  total kept after forbidden filter: %d (dropped %d)",
+                 sum(len(b) for b in out.values()), rejected_total)
+        return out
+    briefs_by_cat = _load_or_run("stage1", _stage1_runner)
 
     # ---- Stage 2: mega-curator (1 LLM call, 5 ranked per cat) ----
-    t = time.monotonic()
-    log.info("=== MEGA Stage 2 — curator picks 5 ranked per cat ===")
-    ranked_by_cat, _vet, _reasoning = mega_curate(briefs_by_cat)
-    _set_phase("stage2_curator", t,
-               picks={c: len(p) for c, p in ranked_by_cat.items()})
+    def _stage2_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA Stage 2 — curator picks 5 ranked per cat ===")
+        ranked, _vet, _reasoning = mega_curate(briefs_by_cat)
+        _set_phase("stage2_curator", t0,
+                   picks={c: len(p) for c, p in ranked.items()})
+        return ranked
+    ranked_by_cat = _load_or_run("stage2_picks", _stage2_runner)
 
     # ---- Body + og:image verify on rank 1-4 (lazy fetch) ----
-    t = time.monotonic()
-    log.info("=== MEGA verify body + og:image on rank 1-4 ===")
-    stories_by_cat = verify_picks_lazy(ranked_by_cat, max_top=4)
-    verified_counts = {c: sum(1 for s in v if not s.get("_unverified_spare"))
-                       for c, v in stories_by_cat.items()}
-    _set_phase("verify", t, verified=verified_counts)
-    for cat, ws in stories_by_cat.items():
-        verified = [s for s in ws if not s.get("_unverified_spare")]
-        log.info("  [%s] %d verified + %d spare ranks",
-                 cat, len(verified), len(ws) - len(verified))
+    def _verify_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA verify body + og:image on rank 1-4 ===")
+        out = verify_picks_lazy(ranked_by_cat, max_top=4)
+        verified_counts = {c: sum(1 for s in v if not s.get("_unverified_spare"))
+                           for c, v in out.items()}
+        _set_phase("verify", t0, verified=verified_counts)
+        for cat, ws in out.items():
+            verified = [s for s in ws if not s.get("_unverified_spare")]
+            log.info("  [%s] %d verified + %d spare ranks",
+                     cat, len(verified), len(ws) - len(verified))
+        return out
+    stories_by_cat = _load_or_run("verify", _verify_runner)
 
     # ---- Image optimize + upload to Supabase Storage ----
     t = time.monotonic()
@@ -1141,67 +1192,74 @@ def main_mega() -> None:
     _set_phase("images", t)
 
     # ---- Phase C: rewrite up to 4 per cat (with self-scored safety) ----
-    t = time.monotonic()
-    log.info("=== MEGA rewrite (4 per cat, with safety scores) ===")
-    rewrites_by_cat: dict[str, dict] = {}
-    for cat, ws in stories_by_cat.items():
-        verified = [s for s in ws if not s.get("_unverified_spare")][:4]
-        if not verified:
-            log.warning("  [%s] no verified picks to rewrite", cat)
-            rewrites_by_cat[cat] = {"articles": [], "_winners": []}
-            continue
-        articles = [(i, w["winner"]) for i, w in enumerate(verified)]
-        try:
-            rewrite_res = tri_variant_rewrite(articles)
-        except Exception as e:  # noqa: BLE001
-            log.error("  [%s] rewrite failed: %s", cat, e)
-            rewrite_res = {"articles": []}
-        rewrites_by_cat[cat] = {**rewrite_res, "_winners": verified}
-    _set_phase("rewrite", t)
+    def _rewrite_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA rewrite (4 per cat, with safety scores) ===")
+        out: dict[str, dict] = {}
+        for cat, ws in stories_by_cat.items():
+            verified = [s for s in ws if not s.get("_unverified_spare")][:4]
+            if not verified:
+                log.warning("  [%s] no verified picks to rewrite", cat)
+                out[cat] = {"articles": [], "_winners": []}
+                continue
+            articles = [(i, w["winner"]) for i, w in enumerate(verified)]
+            try:
+                rewrite_res = tri_variant_rewrite(articles)
+            except Exception as e:  # noqa: BLE001
+                log.error("  [%s] rewrite failed: %s", cat, e)
+                rewrite_res = {"articles": []}
+            out[cat] = {**rewrite_res, "_winners": verified}
+        _set_phase("rewrite", t0)
+        return out
+    rewrites_by_cat: dict[str, dict] = _load_or_run("rewrite", _rewrite_runner)
 
     # ---- Stage 3: Python safety filter on rewritten bodies ----
-    t = time.monotonic()
-    log.info("=== MEGA Stage 3 — Python safety filter (any_dim ≥ 3 = REJECT) ===")
-    final_stories_by_cat: dict[str, list[dict]] = {}
-    final_variants_by_cat: dict[str, dict[int, dict]] = {}
-    for cat, bundle in rewrites_by_cat.items():
-        winners = bundle.get("_winners") or []
-        rewrite_res = {"articles": bundle.get("articles") or []}
-        kept, rejected = filter_safe_rewrites(rewrite_res)
-        # Map source_id → kept article entry
-        kept_by_sid: dict[int, dict] = {a["source_id"]: a for a in kept
-                                         if isinstance(a.get("source_id"), int)}
-        # Pair up: winners that survived
-        survived_winners: list[dict] = []
-        survived_articles: list[dict] = []
-        for i, w in enumerate(winners):
-            if i in kept_by_sid:
-                survived_winners.append(w)
-                survived_articles.append(kept_by_sid[i])
-        # Promote spares while we have <3
-        spare_pool = [s for s in stories_by_cat.get(cat, [])
-                      if s.get("_unverified_spare")]
-        promotions = 0
-        while len(survived_winners) < 3 and spare_pool:
-            promoted_winner, promoted_article = promote_spare_and_rewrite(cat, spare_pool)
-            if not promoted_winner:
-                break
-            survived_winners.append(promoted_winner)
-            survived_articles.append(promoted_article)
-            promotions += 1
-            if promotions >= 3:  # cap to avoid runaway promotion
-                break
-        final_stories_by_cat[cat] = survived_winners[:3]
-        final_variants_by_cat[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
-        if promotions:
-            telemetry["warnings"].append(
-                f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot")
-        if len(survived_winners) < 3:
-            telemetry["warnings"].append(
-                f"{cat}: only {len(survived_winners)} stories shipped after Stage 3")
-        log.info("  [%s] final: %d stories (%d rejected, %d promoted)",
-                 cat, len(survived_winners), len(rejected), promotions)
-    _set_phase("stage3_safety", t)
+    def _safety_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA Stage 3 — Python safety filter (any_dim ≥ 3 = REJECT) ===")
+        final_stories: dict[str, list[dict]] = {}
+        final_variants: dict[str, dict[int, dict]] = {}
+        for cat, bundle in rewrites_by_cat.items():
+            winners = bundle.get("_winners") or []
+            rewrite_res = {"articles": bundle.get("articles") or []}
+            kept, rejected = filter_safe_rewrites(rewrite_res)
+            kept_by_sid: dict[int, dict] = {a["source_id"]: a for a in kept
+                                             if isinstance(a.get("source_id"), int)}
+            survived_winners: list[dict] = []
+            survived_articles: list[dict] = []
+            for i, w in enumerate(winners):
+                if i in kept_by_sid:
+                    survived_winners.append(w)
+                    survived_articles.append(kept_by_sid[i])
+            spare_pool = [s for s in stories_by_cat.get(cat, [])
+                          if s.get("_unverified_spare")]
+            promotions = 0
+            while len(survived_winners) < 3 and spare_pool:
+                promoted_winner, promoted_article = promote_spare_and_rewrite(cat, spare_pool)
+                if not promoted_winner:
+                    break
+                survived_winners.append(promoted_winner)
+                survived_articles.append(promoted_article)
+                promotions += 1
+                if promotions >= 3:
+                    break
+            final_stories[cat] = survived_winners[:3]
+            final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+            if promotions:
+                telemetry["warnings"].append(
+                    f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot")
+            if len(survived_winners) < 3:
+                telemetry["warnings"].append(
+                    f"{cat}: only {len(survived_winners)} stories shipped after Stage 3")
+            log.info("  [%s] final: %d stories (%d rejected, %d promoted)",
+                     cat, len(survived_winners), len(rejected), promotions)
+        _set_phase("stage3_safety", t0)
+        # Bundle both products into a single checkpoint payload.
+        return {"final_stories_by_cat": final_stories, "final_variants_by_cat": final_variants}
+
+    safety_bundle = _load_or_run("stage3_safety", _safety_runner)
+    final_stories_by_cat = safety_bundle["final_stories_by_cat"]
+    final_variants_by_cat = safety_bundle["final_variants_by_cat"]
 
     # Process images for any newly promoted spares (their image hasn't
     # been processed yet — verify_picks_lazy only ran image-fetch on the
@@ -1213,29 +1271,33 @@ def main_mega() -> None:
             process_images(unprocessed, today, website_dir)
 
     # ---- Phase D: enrich the 9 survivors ----
-    t = time.monotonic()
-    log.info("=== MEGA Phase D — enrich 9 survivors only ===")
-    final_details_by_cat: dict[str, dict] = {}
-    failures: list[str] = []
-    for cat, stories in final_stories_by_cat.items():
-        if not stories:
-            final_details_by_cat[cat] = {}
-            continue
-        articles = [final_variants_by_cat[cat][i] for i in range(len(stories))]
-        try:
-            enrich = detail_enrich({"articles": articles})
-            details = enrich.get("details") or {}
-            expected = len(articles) * 2
-            if len(details) < expected:
-                log.warning("  [%s] enrich returned %d slots, expected %d",
-                            cat, len(details), expected)
-                telemetry["warnings"].append(
-                    f"{cat}: partial enrich ({len(details)}/{expected})")
-            final_details_by_cat[cat] = details
-        except Exception as e:  # noqa: BLE001
-            log.error("  [%s] enrich failed: %s", cat, e)
-            failures.append(f"{cat}: {e}")
-    _set_phase("enrich", t)
+    enrich_failures: list[str] = []
+    def _enrich_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA Phase D — enrich 9 survivors only ===")
+        out: dict[str, dict] = {}
+        for cat, stories in final_stories_by_cat.items():
+            if not stories:
+                out[cat] = {}
+                continue
+            articles = [final_variants_by_cat[cat][i] for i in range(len(stories))]
+            try:
+                enrich = detail_enrich({"articles": articles})
+                details = enrich.get("details") or {}
+                expected = len(articles) * 2
+                if len(details) < expected:
+                    log.warning("  [%s] enrich returned %d slots, expected %d",
+                                cat, len(details), expected)
+                    telemetry["warnings"].append(
+                        f"{cat}: partial enrich ({len(details)}/{expected})")
+                out[cat] = details
+            except Exception as e:  # noqa: BLE001
+                log.error("  [%s] enrich failed: %s", cat, e)
+                enrich_failures.append(f"{cat}: {e}")
+        _set_phase("enrich", t0)
+        return out
+    final_details_by_cat = _load_or_run("enrich", _enrich_runner)
+    failures = enrich_failures
 
     if failures:
         msg = f"{len(failures)} enrich failures: " + " | ".join(failures)
@@ -1247,6 +1309,11 @@ def main_mega() -> None:
         raise SystemExit(1)
 
     # ---- Reuse emit + persist + pack from the current path ----
+    # Emit always re-runs (writes to disk; in CI the disk is fresh each
+    # run, so cached checkpoints alone wouldn't have the JSON files
+    # pack_and_upload reads). When resuming, the upstream stages were
+    # loaded from DB checkpoints — we still need their data on disk for
+    # the bundler.
     t = time.monotonic()
     log.info("=== EMIT + PERSIST + PACK (shared with current pipeline) ===")
     emit_v1_shape(final_stories_by_cat, final_variants_by_cat,
@@ -1256,11 +1323,18 @@ def main_mega() -> None:
     t = time.monotonic()
     count = 0
     if run_id:
-        count = persist_to_supabase(final_stories_by_cat,
-                                     final_variants_by_cat, today, run_id)
-        update_run(run_id, {"status": "persisted",
-                             "notes": f"stories persisted: {count}",
-                             "telemetry": telemetry})
+        # Skip persist when resuming from a later stage — the stories are
+        # already in the DB from the original run. (Re-persisting would be
+        # safe via the unique constraint, but it's wasted work.)
+        if resume_target and ckpt.STAGES.index("persist") < ckpt.STAGES.index(resume_target):
+            log.info("=== resume: skipping persist (already done) ===")
+        else:
+            count = persist_to_supabase(final_stories_by_cat,
+                                         final_variants_by_cat, today, run_id)
+            update_run(run_id, {"status": "persisted",
+                                 "notes": f"stories persisted: {count}",
+                                 "telemetry": telemetry})
+            ckpt.save("persist", {"stories_persisted": count}, run_date=today)
     _set_phase("persist", t, stories_persisted=count)
 
     t = time.monotonic()

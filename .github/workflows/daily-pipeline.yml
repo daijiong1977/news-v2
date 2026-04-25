@@ -8,6 +8,11 @@ on:
         type: choice
         options: [current, mega]
         default: current
+      resume_from:
+        description: "Resume mega from a checkpoint (skip earlier stages). Empty = full run."
+        type: choice
+        options: ['', stage2_picks, verify, rewrite, stage3_safety, enrich, persist]
+        default: ''
   schedule:
     # Polls every 30 minutes. The first job step reads
     # `redesign_cron_config` and exits early when "now" isn't within
@@ -144,6 +149,9 @@ jobs:
           # skipped (its outputs are empty), so fall through to the
           # job-level env which reads inputs.pipeline_variant.
           PIPELINE_VARIANT: ${{ steps.cron_check.outputs.variant || inputs.pipeline_variant || 'current' }}
+          # Optional checkpoint resume — only honored on workflow_dispatch
+          # (scheduled runs always start fresh).
+          RESUME_FROM: ${{ inputs.resume_from || '' }}
         run: python -m pipeline.full_round
 
       - name: Trigger kidsnews-v2 sync
