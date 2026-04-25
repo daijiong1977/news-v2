@@ -63,7 +63,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
       {/* Header */}
       <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
-          <KidsNewsLockup size={132}/>
+          <KidsNewsLockup size={100}/>
         </div>
       </div>
 
@@ -413,7 +413,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
         <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
           <div style={{maxWidth:1180, margin:'0 auto'}}>
-            <KidsNewsLockup size={88}/>
+            <KidsNewsLockup size={66}/>
           </div>
         </div>
 
@@ -505,7 +505,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
         padding:'14px 28px',
       }}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
-          <KidsNewsLockup size={88}/>
+          <KidsNewsLockup size={66}/>
         </div>
       </div>
 
@@ -878,9 +878,19 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
 
           {/* Daily 3 stack — swappable picks */}
           <div style={{display:'flex', flexDirection:'column', gap:10, position:'relative'}}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:10, flexWrap:'wrap'}}>
               <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>⚡ Today's {window.SITE_CONFIG?.storiesPerDay ?? 3} · {window.SITE_CONFIG?.perArticleMinutes ?? 7} min each</div>
-              <div style={{fontSize:11, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
+              <div className="row" style={{display:'flex', gap:8, alignItems:'center'}}>
+                {picksLocked && (
+                  <button onClick={resetPicks} style={{
+                    background:'transparent', border:'1.5px solid #f0e8d8',
+                    borderRadius:999, padding:'5px 12px', cursor:'pointer',
+                    fontSize:11, fontWeight:800, color:'#1b1230',
+                    fontFamily:'Nunito, sans-serif', letterSpacing:'.02em',
+                  }} title="Re-open the pick screen for today">🔄 Pick again</button>
+                )}
+                <div style={{fontSize:11, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
+              </div>
             </div>
             {daily3.map((a, i) => {
               const catColor = CATEGORIES.find(c => c.label === a.category)?.color || '#1b1230';
@@ -1119,7 +1129,7 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
     }}>
       <div style={{maxWidth:1180, margin:'0 auto', padding:'14px 28px', display:'flex', alignItems:'center', gap:16}}>
         {/* New brand lockup — kidsnews mark + wordmark + "a 21mins channel" */}
-        <KidsNewsLockup size={88}/>
+        <KidsNewsLockup size={66}/>
 
         <div style={{flex:1}}/>
 

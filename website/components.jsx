@@ -6,7 +6,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 // (Renders the locked brand from `21mins-brand` handoff. SunFace21 is the
 //  canonical mark; the wordmark + endorsement are styled inline below.)
 // ————————————————————————————————————————————————————————————
-function KidsNewsLockup({ size = 132, compact = false, hideEndorsement = false }) {
+function KidsNewsLockup({ size = 100, compact = false, hideEndorsement = false }) {
   const cfg = window.SITE_CONFIG || {};
   const wordHi = cfg.brandWordHi || 'news';   // "news" by default
   const brand = cfg.brand || 'kidsnews';
@@ -17,39 +17,35 @@ function KidsNewsLockup({ size = 132, compact = false, hideEndorsement = false }
   const wordSize = compact ? Math.round(size * 0.42) : Math.round(size * 0.46);
   const endorseSize = compact ? 8.5 : 10;
 
+  // Endorsement: render two SITE_CONFIG fields on a single line
+  // ("21MINS DAILY NEWS. LEARN THE REAL WORLD."). Periods come from
+  // the config strings themselves so the join just adds a space.
+  const endorseLine = !hideEndorsement
+    ? [cfg.endorsement, cfg.endorsement2].filter(Boolean).join(' ')
+    : '';
+
   return (
     <div style={{display:'inline-flex', alignItems:'center', gap: compact ? 10 : 14}}>
       <SunFace21 size={size} />
       <div style={{
-        display:'flex', flexDirection:'column', gap: 3,
+        display:'flex', flexDirection:'column', gap: 4,
         lineHeight: 1, paddingTop: 2,
       }}>
         <div style={{
           fontFamily:'Fraunces, serif', fontWeight: 700,
           fontSize: wordSize, letterSpacing: '-0.02em',
           color: 'var(--twentyone-ink, #1b1230)',
-          marginBottom: 2,
         }}>
           {prefix}<span style={{color: 'var(--twentyone-coral, #ff6b5b)'}}>{wordHi}</span>
         </div>
-        {!hideEndorsement && cfg.endorsement && (
+        {endorseLine && (
           <div style={{
             fontFamily:'Nunito, sans-serif', fontWeight: 800,
             fontSize: endorseSize, letterSpacing: '.18em',
             textTransform:'uppercase', color: 'var(--twentyone-muted, #9a8d7a)',
-            lineHeight: 1.25,
+            lineHeight: 1.25, whiteSpace: 'nowrap',
           }}>
-            {cfg.endorsement}
-          </div>
-        )}
-        {!hideEndorsement && cfg.endorsement2 && (
-          <div style={{
-            fontFamily:'Nunito, sans-serif', fontWeight: 700,
-            fontSize: endorseSize, letterSpacing: '.14em',
-            textTransform:'uppercase', color: 'var(--twentyone-muted, #9a8d7a)',
-            opacity: 0.78, lineHeight: 1.25,
-          }}>
-            {cfg.endorsement2}
+            {endorseLine}
           </div>
         )}
       </div>
