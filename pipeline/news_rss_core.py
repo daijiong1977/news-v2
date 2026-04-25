@@ -836,33 +836,6 @@ Return ONLY valid JSON (no markdown fences):
 }"""
 
 
-def detail_enrich_input(rewrite_result: dict) -> str:
-    """Build the user message for detail enrichment from the tri-variant rewrite result."""
-    arts = rewrite_result.get("articles") or []
-    n = len(arts)
-    expected_keys = [f"{i}_{lvl}" for i in range(n) for lvl in ("easy", "middle")]
-    lines = [
-        f"{n} article{'s' if n != 1 else ''} below. "
-        f"Generate detail fields for {n} × 2 = {2 * n} slots.",
-        f"REQUIRED keys (produce ONLY these): {expected_keys}",
-        "",
-    ]
-    for i, art in enumerate(arts):
-        easy = art.get("easy_en") or {}
-        middle = art.get("middle_en") or {}
-        lines.append(f"=== Article [id: {i}] ===")
-        lines.append(f"easy_en headline: {easy.get('headline','')}")
-        lines.append(f"easy_en body ({len((easy.get('body') or '').split())} words):")
-        lines.append((easy.get("body") or ""))
-        lines.append("")
-        lines.append(f"middle_en headline: {middle.get('headline','')}")
-        lines.append(f"middle_en body ({len((middle.get('body') or '').split())} words):")
-        lines.append((middle.get("body") or ""))
-        lines.append("")
-    lines.append(f"Return the JSON with exactly these {2 * n} slot key{'s' if 2 * n != 1 else ''}: {expected_keys}.")
-    return "\n".join(lines)
-
-
 KEYWORD_SUFFIX_RE = r"(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers|ion|ions|ensions|ensión|ly)?"
 
 
@@ -998,37 +971,32 @@ def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
 
 
 def detail_enrich(rewrite_result: dict) -> dict:
-    """Detail enrichment with two-stage fallback:
-      1. Single 6-slot call (fast, cheaper).
-      2. If that fails JSON parse even after retries, split into TWO 3-slot
-         calls (easy-only + middle-only). Smaller prompts → higher chance of
-         well-formed JSON per call, and if one half still fails the other is
-         salvageable.
-    Post-filter hallucinated keywords at the end."""
-    try:
-        res = deepseek_reasoner_call(DETAIL_ENRICH_PROMPT,
-                                     detail_enrich_input(rewrite_result),
-                                     max_tokens=16000)
-        details = res.get("details") or {}
-        # Accept even partial success here (all 6 slots expected; caller checks).
-    except RuntimeError as e:
-        log.warning("detail_enrich 6-slot call failed after retries (%s) — "
-                    "falling back to split 3-slot batches", e)
-        details = {}
-        for level in ("easy", "middle"):
-            try:
-                res = deepseek_reasoner_call(
-                    DETAIL_ENRICH_PROMPT,
-                    _detail_enrich_input_single_level(rewrite_result, level),
-                    max_tokens=12000,
-                )
-                for k, v in (res.get("details") or {}).items():
-                    details[k] = v
-                log.info("split-batch %s: %d slots OK", level,
-                         len(res.get("details") or {}))
-            except RuntimeError as e2:
-                log.error("split-batch %s failed: %s", level, e2)
-                # Continue — the other level may still succeed.
+    """Detail enrichment via split 3-slot batches (easy-only + middle-only).
+
+    The combined 6-slot call kept hitting the reasoner's 16k cap on
+    realistic article batches, so we don't even attempt it — go straight
+    to the two split calls. Each call has a smaller payload AND a smaller
+    output, both of which improve well-formed-JSON odds. If one half
+    fails after retries we keep the other half's slots; the caller
+    (full_round) decides whether the partial set is acceptable.
+
+    Post-filter hallucinated keywords + augment with Python-extracted
+    keywords at the end."""
+    details: dict = {}
+    for level in ("easy", "middle"):
+        try:
+            res = deepseek_reasoner_call(
+                DETAIL_ENRICH_PROMPT,
+                _detail_enrich_input_single_level(rewrite_result, level),
+                max_tokens=12000,
+            )
+            for k, v in (res.get("details") or {}).items():
+                details[k] = v
+            log.info("split-batch %s: %d slots OK", level,
+                     len(res.get("details") or {}))
+        except RuntimeError as e:
+            log.error("split-batch %s failed after retries: %s", level, e)
+            # Continue — the other level may still succeed.
 
     filter_keywords(details, rewrite_result)
     # Augment with Python-extracted keywords (deterministic, body-guaranteed).
