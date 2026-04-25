@@ -65,11 +65,14 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     return m;
   }, []);
 
-  const minutesToday = progress.minutesToday;
-  const streak = MOCK_USER.streak;
-  const goal = MOCK_USER.dailyGoal;
+  // All user stats come from REAL state: progress.* (reading data) +
+  // tweaks.* (preferences). MOCK_USER is no longer read here — it was
+  // causing "I haven't read anything but it says 7-day streak" surprises.
+  const minutesToday = progress.minutesToday || 0;
+  const streak = tweaks.streakDays ?? 0;
+  const goal = tweaks.dailyGoal || 15;
   const goalPct = Math.min(1, minutesToday / goal);
-  const readCount = progress.readToday.length;
+  const readCount = (progress.readToday || []).length;
 
   return (
     <div style={{background: theme.bg, minHeight:'100vh'}}>
@@ -120,7 +123,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
 
           <div style={{position:'relative'}}>
             <div style={{fontFamily:'Nunito, sans-serif', fontWeight:800, color: theme.heroTextAccent, fontSize:13, letterSpacing:'.1em', textTransform:'uppercase', marginBottom:6}}>
-              Hi Mia! 👋 &nbsp;·&nbsp; Thursday, Oct 24
+              Hi {tweaks.userName || 'friend'}! 👋 &nbsp;·&nbsp; {new Date().toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})}
             </div>
             {heroVariant === 'streak' ? (
               <>
@@ -128,10 +131,13 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                   🔥 Streak mode
                 </div>
                 <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:64, lineHeight:0.95, color:'#1b1230', margin:'0 0 10px', letterSpacing:'-0.03em'}}>
-                  {MOCK_USER.streak} days<br/><span style={{color: theme.heroTextAccent, fontStyle:'italic'}}>on fire.</span>
+                  {streak} days<br/><span style={{color: theme.heroTextAccent, fontStyle:'italic'}}>on fire.</span>
                 </h1>
                 <p style={{fontSize:17, color:'#3a2a4a', margin:'0 0 14px', lineHeight:1.5, maxWidth:480}}>
-                  Read today to hit <b>day {MOCK_USER.streak+1}</b>. You've practiced <b>{minutesToday} of {goal} min</b>.
+                  {streak > 0
+                    ? <>Read today to hit <b>day {streak+1}</b>. You've practiced <b>{minutesToday} of {goal} min</b>.</>
+                    : <>Read your first story today to start a streak. Today's goal: <b>{goal} min</b>.</>
+                  }
                 </p>
                 {/* mini calendar of last 7 days */}
                 <div style={{display:'flex', gap:6, marginBottom:16}}>
@@ -428,10 +434,10 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
             padding:'6px 14px 6px 6px', borderRadius:999, border:'none', cursor:'pointer',
             fontFamily:'Nunito, sans-serif',
           }}>
-            <StreakRing minutes={MOCK_USER.minutesToday} goal={MOCK_USER.dailyGoal} streak={MOCK_USER.streak} size={40}/>
+            <StreakRing minutes={(progress && progress.minutesToday) || 0} goal={tweaks.dailyGoal || 15} streak={tweaks.streakDays ?? 0} size={40}/>
             <div style={{lineHeight:1.1, textAlign:'left'}}>
               <div style={{fontSize:11, opacity:.7, fontWeight:700}}>STREAK</div>
-              <div style={{fontWeight:800, fontSize:14}}>{MOCK_USER.streak} days 🔥</div>
+              <div style={{fontWeight:800, fontSize:14}}>{tweaks.streakDays ?? 0} days 🔥</div>
             </div>
             <span style={{fontSize:11, opacity:0.7, marginLeft:4}}>▾</span>
           </button>
@@ -442,7 +448,7 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
 
         {/* User button — opens the profile panel */}
         {window.UserButton && (
-          <window.UserButton tweaks={tweaks} streak={MOCK_USER.streak} onClick={onOpenUserPanel}/>
+          <window.UserButton tweaks={tweaks} level={level} streak={tweaks.streakDays ?? 0} onClick={onOpenUserPanel}/>
         )}
       </div>
     </header>

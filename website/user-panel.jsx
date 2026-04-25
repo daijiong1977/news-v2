@@ -41,9 +41,13 @@ function getAvatar(id) {
 }
 
 // —————————— USER BUTTON (in header) ——————————
-function UserButton({ tweaks, onClick, streak }) {
+function UserButton({ tweaks, onClick, streak, level }) {
   const av = getAvatar(tweaks.avatar);
-  const lvl = LEVEL_OPTIONS.find(l => l.id === tweaks.level) || LEVEL_OPTIONS[1];
+  // Prefer the prop `level` (app's authoritative state used for content
+  // filtering) over `tweaks.level` (a mirror that can drift on legacy
+  // installs). Falls back to tweaks for the iframe-edit-mode preview.
+  const activeLevel = level || tweaks.level;
+  const lvl = LEVEL_OPTIONS.find(l => l.id === activeLevel) || LEVEL_OPTIONS[1];
   return (
     <button onClick={onClick} style={{
       display:'flex', alignItems:'center', gap:10,
@@ -76,11 +80,17 @@ function UserButton({ tweaks, onClick, streak }) {
 }
 
 // —————————— USER PANEL (slide-in drawer) ——————————
-function UserPanel({ tweaks, updateTweak, level, setLevel, onClose }) {
+function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) {
   const av = getAvatar(tweaks.avatar);
   const [tab, setTab] = useStateU('learn'); // learn | look | me
 
   const setLevelBoth = (lv) => { setLevel(lv); updateTweak('level', lv); };
+
+  // Real progression numbers (not MOCK_USER):
+  // - storiesRead = articles read today (only metric we track now)
+  // - badges = milestone count: 1 badge per 3 stories read today
+  const storiesRead = ((progress && progress.readToday) || []).length;
+  const badges = Math.floor(storiesRead / 3);
 
   return (
     <>
@@ -316,10 +326,10 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose }) {
 
               <Section label="Your progress" sub="">
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-                  <BigStat icon="🔥" val={`${tweaks.streakDays ?? 7}`} label="Day streak"/>
-                  <BigStat icon="⭐" val={`${tweaks.xp ?? 240}`} label="XP earned"/>
-                  <BigStat icon="📖" val="23" label="Stories read"/>
-                  <BigStat icon="🏆" val="4" label="Badges"/>
+                  <BigStat icon="🔥" val={`${tweaks.streakDays ?? 0}`} label="Day streak"/>
+                  <BigStat icon="⭐" val={`${tweaks.xp ?? 0}`} label="XP earned"/>
+                  <BigStat icon="📖" val={`${storiesRead}`} label="Stories today"/>
+                  <BigStat icon="🏆" val={`${badges}`} label="Badges"/>
                 </div>
               </Section>
 

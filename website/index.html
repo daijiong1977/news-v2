@@ -24,10 +24,10 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" src="data.jsx?v=20260424g"></script>
+<script type="text/babel" src="data.jsx?v=20260424h"></script>
 <script type="text/babel" src="components.jsx"></script>
-<script type="text/babel" src="home.jsx?v=20260424g"></script>
-<script type="text/babel" src="article.jsx?v=20260424g"></script>
+<script type="text/babel" src="home.jsx?v=20260424h"></script>
+<script type="text/babel" src="article.jsx?v=20260424h"></script>
 <script type="text/babel" src="user-panel.jsx"></script>
 
 <script type="text/babel">
@@ -76,15 +76,26 @@ function App() {
     return null;
   });
   const [progress, setProgress] = useState(() => {
+    // Fresh users start with empty progress — no pre-filled mock reads.
+    // Old MOCK_USER readToday["a2"] inflated the count + showed phantom reads.
     const saved = ss.getJSON('ohye_progress');
-    const base = { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} };
+    const base = { readToday: [], minutesToday: 0, articleProgress: {} };
     if (!saved) return base;
-    return { articleProgress: {}, ...saved, articleProgress: saved.articleProgress || {} };
+    return { ...base, ...saved, articleProgress: saved.articleProgress || {} };
   });
 
   const [tweaks, setTweaks] = useState(() => {
     const saved = ss.getJSON('ohye_tweaks');
-    return saved ? { ...TWEAK_DEFAULTS, ...saved } : TWEAK_DEFAULTS;
+    const merged = saved ? { ...TWEAK_DEFAULTS, ...saved } : TWEAK_DEFAULTS;
+    // One-time drift fix: app's `level` (read above from ohye_level) is the
+    // authoritative content filter. `tweaks.level` is a legacy mirror —
+    // sync it to `level` so the header button doesn't lie when the two
+    // localStorage keys disagree.
+    const appLevel = ss.get('ohye_level');
+    if (appLevel && merged.level !== appLevel) {
+      merged.level = appLevel;
+    }
+    return merged;
   });
   const [userPanelOpen, setUserPanelOpen] = useState(false);
 
@@ -192,6 +203,7 @@ function App() {
           updateTweak={updateTweak}
           level={level}
           setLevel={setLevel}
+          progress={progress}
           onClose={()=>setUserPanelOpen(false)}
         />
       )}
