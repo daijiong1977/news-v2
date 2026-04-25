@@ -150,9 +150,10 @@ jobs:
         # Fires a repository_dispatch event so the deploy site syncs
         # IMMEDIATELY instead of waiting for its 2h cron. The schedule on
         # the kidsnews-v2 side stays as a fallback if this step is skipped
-        # (e.g., KIDSNEWS_DISPATCH_TOKEN not set or this step's success cond
-        # didn't fire because pack_and_upload aborted).
-        if: success() && env.KIDSNEWS_DISPATCH_TOKEN != ''
+        # (e.g., KIDSNEWS_DISPATCH_TOKEN not set, pack_and_upload aborted,
+        # or cron_check told us to no-op because the configured time
+        # didn't match this 30-min poll).
+        if: success() && env.KIDSNEWS_DISPATCH_TOKEN != '' && steps.cron_check.outputs.proceed != 'false'
         env:
           KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
         run: |
