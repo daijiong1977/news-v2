@@ -92,10 +92,14 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
     };
   }, [articleId, detail]);
 
-  // Per-step progress: each step finished = +1 toward the 15-point daily
-  // goal (3 articles × 4 steps × 1 + 1 completion bonus = 15). Idempotent
-  // — finishing the same step twice doesn't double-count.
+  // Per-step progress: each step contributes its weight (from
+  // SITE_CONFIG.stepWeights) to the daily counter. Idempotent —
+  // finishing the same step twice doesn't double-count. Daily goal:
+  //   storiesPerDay × sum(stepWeights) = SITE_CONFIG.dailyGoalMinutes
+  //   (kidsnews defaults: 3 × (2+1+2+2) = 21)
   const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'];
+  const STEP_WEIGHTS = (window.SITE_CONFIG && window.SITE_CONFIG.stepWeights) ||
+                       { read:1, analyze:1, quiz:1, discuss:1 };
   const bumpStep = (stageId) => {
     setProgress(p => {
       const ap = p.articleProgress || {};
@@ -110,16 +114,14 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
       const newSteps = [...curSteps, stageId];
       const fullyDone = STEP_IDS.every(s => newSteps.includes(s));
       const newAP = { ...cur, steps: newSteps };
+      const weight = STEP_WEIGHTS[stageId] || 1;
 
-      // +1 for this step. +1 more when this step completes the article.
-      let delta = 1;
       const next = { ...p };
       if (fullyDone && !p.readToday.includes(article.id)) {
-        delta += 1;
         next.readToday = [...p.readToday, article.id];
       }
       next.articleProgress = { ...ap, [article.id]: newAP };
-      next.minutesToday = (p.minutesToday || 0) + delta;
+      next.minutesToday = (p.minutesToday || 0) + weight;
       return next;
     });
   };

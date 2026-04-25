@@ -203,22 +203,27 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
                 </div>
               </Section>
 
-              <Section label="Daily goal" sub="Read 15 minutes a day to build your streak">
-                <div style={{
-                  background:'#fff9ef', border:'2px solid #f0e8d8', borderRadius:14,
-                  padding:'12px 16px', display:'flex', alignItems:'center', gap:12,
-                }}>
-                  <div style={{
-                    width:44, height:44, borderRadius:12, background:'#1b1230',
-                    color:'#ffc83d', display:'flex', alignItems:'center', justifyContent:'center',
-                    fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20,
-                  }}>15</div>
-                  <div>
-                    <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230', lineHeight:1}}>15 min every day</div>
-                    <div style={{fontSize:12, color:'#6b5c80', fontWeight:600, marginTop:4}}>One story from each category · just right for a daily habit</div>
-                  </div>
-                </div>
-              </Section>
+              {(() => {
+                const goalMin = window.SITE_CONFIG?.dailyGoalMinutes ?? 21;
+                return (
+                  <Section label="Daily goal" sub={`Read ${goalMin} minutes a day to build your streak`}>
+                    <div style={{
+                      background:'#fff9ef', border:'2px solid #f0e8d8', borderRadius:14,
+                      padding:'12px 16px', display:'flex', alignItems:'center', gap:12,
+                    }}>
+                      <div style={{
+                        width:44, height:44, borderRadius:12, background:'#1b1230',
+                        color:'#ffc83d', display:'flex', alignItems:'center', justifyContent:'center',
+                        fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20,
+                      }}>{goalMin}</div>
+                      <div>
+                        <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230', lineHeight:1}}>{goalMin} min every day</div>
+                        <div style={{fontSize:12, color:'#6b5c80', fontWeight:600, marginTop:4}}>One story from each category · just right for a daily habit</div>
+                      </div>
+                    </div>
+                  </Section>
+                );
+              })()}
 
               <Section label="Language" sub="What language you want stories in">
                 <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8}}>
@@ -371,7 +376,7 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
             <button onClick={()=>{
               updateTweak('avatar','fox'); updateTweak('userName','Me');
               updateTweak('theme','sunny'); updateTweak('heroVariant','daily15');
-              updateTweak('language','en'); updateTweak('dailyGoal',15);
+              updateTweak('language','en'); updateTweak('dailyGoal', window.SITE_CONFIG?.dailyGoalMinutes ?? 21);
               setLevelBoth('Sprout');
             }} style={{
               background:'#fff', color:'#6b5c80', border:'2px solid #f0e8d8',

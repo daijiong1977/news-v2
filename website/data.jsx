@@ -15,6 +15,36 @@
 const SUPABASE_URL = 'https://lfknsvavhiqrsasdfyrs.supabase.co';
 const ARCHIVE_BASE = `${SUPABASE_URL}/storage/v1/object/public/redesign-daily-content`;
 
+// ─── Per-vertical site config ─────────────────────────────────────────
+// Single point of truth for the daily-reading model + brand. Future
+// "21mins" verticals (AI, finance, tech for adults) clone this with
+// different values. Anything that varies by vertical lives here, never
+// hardcoded in JSX.
+//
+// dailyGoalMinutes  =  storiesPerDay  ×  sum(stepWeights)
+// 21               =  3              ×  (2+1+2+2)
+const SITE_CONFIG = {
+  brand:        "News Oh,Ye!",
+  audience:     "Kids age 8-13",
+  domain:       "kidsnews.21mins.com",   // production target
+  vertical:     "kidsnews",
+
+  // Daily reading model
+  dailyGoalMinutes: 21,
+  storiesPerDay:    3,
+  perArticleMinutes: 7,                  // = sum(stepWeights)
+
+  // Each step contributes its weight in "minutes" to the daily counter
+  // when the user finishes it. Sum must equal perArticleMinutes.
+  stepWeights: {
+    read:    2,   // body + words / vocabulary
+    analyze: 1,   // background, structure
+    quiz:    2,
+    discuss: 2,   // think
+  },
+};
+window.SITE_CONFIG = SITE_CONFIG;
+
 // Browsers can throw on localStorage access (private mode in Safari, quota
 // exhaustion, storage disabled by enterprise policy, embedded contexts).
 // Wrap reads/writes so one bad environment doesn't kill route restoration,
@@ -60,7 +90,7 @@ const MOCK_USER = {
   name: "Mia",
   streak: 7,
   minutesToday: 0,
-  dailyGoal: 15,
+  dailyGoal: SITE_CONFIG.dailyGoalMinutes,
   totalXp: 1240,
   weekXp: 310,
   badges: ["🦉", "🔭", "🌱"],
@@ -93,7 +123,10 @@ function listingToArticle(entry, cat, lvl, archiveDate) {
     time: entry.time_ago || "",
     minedAt: entry.mined_at || "",
     sourcePublishedAt: entry.source_published_at || "",
-    readMins: isZh ? 2 : (lvl === "easy" ? 3 : 5),
+    // English articles count for the full per-article reading budget.
+    // Chinese summary cards stay shorter (they're summary-only, not the
+    // full counter contributor).
+    readMins: isZh ? 2 : SITE_CONFIG.perArticleMinutes,
     level: level,
     language: isZh ? "zh" : "en",
     xp: isZh ? 15 : (lvl === "easy" ? 30 : 45),

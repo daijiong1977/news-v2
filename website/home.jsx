@@ -82,7 +82,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
   // causing "I haven't read anything but it says 7-day streak" surprises.
   const minutesToday = progress.minutesToday || 0;
   const streak = tweaks.streakDays ?? 0;
-  const goal = tweaks.dailyGoal || 15;
+  const goal = tweaks.dailyGoal || (window.SITE_CONFIG?.dailyGoalMinutes ?? 21);
   const goalPct = Math.min(1, minutesToday / goal);
   const readCount = (progress.readToday || []).length;
 
@@ -167,7 +167,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
             ) : (
               <>
                 <h1 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:52, lineHeight:1.02, color:'#1b1230', margin:'0 0 12px', letterSpacing:'-0.02em'}}>
-                  Today's <span style={{background: theme.accent, padding:'0 10px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>15 minutes</span>
+                  Today's <span style={{background: theme.accent, padding:'0 10px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>{goal} minutes</span>
                 </h1>
                 <p style={{fontSize:17, color:'#3a2a4a', margin:'0 0 18px', lineHeight:1.5, maxWidth:480}}>
                   Read 3 smart stories, learn new words, and win your streak. You've read <b>{readCount} of 3</b> today.
@@ -188,7 +188,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
           {/* Daily 3 stack — swappable picks */}
           <div style={{display:'flex', flexDirection:'column', gap:10, position:'relative'}}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline'}}>
-              <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>⚡ Today's 3 · 5 min</div>
+              <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230'}}>⚡ Today's {window.SITE_CONFIG?.storiesPerDay ?? 3} · {window.SITE_CONFIG?.perArticleMinutes ?? 7} min</div>
               <div style={{fontSize:11, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
             </div>
             {daily3.map((a, i) => {
@@ -446,7 +446,7 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
             padding:'6px 14px 6px 6px', borderRadius:999, border:'none', cursor:'pointer',
             fontFamily:'Nunito, sans-serif',
           }}>
-            <StreakRing minutes={(progress && progress.minutesToday) || 0} goal={tweaks.dailyGoal || 15} streak={tweaks.streakDays ?? 0} size={40}/>
+            <StreakRing minutes={(progress && progress.minutesToday) || 0} goal={tweaks.dailyGoal || (window.SITE_CONFIG?.dailyGoalMinutes ?? 21)} streak={tweaks.streakDays ?? 0} size={40}/>
             <div style={{lineHeight:1.1, textAlign:'left'}}>
               <div style={{fontSize:11, opacity:.7, fontWeight:700}}>STREAK</div>
               <div style={{fontWeight:800, fontSize:14}}>{tweaks.streakDays ?? 0} days 🔥</div>
@@ -494,7 +494,7 @@ function RecentReadsPopover({ onClose, onOpenArticle, readIds }) {
         </div>
         {recent.length === 0 ? (
           <div style={{padding:'24px 8px', textAlign:'center', color:'#9a8d7a', fontSize:13}}>
-            You haven't read anything yet today. Start your 15 min!
+            You haven't read anything yet today. Start your {goal} min!
           </div>
         ) : recent.map(a => {
           const catColor = CATEGORIES.find(c => c.label === a.category)?.color || '#1b1230';
