@@ -732,39 +732,97 @@ function RewriteText({ text }) {
   );
 }
 
+function ScorePills({ scores, color = '#9061f9' }) {
+  if (!scores) return null;
+  return (
+    <div style={{display:'flex', gap:6, fontSize:11, color:'#6b5c80', fontWeight:700, flexWrap:'wrap'}}>
+      {['clarity','evidence','voice','depth'].map(k => (
+        <span key={k} style={{background:'#fff', padding:'3px 8px', borderRadius:999, border:'1.5px solid #e5dcf5', whiteSpace:'nowrap'}}>
+          {k}: <b style={{color}}>{scores[k] ?? '–'}</b>/5
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Side-by-side comparison: kid's draft (Round N) vs coach's polish.
+// Used both for the "current round" panel and for collapsed history rows.
+function RoundCompare({ round, n, total, defaultOpen = true }) {
+  const [open, setOpen] = useStateA(defaultOpen);
+  return (
+    <div style={{background:open ? 'linear-gradient(135deg, #f0ebff, #fff9ef)' : '#fff', border:`2px solid ${open ? '#c9b8ff' : '#e5dcf5'}`, borderRadius:18, padding: open ? '22px 24px' : '14px 18px', marginBottom:14}}>
+      <button onClick={()=>setOpen(!open)} style={{width:'100%', background:'transparent', border:'none', padding:0, cursor:'pointer', display:'flex', alignItems:'center', gap:10, marginBottom: open ? 14 : 0}}>
+        <div style={{fontSize:open ? 24 : 18}}>✨</div>
+        <h3 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize: open ? 18 : 15, color:'#1b1230', margin:0, textAlign:'left'}}>
+          Round {n}{n < total ? ` of ${total}` : ''} — what the coach thinks
+        </h3>
+        <div style={{flex:1}}/>
+        {!open && round.aiResult?.scores && <ScorePills scores={round.aiResult.scores}/>}
+        <div style={{fontSize:14, color:'#9a8d7a', transform: open ? 'rotate(180deg)' : 'rotate(0)'}}>⌄</div>
+      </button>
+      {open && (
+        <>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14}}>
+            <div style={{background:'#fff', border:'2px solid #f0e8d8', borderRadius:14, padding:'14px 16px'}}>
+              <div style={{fontSize:11, fontWeight:800, color:'#6b5c80', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:6}}>
+                What you wrote
+              </div>
+              <p style={{fontSize:14.5, lineHeight:1.6, color:'#2a1f3d', margin:0, whiteSpace:'pre-wrap'}}>{round.userText}</p>
+              <div style={{fontSize:10, color:'#9a8d7a', marginTop:8, fontWeight:600}}>
+                {countWords(round.userText)} words
+              </div>
+            </div>
+            <div style={{background:'#fff', border:'2px solid #e5dcf5', borderRadius:14, padding:'14px 16px'}}>
+              <div style={{fontSize:11, fontWeight:800, color:'#9061f9', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:6}}>
+                Coach's polish
+              </div>
+              <p style={{fontSize:14.5, lineHeight:1.65, color:'#1b1230', margin:0, whiteSpace:'pre-wrap'}}>
+                <RewriteText text={round.aiResult?.rewrite || ''}/>
+              </p>
+            </div>
+          </div>
+          <p style={{fontSize:14, lineHeight:1.6, color:'#2a1f3d', margin:'0 0 10px', fontStyle:'italic'}}>
+            💬 {round.aiResult?.feedback}
+          </p>
+          <ScorePills scores={round.aiResult?.scores}/>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DiscussTab({ article, paragraphs, onDone }) {
-  // Restore last saved draft for THIS article — survives reloads.
+  // Restore iteration history for THIS article — survives reloads.
+  // Shape: { rounds: [{userText, aiResult, at}], currentDraft, savedFinal }
   const draftKey = `ohye_response_${article.storyId}_${article.level || 'unk'}`;
   const ss = window.safeStorage;
   const initial = (ss && ss.getJSON(draftKey)) || {};
 
-  const [answer, setAnswer] = useStateA(initial.text || '');
-  const [submitted, setSubmitted] = useStateA(!!initial.savedAt);
-  const [articleOpen, setArticleOpen] = useStateA(false);
-  const [aiState, setAiState] = useStateA(initial.aiResult ? 'ready' : 'idle');
-  // 'idle' | 'loading' | 'ready' | 'error'
-  const [aiResult, setAiResult] = useStateA(initial.aiResult || null);
+  const [rounds, setRounds] = useStateA(initial.rounds || []);
+  const [currentDraft, setCurrentDraft] = useStateA(initial.currentDraft || '');
+  const [aiState, setAiState] = useStateA('idle'); // 'idle' | 'loading' | 'error'
   const [aiError, setAiError] = useStateA(null);
+  const [savedFinal, setSavedFinal] = useStateA(!!initial.savedFinal);
+  const [articleOpen, setArticleOpen] = useStateA(false);
   const catColor = getCatColor(article.category);
 
-  // Persist text + AI result on every change so a reload doesn't lose work.
+  // Persist on every change so a reload preserves all rounds + current draft.
   useEffectA(() => {
     if (!ss) return;
-    ss.setJSON(draftKey, {
-      text: answer,
-      savedAt: submitted ? (initial.savedAt || new Date().toISOString()) : null,
-      aiResult,
-    });
-  }, [answer, submitted, aiResult]);
+    ss.setJSON(draftKey, { rounds, currentDraft, savedFinal });
+  }, [rounds, currentDraft, savedFinal]);
 
-  const wordCount = countWords(answer);
+  const wordCount = countWords(currentDraft);
   const meetsMin = wordCount >= MIN_WORDS;
+  const lastRound = rounds.length > 0 ? rounds[rounds.length - 1] : null;
+  // Don't let user pay for an AI call on the IDENTICAL text they just submitted
+  const sameAsLast = lastRound && currentDraft.trim() === lastRound.userText.trim();
 
   const onGetFeedback = async () => {
-    if (!meetsMin || aiState === 'loading') return;
+    if (!meetsMin || aiState === 'loading' || sameAsLast) return;
     setAiState('loading'); setAiError(null);
     const res = await window.fetchAIFeedback({
-      text: answer,
+      text: currentDraft,
       articleId: article.id,
       articleTitle: article.title,
       articleSummary: (article.summary || '').slice(0, 1500),
@@ -773,9 +831,33 @@ function DiscussTab({ article, paragraphs, onDone }) {
     if (res.error) {
       setAiError(res.error); setAiState('error');
     } else {
-      setAiResult(res); setAiState('ready');
+      setRounds([...rounds, { userText: currentDraft, aiResult: res, at: new Date().toISOString() }]);
+      setAiState('idle');
+      // Keep currentDraft populated so the kid sees the side-by-side
+      // immediately. They can then edit it, or click "Use polished".
     }
   };
+
+  const onUsePolished = () => {
+    if (lastRound?.aiResult?.rewrite) {
+      setCurrentDraft(lastRound.aiResult.rewrite.replace(/\*\*/g, ''));
+    }
+  };
+
+  const onSaveFinal = () => setSavedFinal(true);
+  const onUnlock = () => setSavedFinal(false);
+  const onResetAll = () => {
+    if (confirm('Start over? Your saved drafts and coach feedback will be cleared.')) {
+      setRounds([]); setCurrentDraft(''); setSavedFinal(false);
+    }
+  };
+
+  // Action-button label depends on iteration state
+  const isFirstRound = rounds.length === 0;
+  const feedbackBtnLabel = aiState === 'loading'
+    ? '✨ Thinking…'
+    : isFirstRound ? '✨ Get AI feedback'
+                   : `✨ Get feedback again (round ${rounds.length + 1})`;
 
   return (
     <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:24}}>
@@ -783,6 +865,11 @@ function DiscussTab({ article, paragraphs, onDone }) {
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16}}>
           <div style={{fontSize:26}}>💭</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:22, color:'#1b1230', margin:0}}>Think & share</h2>
+          {rounds.length > 0 && (
+            <span style={{marginLeft:'auto', fontSize:12, color:'#9061f9', fontWeight:800, background:'#f0ebff', padding:'4px 10px', borderRadius:999}}>
+              {rounds.length} {rounds.length === 1 ? 'round' : 'rounds'} with the coach
+            </span>
+          )}
         </div>
 
         {article.discussion.map((d, i) => (
@@ -791,70 +878,86 @@ function DiscussTab({ article, paragraphs, onDone }) {
           </div>
         ))}
 
-        <label style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', fontWeight:800, fontSize:13, color:'#6b5c80', marginBottom:8, letterSpacing:'.05em', textTransform:'uppercase', marginTop:8}}>
-          <span>Your thoughts</span>
-          <span style={{fontSize:11, color: meetsMin ? '#17b3a6' : '#c14e2a', textTransform:'none', letterSpacing:0, fontWeight:700}}>
-            {wordCount} / {MIN_WORDS}+ words {meetsMin ? '✓' : ''}
-          </span>
-        </label>
-        <textarea value={answer} onChange={e=>setAnswer(e.target.value)}
-          placeholder={`Write at least ${MIN_WORDS} words. What surprised you? What do you think should happen next?`}
-          rows={5}
-          style={{width:'100%', border:`2px solid ${meetsMin ? '#cfe6cd' : '#f0e8d8'}`, borderRadius:14, padding:'12px 14px', fontSize:14.5, fontFamily:'Nunito, sans-serif', resize:'vertical', outline:'none', background:'#fff9ef', color:'#1b1230', lineHeight:1.55}}/>
+        {/* Round history — older rounds collapsed by default */}
+        {rounds.length > 1 && rounds.slice(0, -1).map((r, i) => (
+          <RoundCompare key={i} round={r} n={i + 1} total={rounds.length} defaultOpen={false}/>
+        ))}
 
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:12, flexWrap:'wrap', gap:10}}>
-          <div style={{fontSize:12, color:'#9a8d7a'}}>
-            💾 Saved as you type · {meetsMin ? '✨ AI feedback unlocked' : `Add ${MIN_WORDS - wordCount} more word${MIN_WORDS - wordCount === 1 ? '' : 's'} to unlock AI feedback`}
-          </div>
-          <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-            <BigButton bg={meetsMin ? '#9061f9' : '#d8cfb8'} color="#fff" onClick={onGetFeedback} disabled={!meetsMin || aiState === 'loading'}>
-              {aiState === 'loading' ? '✨ Thinking…' : '✨ Get AI feedback'}
-            </BigButton>
-            {submitted ? (
-              <BigButton bg="#17b3a6" color="#fff" onClick={onDone}>✓ All done →</BigButton>
-            ) : (
-              <BigButton bg="#ffc83d" color="#1b1230" onClick={()=>setSubmitted(true)} disabled={!meetsMin}>Save my answer</BigButton>
-            )}
-          </div>
-        </div>
-
-        {aiError && (
-          <div style={{marginTop:14, background:'#ffece8', border:'2px solid #ff9b8a', borderRadius:14, padding:'14px 18px', color:'#a3321b', fontWeight:600, fontSize:14}}>
-            ⚠️ {aiError}
-          </div>
+        {/* Latest round — always expanded */}
+        {lastRound && (
+          <RoundCompare round={lastRound} n={rounds.length} total={rounds.length} defaultOpen={true}/>
         )}
 
-        {aiResult && aiState !== 'loading' && (
-          <div style={{marginTop:18, background:'linear-gradient(135deg, #f0ebff, #fff9ef)', border:'2px solid #c9b8ff', borderRadius:18, padding:'22px 24px'}}>
-            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:12}}>
-              <div style={{fontSize:24}}>✨</div>
-              <h3 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230', margin:0}}>What the coach thinks</h3>
-              {aiResult.scores && (
-                <div style={{marginLeft:'auto', display:'flex', gap:8, fontSize:11, color:'#6b5c80', fontWeight:700}}>
-                  {['clarity','evidence','voice','depth'].map(k => (
-                    <span key={k} style={{background:'#fff', padding:'3px 8px', borderRadius:999, border:'1.5px solid #e5dcf5'}}>
-                      {k}: <b style={{color:'#9061f9'}}>{aiResult.scores[k] ?? '–'}</b>/5
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <p style={{fontSize:14.5, lineHeight:1.6, color:'#2a1f3d', margin:'0 0 14px'}}>{aiResult.feedback}</p>
+        {/* Current draft — for NEXT round */}
+        {!savedFinal && (
+          <>
+            <label style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', fontWeight:800, fontSize:13, color:'#6b5c80', marginBottom:8, letterSpacing:'.05em', textTransform:'uppercase', marginTop:rounds.length > 0 ? 4 : 8}}>
+              <span>{isFirstRound ? 'Your thoughts' : `Try again — round ${rounds.length + 1} draft`}</span>
+              <span style={{fontSize:11, color: meetsMin ? '#17b3a6' : '#c14e2a', textTransform:'none', letterSpacing:0, fontWeight:700}}>
+                {wordCount} / {MIN_WORDS}+ words {meetsMin ? '✓' : ''}
+              </span>
+            </label>
+            <textarea value={currentDraft} onChange={e=>setCurrentDraft(e.target.value)}
+              placeholder={isFirstRound
+                ? `Write at least ${MIN_WORDS} words. What surprised you? What do you think should happen next?`
+                : "Take what helped from the polish, but keep your voice. What did you want to say even more clearly?"}
+              rows={5}
+              style={{width:'100%', border:`2px solid ${meetsMin ? '#cfe6cd' : '#f0e8d8'}`, borderRadius:14, padding:'12px 14px', fontSize:14.5, fontFamily:'Nunito, sans-serif', resize:'vertical', outline:'none', background:'#fff9ef', color:'#1b1230', lineHeight:1.55}}/>
 
-            <div style={{background:'#fff', border:'2px solid #e5dcf5', borderRadius:14, padding:'14px 16px'}}>
-              <div style={{fontSize:11, fontWeight:800, color:'#9061f9', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:6}}>
-                Your draft, polished
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:12, flexWrap:'wrap', gap:10}}>
+              <div style={{fontSize:12, color:'#9a8d7a'}}>
+                {sameAsLast ? '💡 Edit your draft to ask the coach again'
+                            : meetsMin ? '✨ AI feedback ready'
+                                       : `Add ${MIN_WORDS - wordCount} more word${MIN_WORDS - wordCount === 1 ? '' : 's'} to unlock`}
               </div>
-              <p style={{fontSize:14.5, lineHeight:1.65, color:'#1b1230', margin:0}}>
-                <RewriteText text={aiResult.rewrite}/>
-              </p>
-              <button onClick={()=>{ if (aiResult.rewrite) { setAnswer(aiResult.rewrite.replace(/\*\*/g, '')); }}}
-                      style={{marginTop:12, background:'#9061f9', color:'#fff', border:'none', borderRadius:10, padding:'8px 14px', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'Nunito, sans-serif'}}>
-                ↑ Use this rewrite
-              </button>
+              <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+                {lastRound && (
+                  <button onClick={onUsePolished}
+                    style={{background:'#fff', color:'#9061f9', border:'2px solid #c9b8ff', borderRadius:10, padding:'10px 16px', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'Nunito, sans-serif'}}>
+                    ↑ Use polished as my draft
+                  </button>
+                )}
+                <BigButton bg={meetsMin && !sameAsLast ? '#9061f9' : '#d8cfb8'} color="#fff"
+                           onClick={onGetFeedback} disabled={!meetsMin || aiState === 'loading' || sameAsLast}>
+                  {feedbackBtnLabel}
+                </BigButton>
+                <BigButton bg="#ffc83d" color="#1b1230" onClick={onSaveFinal} disabled={!meetsMin}>
+                  ✓ Save final answer
+                </BigButton>
+              </div>
             </div>
-            <div style={{fontSize:11, color:'#9a8d7a', marginTop:10}}>
-              💡 The coach's job is to help you grow — your original is yours forever.
+
+            {aiError && (
+              <div style={{marginTop:14, background:'#ffece8', border:'2px solid #ff9b8a', borderRadius:14, padding:'14px 18px', color:'#a3321b', fontWeight:600, fontSize:14}}>
+                ⚠️ {aiError}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Final state */}
+        {savedFinal && (
+          <div style={{background:'linear-gradient(135deg, #d6f3ed, #fff9ef)', border:'2px solid #17b3a6', borderRadius:18, padding:'22px 24px', marginTop:8}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:10}}>
+              <div style={{fontSize:24}}>🌟</div>
+              <h3 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:18, color:'#1b1230', margin:0}}>Your final answer is saved</h3>
+            </div>
+            <div style={{background:'#fff', border:'2px solid #c8ebe3', borderRadius:14, padding:'14px 16px', marginBottom:12}}>
+              <p style={{fontSize:14.5, lineHeight:1.6, color:'#1b1230', margin:0, whiteSpace:'pre-wrap'}}>{currentDraft}</p>
+              <div style={{fontSize:10, color:'#9a8d7a', marginTop:8, fontWeight:600}}>
+                {countWords(currentDraft)} words · {rounds.length} round{rounds.length === 1 ? '' : 's'} of coaching
+              </div>
+            </div>
+            <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+              <button onClick={onUnlock}
+                style={{background:'#fff', color:'#17b3a6', border:'2px solid #17b3a6', borderRadius:10, padding:'8px 14px', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'Nunito, sans-serif'}}>
+                ✏️ Edit again
+              </button>
+              <button onClick={onResetAll}
+                style={{background:'transparent', color:'#9a8d7a', border:'1.5px dashed #d0c4b4', borderRadius:10, padding:'8px 14px', fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'Nunito, sans-serif'}}>
+                ↺ Start over
+              </button>
+              <BigButton bg="#17b3a6" color="#fff" onClick={onDone}>✓ All done →</BigButton>
             </div>
           </div>
         )}

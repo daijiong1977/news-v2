@@ -130,8 +130,11 @@ Score, give feedback, and rewrite per the system prompt.`;
       },
       body: JSON.stringify({
         model: "deepseek-v4-flash",
-        // chat/rewrite path — thinking off (V4 default is on)
-        thinking: { type: "disabled" },
+        // Thinking ON — coach evaluates writing quality + rewrites; the
+        // reasoning pass meaningfully improves score accuracy and the
+        // rewrite faithfulness (keeps the kid's voice better). Cost is
+        // fine for this interactive volume.
+        thinking: { type: "enabled" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userMsg },
