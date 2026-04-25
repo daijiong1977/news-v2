@@ -551,10 +551,20 @@ function KeywordCard({ kw, idx, expanded, onToggle }) {
       transition:'all .2s',
       boxShadow:'0 2px 0 rgba(27,18,48,0.06)',
     }}>
-      <button onClick={onToggle} style={{
-        all:'unset', cursor:'pointer', width:'100%',
-        display:'flex', alignItems:'center', gap:8,
-      }}>
+      {/* Outer = div role=button to avoid invalid <button> nesting (React
+          validateDOMNesting warning). The inner speak control stays a real
+          <button> for screen-reader semantics; its onSpeak stops propagation
+          so toggling and speaking remain independent. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        style={{
+          cursor:'pointer', width:'100%',
+          display:'flex', alignItems:'center', gap:8,
+          outline:'none',
+        }}>
         <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:16, color: expanded ? '#fff' : palette.c, flex:1}}>{kw.term}</div>
         <button onClick={onSpeak}
           title="Read this word aloud"
@@ -566,7 +576,7 @@ function KeywordCard({ kw, idx, expanded, onToggle }) {
             background: expanded ? 'rgba(255,255,255,0.2)' : 'rgba(27,18,48,0.06)',
             fontSize:14,
           }}>🔊</button>
-      </button>
+      </div>
       {expanded && <div style={{fontSize:12, lineHeight:1.4, marginTop:6}}>{kw.def}</div>}
       {!expanded && <div style={{fontSize:11, fontWeight:700, opacity:.65, marginTop:4}}>Tap to reveal →</div>}
     </div>
