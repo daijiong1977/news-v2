@@ -449,7 +449,7 @@ def _short_hash(s: str) -> str:
 
 # ─── Mega pipeline helpers ─────────────────────────────────────────────
 
-def phase_a_light(category: str, sources, max_per_source: int = 10) -> list[dict]:
+def phase_a_light(category: str, sources, max_per_source: int = 5) -> list[dict]:
     """Light Phase A for the mega path: RSS metadata only — NO body fetch,
     NO LLM. Returns a flat list of brief dicts annotated with _source +
     _category. Bodies + og:images are fetched lazily after the curator
@@ -483,7 +483,7 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
                        max_top: int = 4,
                        min_body_words: int = 250) -> dict[str, list[dict]]:
     """For each category's top-`max_top` ranked picks, fetch HTML body +
-    og:image and verify. If a rank-1..4 pick fails, promote rank 5/6.
+    og:image and verify. If a rank-1..4 pick fails, promote rank 5.
     Returns {cat: [story_dict_with_winner, ...]} where story_dict has
     `winner`, `source`, `winner_slot`, `_rank`. Includes the verified
     spares too (so Stage 3 can promote them on safety reject).
@@ -1113,9 +1113,9 @@ def main_mega() -> None:
     log.info("  total kept after forbidden filter: %d (dropped %d)",
              sum(len(b) for b in briefs_by_cat.values()), rejected_total)
 
-    # ---- Stage 2: mega-curator (1 LLM call, 6 ranked per cat) ----
+    # ---- Stage 2: mega-curator (1 LLM call, 5 ranked per cat) ----
     t = time.monotonic()
-    log.info("=== MEGA Stage 2 — curator picks 6 ranked per cat ===")
+    log.info("=== MEGA Stage 2 — curator picks 5 ranked per cat ===")
     ranked_by_cat, _vet, _reasoning = mega_curate(briefs_by_cat)
     _set_phase("stage2_curator", t,
                picks={c: len(p) for c, p in ranked_by_cat.items()})

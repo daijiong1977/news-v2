@@ -1,10 +1,10 @@
 """Stage 2 of the mega pipeline: a single LLM call sees all (forbidden-
-filtered) RSS briefs across all 3 categories and picks 6 ranked
+filtered) RSS briefs across all 3 categories and picks 5 ranked
 candidates per cat with topic-cluster reasoning + cross-cat dedup.
 
 ranks 1-4 → fed to the rewriter (4 per cat × 3 cats = 12 rewrites)
-ranks 5-6 → spares; promoted only if Stage 3 (post-rewrite safety vet)
-            rejects too many of the rank 1-4 picks for a category
+rank 5    → spare; promoted only if Stage 3 (post-rewrite safety vet)
+            rejects one of the rank 1-4 picks for a category
 
 Returns a dict suitable for downstream stages:
     {cat: [{"source": <Source>, "winner": <art>, "winner_slot": "rank_N"}, ...]}
@@ -21,62 +21,55 @@ log = logging.getLogger("mega-curator")
 
 
 MEGA_CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a
-daily news site for kids ages 8-13. The pipeline mined ~60 candidates from
-9 RSS feeds (3 News + 3 Science + 3 Fun), ran a forbidden-word safety
-filter, and now hands you the survivors.
+daily news site for kids ages 8-13. The pipeline mined ~45 candidates from
+9 RSS feeds (3 News + 3 Science + 3 Fun, up to 15 per cat), ran a
+forbidden-word safety filter, and now hands you the survivors.
 
-YOUR JOB: rank 6 candidates per category (18 total), in order, ready for
-rewriting. Ranks 1-4 are the rewrite pool. Ranks 5-6 are spares — only
+YOUR JOB: rank 5 candidates per category (15 total), in order, ready for
+rewriting. Ranks 1-4 are the rewrite pool. Rank 5 is the spare — only
 used if a rank-1..4 pick later fails the post-rewrite safety vet.
 
-OUTPUT CONTRACT (strict): exactly 6 ranked picks per category.
+OUTPUT CONTRACT (strict): exactly 5 ranked picks per category. Score
+ONLY the 15 picks inline — do NOT emit per-candidate vet for the full
+pool (that blows the token budget).
 
-ALGORITHM:
+ALGORITHM (internal, don't output intermediate work):
 
-  Step 1 — VET: For each candidate, score:
-      safety dims (0-5, lower is safer): violence, sexual, substance,
-        language, fear, adult_themes, distress, bias
-      interest dims (0-5, higher is better): importance, fun_factor,
-        kid_appeal
-    Drop any with safety total > 6 OR any safety dim ≥ 4 — these can
-    never be picked.
+  1. VET silently: for each candidate rate safety (0-5, lower is safer)
+     across violence, sexual, substance, language, fear, adult_themes,
+     distress, bias — and interest (0-5, higher is better) across
+     importance, fun_factor, kid_appeal. Skip any with safety total > 6
+     or any safety dim ≥ 4 — they can never be picked.
 
-  Step 2 — CLUSTER: Identify topic clusters across the full pool. A
-    cluster = 2+ candidates covering the same real-world story. Mark
-    each candidate's cluster_id. We pick at most ONE per cluster across
-    all 3 categories combined.
+  2. CLUSTER: group candidates covering the same real-world story into
+     topic clusters. Pick AT MOST ONE candidate per cluster across all
+     3 categories combined.
 
-  Step 3 — PICK 6 PER CAT, RANKED:
-    Within each category:
-      - Prefer candidates with high interest_peak (max of importance /
-        fun / kid_appeal) AND low safety_total.
-      - Prefer DIFFERENT topic clusters across the 6 picks (topic
-        diversity within a cat).
-      - Prefer DIFFERENT sources across the 6 picks.
-      - Lower-numbered slot in source ordering ties broken by interest.
-    Cross-category tiebreak (when two cats want a candidate from the
-    same cluster):
-      News × Fun     → keep the Fun pick
-      News × Science → keep the Science pick
-      Fun  × Science → keep the Fun pick
-    The losing category picks a candidate from a DIFFERENT cluster to
-    fill that rank.
+  3. PICK 5 PER CAT, RANKED:
+     - Prefer high interest_peak (max of importance / fun / kid_appeal)
+       AND low safety_total.
+     - Prefer DIFFERENT topic clusters and DIFFERENT sources within a cat.
+     - Cross-category tiebreak (same cluster wanted by two cats):
+         News × Fun     → keep the Fun pick
+         News × Science → keep the Science pick
+         Fun  × Science → keep the Fun pick
+       Losing category picks from a DIFFERENT cluster to fill that rank.
 
-OUTPUT — valid JSON only, no markdown fences:
+OUTPUT — valid JSON only, no markdown fences. For each of the 15 picks
+include its safety + interest scores inline so the downstream pipeline
+has the vet signal. Use SHORT integer scores, no totals/peaks, no prose.
+
 {
-  "vet": [
-    {"id": <int>, "safety": {"violence":N,"sexual":N,"substance":N,"language":N,
-                              "fear":N,"adult_themes":N,"distress":N,"bias":N,
-                              "total":N},
-     "interest": {"importance":N,"fun_factor":N,"kid_appeal":N,"peak":N},
-     "cluster_id": "<short string>"},
-    ...one entry per candidate...
-  ],
   "picks": {
-    "News":    [{"rank":1,"id":N},{"rank":2,"id":N},{"rank":3,"id":N},
-                {"rank":4,"id":N},{"rank":5,"id":N},{"rank":6,"id":N}],
-    "Science": [...6 entries...],
-    "Fun":     [...6 entries...]
+    "News": [
+      {"rank":1,"id":N,"cluster_id":"<short>",
+       "safety":{"violence":N,"sexual":N,"substance":N,"language":N,
+                 "fear":N,"adult_themes":N,"distress":N,"bias":N},
+       "interest":{"importance":N,"fun_factor":N,"kid_appeal":N}},
+      ...5 entries ranked 1..5...
+    ],
+    "Science": [...5 entries...],
+    "Fun":     [...5 entries...]
   },
   "reasoning": "1-3 sentences: cross-cat dups you caught, topic
                 diversity choices, cases where rank-1 isn't choice_1."
@@ -121,7 +114,7 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             parts.extend(lines)
         parts.append("")
     parts.append(
-        "Vet, cluster, and pick 6 ranked per category. "
+        "Vet, cluster, and pick 5 ranked per category. "
         "Return the JSON shape from the system prompt."
     )
     return "\n".join(parts), registry
@@ -145,17 +138,18 @@ def mega_curate(
     log.info("mega-curator: %d total candidates across %d categories",
              len(registry), len(briefs_by_cat))
 
-    # 12k is a safe ceiling for ~90 candidates: each vet entry is ~80
-    # tokens, plus 18 picks + reasoning. 6k truncated on the first run.
+    # Slim schema (only 15 picks scored inline, no per-candidate vet array)
+    # fits comfortably under 6k. Higher caps slow reasoner response quality.
     res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
-                                  max_tokens=12000)
-    vet = {v["id"]: v for v in (res.get("vet") or []) if isinstance(v.get("id"), int)}
+                                  max_tokens=6000)
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""
 
     if reasoning:
         log.info("mega-curator reasoning: %s", reasoning[:400])
 
+    # Build vet dict from the inline scores on the 18 picks
+    vet: dict[int, dict] = {}
     out: dict[str, list[dict]] = {cat: [] for cat in briefs_by_cat}
     for cat in briefs_by_cat:
         cat_picks = raw_picks.get(cat) or []
@@ -173,12 +167,20 @@ def mega_curate(
                             cid, cat, info["cat"] if info else "?")
                 continue
             seen_ids.add(cid)
+            # Extract inline scores for downstream pipeline
+            pick_vet = {
+                "id": cid,
+                "safety": p.get("safety") or {},
+                "interest": p.get("interest") or {},
+                "cluster_id": p.get("cluster_id") or "",
+            }
+            vet[cid] = pick_vet
             out[cat].append({
                 "rank": rank,
                 "id": cid,
                 "source": info["source"],
                 "brief": info["brief"],
-                "vet": vet.get(cid) or {},
+                "vet": pick_vet,
             })
 
     for cat, picks in out.items():

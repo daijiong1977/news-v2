@@ -29,21 +29,30 @@ log = logging.getLogger("forbidden")
 #   · slurs (intentionally not enumerated here — extend the SLURS file
 #     locally if needed; we don't ship a list to avoid normalizing them)
 FORBIDDEN_PATTERNS: list[str] = [
-    # Self-harm / suicide
+    # ─── Self-harm / suicide ───
     r"\bsuicid(?:e|al|es|ed)\b",
     r"\bself[-\s]?harm(?:ed|ing)?\b",
     r"\bcutting\s+(?:themselves|themself|herself|himself)\b",
 
-    # Sexual abuse / assault — these almost never belong in a kids edition,
-    # even when reported responsibly.
+    # ─── Sexual abuse / assault ───
     r"\brape[ds]?\b",
     r"\braping\b",
     r"\bmolest(?:ed|er|ation|ing)?\b",
     r"\bsex(?:ual)?\s+(?:abuse|assault|predator|misconduct|harass(?:ment)?)\b",
     r"\bchild\s+(?:abuse|porn(?:ography)?)\b",
-    r"\bgrooming\b(?!\s+(?:standards?|services?|tips?))",  # avoid pet/personal grooming
+    r"\bgrooming\b(?!\s+(?:standards?|services?|tips?))",  # exempt pet/personal grooming
 
-    # Graphic violence
+    # ─── Sexual content & online-predator slang ───
+    r"\b(?:naked|nude|nudity|nudes)\b",
+    r"\bx-?rated\b",
+    r"\bsexting\b",
+    r"\bsex\s+tape\b",
+    r"\bporn(?:ography|ographic)?\b",
+    r"\bonlyfans\b",
+    r"\b(?:erotic|erotica|obscene|obscenity|obscenities)\b",
+    r"\b(?:gnoc|cd9|asl)\b",          # predator slang acronyms
+
+    # ─── Graphic violence ───
     r"\bbeheaded?\b",
     r"\bdismember(?:ed|ing|ment)?\b",
     r"\bmutilat(?:ed|ion|ing)?\b",
@@ -51,20 +60,39 @@ FORBIDDEN_PATTERNS: list[str] = [
     r"\bmassacre(?:s|d)?\b",
     r"\bgang\s+rape\b",
 
-    # Hard drugs (noun usage — context is "drug bust / overdose / addict")
+    # ─── Active mass-violence ───
+    r"\bschool\s+shoot(?:ing|er|ers)\b",
+    r"\bmass\s+shoot(?:ing|er|ers)\b",
+    r"\bactive\s+shoot(?:ing|er)\b",
+
+    # ─── Hate / extremism / hate groups ───
+    r"\bextremis(?:m|t|ts)\b",
+    r"\bn[a@]z(?:i|is|ism)\b",         # nazi variants (incl. n@zi)
+    r"\bneo[-\s]?n[a@]zi[s]?\b",
+    r"\bswastik(?:a|as)\b",
+    r"\bracist\b",
+    r"\bhate\s+(?:speech|crime|crimes|group|groups)\b",
+    r"\bwhite\s+(?:power|supremac(?:y|ist|ists))\b",
+    r"\b(?:kkk|ku\s+klux\s+klan)\b",
+    r"\bskinhead[s]?\b",
+    r"\b(?:isis|al[-\s]?qaeda|taliban)\b",  # named terror orgs
+
+    # ─── Hard drugs (noun usage, drug-bust contexts) ───
     r"\b(?:fentanyl|heroin|cocaine|methamphetamine|crystal\s+meth)\b",
     r"\boverdose[ds]?\b",
     r"\bdied\s+from\s+(?:drugs|overdose|fentanyl|heroin)\b",
 
-    # Explicit pornography references
-    r"\bporn(?:ography|ographic)?\b",
-    r"\bsex\s+tape\b",
-    r"\bonlyfans\b",
-
-    # Active mass-violence terms (general "shooting" / "gun" not blocked —
-    # too many false positives with sports + policy reporting)
-    r"\bschool\s+shoot(?:ing|er)\b",
-    r"\bmass\s+shoot(?:ing|er)\b",
+    # ─── Gambling ───
+    # Per editorial decision: kid news shouldn't normalize betting culture.
+    # Trade-off: legitimate political/legal stories about gambling regulation
+    # (e.g. Kalshi prediction-market enforcement) get filtered too. Acceptable.
+    r"\b(?:betting|gambling|gambler[s]?|gamble[ds]?)\b",
+    r"\bcasino[s]?\b",
+    r"\b(?:slot\s+machine[s]?|slots)\b",
+    r"\bloot\s+box(?:es)?\b",
+    r"\bsports\s+book(?:s)?\b",
+    r"\bonline\s+poker\b",
+    r"\bprediction\s+market[s]?\b",
 ]
 
 # Compile once at import time
