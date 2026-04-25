@@ -131,66 +131,123 @@ def filter_past_duplicates(category: str, by_source: dict[str, dict],
 
 
 def pick_winners_with_dedup(by_source: dict[str, dict]) -> list[dict]:
-    """Pick the highest-ranked surviving candidate per source, then
-    cross-source dedup. When a pair of today's picks duplicates, drop the
-    weaker source's current pick and promote its NEXT candidate (no extra
-    DeepSeek-and-RSS round-trip — we already mined up to 4 per source)."""
-    ptrs: dict[str, int] = {name: 0 for name in by_source}
-    exhausted: set[str] = set()
+    """Per-category cross-source dedup. Picks each source's highest-ranked
+    surviving candidate, runs cross-source check_duplicates, on dup
+    promotes the next candidate from the weaker source. Operates within a
+    single category — see `pick_all_winners_with_xcat_dedup` for the
+    unified pass that also catches News-vs-Fun overlaps."""
+    return _pick_with_dedup_unified({"_": by_source}, cat_priority=None)["_"]
 
-    def current_for(name: str) -> dict | None:
-        idx = ptrs.get(name, 0)
-        cands = by_source[name].get("candidates") or []
-        return cands[idx] if idx < len(cands) else None
 
-    for _round in range(8):
-        picks: list[tuple[str, dict]] = []
-        for name in by_source:
-            if name in exhausted:
-                continue
-            c = current_for(name)
-            if c:
-                picks.append((name, c))
-        if len(picks) < 2:
+# News > Science > Fun. On a cross-category dup, the lower-priority cat
+# loses (its source promotes its next candidate). Tweakable per editorial
+# preference; News leads because it has the strictest vetting + biggest
+# audience expectation.
+CAT_PRIORITY = {"News": 1, "Science": 2, "Fun": 3}
+
+
+def pick_all_winners_with_xcat_dedup(buckets_by_cat: dict[str, dict]) -> dict[str, list[dict]]:
+    """Single dedup pass that covers BOTH within-category sources AND
+    across-category overlaps (e.g. an Alcaraz wrist-injury story that
+    legitimately appears in BOTH a News RSS and BBC Tennis on a Tue/Sat/Sun
+    Fun rotation). Promotes the next candidate from the lower-priority
+    category's source on cross-cat dups."""
+    return _pick_with_dedup_unified(buckets_by_cat, cat_priority=CAT_PRIORITY)
+
+
+def _pick_with_dedup_unified(
+    buckets_by_cat: dict[str, dict],
+    cat_priority: dict[str, int] | None,
+) -> dict[str, list[dict]]:
+    """Workhorse for both within-cat (per-cat) and cross-cat dedup.
+
+    `buckets_by_cat = {cat: {source_name: {source, candidates}}}`. For
+    within-cat-only mode, pass a single-cat dict; cat_priority=None
+    disables the cross-cat tiebreaker (fall back to source.priority).
+    Returns `{cat: [{source, winner, winner_slot}]}`.
+    """
+    # Flat state list: one entry per (cat, source).
+    state = []
+    for cat, by_src in buckets_by_cat.items():
+        for src_name, bundle in by_src.items():
+            state.append({
+                "cat": cat,
+                "src_name": src_name,
+                "source": bundle["source"],
+                "candidates": bundle.get("candidates") or [],
+                "ptr": 0,
+                "exhausted": False,
+            })
+
+    def _current(s):
+        if s["exhausted"] or s["ptr"] >= len(s["candidates"]):
+            return None
+        return s["candidates"][s["ptr"]]
+
+    for _round in range(15):  # cap loops for adversarial inputs
+        active = [(i, s) for i, s in enumerate(state) if _current(s) is not None]
+        if len(active) < 2:
             break
         briefs = [
-            {"id": i, "title": c["winner"].get("title"),
-             "source_name": name,
-             "source_priority": getattr(by_source[name]["source"], "priority", 9),
-             "excerpt": (c["winner"].get("body") or "")[:400]}
-            for i, (name, c) in enumerate(picks)
+            {"id": k, "title": _current(s)["winner"].get("title"),
+             "source_name": s["src_name"],
+             "source_priority": getattr(s["source"], "priority", 9),
+             "category": s["cat"],
+             "excerpt": (_current(s)["winner"].get("body") or "")[:400]}
+            for k, (_, s) in enumerate(active)
         ]
         dup = check_duplicates(briefs)
         if dup.get("verdict") != "DUP_FOUND":
             break
-        drop_id = dup.get("drop_suggestion")
-        if drop_id is None and dup.get("duplicate_pairs"):
-            pair = dup["duplicate_pairs"][0]["ids"]
-            drop_id = max(pair, key=lambda i: briefs[i]["source_priority"])
-        if drop_id is None or drop_id >= len(picks):
-            break
-        drop_name, drop_cand = picks[drop_id]
-        log.info("  cross-source dup — promoting next candidate for [%s] "
-                 "(was %s: %s)",
-                 drop_name, drop_cand["slot"],
-                 (drop_cand["winner"].get("title") or "")[:50])
-        ptrs[drop_name] += 1
-        if ptrs[drop_name] >= len(by_source[drop_name].get("candidates") or []):
-            log.warning("  [%s] exhausted all candidates — skipping", drop_name)
-            exhausted.add(drop_name)
 
-    final: list[dict] = []
-    for name, bundle in by_source.items():
-        if name in exhausted:
+        # Pick which of the duplicated pair to drop. Tiebreak ordering:
+        #   1. cross-cat: drop the LOWER-priority category (News=1 wins)
+        #   2. within-cat: drop the HIGHER-numbered source.priority (lower-priority source loses)
+        pair = dup.get("duplicate_pairs", [{}])[0].get("ids") or []
+        if len(pair) < 2:
+            drop_id = dup.get("drop_suggestion")
+            if drop_id is None or drop_id >= len(active):
+                break
+        else:
+            i, j = pair[0], pair[1]
+            if i >= len(active) or j >= len(active):
+                break
+            si, sj = active[i][1], active[j][1]
+
+            def _tiebreak(s):
+                # Higher number = "drop me first"
+                cat_rank = (cat_priority.get(s["cat"], 99) if cat_priority else 0)
+                src_rank = getattr(s["source"], "priority", 9)
+                return (cat_rank, src_rank)
+
+            drop_id = j if _tiebreak(sj) > _tiebreak(si) else i
+
+        drop_state = active[drop_id][1]
+        keep_state = active[1 - drop_id][1] if len(pair) >= 2 else None
+        keep_label = (f"[{keep_state['cat']}/{keep_state['src_name']}]"
+                      if keep_state and cat_priority else "(other)")
+        log.info("  dedup drop [%s/%s] %s (promoting next candidate) — kept over %s",
+                 drop_state["cat"], drop_state["src_name"],
+                 (_current(drop_state)["winner"].get("title") or "")[:50],
+                 keep_label)
+        drop_state["ptr"] += 1
+        if drop_state["ptr"] >= len(drop_state["candidates"]):
+            log.warning("  [%s/%s] exhausted candidates — skipping",
+                        drop_state["cat"], drop_state["src_name"])
+            drop_state["exhausted"] = True
+
+    # Assemble results per category, preserving source order.
+    out: dict[str, list[dict]] = {cat: [] for cat in buckets_by_cat}
+    for s in state:
+        c = _current(s)
+        if c is None:
             continue
-        c = current_for(name)
-        if c:
-            final.append({
-                "source": bundle["source"],
-                "winner": c["winner"],
-                "winner_slot": c["slot"],
-            })
-    return final
+        out[s["cat"]].append({
+            "source": s["source"],
+            "winner": c["winner"],
+            "winner_slot": c["slot"],
+        })
+    return out
 
 
 # -------------------------------------------------------------------
@@ -526,14 +583,19 @@ def main() -> None:
     fun_bs = filter_past_duplicates("Fun", fun_bs, days=3)
     _set_phase("past_dedup", t)
 
-    # ---- PICK + CROSS-SOURCE DEDUP ----
+    # ---- PICK + UNIFIED CROSS-SOURCE + CROSS-CATEGORY DEDUP ----
+    # One pass handles BOTH within-category source dups AND cross-category
+    # overlaps (e.g. an Alcaraz tennis injury that lands in News + Fun on
+    # the same day because BBC Tennis fires on Tue/Sat/Sun). On cross-cat
+    # dup the LOWER-priority category drops + promotes its next candidate.
     t = time.monotonic()
-    log.info("=== PICK + CROSS-SOURCE DEDUP (promote next candidate on dup) ===")
-    news = pick_winners_with_dedup(news_bs)
-    science = pick_winners_with_dedup(science_bs)
-    fun = pick_winners_with_dedup(fun_bs)
-    stories_by_cat = {"News": news, "Science": science, "Fun": fun}
+    log.info("=== PICK + DEDUP (within-cat + cross-cat, promote next on dup) ===")
     cat_buckets = {"News": news_bs, "Science": science_bs, "Fun": fun_bs}
+    picked = pick_all_winners_with_xcat_dedup(cat_buckets)
+    news = picked.get("News", [])
+    science = picked.get("Science", [])
+    fun = picked.get("Fun", [])
+    stories_by_cat = {"News": news, "Science": science, "Fun": fun}
     for cat, ws in stories_by_cat.items():
         log.info("  %s: %d winners", cat, len(ws))
         snapshot = _category_summary(cat, cat_buckets[cat], ws)
