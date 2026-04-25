@@ -13,8 +13,13 @@ function formatDate(iso) {
 function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
   const baseArticle = ARTICLES.find(a => a.id === articleId) || ARTICLES[0];
   // Resume at the tab the user was last on for this article (issue #2).
+  // Whitelist against the known stage ids so a stale localStorage value
+  // (from a future renamed/removed stage) can't strand the reader on a
+  // tab whose detail won't render.
+  const _validTabs = ['read', 'analyze', 'quiz', 'discuss'];
   const _savedAP = (progress && progress.articleProgress && progress.articleProgress[articleId]) || null;
-  const _resumeTab = _savedAP && _savedAP.lastTab ? _savedAP.lastTab : 'read';
+  const _savedTab = _savedAP && _savedAP.lastTab;
+  const _resumeTab = (_savedTab && _validTabs.includes(_savedTab)) ? _savedTab : 'read';
   const [tab, setTab] = useStateA(_resumeTab);
   // tabsVisited covers what's been opened — used by the stepper UI to color
   // already-seen tabs. Hydrate from saved steps so the dots stay filled
@@ -94,7 +99,11 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
   const bumpStep = (stageId) => {
     setProgress(p => {
       const ap = p.articleProgress || {};
-      const cur = ap[article.id] || { steps: [], lastTab: 'read' };
+      // Defensive: legacy localStorage entries are bare numbers
+      // (0/25/.../100). Spreading a primitive silently drops fields, so
+      // treat anything non-object as a fresh slate.
+      const raw = ap[article.id];
+      const cur = (raw && typeof raw === 'object') ? raw : { steps: [], lastTab: 'read' };
       const curSteps = cur.steps || [];
       if (curSteps.includes(stageId)) return p;  // already counted
 
@@ -151,7 +160,8 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
     // Persist last-visited tab so re-opening the article resumes here.
     setProgress(p => {
       const ap = p.articleProgress || {};
-      const cur = ap[article.id] || { steps: [], lastTab: 'read' };
+      const raw = ap[article.id];
+      const cur = (raw && typeof raw === 'object') ? raw : { steps: [], lastTab: 'read' };
       if (cur.lastTab === id) return p;
       return { ...p, articleProgress: { ...ap, [article.id]: { ...cur, lastTab: id } } };
     });

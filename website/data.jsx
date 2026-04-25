@@ -52,15 +52,19 @@ const LEVELS = [
   { id: "Tree",   emoji: "🌳", label: "Tree",   sub: "Middle" },
 ];
 
+// Cosmetic fixtures only (name/streak/XP/badges). Daily progress lives in
+// React state hydrated from localStorage `ohye_progress`; pre-filled
+// `minutesToday`/`readToday` here would silently inflate a brand-new
+// reader's count — keep these zero/empty.
 const MOCK_USER = {
   name: "Mia",
   streak: 7,
-  minutesToday: 6,
+  minutesToday: 0,
   dailyGoal: 15,
   totalXp: 1240,
   weekXp: 310,
   badges: ["🦉", "🔭", "🌱"],
-  readToday: ["a2"],
+  readToday: [],
 };
 
 // Rewrite /article_images/xxx.webp → full Supabase URL when we're loading an

@@ -124,6 +124,22 @@ function App() {
     }
   }, [archiveDay]);
   useEffect(() => { ss.setJSON('ohye_progress', progress); }, [progress]);
+
+  // Runtime day-rollover: if the user keeps the tab open across local
+  // midnight, reset the daily counters when the tab becomes visible
+  // again on the new day. Uses local timezone (matches initial-load
+  // dayKey check) — intentionally not UTC so the reset feels right
+  // wherever the reader is.
+  useEffect(() => {
+    const checkRollover = () => {
+      const now = new Date().toDateString();
+      setProgress(p => (p && p.dayKey === now)
+        ? p
+        : { readToday: [], minutesToday: 0, articleProgress: {}, dayKey: now });
+    };
+    document.addEventListener('visibilitychange', checkRollover);
+    return () => document.removeEventListener('visibilitychange', checkRollover);
+  }, []);
   useEffect(() => { ss.setJSON('ohye_tweaks', tweaks); }, [tweaks]);
 
   // Edit-mode wiring

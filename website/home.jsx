@@ -1,6 +1,18 @@
 // Home page — News Oh,Ye!
 const { useState: useStateH, useEffect: useEffectH, useMemo: useMemoH } = React;
 
+// Convert articleProgress entry → 0..100 percentage. Handles two shapes:
+//   · legacy: <number> from before commit 8f28c21 (still in some readers'
+//     localStorage; will fade out as their dayKey rollover replaces it)
+//   · new:    { steps: string[], lastTab: string } — 4 steps total, each
+//     step = 25%, so steps.length × 25 maps cleanly to the old percent UI
+function _articlePct(ap) {
+  if (!ap) return 0;
+  if (typeof ap === 'number') return ap;
+  const steps = (ap && ap.steps) || [];
+  return Math.min(100, steps.length * 25);
+}
+
 function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, theme, heroVariant, tweaks, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
@@ -243,7 +255,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                       </div>
                     </button>
                     {(() => {
-                      const p = (progress.articleProgress||{})[a.id] || 0;
+                      const p = _articlePct((progress.articleProgress||{})[a.id]);
                       const done = progress.readToday.includes(a.id);
                       if (done) return <span style={{fontSize:22, color:'#17b3a6'}}>✓</span>;
                       if (p > 0) return <span style={{fontSize:11, fontWeight:800, color:'#f4a24c', background:'#fff4e0', padding:'3px 8px', borderRadius:999, border:'1.5px solid #f4a24c'}}>{p}%</span>;
@@ -302,10 +314,10 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
         ) : filtered.length === 3 && !isArchive ? (
           /* Editorial layout: big feature on top (photo left, article right) + 2 companions below */
           <div style={{display:'flex', flexDirection:'column', gap:20}}>
-            <ArticleCard article={filtered[0]} onOpen={()=>onOpen(filtered[0].id)} read={progress.readToday.includes(filtered[0].id)} pct={(progress.articleProgress||{})[filtered[0].id]} variant="feature" />
+            <ArticleCard article={filtered[0]} onOpen={()=>onOpen(filtered[0].id)} read={progress.readToday.includes(filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
-              <ArticleCard article={filtered[1]} onOpen={()=>onOpen(filtered[1].id)} read={progress.readToday.includes(filtered[1].id)} pct={(progress.articleProgress||{})[filtered[1].id]} variant="normal" />
-              <ArticleCard article={filtered[2]} onOpen={()=>onOpen(filtered[2].id)} read={progress.readToday.includes(filtered[2].id)} pct={(progress.articleProgress||{})[filtered[2].id]} variant="normal" />
+              <ArticleCard article={filtered[1]} onOpen={()=>onOpen(filtered[1].id)} read={progress.readToday.includes(filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
+              <ArticleCard article={filtered[2]} onOpen={()=>onOpen(filtered[2].id)} read={progress.readToday.includes(filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
             </div>
           </div>
         ) : (
@@ -315,7 +327,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
             gap:20,
           }}>
             {filtered.map((a, i) => (
-              <ArticleCard key={a.id} article={a} onOpen={()=>onOpen(a.id)} read={progress.readToday.includes(a.id)} pct={(progress.articleProgress||{})[a.id]} variant={i===0 && !isArchive ? 'feature' : 'normal'} />
+              <ArticleCard key={a.id} article={a} onOpen={()=>onOpen(a.id)} read={progress.readToday.includes(a.id)} pct={_articlePct((progress.articleProgress||{})[a.id])} variant={i===0 && !isArchive ? 'feature' : 'normal'} />
             ))}
           </div>
         )}
