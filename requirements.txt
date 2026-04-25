@@ -1,5 +1,6 @@
 beautifulsoup4>=4.12
 feedparser>=6.0
+fpdf2>=2.7
 pillow>=10.3
 python-dotenv>=1.0
 requests>=2.31

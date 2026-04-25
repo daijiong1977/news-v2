@@ -597,6 +597,17 @@ def main() -> None:
     emit_v1_shape(stories_by_cat, variants_by_cat, details_by_cat, today, website_dir)
     _set_phase("emit", t)
 
+    # ---- PDF EXPORT (1 per story × 2 levels = up to 18) ----
+    t = time.monotonic()
+    log.info("=== PDF EXPORT (printable per article) ===")
+    try:
+        from .pdf_export import generate_all_pdfs
+        pdf_count = generate_all_pdfs(stories_by_cat, today, website_dir)
+        _set_phase("pdf_export", t, count=pdf_count)
+    except Exception as e:  # noqa: BLE001
+        log.warning("PDF export failed (non-fatal): %s", e)
+        _set_phase("pdf_export", t, error=str(e)[:200])
+
     t = time.monotonic()
     log.info("=== PERSIST TO SUPABASE ===")
     count = 0
