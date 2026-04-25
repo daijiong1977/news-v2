@@ -139,19 +139,24 @@ def pick_winners_with_dedup(by_source: dict[str, dict]) -> list[dict]:
     return _pick_with_dedup_unified({"_": by_source}, cat_priority=None)["_"]
 
 
-# News > Science > Fun. On a cross-category dup, the lower-priority cat
-# loses (its source promotes its next candidate). Tweakable per editorial
-# preference; News leads because it has the strictest vetting + biggest
-# audience expectation.
-CAT_PRIORITY = {"News": 1, "Science": 2, "Fun": 3}
+# Fun > Science > News. On a cross-category dup the lower-priority
+# (numerically higher) category drops + promotes its next candidate.
+# Editorial reasoning: News has 3 sources fresh every day and the easiest
+# pool to swap from; Fun is curated per-weekday (BBC Tennis on Tue/Sat/Sun,
+# specific topical feeds) and we want to preserve those picks. Science
+# sits in the middle.
+CAT_PRIORITY = {"Fun": 1, "Science": 2, "News": 3}
 
 
 def pick_all_winners_with_xcat_dedup(buckets_by_cat: dict[str, dict]) -> dict[str, list[dict]]:
-    """Single dedup pass that covers BOTH within-category sources AND
-    across-category overlaps (e.g. an Alcaraz wrist-injury story that
-    legitimately appears in BOTH a News RSS and BBC Tennis on a Tue/Sat/Sun
-    Fun rotation). Promotes the next candidate from the lower-priority
-    category's source on cross-cat dups."""
+    """Single dedup pass covering BOTH within-category sources AND
+    across-category overlaps. Tiebreak follows CAT_PRIORITY: News drops
+    first on News×Fun and News×Science dups; Science drops on Fun×Science
+    dups. The losing category's source promotes its next candidate.
+
+    Concrete: an Alcaraz tennis-injury story landing in News (PBS-style)
+    AND Fun (BBC Tennis on Tue/Sat/Sun) keeps the Fun version and tells
+    News to use its choice_2."""
     return _pick_with_dedup_unified(buckets_by_cat, cat_priority=CAT_PRIORITY)
 
 
