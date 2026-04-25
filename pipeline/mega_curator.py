@@ -145,8 +145,10 @@ def mega_curate(
     log.info("mega-curator: %d total candidates across %d categories",
              len(registry), len(briefs_by_cat))
 
+    # 12k is a safe ceiling for ~90 candidates: each vet entry is ~80
+    # tokens, plus 18 picks + reasoning. 6k truncated on the first run.
     res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
-                                  max_tokens=6000)
+                                  max_tokens=12000)
     vet = {v["id"]: v for v in (res.get("vet") or []) if isinstance(v.get("id"), int)}
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""
