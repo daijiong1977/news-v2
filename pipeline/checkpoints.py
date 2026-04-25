@@ -129,8 +129,8 @@ def load(stage: str, source_lookup: dict, run_date: str | None = None) -> Any:
     sb = client()
     res = sb.table("redesign_checkpoints") \
         .select("data,size_bytes,created_at") \
-        .eq("run_date", rd).eq("stage", stage).maybeSingle().execute()
-    row = res.data
+        .eq("run_date", rd).eq("stage", stage).maybe_single().execute()
+    row = res.data if res else None
     if not row:
         raise FileNotFoundError(f"no checkpoint at {rd}/{stage}")
     log.info("checkpoint loaded: %s/%s (%d bytes, saved %s)",
