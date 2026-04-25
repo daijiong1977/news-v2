@@ -34,15 +34,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check admin-configured cron schedule
-        # Workflow polls every 30m. This step:
-        #   · workflow_dispatch (manual run)  → always proceed
-        #   · scheduled run                   → fetch redesign_cron_config,
-        #                                       proceed only when now is
-        #                                       within ±15 min of the
-        #                                       configured cron expression
-        #                                       AND `enabled = true`.
-        # Variant comes from the config row when scheduled; from the
-        # workflow_dispatch input otherwise.
+        # Polls every 30m. Reads `redesign_cron_config` and decides
+        # whether THIS poll should proceed. workflow_dispatch always
+        # proceeds (skipping this step entirely). Schedule firings:
+        #   · enabled=false           → SKIP
+        #   · invalid cron expression → SKIP (logged)
+        #   · now NOT within ±15 min  → SKIP
+        # Sets steps.cron_check.outputs.proceed=true only when the poll
+        # should actually run the pipeline. We exit 0 in all paths so
+        # GitHub Actions doesn't show the run as failed.
+        id: cron_check
         if: github.event_name == 'schedule'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -51,62 +52,82 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet requests croniter
           python3 - <<'PY'
-          import os, sys, json, datetime as dt
+          import os, sys, datetime as dt
           import requests
-          from croniter import croniter
+
+          # Default outputs: skip + variant=current.
+          out_path = os.environ['GITHUB_OUTPUT']
+          def emit(proceed, variant='current'):
+              with open(out_path, 'a') as f:
+                  f.write(f"proceed={'true' if proceed else 'false'}\n")
+                  f.write(f"variant={variant}\n")
 
           url = os.environ['SUPABASE_URL']
           key = os.environ['SUPABASE_SERVICE_KEY']
-          r = requests.get(
-              f"{url}/rest/v1/redesign_cron_config?name=eq.daily-pipeline&select=*",
-              headers={'apikey': key, 'Authorization': f'Bearer {key}'},
-              timeout=10,
-          )
-          r.raise_for_status()
-          rows = r.json()
+          try:
+              r = requests.get(
+                  f"{url}/rest/v1/redesign_cron_config?name=eq.daily-pipeline&select=*",
+                  headers={'apikey': key, 'Authorization': f'Bearer {key}'},
+                  timeout=10,
+              )
+              r.raise_for_status()
+              rows = r.json()
+          except Exception as e:
+              print(f"::warning::cron_config fetch failed: {e}; skipping run", flush=True)
+              emit(False); sys.exit(0)
+
           if not rows:
               print("::warning::no redesign_cron_config row; skipping run", flush=True)
-              sys.exit(78)  # neutral skip
+              emit(False); sys.exit(0)
           cfg = rows[0]
           if not cfg.get('enabled'):
               print(f"cron disabled in config; skipping (id={cfg.get('id')})", flush=True)
-              sys.exit(78)
-          expr = cfg['cron_expression']
-          now = dt.datetime.now(dt.timezone.utc)
-          # Look at the closest scheduled fire time (prev or next) within 15 min.
-          itr = croniter(expr, now)
-          prev_fire = itr.get_prev(dt.datetime)
-          next_fire = itr.get_next(dt.datetime)
-          delta = min(abs((now - prev_fire).total_seconds()),
-                      abs((next_fire - now).total_seconds()))
+              emit(False); sys.exit(0)
+
+          expr = cfg.get('cron_expression') or ''
+          variant = cfg.get('pipeline_variant') or 'current'
+          try:
+              from croniter import croniter
+              now = dt.datetime.now(dt.timezone.utc)
+              itr = croniter(expr, now)
+              prev_fire = itr.get_prev(dt.datetime)
+              next_fire = itr.get_next(dt.datetime)
+              delta = min(abs((now - prev_fire).total_seconds()),
+                          abs((next_fire - now).total_seconds()))
+          except Exception as e:
+              # Invalid cron expression — log and skip rather than fail
+              # every poll until someone fixes the row.
+              print(f"::error::invalid cron expression '{expr}': {e}; skipping run", flush=True)
+              emit(False); sys.exit(0)
+
           if delta > 15 * 60:
               print(f"now={now.isoformat()} not within 15m of cron '{expr}'; skipping", flush=True)
-              sys.exit(78)
-          print(f"cron match: now within {delta:.0f}s of '{expr}' → proceed", flush=True)
-          # Pass variant + cfg id to subsequent steps via $GITHUB_OUTPUT
-          variant = cfg.get('pipeline_variant') or 'current'
-          with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f"PIPELINE_VARIANT={variant}\n")
-              f.write(f"CRON_CONFIG_ID={cfg['id']}\n")
+              emit(False); sys.exit(0)
+          print(f"cron match: now within {delta:.0f}s of '{expr}' (variant={variant}) → proceed", flush=True)
+          emit(True, variant)
           PY
 
       - name: Install libwebp (cwebp / dwebp)
+        if: steps.cron_check.outputs.proceed != 'false'
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q webp
 
       - name: Set up Python
+        if: steps.cron_check.outputs.proceed != 'false'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install Python deps
+        if: steps.cron_check.outputs.proceed != 'false'
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
 
       - name: Write .env for modules that read it directly
+        if: steps.cron_check.outputs.proceed != 'false'
         run: |
           umask 077
           cat > .env <<EOF
@@ -116,6 +137,13 @@ jobs:
           EOF
 
       - name: Run full_round
+        if: steps.cron_check.outputs.proceed != 'false'
+        env:
+          # On scheduled runs the cron_check step emits the variant from
+          # the admin-edited DB row; on workflow_dispatch that step is
+          # skipped (its outputs are empty), so fall through to the
+          # job-level env which reads inputs.pipeline_variant.
+          PIPELINE_VARIANT: ${{ steps.cron_check.outputs.variant || inputs.pipeline_variant || 'current' }}
         run: python -m pipeline.full_round
 
       - name: Trigger kidsnews-v2 sync

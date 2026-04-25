@@ -151,7 +151,10 @@ function BootstrapWizard({ session, onDone }) {
     if (!email) { setErr('Email is required'); return; }
     setBusy(true);
     setErr(null);
-    const { error } = await sb.from('redesign_admin_users').insert({ email, name: name || null });
+    // Use the SECURITY DEFINER RPC so the bootstrap insert is atomic
+    // (locks the table; refuses if any admin already exists). Avoids the
+    // two-visitors race that a plain INSERT would have.
+    const { error } = await sb.rpc('bootstrap_admin', { p_email: email, p_name: name || '' });
     setBusy(false);
     if (error) { setErr(error.message); return; }
     onDone();
@@ -680,9 +683,22 @@ function PipelineTab({ flash }) {
   };
   useEffect(() => { load(); }, []);
 
+  // Basic client-side check: 5 whitespace-separated fields, each made of
+  // digits / `*` / `,` / `-` / `/`. Catches typos like "20 6 * *" (4 fields)
+  // or "20a 6 * * *" before they break every scheduled run.
+  const validCronShape = (expr) => {
+    if (typeof expr !== 'string') return false;
+    const fields = expr.trim().split(/\s+/);
+    if (fields.length !== 5) return false;
+    return fields.every(f => /^[0-9*,\-\/]+$/.test(f));
+  };
   const save = async () => {
+    if (!validCronShape(cfg.cron_expression)) {
+      flash('err', 'Cron expression must be 5 whitespace-separated fields (m h dom mon dow), digits or * , - / only.');
+      return;
+    }
     const { error } = await sb.from('redesign_cron_config').update({
-      cron_expression: cfg.cron_expression,
+      cron_expression: cfg.cron_expression.trim(),
       pipeline_variant: cfg.pipeline_variant,
       enabled: cfg.enabled,
     }).eq('id', cfg.id);
@@ -802,9 +818,15 @@ function App() {
 
   // Re-check bootstrap state + allowlist when session changes
   const recheck = async () => {
-    const { count } = await sb.from('redesign_admin_users').select('*', { count: 'exact', head: true });
+    // admin_user_count() is a SECURITY DEFINER RPC — anon callers can
+    // get the count without exposing email rows.
+    const { data: countResult } = await sb.rpc('admin_user_count');
+    const count = countResult ?? 0;
     let allowed = false;
     if (session?.user?.email) {
+      // Once signed in, the SELECT policy admits the caller iff
+      // _is_admin() is true (their email is in the table). This call
+      // returns the row only when allowed, otherwise empty.
       const { data } = await sb.from('redesign_admin_users').select('id').eq('email', session.user.email).maybeSingle();
       allowed = !!data;
       if (allowed) {
@@ -812,7 +834,7 @@ function App() {
         await sb.from('redesign_admin_users').update({ last_login_at: new Date().toISOString() }).eq('email', session.user.email);
       }
     }
-    setBootState({ loading: false, adminCount: count || 0, allowed });
+    setBootState({ loading: false, adminCount: count, allowed });
   };
   useEffect(() => { recheck(); }, [session]);
 
