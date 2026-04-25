@@ -44,6 +44,15 @@ for _line in (_envp.open() if _envp.exists() else []):
 DEEPSEEK_KEY = os.environ["DEEPSEEK_API_KEY"]
 DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions"
 
+# Model selection (DeepSeek V4 family — older `deepseek-chat` /
+# `deepseek-reasoner` aliases will be deprecated). The same model serves
+# both modes — thinking is on by default; we disable it for the chat
+# (rewrite) path with `thinking: {type: 'disabled'}`. Override per-env
+# via DEEPSEEK_MODEL_CHAT / DEEPSEEK_MODEL_REASONER if you need to A/B
+# test other variants (e.g. deepseek-v4-pro).
+DEEPSEEK_MODEL_CHAT = os.environ.get("DEEPSEEK_MODEL_CHAT", "deepseek-v4-flash")
+DEEPSEEK_MODEL_REASONER = os.environ.get("DEEPSEEK_MODEL_REASONER", "deepseek-v4-flash")
+
 MIN_WORDS_DEFAULT = 500
 MAX_RSS_DEFAULT = 25
 VIDEO_PATH_RE = re.compile(r"/video/", re.I)
@@ -373,7 +382,10 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
     default — eliminates the malformed-JSON failure class for most calls.
     Retries with per-class backoff."""
     payload = {
-        "model": "deepseek-chat",
+        "model": DEEPSEEK_MODEL_CHAT,
+        # Disable thinking — V4 default is on; chat/rewrite is faithful
+        # restatement, doesn't need reasoning tokens.
+        "thinking": {"type": "disabled"},
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
         "temperature": temperature,
@@ -798,7 +810,9 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
         the same prompt will hit the same length cap.
     """
     payload = {
-        "model": "deepseek-reasoner",
+        "model": DEEPSEEK_MODEL_REASONER,
+        # thinking is default on V4 — explicit so the intent is clear
+        "thinking": {"type": "enabled"},
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
         "max_tokens": max_tokens,

@@ -129,7 +129,9 @@ Score, give feedback, and rewrite per the system prompt.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
+        // chat/rewrite path — thinking off (V4 default is on)
+        thinking: { type: "disabled" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userMsg },
