@@ -678,51 +678,63 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen 
     <div style={{
       position:'sticky', top: 0, zIndex: 25,
       background: 'rgba(255,249,239,0.96)', backdropFilter:'blur(8px)',
-      borderBottom:`1.5px solid ${theme.chip}`,
-      padding:'10px 28px',
+      borderBottom:`2px solid ${theme.chip}`,
+      padding:'18px 28px 16px',
     }}>
-      <div style={{
-        maxWidth:1180, margin:'0 auto',
-        display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
-      }}>
-        {/* Left: progress text + thin bar */}
-        <div style={{flex:1, minWidth:240}}>
-          <div style={{
-            fontSize:12, fontWeight:900, color:'#1b1230', letterSpacing:'.04em',
-            textTransform:'uppercase', marginBottom:4, fontFamily:'Nunito, sans-serif',
-          }}>
-            <span style={{fontSize:16, marginRight:6}}>⏱️</span>
-            Today's read · <span style={{color: theme.heroTextAccent}}>{minutesToday}</span>/{dailyGoal} min
-            {!allDone && <span style={{fontWeight:600, color:'#9a8d7a', marginLeft:8}}>· {dailyGoal - minutesToday} min left</span>}
-          </div>
-          <div style={{
-            height:5, background:'#f0e8d8', borderRadius:999, overflow:'hidden',
-          }}>
-            <div style={{
-              width: `${pct}%`, height:'100%',
-              background:`linear-gradient(90deg, ${theme.accent}, #ff8a3d)`,
-              borderRadius:999, transition:'width .3s ease',
-            }}/>
-          </div>
+      <div style={{maxWidth:1180, margin:'0 auto'}}>
+        {/* Top row: progress text */}
+        <div style={{
+          fontFamily:'Nunito, sans-serif',
+          fontSize:14, fontWeight:900, color:'#1b1230', letterSpacing:'.04em',
+          textTransform:'uppercase', marginBottom:10,
+          display:'flex', alignItems:'baseline', gap:12, flexWrap:'wrap',
+        }}>
+          <span style={{fontSize:18}}>⏱️</span>
+          <span>Today's read</span>
+          <span style={{
+            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:24,
+            color: theme.heroTextAccent, letterSpacing:'-0.01em',
+            textTransform:'none',
+          }}>{minutesToday} / {dailyGoal} min</span>
+          {!allDone && (
+            <span style={{
+              fontWeight:700, color:'#6b5c80', fontSize:12,
+              textTransform:'none', letterSpacing:'.02em',
+            }}>· {dailyGoal - minutesToday} min left today</span>
+          )}
         </div>
 
-        {/* Right: CTA */}
+        {/* Middle row: thicker progress bar */}
+        <div style={{
+          height:8, background:'#f0e8d8', borderRadius:999, overflow:'hidden',
+          marginBottom:14,
+        }}>
+          <div style={{
+            width: `${pct}%`, height:'100%',
+            background:`linear-gradient(90deg, ${theme.accent}, #ff8a3d)`,
+            borderRadius:999, transition:'width .3s ease',
+          }}/>
+        </div>
+
+        {/* Bottom row: full-width CTA */}
         {action ? (
           <button onClick={action} style={{
+            width:'100%',
             background: targetCat?.color || '#1b1230', color:'#fff', border:'none',
-            borderRadius:14, padding:'10px 18px', fontWeight:900, fontSize:13.5,
+            borderRadius:14, padding:'14px 22px', fontWeight:900, fontSize:16,
             fontFamily:'Nunito, sans-serif', cursor:'pointer', letterSpacing:'.02em',
-            boxShadow:'0 3px 0 rgba(27,18,48,0.18)',
-            display:'inline-flex', alignItems:'center', gap:8,
+            boxShadow:'0 4px 0 rgba(27,18,48,0.18)',
+            display:'inline-flex', alignItems:'center', justifyContent:'center', gap:10,
           }}>
-            <span style={{fontSize:14}}>{targetCat?.emoji}</span>
+            <span style={{fontSize:18}}>{targetCat?.emoji}</span>
             {label}
           </button>
         ) : (
-          <span style={{
-            background:'#0e8d82', color:'#fff', padding:'10px 16px', borderRadius:14,
-            fontWeight:900, fontSize:13.5, letterSpacing:'.02em',
-          }}>{label}</span>
+          <div style={{
+            width:'100%', textAlign:'center',
+            background:'#0e8d82', color:'#fff', padding:'14px 22px', borderRadius:14,
+            fontWeight:900, fontSize:16, letterSpacing:'.02em',
+          }}>{label}</div>
         )}
       </div>
     </div>
@@ -783,8 +795,16 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     && picksLock.dayKey === todayKeyLocal
     && picksLock.ids.length === 3
     && picksLock.ids.every(id => poolIds.has(id));
-  const lockPicks = (ids) => setPicksLock({ dayKey: todayKeyLocal, ids });
-  const resetPicks = () => setPicksLock({ dayKey: null, ids: [] });
+  const lockPicks = (ids) => {
+    setPicksLock({ dayKey: todayKeyLocal, ids });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const resetPicks = () => {
+    setPicksLock({ dayKey: null, ids: [] });
+    // Scroll to top so the kid actually SEES the pick screen instead of
+    // being mid-page where the daily-3 stack used to be.
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Pick 1 from each category by default, user can swap (only from the 3-per-category pool)
   const [dailyPicks, setDailyPicks] = useStateH(() => {
@@ -913,7 +933,9 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
           borderRadius:28,
           padding:'28px 32px',
           display:'grid',
-          gridTemplateColumns: heroVariant === 'streak' ? '1fr 1fr' : '1.2fr 1fr',
+          // Daily-3 column gets ~2/3 of width so cards have room to breathe;
+          // welcome text gets the remaining ~1/3.
+          gridTemplateColumns: heroVariant === 'streak' ? '1fr 1fr' : '1fr 2fr',
           gap:28,
           alignItems:'center',
           position:'relative',

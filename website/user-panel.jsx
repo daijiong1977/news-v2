@@ -366,6 +366,20 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
             </>
           )}
 
+          {/* Re-do the first-launch onboarding (clears name → onboarding
+              gate fires on next render). Useful when the kid wants to
+              change everything in one pass instead of editing fields
+              one by one above. */}
+          <button
+            onClick={()=>{ updateTweak('userName',''); onClose(); }}
+            style={{
+              width:'100%', marginTop:14,
+              background:'transparent', color:'#6b5c80',
+              border:'1.5px dashed #c9b99a', borderRadius:14,
+              padding:'12px', cursor:'pointer',
+              fontWeight:800, fontSize:13, fontFamily:'Nunito, sans-serif',
+            }}>🔁 Re-do welcome setup</button>
+
           <div style={{display:'flex', gap:8, marginTop:12}}>
             <button onClick={onClose} style={{
               flex:1, background:'#1b1230', color:'#ffc83d', border:'none',
