@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 
 from .news_rss_core import deepseek_call
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("backfill")
@@ -20,7 +22,7 @@ for _line in (_envp.open() if _envp.exists() else []):
         k, v = _line.strip().split("=", 1)
         os.environ[k] = v
 
-ROOT = Path("/Users/jiong/myprojects/news-v2/website/payloads")
+ROOT = (_REPO_ROOT / "website/payloads")
 
 CARD_PROMPT = """You write blurbs that appear on news home-page cards for kids.
 Given ONE kid-friendly news article body, write a 6-9 sentence card summary.

@@ -14,6 +14,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 # Load .env manually
 _envp = __import__("pathlib").Path(__file__).resolve().parent.parent / ".env"
@@ -165,7 +167,7 @@ def main() -> None:
     print(f"Calling Tavily: domains={DOMAINS}, query='{QUERY}', max_results=15 ...")
     data = fetch()
 
-    out_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output")
+    out_dir = (_REPO_ROOT / "website/test_output")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     out_dir_date = out_dir / today
     out_dir_date.mkdir(parents=True, exist_ok=True)
@@ -174,7 +176,7 @@ def main() -> None:
     json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     print(f"JSON written: {json_path}")
 
-    html_path = Path("/Users/jiong/myprojects/news-v2/website/news-raw.html")
+    html_path = (_REPO_ROOT / "website/news-raw.html")
     html_path.write_text(render_html(data))
     print(f"HTML written: {html_path}")
     print()

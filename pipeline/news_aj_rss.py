@@ -17,6 +17,8 @@ import feedparser
 import requests
 
 from .cleaner import extract_article_from_html
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("aj-rss")
@@ -213,7 +215,7 @@ def main() -> None:
     log.info("  %d/%d got og:image, %d/%d got body ≥300w, %d fetch errors",
              with_image, len(processed), with_body, len(processed), fetch_errs)
 
-    out_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output") / \
+    out_dir = (_REPO_ROOT / "website/test_output") / \
               datetime.now(timezone.utc).strftime("%Y-%m-%d")
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "news_aj_rss.json").write_text(
@@ -221,7 +223,7 @@ def main() -> None:
     )
     log.info("JSON: %s", out_dir / "news_aj_rss.json")
 
-    html_path = Path("/Users/jiong/myprojects/news-v2/website/news-aj-rss.html")
+    html_path = (_REPO_ROOT / "website/news-aj-rss.html")
     html_path.write_text(render_html(processed))
     log.info("HTML: %s", html_path)
     log.info("View at: http://localhost:18100/news-aj-rss.html")

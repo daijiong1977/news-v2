@@ -520,22 +520,44 @@ def main() -> None:
     count = 0
     if run_id:
         count = persist_to_supabase(stories_by_cat, variants_by_cat, today, run_id)
-        update_run(run_id, {"status": "completed",
-                            "finished_at": datetime.now(timezone.utc).isoformat(),
+        # Intermediate state: rows are written but the deploy zip hasn't shipped
+        # yet. We only flip to `completed` after pack+upload returns cleanly.
+        update_run(run_id, {"status": "persisted",
                             "notes": f"stories persisted: {count}"})
 
     log.info("=== PACK + UPLOAD ZIP (deploy trigger) ===")
+    upload_ok = False
+    upload_err: str | None = None
     try:
         from .pack_and_upload import main as _pack_upload
         _pack_upload()
+        upload_ok = True
+    except SystemExit as e:
+        # validate_bundle / check_not_overwriting_newer raised SystemExit(1)
+        upload_err = f"pack_and_upload aborted (SystemExit {e.code})"
+        log.error(upload_err)
     except Exception as e:  # noqa: BLE001
-        log.warning("pack_and_upload failed — site will lag until next run: %s", e)
+        upload_err = f"pack_and_upload exception: {e}"
+        log.error(upload_err)
+
+    if run_id:
+        terminal = {"finished_at": datetime.now(timezone.utc).isoformat()}
+        if upload_ok:
+            terminal["status"] = "completed"
+            terminal["notes"] = f"stories persisted: {count}; deployed"
+        else:
+            terminal["status"] = "deploy_failed"
+            terminal["notes"] = (f"stories persisted: {count}; "
+                                  f"deploy failed: {upload_err}")
+        update_run(run_id, terminal)
 
     log.info("=== DONE ===")
     total_stories = sum(len(ws) for ws in stories_by_cat.values())
-    log.info("Run: %s · Stories: %d · DB persisted: %d", run_id or "(no DB)",
-             total_stories, count)
-    log.info("View: http://localhost:18100/")
+    log.info("Run: %s · Stories: %d · DB persisted: %d · Deployed: %s",
+             run_id or "(no DB)", total_stories, count, upload_ok)
+    if not upload_ok:
+        # Make the workflow show red so it's surfaced in GH Actions UI.
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

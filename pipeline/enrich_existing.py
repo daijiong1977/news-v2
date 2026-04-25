@@ -17,13 +17,15 @@ import sys
 from pathlib import Path
 
 from .news_rss_core import detail_enrich
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("enrich")
 
 
 def enrich_category(cat: str, date: str) -> None:
-    details_dir = Path("/Users/jiong/myprojects/news-v2/website/article_payloads")
+    details_dir = (_REPO_ROOT / "website/article_payloads")
     slug = cat.lower()
 
     # Build the rewrite_result shape expected by detail_enrich()

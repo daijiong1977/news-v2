@@ -20,6 +20,8 @@ from supabase import create_client
 
 from .cleaner import extract_article_from_html
 from .news_rss_core import TRI_VARIANT_REWRITER_PROMPT, tri_variant_rewriter_input
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("rewrite-test")
@@ -95,7 +97,7 @@ def main() -> None:
     log.info("Got %d rewritten articles", len(out_articles))
 
     # Save side-by-side
-    details_dir = Path("/Users/jiong/myprojects/news-v2/website/article_payloads")
+    details_dir = (_REPO_ROOT / "website/article_payloads")
     for i, a in enumerate(out_articles):
         sid = a.get("source_id", i)
         slot = sid + 1

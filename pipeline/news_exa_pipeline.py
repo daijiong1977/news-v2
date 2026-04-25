@@ -22,6 +22,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("exa-pipeline")
@@ -436,7 +438,7 @@ def main() -> None:
         else:
             log.warning("  ✗ rewrite failed for %s", art.get("title"))
 
-    out_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output") / \
+    out_dir = (_REPO_ROOT / "website/test_output") / \
               datetime.now(timezone.utc).strftime("%Y-%m-%d")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_json = {
@@ -455,7 +457,7 @@ def main() -> None:
     (out_dir / "news_exa_pipeline.json").write_text(json.dumps(out_json, indent=2, ensure_ascii=False))
     log.info("JSON: %s", out_dir / "news_exa_pipeline.json")
 
-    html_path = Path("/Users/jiong/myprojects/news-v2/website/news-exa-kids.html")
+    html_path = (_REPO_ROOT / "website/news-exa-kids.html")
     html_path.write_text(render_html(exa_raw, kept, rejected, curator_result, kids_articles))
     log.info("HTML: %s", html_path)
     log.info("View at: http://localhost:18100/news-exa-kids.html")

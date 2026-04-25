@@ -409,14 +409,15 @@ def main() -> None:
              manifest["zip_sha256"][:12], manifest["story_count"])
 
     # Flat per-day files — the UI fetches these when user picks a past date.
+    # Only add `today` to archive-index AFTER all flat files are confirmed
+    # present, so DatePopover never advertises a date whose payloads 404.
+    today_flat_ok = False
     try:
-        upload_dated_flat_files(sb, today)
+        n = upload_dated_flat_files(sb, today)
+        today_flat_ok = n > 0
     except Exception as e:  # noqa: BLE001
-        log.warning("dated-flat upload failed (non-fatal): %s", e)
+        log.warning("dated-flat upload failed (non-fatal for today's deploy): %s", e)
 
-    # Read existing archive-index, backfill any dated zip that doesn't yet
-    # have a flat dir, then update archive-index with both backfilled +
-    # today's date.
     try:
         body = sb.storage.from_(BUCKET).download("archive-index.json")
         existing_idx = json.loads(body.decode() if isinstance(body, bytes) else body)
@@ -427,7 +428,14 @@ def main() -> None:
         backfilled = backfill_missing_archive_dirs(sb, existing_dates)
         if backfilled:
             log.info("archive backfill: %s", backfilled)
-        update_archive_index(sb, [today] + backfilled)
+        new_dates: list[str] = []
+        if today_flat_ok:
+            new_dates.append(today)
+        new_dates.extend(backfilled)  # backfill function only returns successes
+        if new_dates:
+            update_archive_index(sb, new_dates)
+        else:
+            log.info("archive-index: no new dates to register")
     except Exception as e:  # noqa: BLE001
         log.warning("archive-index update failed (non-fatal): %s", e)
 

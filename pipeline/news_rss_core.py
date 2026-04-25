@@ -29,6 +29,8 @@ import feedparser
 import requests
 
 from .cleaner import extract_article_from_html
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 log = logging.getLogger("rss-core")
 
@@ -238,35 +240,71 @@ Return ONLY valid JSON (no markdown fences):
 }}"""
 
 
+def _retry_sleep_for(err: Exception, attempt: int) -> float:
+    """Tiered backoff per failure class:
+      · 429 rate limit → honor Retry-After header, fall back to 30s × attempt
+      · 5xx server error → exponential 4s/8s/16s
+      · network errors (Connection/Timeout) → exponential 4s/8s/16s
+      · JSON parse → quick retry 1s/2s (model needs to re-roll, usually works)
+    """
+    if isinstance(err, requests.HTTPError):
+        resp = getattr(err, "response", None)
+        status = resp.status_code if resp is not None else 0
+        if status == 429:
+            ra = (resp.headers.get("Retry-After") if resp is not None else None) or ""
+            try:
+                wait = float(ra)
+            except (TypeError, ValueError):
+                wait = 30.0 * attempt
+            return min(wait, 120.0)
+        if status >= 500:
+            return min(4.0 * (2 ** (attempt - 1)), 60.0)
+        return 2.0 * attempt  # other 4xx → quick retry
+    if isinstance(err, (requests.ConnectionError, requests.Timeout)):
+        return min(4.0 * (2 ** (attempt - 1)), 60.0)
+    if isinstance(err, json.JSONDecodeError):
+        return 1.0 * attempt
+    return 2.0 * attempt
+
+
+def _deepseek_post(payload: dict, timeout: int) -> dict:
+    """Single HTTP call to DeepSeek; raises on bad status or unparseable JSON."""
+    r = requests.post(
+        DEEPSEEK_ENDPOINT,
+        json=payload,
+        headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    content = r.json()["choices"][0]["message"]["content"]
+    content = re.sub(r"^```json\s*", "", content.strip())
+    content = re.sub(r"\s*```\s*$", "", content)
+    return json.loads(content)
+
+
 def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2,
                   max_attempts: int = 3) -> dict:
-    """Call deepseek-chat with JSON output. Retries on JSON parse failure
-    (model occasionally emits malformed JSON) and transient HTTP errors."""
+    """Call deepseek-chat with JSON output. Retries with per-class backoff
+    (429 honors Retry-After, 5xx/network exponential, JSON parse quick)."""
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
-            r = requests.post(DEEPSEEK_ENDPOINT,
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "system", "content": system},
-                                 {"role": "user", "content": user}],
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
-                timeout=120)
-            r.raise_for_status()
-            content = r.json()["choices"][0]["message"]["content"]
-            content = re.sub(r"^```json\s*", "", content.strip())
-            content = re.sub(r"\s*```\s*$", "", content)
-            return json.loads(content)
+            return _deepseek_post(payload, timeout=120)
         except (json.JSONDecodeError, requests.HTTPError, requests.ConnectionError,
                 requests.Timeout) as e:
             last_err = e
-            log.warning("chat attempt %d/%d failed: %s",
-                        attempt, max_attempts, str(e)[:200])
+            wait = _retry_sleep_for(e, attempt)
+            log.warning("chat attempt %d/%d failed (%s): waiting %.1fs",
+                        attempt, max_attempts, type(e).__name__, wait)
             if attempt < max_attempts:
-                time.sleep(2 * attempt)
+                time.sleep(wait)
     raise RuntimeError(f"deepseek_call exhausted {max_attempts} attempts") from last_err
 
 
@@ -460,7 +498,10 @@ OUTPUT — valid JSON only (no markdown fences):
 
 
 def tri_variant_rewriter_input(articles_with_ids: list[tuple[int, dict]]) -> str:
-    lines = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.", ""]
+    n = len(articles_with_ids)
+    lines = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.",
+             f"You will receive {n} source article{'s' if n != 1 else ''} below.",
+             ""]
     for src_id, art in articles_with_ids:
         host = urlparse(art.get("link") or "").netloc.replace("www.", "")
         body = art.get("body") or ""
@@ -473,7 +514,8 @@ def tri_variant_rewriter_input(articles_with_ids: list[tuple[int, dict]]) -> str
         lines.append("Full body:")
         lines.append(body_trimmed)
         lines.append("")
-    lines.append("Write 3 tri-variant entries (easy_en + middle_en + zh) per the rules.")
+    lines.append(f"Write {n} tri-variant entr{'ies' if n != 1 else 'y'} "
+                 f"(easy_en + middle_en + zh) — one per source — per the rules.")
     return "\n".join(lines)
 
 
@@ -492,11 +534,12 @@ DETAIL_ENRICH_PROMPT = """You are enriching kids-news articles with DEPTH beyond
 Use careful reasoning. The reader already has the body; you're adding what the
 body alone doesn't provide — historical context, real-world pattern, nuance.
 
-You will receive 3 articles. Each has two rewritten English bodies:
+You will receive N articles (where N is given in the user message; usually 3,
+but could be 1, 2, or 3). Each article has two rewritten English bodies:
   easy_en  — grade 4 / 10-year-old reader (~200 words)
   middle_en — grade 7-8 / 12-14 year old reader (~320 words)
 
-For each of the 6 slots (3 articles × {easy,middle}) produce:
+For each of the 2N slots (N articles × {easy, middle}) produce:
 
   [common to both easy and middle]
   · keywords: 6 {term, explanation} pairs. EVERY term MUST literally appear (or
@@ -551,26 +594,33 @@ For each of the 6 slots (3 articles × {easy,middle}) produce:
 ACCURACY: facts in background_read must be real-world accurate. If unsure,
 prefer pattern statements over specific claims.
 
-REFERENCE, don't re-return: use keys "0_easy", "0_middle", "1_easy", "1_middle",
-"2_easy", "2_middle". Do NOT echo the body text back.
+REFERENCE, don't re-return: keys are "<i>_easy" / "<i>_middle" where i is the
+0-indexed article position. The exact set of keys you should produce is given
+in the user message — produce ONLY those keys, no more, no less. Do NOT echo
+the body text back.
 
 Return ONLY valid JSON (no markdown fences):
 {
   "details": {
     "0_easy":   {"keywords":[...], "questions":[...], "background_read":[...], "Article_Structure":[...], "why_it_matters":"...", "perspectives":[...]},
     "0_middle": {...},
-    "1_easy":   {...},
-    "1_middle": {...},
-    "2_easy":   {...},
-    "2_middle": {...}
+    ... (one entry per requested key)
   }
 }"""
 
 
 def detail_enrich_input(rewrite_result: dict) -> str:
     """Build the user message for detail enrichment from the tri-variant rewrite result."""
-    lines = ["3 articles below. For each, generate detail fields for easy and middle levels.", ""]
-    for i, art in enumerate(rewrite_result.get("articles") or []):
+    arts = rewrite_result.get("articles") or []
+    n = len(arts)
+    expected_keys = [f"{i}_{lvl}" for i in range(n) for lvl in ("easy", "middle")]
+    lines = [
+        f"{n} article{'s' if n != 1 else ''} below. "
+        f"Generate detail fields for {n} × 2 = {2 * n} slots.",
+        f"REQUIRED keys (produce ONLY these): {expected_keys}",
+        "",
+    ]
+    for i, art in enumerate(arts):
         easy = art.get("easy_en") or {}
         middle = art.get("middle_en") or {}
         lines.append(f"=== Article [id: {i}] ===")
@@ -582,7 +632,7 @@ def detail_enrich_input(rewrite_result: dict) -> str:
         lines.append(f"middle_en body ({len((middle.get('body') or '').split())} words):")
         lines.append((middle.get("body") or ""))
         lines.append("")
-    lines.append("Return the JSON with the 6 slots keyed as 0_easy, 0_middle, 1_easy, 1_middle, 2_easy, 2_middle.")
+    lines.append(f"Return the JSON with exactly these {2 * n} slot key{'s' if 2 * n != 1 else ''}: {expected_keys}.")
     return "\n".join(lines)
 
 
@@ -629,52 +679,52 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
 
 def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
                            max_attempts: int = 3) -> dict:
-    """Call deepseek-reasoner (thinking mode). Returns parsed JSON from final
-    content. Retries on JSON parse failure (model occasionally drops a comma
-    in large payloads) and on transient HTTP/network errors."""
+    """Call deepseek-reasoner (thinking mode). Same per-class retry policy
+    as deepseek_call. Reasoner has bigger payloads → more JSON-corruption
+    cases; the split-batch fallback in detail_enrich() handles that."""
+    payload = {
+        "model": "deepseek-reasoner",
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+        "max_tokens": max_tokens,
+    }
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
-            r = requests.post(
-                DEEPSEEK_ENDPOINT,
-                json={
-                    "model": "deepseek-reasoner",
-                    "messages": [{"role": "system", "content": system},
-                                 {"role": "user", "content": user}],
-                    "max_tokens": max_tokens,
-                },
-                headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"},
-                timeout=300,
-            )
-            r.raise_for_status()
-            content = r.json()["choices"][0]["message"]["content"]
-            content = re.sub(r"^```json\s*", "", content.strip())
-            content = re.sub(r"\s*```\s*$", "", content)
-            return json.loads(content)
+            return _deepseek_post(payload, timeout=300)
         except (json.JSONDecodeError, requests.HTTPError, requests.ConnectionError,
                 requests.Timeout) as e:
             last_err = e
-            log.warning("reasoner attempt %d/%d failed: %s",
-                        attempt, max_attempts, str(e)[:200])
+            wait = _retry_sleep_for(e, attempt)
+            log.warning("reasoner attempt %d/%d failed (%s): waiting %.1fs",
+                        attempt, max_attempts, type(e).__name__, wait)
             if attempt < max_attempts:
-                time.sleep(2 * attempt)  # 2s, 4s
+                time.sleep(wait)
     raise RuntimeError(f"deepseek_reasoner_call exhausted {max_attempts} attempts") from last_err
 
 
 def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
-    """Build an input covering only easy OR only middle slots (3 slots total).
-    Smaller payload → less chance of malformed JSON under reasoner load."""
+    """Build an input covering only easy OR only middle slots (one slot per
+    article). Smaller payload → less chance of malformed JSON under reasoner
+    load."""
     assert level in ("easy", "middle")
-    lines = [f"3 articles below. For EACH, generate detail fields ONLY for the "
-             f"{level} level.", ""]
-    for i, art in enumerate(rewrite_result.get("articles") or []):
+    arts = rewrite_result.get("articles") or []
+    n = len(arts)
+    expected_keys = [f"{i}_{level}" for i in range(n)]
+    lines = [
+        f"{n} article{'s' if n != 1 else ''} below. "
+        f"Generate detail fields ONLY for the {level} level.",
+        f"REQUIRED keys (produce ONLY these): {expected_keys}",
+        "",
+    ]
+    for i, art in enumerate(arts):
         v = art.get(f"{level}_en") or {}
         lines.append(f"=== Article [id: {i}] ===")
         lines.append(f"{level}_en headline: {v.get('headline','')}")
         lines.append(f"{level}_en body ({len((v.get('body') or '').split())} words):")
         lines.append((v.get("body") or ""))
         lines.append("")
-    lines.append(f"Return JSON with 3 slots keyed as 0_{level}, 1_{level}, 2_{level}.")
+    lines.append(f"Return JSON with exactly {n} slot key{'s' if n != 1 else ''}: {expected_keys}.")
     return "\n".join(lines)
 
 
@@ -1206,7 +1256,7 @@ def run_pipeline(*, rss_url: str, source_label: str,
             kids_articles_by_id[sid] = a
 
     # Output
-    out_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output") / \
+    out_dir = (_REPO_ROOT / "website/test_output") / \
               datetime.now(timezone.utc).strftime("%Y-%m-%d")
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{output_slug}.json").write_text(json.dumps({
@@ -1223,7 +1273,7 @@ def run_pipeline(*, rss_url: str, source_label: str,
         "kids_articles": kids_articles_by_id,
     }, indent=2, ensure_ascii=False))
 
-    html_path = Path(f"/Users/jiong/myprojects/news-v2/website/{output_slug}.html")
+    html_path = (_REPO_ROOT / f"website/{output_slug}.html")
     html_path.write_text(render_html(source_label, rss_url,
                                       all_processed, kept, rejected,
                                       batch_vet, kids_articles_by_id,

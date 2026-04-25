@@ -36,6 +36,8 @@ from .news_rss_core import (
     verify_article_content,
 )
 from .news_sources import NewsSource, backup_sources, enabled_sources
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("aggregate")
@@ -345,7 +347,7 @@ def main() -> None:
 </body>
 </html>""")
 
-    today_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output") / today
+    today_dir = (_REPO_ROOT / "website/test_output") / today
     today_dir.mkdir(parents=True, exist_ok=True)
     (today_dir / "news_today.json").write_text(json.dumps({
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -369,7 +371,7 @@ def main() -> None:
         "variants": articles_out,
     }, indent=2, ensure_ascii=False))
 
-    html_path = Path("/Users/jiong/myprojects/news-v2/website/news-today.html")
+    html_path = (_REPO_ROOT / "website/news-today.html")
     html_path.write_text("".join(parts))
     log.info("HTML: %s", html_path)
     log.info("View: http://localhost:18100/news-today.html")

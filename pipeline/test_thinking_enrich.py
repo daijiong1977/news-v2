@@ -15,6 +15,8 @@ import re
 from pathlib import Path
 
 import requests
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("thinking-test")
@@ -118,7 +120,7 @@ def call_reasoner(user_msg: str) -> tuple[str, str]:
 
 
 def main() -> None:
-    details_dir = Path("/Users/jiong/myprojects/news-v2/website/article_payloads")
+    details_dir = (_REPO_ROOT / "website/article_payloads")
     # Load the 3 News middle articles
     articles = []
     for slot in (1, 2, 3):

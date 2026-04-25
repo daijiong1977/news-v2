@@ -33,6 +33,8 @@ from supabase import create_client
 from .cleaner import extract_article_from_html
 from .full_round import card_summary
 from .news_rss_core import detail_enrich, tri_variant_rewrite
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("resume")
@@ -49,7 +51,7 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-WEBSITE_DIR = Path("/Users/jiong/myprojects/news-v2/website")
+WEBSITE_DIR = (_REPO_ROOT / "website")
 
 
 def fetch_body(url: str) -> tuple[str, list[str]]:

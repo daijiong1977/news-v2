@@ -24,10 +24,10 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" src="data.jsx?v=20260424e"></script>
+<script type="text/babel" src="data.jsx?v=20260424g"></script>
 <script type="text/babel" src="components.jsx"></script>
-<script type="text/babel" src="home.jsx?v=20260424f"></script>
-<script type="text/babel" src="article.jsx?v=20260424e"></script>
+<script type="text/babel" src="home.jsx?v=20260424g"></script>
+<script type="text/babel" src="article.jsx?v=20260424g"></script>
 <script type="text/babel" src="user-panel.jsx"></script>
 
 <script type="text/babel">
@@ -47,60 +47,53 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 function App() {
-  // restore from localStorage; if saved articleId no longer exists (payloads changed), fall back to home
+  // All localStorage access goes through window.safeStorage (defined in
+  // data.jsx) so private-mode / quota-exhausted browsers degrade gracefully
+  // instead of taking down the whole app.
+  const ss = window.safeStorage;
+
   const [route, setRoute] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('ohye_route') || 'null');
-      if (!saved) return { page:'home', articleId:null };
-      if (saved.page === 'article' && !ARTICLES.some(a => a.id === saved.articleId)) {
-        return { page:'home', articleId:null };
-      }
-      return saved;
-    } catch { return { page:'home', articleId:null }; }
+    const saved = ss.getJSON('ohye_route');
+    if (!saved) return { page:'home', articleId:null };
+    if (saved.page === 'article' && !ARTICLES.some(a => a.id === saved.articleId)) {
+      return { page:'home', articleId:null };
+    }
+    return saved;
   });
   const [level, setLevel] = useState(() => {
-    const v = localStorage.getItem('ohye_level') || 'Sprout';
-    // Retire Seedling — migrate legacy profiles
-    return v === 'Seedling' ? 'Sprout' : v;
+    const v = ss.get('ohye_level') || 'Sprout';
+    return v === 'Seedling' ? 'Sprout' : v;  // legacy migration
   });
   const [cat, setCat] = useState(() => {
-    const v = localStorage.getItem('ohye_cat') || 'News';
+    const v = ss.get('ohye_cat') || 'News';
     return (v === 'Today' || v === 'Archive' || v === 'All') ? 'News' : v;
   });
   const [archiveDay, setArchiveDay] = useState(() => {
-    // archiveDay is now "YYYY-MM-DD" (string) or null for today.
-    // Migration: any legacy numeric value in localStorage is cleared.
-    const v = localStorage.getItem('ohye_archive_day');
+    // archiveDay is "YYYY-MM-DD" (string) or null for today.
+    const v = ss.get('ohye_archive_day');
     if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    if (v) localStorage.removeItem('ohye_archive_day');
+    if (v) ss.remove('ohye_archive_day');  // clear legacy numeric values
     return null;
   });
   const [progress, setProgress] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('ohye_progress') || 'null');
-      const base = { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} };
-      if (!saved) return base;
-      return { articleProgress: {}, ...saved, articleProgress: saved.articleProgress || {} };
-    } catch { return { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} }; }
+    const saved = ss.getJSON('ohye_progress');
+    const base = { readToday: MOCK_USER.readToday, minutesToday: MOCK_USER.minutesToday, articleProgress: {} };
+    if (!saved) return base;
+    return { articleProgress: {}, ...saved, articleProgress: saved.articleProgress || {} };
   });
 
-  // Tweaks / User Panel — persisted to localStorage so name/avatar/theme/etc.
-  // survive reloads. Defaults fill in any missing keys (forward-compat when
-  // we add new tweak fields later).
   const [tweaks, setTweaks] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('ohye_tweaks') || 'null');
-      return saved ? { ...TWEAK_DEFAULTS, ...saved } : TWEAK_DEFAULTS;
-    } catch { return TWEAK_DEFAULTS; }
+    const saved = ss.getJSON('ohye_tweaks');
+    return saved ? { ...TWEAK_DEFAULTS, ...saved } : TWEAK_DEFAULTS;
   });
   const [userPanelOpen, setUserPanelOpen] = useState(false);
 
-  useEffect(() => { localStorage.setItem('ohye_route', JSON.stringify(route)); }, [route]);
-  useEffect(() => { localStorage.setItem('ohye_level', level); }, [level]);
-  useEffect(() => { localStorage.setItem('ohye_cat', cat); }, [cat]);
+  useEffect(() => { ss.setJSON('ohye_route', route); }, [route]);
+  useEffect(() => { ss.set('ohye_level', level); }, [level]);
+  useEffect(() => { ss.set('ohye_cat', cat); }, [cat]);
   useEffect(() => {
-    if (archiveDay) localStorage.setItem('ohye_archive_day', String(archiveDay));
-    else localStorage.removeItem('ohye_archive_day');
+    if (archiveDay) ss.set('ohye_archive_day', String(archiveDay));
+    else ss.remove('ohye_archive_day');
     // Whenever archiveDay changes, re-load ARTICLES from the matching bundle
     // (today's local files, or a past day's Supabase prefix).
     if (typeof window.loadArchive === 'function') {
@@ -110,8 +103,8 @@ function App() {
       });
     }
   }, [archiveDay]);
-  useEffect(() => { localStorage.setItem('ohye_progress', JSON.stringify(progress)); }, [progress]);
-  useEffect(() => { localStorage.setItem('ohye_tweaks', JSON.stringify(tweaks)); }, [tweaks]);
+  useEffect(() => { ss.setJSON('ohye_progress', progress); }, [progress]);
+  useEffect(() => { ss.setJSON('ohye_tweaks', tweaks); }, [tweaks]);
 
   // Edit-mode wiring
   useEffect(() => {

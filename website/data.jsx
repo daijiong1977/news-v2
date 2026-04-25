@@ -15,6 +15,32 @@
 const SUPABASE_URL = 'https://lfknsvavhiqrsasdfyrs.supabase.co';
 const ARCHIVE_BASE = `${SUPABASE_URL}/storage/v1/object/public/redesign-daily-content`;
 
+// Browsers can throw on localStorage access (private mode in Safari, quota
+// exhaustion, storage disabled by enterprise policy, embedded contexts).
+// Wrap reads/writes so one bad environment doesn't kill route restoration,
+// archive mode, progress saving, or daily-picks persistence.
+const safeStorage = {
+  get(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, value); return true; }
+    catch (e) { console.warn('[storage] set failed', key, e); return false; }
+  },
+  remove(key) {
+    try { localStorage.removeItem(key); } catch (e) { /* swallow */ }
+  },
+  getJSON(key, fallback = null) {
+    const raw = this.get(key);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch { return fallback; }
+  },
+  setJSON(key, value) {
+    return this.set(key, JSON.stringify(value));
+  },
+};
+window.safeStorage = safeStorage;
+
 const CATEGORIES = [
   { id: "news",    label: "News",    emoji: "📰", color: "#ff6b5b", bg: "#ffece8" },
   { id: "science", label: "Science", emoji: "🔬", color: "#17b3a6", bg: "#e0f6f3" },

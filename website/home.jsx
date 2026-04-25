@@ -40,7 +40,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
 
   // Pick 1 from each category by default, user can swap (only from the 3-per-category pool)
   const [dailyPicks, setDailyPicks] = useStateH(() => {
-    try { const s = JSON.parse(localStorage.getItem('ohye_daily_picks_v3') || 'null'); if (s && s.length === 3) return s; } catch {}
+    const s = window.safeStorage?.getJSON('ohye_daily_picks_v3'); if (s && s.length === 3) return s;
     return null;
   });
   const defaultPicks = useMemoH(() => {
@@ -52,7 +52,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     return out.slice(0, 3);
   }, [displayPool]);
   const activePicks = (dailyPicks && dailyPicks.every(id => poolIds.has(id))) ? dailyPicks : defaultPicks;
-  useEffectH(() => { localStorage.setItem('ohye_daily_picks_v3', JSON.stringify(activePicks)); }, [activePicks]);
+  useEffectH(() => { window.safeStorage?.setJSON('ohye_daily_picks_v3', activePicks); }, [activePicks]);
   const swapPick = (idx, newId) => {
     const next = [...activePicks]; next[idx] = newId; setDailyPicks(next);
   };

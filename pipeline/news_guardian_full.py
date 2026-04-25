@@ -20,6 +20,8 @@ from urllib.parse import urlparse
 
 from .cleaner import extract_article_from_html
 from .news_rss_core import (
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
     MIN_PICK_BODY_WORDS,
     SAFETY_DIMS,
     SAFETY_SHORT,
@@ -416,7 +418,7 @@ def main() -> None:
 </html>""")
 
     # Write output
-    out_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output") / today
+    out_dir = (_REPO_ROOT / "website/test_output") / today
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{OUTPUT_SLUG}.json").write_text(json.dumps({
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -433,7 +435,7 @@ def main() -> None:
         "kids_articles": kids_articles_by_id,
     }, indent=2, ensure_ascii=False))
 
-    html_path = Path(f"/Users/jiong/myprojects/news-v2/website/{OUTPUT_SLUG}.html")
+    html_path = (_REPO_ROOT / f"website/{OUTPUT_SLUG}.html")
     html_path.write_text("".join(parts))
     log.info("HTML: %s", html_path)
     log.info("View: http://localhost:18100/%s.html", OUTPUT_SLUG)

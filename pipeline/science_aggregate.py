@@ -33,6 +33,7 @@ from .science_sources import (
     todays_enabled_sources,
     todays_topic,
 )
+_REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("sci-aggregate")
@@ -296,7 +297,7 @@ def main() -> None:
 </div>""")
     parts.append("</body></html>")
 
-    today_dir = Path("/Users/jiong/myprojects/news-v2/website/test_output") / today_date
+    today_dir = (_REPO_ROOT / "website/test_output") / today_date
     today_dir.mkdir(parents=True, exist_ok=True)
     (today_dir / "science_today.json").write_text(json.dumps({
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -308,7 +309,7 @@ def main() -> None:
         "variants": articles_out,
     }, indent=2, ensure_ascii=False))
 
-    html_path = Path("/Users/jiong/myprojects/news-v2/website/science-today.html")
+    html_path = (_REPO_ROOT / "website/science-today.html")
     html_path.write_text("".join(parts))
     log.info("HTML: %s", html_path)
     log.info("View: http://localhost:18100/science-today.html")
