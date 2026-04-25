@@ -826,6 +826,10 @@ function DiscussTab({ article, paragraphs, onDone }) {
       articleId: article.id,
       articleTitle: article.title,
       articleSummary: (article.summary || '').slice(0, 1500),
+      // Send the full article body so the coach knows what the kid is
+      // responding TO and can check evidence-from-text. Edge Function
+      // caps at 6KB on its side as a safety guard.
+      articleBody: (article.body || '').slice(0, 6000),
       level: article.level,
     });
     if (res.error) {

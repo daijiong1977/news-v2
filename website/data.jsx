@@ -171,7 +171,7 @@ const FEEDBACK_FN = `${SUPABASE_URL}/functions/v1/feedback-rewrite`;
 // on success, or
 //   { error: "..." }
 // on validation failure (status 400) or upstream error (502).
-async function fetchAIFeedback({ text, articleId, articleTitle, articleSummary, level }) {
+async function fetchAIFeedback({ text, articleId, articleTitle, articleSummary, articleBody, level }) {
   try {
     const r = await fetch(FEEDBACK_FN, {
       method: 'POST',
@@ -180,7 +180,7 @@ async function fetchAIFeedback({ text, articleId, articleTitle, articleSummary, 
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({
-        text, articleId, articleTitle, articleSummary, level,
+        text, articleId, articleTitle, articleSummary, articleBody, level,
         clientId: getClientId(),
       }),
     });

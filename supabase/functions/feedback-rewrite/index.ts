@@ -86,7 +86,11 @@ Deno.serve(async (req) => {
   const text = String(payload.text || "").trim();
   const articleId = String(payload.articleId || "").trim();
   const articleTitle = String(payload.articleTitle || "").slice(0, 300);
-  const articleSummary = String(payload.articleSummary || "").slice(0, 2000);
+  // articleSummary is the short card blurb (120w); articleBody is the full
+  // article the kid actually read. Coach needs the body to evaluate whether
+  // the response cites real article details.
+  const articleSummary = String(payload.articleSummary || "").slice(0, 1500);
+  const articleBody = String(payload.articleBody || "").slice(0, 6000);
   const level = ["Sprout", "Tree"].includes(payload.level) ? payload.level : null;
   const clientId = String(payload.clientId || "").trim();
 
@@ -110,11 +114,16 @@ Deno.serve(async (req) => {
   }
 
   // Build the user message with article context the model needs to coach well
-  const userMsg = `Article title: ${articleTitle || "(unknown)"}
-Article summary (first 2KB): ${articleSummary}
+  // Build the prompt with the article context the coach needs to:
+  //  · know what the kid is responding TO
+  //  · check whether they cited real details from the body
+  //  · suggest one specific detail they could have woven in
+  const userMsg = `=== Article the kid read ===
+Title: ${articleTitle || "(unknown)"}
+${articleSummary ? `Card summary: ${articleSummary}\n` : ""}${articleBody ? `Full body:\n${articleBody}\n` : ""}
 Reader level: ${level || "Sprout"}
 
-Kid's response (${wordCount} words):
+=== Kid's response (${wordCount} words) ===
 ${text}
 
 Score, give feedback, and rewrite per the system prompt.`;
