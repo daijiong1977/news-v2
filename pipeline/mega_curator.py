@@ -138,11 +138,12 @@ def mega_curate(
     log.info("mega-curator: %d total candidates across %d categories",
              len(registry), len(briefs_by_cat))
 
-    # Smaller pool (~36 candidates from 4-per-source) lets us keep
-    # max_tokens at 6k — the reasoner's thinking budget is combined with
-    # output, so a smaller candidate pool means less reasoning burn.
+    # Reasoner thinking budget shares max_tokens with output. 6k truncated
+    # at 34 candidates (run 24921275967), 12k truncated at 89 — but with
+    # the slim 15-pick output schema, 12k now leaves ~9k for the thinking
+    # pass which fits 34 candidates of vet+cluster reasoning.
     res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
-                                  max_tokens=6000)
+                                  max_tokens=12000)
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""
 
