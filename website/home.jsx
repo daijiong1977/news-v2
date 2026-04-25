@@ -20,6 +20,24 @@ function _articlePct(ap) {
 // level + theme. After save, the standard pick-3 flow takes over.
 // AVATARS, LEVEL_OPTIONS, THEMES, LANGS come from user-panel.jsx
 // (Babel-standalone hoists them to script scope).
+
+// Section helper — defined OUTSIDE OnboardingScreen so that React doesn't
+// unmount/remount it on every parent re-render (which would steal focus
+// from the name input on every keystroke).
+function _OnbSection({ label, sub, children }) {
+  return (
+    <div style={{marginBottom: 22}}>
+      <div style={{
+        fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:13,
+        color:'#1b1230', letterSpacing:'.04em', textTransform:'uppercase',
+        marginBottom: 4,
+      }}>{label}</div>
+      {sub && <div style={{fontSize:12.5, color:'#6b5c80', marginBottom: 10}}>{sub}</div>}
+      {children}
+    </div>
+  );
+}
+
 function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone }) {
   const cfg = window.SITE_CONFIG || {};
   const [name, setName] = useStateH(tweaks?.userName || '');
@@ -40,24 +58,12 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
     onDone && onDone();
   };
 
-  const Section = ({ label, sub, children }) => (
-    <div style={{marginBottom: 22}}>
-      <div style={{
-        fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:13,
-        color:'#1b1230', letterSpacing:'.04em', textTransform:'uppercase',
-        marginBottom: 4,
-      }}>{label}</div>
-      {sub && <div style={{fontSize:12.5, color:'#6b5c80', marginBottom: 10}}>{sub}</div>}
-      {children}
-    </div>
-  );
-
   return (
     <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
       {/* Header */}
       <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
-          <KidsNewsLockup size={66}/>
+          <KidsNewsLockup size={132}/>
         </div>
       </div>
 
@@ -94,7 +100,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
       {/* Form */}
       <div style={{maxWidth:720, margin:'0 auto', padding:'28px'}}>
 
-        <Section label="What's your name?" sub="So we can say hi every morning.">
+        <_OnbSection label="What's your name?" sub="So we can say hi every morning.">
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="Your first name"
@@ -104,9 +110,9 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
               borderRadius:14, background:'#fff', fontFamily:'Nunito, sans-serif',
               color:'#1b1230', outline:'none',
             }}/>
-        </Section>
+        </_OnbSection>
 
-        <Section label="Pick an avatar" sub="Tap one — you can change it later.">
+        <_OnbSection label="Pick an avatar" sub="Tap one — you can change it later.">
           <div style={{display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap: 8}}>
             {AVATARS.map(a => (
               <button key={a.id} onClick={()=>setAvatarId(a.id)} style={{
@@ -120,9 +126,9 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
               }} title={a.id}>{a.emoji}</button>
             ))}
           </div>
-        </Section>
+        </_OnbSection>
 
-        <Section label="Reading level">
+        <_OnbSection label="Reading level">
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
             {LEVEL_OPTIONS.map(l => (
               <button key={l.id} onClick={()=>setPickedLevel(l.id)} style={{
@@ -140,9 +146,9 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
               </button>
             ))}
           </div>
-        </Section>
+        </_OnbSection>
 
-        <Section label="Color theme">
+        <_OnbSection label="Color theme">
           <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap: 8}}>
             {THEMES.map(t => (
               <button key={t.id} onClick={()=>setThemeId(t.id)} style={{
@@ -159,9 +165,9 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
               </button>
             ))}
           </div>
-        </Section>
+        </_OnbSection>
 
-        <Section label="Language">
+        <_OnbSection label="Language">
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
             {LANGS.map(l => (
               <button key={l.id} onClick={()=>setLang(l.id)} style={{
@@ -178,7 +184,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
               </button>
             ))}
           </div>
-        </Section>
+        </_OnbSection>
 
         {/* Phase-3 placeholder: parent sync */}
         <div style={{
@@ -359,23 +365,137 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
   const isLast = step === groups.length - 1;
   const allReady = groups.every(g => selections[g.cat.label]);
 
+  // Tap a card → save the selection AND auto-advance to the next
+  // category screen. On the last screen this transitions to the
+  // "complete" preview state (showCompleteFor) instead of locking
+  // immediately — the kid still gets to see all 3 picks before
+  // committing. To change a previous pick, tap a tracker pill.
+  const [showComplete, setShowComplete] = useStateH(false);
   const select = (id) => {
-    setSelections(prev => ({ ...prev, [cur.cat.label]: id }));
+    setSelections(prev => {
+      const nextSel = { ...prev, [cur.cat.label]: id };
+      if (isLast) {
+        // Last category — show the complete-status screen.
+        // Use a microtask so React renders the "selected" state first,
+        // giving a brief visual confirmation before transition.
+        setTimeout(() => setShowComplete(true), 280);
+      } else {
+        setTimeout(() => setStep(step + 1), 280);
+      }
+      return nextSel;
+    });
   };
   const next = () => {
-    if (isLast) {
-      // Lock in CATEGORIES order so the daily-3 stack stays consistent.
-      const ids = CATEGORIES.map(c => selections[c.label]).filter(Boolean);
-      onLock(ids);
-    } else {
-      setStep(step + 1);
-    }
+    if (isLast) setShowComplete(true);
+    else setStep(step + 1);
   };
-  const back = () => { if (step > 0) setStep(step - 1); };
+  const back = () => {
+    if (showComplete) { setShowComplete(false); return; }
+    if (step > 0) setStep(step - 1);
+  };
+  const lockNow = () => {
+    const ids = CATEGORIES.map(c => selections[c.label]).filter(Boolean);
+    onLock(ids);
+  };
 
   // Big feature = first candidate by current order; small two = the rest.
   // (Ordering already follows source priority + last-used rotation upstream.)
   const [featureCandidate, ...smallCandidates] = cur.candidates;
+
+  // ── Complete-status screen (after the 3rd pick auto-fires) ─────────
+  // Shows all three picked stories side-by-side with a confirmation CTA.
+  // Kid can change their mind via tracker pills or "Change my picks".
+  if (showComplete) {
+    const finalIds = CATEGORIES.map(c => selections[c.label]).filter(Boolean);
+    const finals = finalIds.map(id => pool.find(p => p.id === id)).filter(Boolean);
+    const totalMins = finals.reduce((m, s) => m + (s.readMins || 0), 0);
+    return (
+      <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
+        <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
+          <div style={{maxWidth:1180, margin:'0 auto'}}>
+            <KidsNewsLockup size={88}/>
+          </div>
+        </div>
+
+        <div style={{
+          background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
+          padding:'30px 28px 24px', borderBottom:`2px solid ${theme.border}`, textAlign:'center',
+        }}>
+          <div style={{
+            fontSize:12, fontWeight:800, letterSpacing:'.12em',
+            textTransform:'uppercase', color: theme.heroTextAccent, marginBottom:8,
+          }}>
+            🎉 All set{tweaks?.userName ? `, ${tweaks.userName}` : ''}
+          </div>
+          <h1 style={{
+            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:40, lineHeight:1.05,
+            color:'#1b1230', margin:'0', letterSpacing:'-0.025em',
+          }}>
+            Today's <span style={{
+              background: theme.accent, padding:'0 12px', borderRadius:12,
+              display:'inline-block', transform:'rotate(-1.5deg)',
+            }}>{totalMins} minutes</span> are ready
+          </h1>
+          <div style={{
+            fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
+            fontSize:19, color:'#c14e2a', marginTop:8,
+          }}>
+            {cfg.tagline || 'Little daily, big magic.'}
+          </div>
+        </div>
+
+        <div style={{maxWidth:1180, margin:'0 auto', padding:'28px'}}>
+          <div style={{
+            display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:18, marginBottom:28,
+          }}>
+            {finals.map((s, i) => {
+              const c = CATEGORIES.find(x => x.label === s.category) || CATEGORIES[0];
+              return (
+                <div key={s.id} style={{
+                  background:'#fff', border:`2px solid ${c.color}`, borderRadius:18,
+                  overflow:'hidden', boxShadow:`0 4px 0 ${c.color}33`,
+                }}>
+                  <div style={{
+                    aspectRatio:'16/10',
+                    background: s.image ? `url(${s.image}) center/cover, ${c.color}` : c.color,
+                  }}/>
+                  <div style={{padding:'12px 14px 14px'}}>
+                    <div style={{
+                      display:'inline-flex', alignItems:'center', gap:5,
+                      background: c.bg, color: c.color, padding:'3px 10px', borderRadius:999,
+                      fontWeight:800, fontSize:11, marginBottom:8,
+                    }}>
+                      <span style={{fontSize:13}}>{c.emoji}</span>{i+1} · {s.readMins} min
+                    </div>
+                    <div style={{
+                      fontFamily:'Fraunces, serif', fontWeight:700, fontSize:15,
+                      lineHeight:1.22, color:'#1b1230', letterSpacing:'-0.01em',
+                    }}>{s.title}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12}}>
+            <button onClick={() => { setShowComplete(false); setStep(0); }} style={{
+              background:'transparent', border:'2px solid #e8dfd3', borderRadius:14,
+              padding:'12px 20px', color:'#1b1230',
+              fontWeight:800, fontSize:14, fontFamily:'Nunito, sans-serif',
+              cursor:'pointer',
+            }}>← Change my picks</button>
+
+            <button onClick={lockNow} style={{
+              background:'#1b1230', color:'#fff', border:'none', borderRadius:16,
+              padding:'16px 28px', fontWeight:900, fontSize:17,
+              fontFamily:'Nunito, sans-serif', cursor:'pointer',
+              boxShadow:'0 5px 0 rgba(27,18,48,0.18)',
+            }}>▶ Start your {dailyGoal} minutes</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
@@ -385,7 +505,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
         padding:'14px 28px',
       }}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
-          <KidsNewsLockup size={44}/>
+          <KidsNewsLockup size={88}/>
         </div>
       </div>
 
@@ -486,7 +606,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
           </div>
         )}
 
-        {/* — Bottom nav: Back / progress hint / Next-or-Start — */}
+        {/* — Bottom nav: Back + progress hint (Next is implicit — tap card) — */}
         <div style={{
           marginTop:28, display:'flex', justifyContent:'space-between',
           alignItems:'center', flexWrap:'wrap', gap:12,
@@ -503,19 +623,12 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
             {Object.keys(selections).length}/{groups.length} chosen · {Object.keys(selections).length * (cfg.perArticleMinutes ?? 7)}/{dailyGoal} min
           </div>
 
-          <button onClick={next} disabled={!ready || (isLast && !allReady)} style={{
-            background: ready ? '#1b1230' : '#e8dfd3',
-            color: ready ? '#fff' : '#9a8d7a',
-            border:'none', borderRadius:16,
-            padding:'14px 26px', fontWeight:900, fontSize:16,
-            fontFamily:'Nunito, sans-serif',
-            cursor: ready ? 'pointer' : 'not-allowed',
-            boxShadow: ready ? '0 5px 0 rgba(27,18,48,0.18)' : 'none',
-            transition:'all .12s',
+          <div style={{
+            fontSize:12, color:'#9a8d7a', fontWeight:700, letterSpacing:'.04em',
+            fontStyle:'italic',
           }}>
-            {!ready ? 'Choose one to continue' :
-              isLast ? `▶ Start your ${dailyGoal} minutes` : 'Next →'}
-          </button>
+            Tap a story to choose
+          </div>
         </div>
       </div>
     </div>
@@ -1006,7 +1119,7 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
     }}>
       <div style={{maxWidth:1180, margin:'0 auto', padding:'14px 28px', display:'flex', alignItems:'center', gap:16}}>
         {/* New brand lockup — kidsnews mark + wordmark + "a 21mins channel" */}
-        <KidsNewsLockup size={44}/>
+        <KidsNewsLockup size={88}/>
 
         <div style={{flex:1}}/>
 

@@ -6,7 +6,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 // (Renders the locked brand from `21mins-brand` handoff. SunFace21 is the
 //  canonical mark; the wordmark + endorsement are styled inline below.)
 // ————————————————————————————————————————————————————————————
-function KidsNewsLockup({ size = 66, compact = false, hideEndorsement = false }) {
+function KidsNewsLockup({ size = 132, compact = false, hideEndorsement = false }) {
   const cfg = window.SITE_CONFIG || {};
   const wordHi = cfg.brandWordHi || 'news';   // "news" by default
   const brand = cfg.brand || 'kidsnews';
