@@ -21,8 +21,8 @@ log = logging.getLogger("mega-curator")
 
 
 MEGA_CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a
-daily news site for kids ages 8-13. The pipeline mined ~45 candidates from
-9 RSS feeds (3 News + 3 Science + 3 Fun, up to 15 per cat), ran a
+daily news site for kids ages 8-13. The pipeline mined ~36 candidates from
+9 RSS feeds (3 News + 3 Science + 3 Fun, up to 12 per cat), ran a
 forbidden-word safety filter, and now hands you the survivors.
 
 YOUR JOB: rank 5 candidates per category (15 total), in order, ready for
@@ -138,8 +138,9 @@ def mega_curate(
     log.info("mega-curator: %d total candidates across %d categories",
              len(registry), len(briefs_by_cat))
 
-    # Slim schema (only 15 picks scored inline, no per-candidate vet array)
-    # fits comfortably under 6k. Higher caps slow reasoner response quality.
+    # Smaller pool (~36 candidates from 4-per-source) lets us keep
+    # max_tokens at 6k — the reasoner's thinking budget is combined with
+    # output, so a smaller candidate pool means less reasoning burn.
     res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
                                   max_tokens=6000)
     raw_picks = res.get("picks") or {}

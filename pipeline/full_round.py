@@ -449,7 +449,7 @@ def _short_hash(s: str) -> str:
 
 # ─── Mega pipeline helpers ─────────────────────────────────────────────
 
-def phase_a_light(category: str, sources, max_per_source: int = 5) -> list[dict]:
+def phase_a_light(category: str, sources, max_per_source: int = 4) -> list[dict]:
     """Light Phase A for the mega path: RSS metadata only — NO body fetch,
     NO LLM. Returns a flat list of brief dicts annotated with _source +
     _category. Bodies + og:images are fetched lazily after the curator
