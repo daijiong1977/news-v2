@@ -149,15 +149,199 @@ CAT_PRIORITY = {"Fun": 1, "Science": 2, "News": 3}
 
 
 def pick_all_winners_with_xcat_dedup(buckets_by_cat: dict[str, dict]) -> dict[str, list[dict]]:
-    """Single dedup pass covering BOTH within-category sources AND
-    across-category overlaps. Tiebreak follows CAT_PRIORITY: News drops
-    first on News×Fun and News×Science dups; Science drops on Fun×Science
-    dups. The losing category's source promotes its next candidate.
-
-    Concrete: an Alcaraz tennis-injury story landing in News (PBS-style)
-    AND Fun (BBC Tennis on Tue/Sat/Sun) keeps the Fun version and tells
-    News to use its choice_2."""
+    """Greedy per-round dedup (kept as a fallback). Use
+    holistic_curate_picks() instead for the production path."""
     return _pick_with_dedup_unified(buckets_by_cat, cat_priority=CAT_PRIORITY)
+
+
+# ---------------------------------------------------------------------------
+# Holistic curation — send ALL candidates to DeepSeek in one call, let it
+# pick 3 per category with cross-cat dedup + within-cat topic diversity.
+# ---------------------------------------------------------------------------
+
+CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a daily
+news site for kids ages 8-13. The pipeline mined a pre-vetted pool of
+candidates across 3 categories. YOUR JOB: deliver EXACTLY 3 stories per
+category — News, Science, Fun — for a total of 9 stories.
+
+Output contract is STRICT: 3 picks for News + 3 picks for Science +
+3 picks for Fun. ALWAYS. Returning fewer is a failure.
+
+ALGORITHM you must follow:
+
+  STEP 1 — Initial picks. Start with choice_1 from each of the 3 sources
+  in each category (so 3 picks per cat, 9 total).
+
+  STEP 2 — Cross-category dedup. If two categories' picks cover the same
+  event (e.g. an Alcaraz tennis injury appearing in News from PBS AND in
+  Fun from BBC Tennis on a Tue/Sat/Sun), one MUST be replaced. Tiebreak:
+      News × Fun     → keep the Fun pick, REPLACE News' pick from its alternates
+      News × Science → keep the Science pick, REPLACE News' pick
+      Fun  × Science → keep the Fun pick, REPLACE Science' pick
+  Replace by swapping in the next available candidate from the SAME
+  source (its choice_2, then alternate_0/1) — so the losing category
+  still ends up with 3 picks. If that source has no more candidates,
+  swap in any other candidate from a different source in that category.
+
+  STEP 3 — Within-category topic diversity. If your 3 picks in one
+  category are all about the same theme (3 election stories, 3 climate
+  stories, etc.), swap one to a different topic from the alternates.
+  Goal: 3 different topic clusters per category.
+
+  STEP 4 — Final check. You must end up with 9 distinct stories:
+  3 News + 3 Science + 3 Fun. No cross-cat dups. Diverse topics within
+  each cat. Output each pick as its `cid`.
+
+PREFERENCES (use to break ties between equally-valid options):
+  · Lower slot wins (choice_1 > choice_2 > alternate_0 > alternate_1).
+  · Different sources within a cat are preferred over two picks from
+    the same source on the same day.
+
+DEGRADATION (only when the pool is genuinely too thin to satisfy the
+contract): if a category truly has fewer than 3 distinct
+non-duplicate stories available across all its candidates, you may
+return 2 in that category. Never 1 or 0 unless that category had no
+candidates at all in the input.
+
+OUTPUT — valid JSON only, no markdown fences:
+{
+  "picks": {
+    "News":    [<cid>, <cid>, <cid>],
+    "Science": [<cid>, <cid>, <cid>],
+    "Fun":     [<cid>, <cid>, <cid>]
+  },
+  "reasoning": "1-3 sentences: which cross-cat dups you caught, which
+                within-cat topic-diversity swaps you made, and any
+                slot-promotion that wasn't choice_1."
+}"""
+
+
+def _build_curator_input(buckets_by_cat: dict[str, dict]) -> tuple[str, dict[int, dict]]:
+    """Build the user message + a registry mapping cid → candidate metadata."""
+    registry: dict[int, dict] = {}
+    cid = 0
+    by_cat_lines: dict[str, list[str]] = {cat: [] for cat in buckets_by_cat}
+
+    for cat, by_src in buckets_by_cat.items():
+        for src_name, bundle in by_src.items():
+            for cand in bundle.get("candidates") or []:
+                art = cand["winner"]
+                title = (art.get("title") or "")[:240]
+                excerpt = (art.get("body") or "")[:400].replace("\n", " ")
+                vet = art.get("_vet_info") or {}
+                interest = vet.get("interest") or {}
+                imp = interest.get("importance", "?")
+                fun = interest.get("fun_factor", "?")
+                kid = interest.get("kid_appeal", "?")
+                line = (f"  [cid={cid}] slot={cand.get('slot','?')} src={src_name} "
+                        f"importance={imp} fun={fun} kid_appeal={kid}\n"
+                        f"     title: {title}\n"
+                        f"     excerpt: {excerpt}")
+                by_cat_lines[cat].append(line)
+                registry[cid] = {
+                    "cat": cat,
+                    "src_name": src_name,
+                    "source": bundle["source"],
+                    "slot": cand.get("slot", "choice_1"),
+                    "winner": art,
+                }
+                cid += 1
+
+    parts = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.", ""]
+    for cat in ("News", "Science", "Fun"):
+        lines = by_cat_lines.get(cat, [])
+        parts.append(f"=== {cat} ({len(lines)} candidates) ===")
+        if not lines:
+            parts.append("  (none)")
+        else:
+            parts.extend(lines)
+        parts.append("")
+    parts.append("Pick 3 per category. Return the JSON shape from the system prompt.")
+    return "\n".join(parts), registry
+
+
+def holistic_curate_picks(buckets_by_cat: dict[str, dict]) -> dict[str, list[dict]]:
+    """Single LLM call that sees all candidates and picks 3 per category
+    with cross-cat dedup + within-cat topic diversity in one shot.
+
+    Falls back to the greedy per-round dedup if the curator call fails or
+    returns malformed picks."""
+    user_msg, registry = _build_curator_input(buckets_by_cat)
+    if not registry:
+        log.warning("curator: no candidates — nothing to pick")
+        return {cat: [] for cat in buckets_by_cat}
+
+    try:
+        # Reasoner mode (thinking) — this is exactly the holistic
+        # cross-cluster reasoning task that benefits from an explicit
+        # reasoning pass.
+        from .news_rss_core import deepseek_reasoner_call
+        res = deepseek_reasoner_call(CURATOR_SYSTEM_PROMPT, user_msg,
+                                       max_tokens=4000)
+    except Exception as e:  # noqa: BLE001
+        log.warning("curator failed (%s) — falling back to greedy dedup", e)
+        return pick_all_winners_with_xcat_dedup(buckets_by_cat)
+
+    picks = (res or {}).get("picks") or {}
+    reasoning = (res or {}).get("reasoning") or ""
+    if reasoning:
+        log.info("curator reasoning: %s", reasoning[:400])
+
+    # Validate shape — picks must be dict[cat → list of int cids that
+    # exist in registry, all from the right category]
+    out: dict[str, list[dict]] = {cat: [] for cat in buckets_by_cat}
+    seen_cids: set[int] = set()
+    for cat in buckets_by_cat:
+        for cid in (picks.get(cat) or []):
+            if not isinstance(cid, int):
+                continue
+            if cid in seen_cids:
+                log.warning("curator returned cid=%d twice — skipping dup", cid)
+                continue
+            info = registry.get(cid)
+            if not info:
+                log.warning("curator returned unknown cid=%d — skipping", cid)
+                continue
+            if info["cat"] != cat:
+                log.warning("curator put cid=%d in %s but it's a %s candidate",
+                             cid, cat, info["cat"])
+                continue
+            seen_cids.add(cid)
+            out[cat].append({
+                "source": info["source"],
+                "winner": info["winner"],
+                "winner_slot": info["slot"],
+            })
+
+    # Log the picks succinctly so the run log is readable
+    for cat, ws in out.items():
+        slots = ", ".join(f"{w['source'].name}/{w['winner_slot']}" for w in ws)
+        log.info("  curator [%s] → %d picks: %s", cat, len(ws), slots or "(none)")
+
+    # Safety net. The contract is 3 per cat (9 total). Anything short of
+    # that — including a single short category — falls back to the greedy
+    # per-round dedup so we don't ship a degraded run unnoticed. The
+    # greedy path also fills toward 3 via candidate promotion.
+    short_cats = [cat for cat, picks in out.items() if len(picks) < 3]
+    total = sum(len(v) for v in out.values())
+    if short_cats:
+        # If a category had fewer than 3 candidates available in the input
+        # AT ALL, accept the curator's degradation — the greedy fallback
+        # can't conjure picks that don't exist.
+        truly_thin = []
+        for cat in short_cats:
+            cand_count = sum(len(b.get("candidates") or [])
+                              for b in buckets_by_cat.get(cat, {}).values())
+            if cand_count < 3:
+                truly_thin.append(cat)
+        if set(short_cats) <= set(truly_thin):
+            log.warning("curator: %s short due to thin input (%d total picks)",
+                         short_cats, total)
+            return out
+        log.warning("curator returned %d picks (short cats: %s) — "
+                     "falling back to greedy", total, short_cats)
+        return pick_all_winners_with_xcat_dedup(buckets_by_cat)
+    return out
 
 
 def _pick_with_dedup_unified(
@@ -588,15 +772,15 @@ def main() -> None:
     fun_bs = filter_past_duplicates("Fun", fun_bs, days=3)
     _set_phase("past_dedup", t)
 
-    # ---- PICK + UNIFIED CROSS-SOURCE + CROSS-CATEGORY DEDUP ----
-    # One pass handles BOTH within-category source dups AND cross-category
-    # overlaps (e.g. an Alcaraz tennis injury that lands in News + Fun on
-    # the same day because BBC Tennis fires on Tue/Sat/Sun). On cross-cat
-    # dup the LOWER-priority category drops + promotes its next candidate.
+    # ---- HOLISTIC CURATION ----
+    # Single LLM call sees ALL candidates (~36) + vet scores. Picks 3 per
+    # cat with cross-cat dedup + within-cat topic diversity in one shot.
+    # Falls back to the greedy per-round dedup automatically if the
+    # curator returns short or fails.
     t = time.monotonic()
-    log.info("=== PICK + DEDUP (within-cat + cross-cat, promote next on dup) ===")
+    log.info("=== CURATOR (1 call, picks 3-per-cat with cross-cat dedup + diversity) ===")
     cat_buckets = {"News": news_bs, "Science": science_bs, "Fun": fun_bs}
-    picked = pick_all_winners_with_xcat_dedup(cat_buckets)
+    picked = holistic_curate_picks(cat_buckets)
     news = picked.get("News", [])
     science = picked.get("Science", [])
     fun = picked.get("Fun", [])
