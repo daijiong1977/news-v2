@@ -14,6 +14,202 @@ function _articlePct(ap) {
 }
 
 // ────────────────────────────────────────────────────────────────────
+// Onboarding — first-launch setup screen (≤ 2 min)
+// ────────────────────────────────────────────────────────────────────
+// Triggered when tweaks.userName is empty. Asks for name + avatar +
+// level + theme. After save, the standard pick-3 flow takes over.
+// AVATARS, LEVEL_OPTIONS, THEMES, LANGS come from user-panel.jsx
+// (Babel-standalone hoists them to script scope).
+function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone }) {
+  const cfg = window.SITE_CONFIG || {};
+  const [name, setName] = useStateH(tweaks?.userName || '');
+  const [avatarId, setAvatarId] = useStateH(tweaks?.avatar || 'fox');
+  const [pickedLevel, setPickedLevel] = useStateH(level || 'Sprout');
+  const [themeId, setThemeId] = useStateH(tweaks?.theme || 'sunny');
+  const [lang, setLang] = useStateH(tweaks?.language || 'en');
+
+  const ready = name.trim().length > 0;
+
+  const save = () => {
+    if (!ready) return;
+    updateTweak('userName', name.trim());
+    updateTweak('avatar', avatarId);
+    updateTweak('theme', themeId);
+    updateTweak('language', lang);
+    setLevel(pickedLevel);
+    onDone && onDone();
+  };
+
+  const Section = ({ label, sub, children }) => (
+    <div style={{marginBottom: 22}}>
+      <div style={{
+        fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:13,
+        color:'#1b1230', letterSpacing:'.04em', textTransform:'uppercase',
+        marginBottom: 4,
+      }}>{label}</div>
+      {sub && <div style={{fontSize:12.5, color:'#6b5c80', marginBottom: 10}}>{sub}</div>}
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
+      {/* Header */}
+      <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
+        <div style={{maxWidth:1180, margin:'0 auto'}}>
+          <KidsNewsLockup size={66}/>
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div style={{
+        background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
+        padding:'32px 28px 28px', borderBottom:`2px solid ${theme.border}`,
+      }}>
+        <div style={{maxWidth:760, margin:'0 auto', textAlign:'center'}}>
+          <div style={{
+            fontSize:12, fontWeight:800, letterSpacing:'.12em',
+            textTransform:'uppercase', color: theme.heroTextAccent, marginBottom:8,
+          }}>
+            Welcome — about 2 minutes
+          </div>
+          <h1 style={{
+            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:42, lineHeight:1.05,
+            color:'#1b1230', margin:'0 0 6px', letterSpacing:'-0.025em',
+          }}>
+            Let's set up your <span style={{
+              background: theme.accent, padding:'0 12px', borderRadius:12,
+              display:'inline-block', transform:'rotate(-1.5deg)',
+            }}>21 minutes</span>
+          </h1>
+          <div style={{
+            fontFamily:'Fraunces, serif', fontStyle:'italic', fontWeight:600,
+            fontSize:19, color:'#c14e2a', marginTop:8,
+          }}>
+            {cfg.tagline || 'Little daily, big magic.'}
+          </div>
+        </div>
+      </div>
+
+      {/* Form */}
+      <div style={{maxWidth:720, margin:'0 auto', padding:'28px'}}>
+
+        <Section label="What's your name?" sub="So we can say hi every morning.">
+          <input
+            type="text" value={name} onChange={e => setName(e.target.value)}
+            placeholder="Your first name"
+            maxLength={28}
+            style={{
+              width:'100%', fontSize:17, padding:'14px 16px', border:'2px solid #e8dfd3',
+              borderRadius:14, background:'#fff', fontFamily:'Nunito, sans-serif',
+              color:'#1b1230', outline:'none',
+            }}/>
+        </Section>
+
+        <Section label="Pick an avatar" sub="Tap one — you can change it later.">
+          <div style={{display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap: 8}}>
+            {AVATARS.map(a => (
+              <button key={a.id} onClick={()=>setAvatarId(a.id)} style={{
+                aspectRatio:'1', background: avatarId === a.id ? a.bg : '#fff',
+                border: avatarId === a.id ? `3px solid #1b1230` : `2px solid #f0e8d8`,
+                borderRadius: 14, fontSize: 26, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                boxShadow: avatarId === a.id ? '0 3px 0 rgba(27,18,48,0.18)' : 'none',
+                transform: avatarId === a.id ? 'translateY(-2px)' : 'none',
+                transition:'all .12s',
+              }} title={a.id}>{a.emoji}</button>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="Reading level">
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            {LEVEL_OPTIONS.map(l => (
+              <button key={l.id} onClick={()=>setPickedLevel(l.id)} style={{
+                background: pickedLevel === l.id ? '#1b1230' : '#fff',
+                color: pickedLevel === l.id ? '#fff' : '#1b1230',
+                border: pickedLevel === l.id ? '3px solid #1b1230' : '2px solid #f0e8d8',
+                borderRadius: 14, padding: '14px 16px', cursor: 'pointer',
+                fontFamily: 'Nunito, sans-serif', textAlign:'left',
+                boxShadow: pickedLevel === l.id ? '0 3px 0 rgba(27,18,48,0.18)' : 'none',
+                transform: pickedLevel === l.id ? 'translateY(-2px)' : 'none',
+                transition: 'all .12s',
+              }}>
+                <div style={{fontSize: 22, marginBottom: 4}}>{l.emoji} {l.id}</div>
+                <div style={{fontSize: 12, fontWeight:600, opacity:0.85}}>{l.sub}</div>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="Color theme">
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap: 8}}>
+            {THEMES.map(t => (
+              <button key={t.id} onClick={()=>setThemeId(t.id)} style={{
+                background:`linear-gradient(135deg, ${t.sw1}, ${t.sw2})`,
+                border: themeId === t.id ? '3px solid #1b1230' : '2px solid #f0e8d8',
+                borderRadius: 14, padding: '14px 12px', cursor:'pointer',
+                fontFamily: 'Nunito, sans-serif',
+                boxShadow: themeId === t.id ? '0 3px 0 rgba(27,18,48,0.18)' : 'none',
+                transform: themeId === t.id ? 'translateY(-2px)' : 'none',
+                transition: 'all .12s',
+              }}>
+                <div style={{fontSize: 22, marginBottom: 4}}>{t.emoji}</div>
+                <div style={{fontSize: 11, fontWeight: 800, color: '#1b1230'}}>{t.label}</div>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="Language">
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+            {LANGS.map(l => (
+              <button key={l.id} onClick={()=>setLang(l.id)} style={{
+                background: lang === l.id ? '#1b1230' : '#fff',
+                color: lang === l.id ? '#fff' : '#1b1230',
+                border: lang === l.id ? '3px solid #1b1230' : '2px solid #f0e8d8',
+                borderRadius: 14, padding: '12px 16px', cursor:'pointer',
+                fontFamily:'Nunito, sans-serif', textAlign:'left',
+                boxShadow: lang === l.id ? '0 3px 0 rgba(27,18,48,0.18)' : 'none',
+                transition: 'all .12s',
+              }}>
+                <span style={{fontSize:18, marginRight:8}}>{l.flag}</span>
+                <span style={{fontWeight:800}}>{l.label}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        {/* Phase-3 placeholder: parent sync */}
+        <div style={{
+          margin:'8px 0 24px', padding:'12px 16px', borderRadius:12,
+          background:'#fffaf0', border:'1.5px dashed #e8dfd3',
+          fontSize:12.5, color:'#6b5c80', textAlign:'center',
+        }}>
+          🛡️ <b>Parent?</b> Cross-device sync via Google sign-in is coming soon.
+          For now your progress lives on this device only.
+        </div>
+
+        {/* CTA */}
+        <button
+          onClick={save} disabled={!ready}
+          style={{
+            width:'100%', background: ready ? '#1b1230' : '#e8dfd3',
+            color: ready ? '#fff' : '#9a8d7a',
+            border:'none', borderRadius:16, padding:'16px',
+            fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:17,
+            cursor: ready ? 'pointer' : 'not-allowed',
+            boxShadow: ready ? '0 5px 0 rgba(27,18,48,0.18)' : 'none',
+            transition:'all .12s',
+          }}>
+          {ready ? '▶ Save & start picking today\'s 3' : 'Type your name to continue'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
 // Pick-3 daily ritual flow — three sequential category screens
 // ────────────────────────────────────────────────────────────────────
 // First-load-of-the-day surface. Kid sees one category at a time
@@ -326,7 +522,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
   );
 }
 
-function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, theme, heroVariant, tweaks, onOpenUserPanel, archiveDay }) {
+function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
   const isZh = tweaks && tweaks.language === 'zh';
@@ -413,6 +609,24 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     CATEGORIES.forEach(c => { m[c.label] = ARTICLES.filter(a => a.category === c.label); });
     return m;
   }, []);
+
+  // ── Onboarding gate (pre-pick-3) ───────────────────────────────────
+  // First-launch — empty userName triggers the welcome screen. Saves
+  // name + avatar + level + theme + lang into tweaks, then proceeds
+  // to pick-3 on next render. Skipped in archive mode (returning user
+  // browsing past content).
+  const needsOnboarding = !isArchive && (!tweaks?.userName || tweaks.userName.trim() === '');
+  if (needsOnboarding) {
+    return (
+      <OnboardingScreen
+        tweaks={tweaks}
+        updateTweak={updateTweak || (()=>{})}
+        level={level}
+        setLevel={setLevel || (()=>{})}
+        theme={theme}
+      />
+    );
+  }
 
   // ── Pick-3 gate ────────────────────────────────────────────────────
   // Today, not archive, picks not yet locked → render pick screen and

@@ -25,13 +25,14 @@ const ARCHIVE_BASE = `${SUPABASE_URL}/storage/v1/object/public/redesign-daily-co
 // 21               =  3              ×  (2+1+2+2)
 const SITE_CONFIG = {
   // ── Brand / wordmark ────────────────────────────────────────────────
-  brand:        "kidsnews",          // wordmark line, displayed as "kids" + "news"
-  brandWordHi:  "news",              // colored portion of the wordmark (renders in --twentyone-coral)
-  parent:       "21mins",            // parent brand
-  endorsement:  "a 21mins channel",  // small caps endorsement under the lockup
-  audience:     "Kids age 8-13",
-  domain:       "kidsnews.21mins.com",
-  vertical:     "kidsnews",
+  brand:         "kidsnews",          // wordmark line, displayed as "kids" + "news"
+  brandWordHi:   "news",              // colored portion of the wordmark (renders in --twentyone-coral)
+  parent:        "21mins",            // parent brand
+  endorsement:   "21MINS daily news.",// small caps endorsement under the lockup (line 1)
+  endorsement2:  "Learn the real world.", // second-line endorsement
+  audience:      "Kids age 8-13",
+  domain:        "kidsnews.21mins.com",
+  vertical:      "kidsnews",
 
   // ── Slogans + copy ─────────────────────────────────────────────────
   // Hero tagline: italic, sits below "Today's 21 minutes"
