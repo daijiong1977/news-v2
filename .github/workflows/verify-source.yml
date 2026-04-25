@@ -1,0 +1,79 @@
+name: Verify source(s)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to verify (one of: all | category:News | category:Science | category:Fun | id:<n>)"
+        type: string
+        required: true
+        default: "all"
+      upload:
+        description: "Also upload HTML preview to Supabase Storage at verify/<timestamp>/"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install libwebp (cwebp / dwebp)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q webp
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Write .env
+        run: |
+          umask 077
+          cat > .env <<EOF
+          SUPABASE_URL=${SUPABASE_URL}
+          SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+          EOF
+
+      - name: Run verify_source
+        run: |
+          set -euo pipefail
+          target='${{ inputs.target }}'
+          upload_flag='${{ inputs.upload && '--upload' || '' }}'
+          case "$target" in
+            all)
+              python -m pipeline.verify_source --all $upload_flag ;;
+            category:*)
+              cat="${target#category:}"
+              python -m pipeline.verify_source --category "$cat" $upload_flag ;;
+            id:*)
+              sid="${target#id:}"
+              python -m pipeline.verify_source --source-id "$sid" $upload_flag ;;
+            *)
+              echo "::error::invalid target='$target'. Use one of: all | category:NAME | id:N"
+              exit 1 ;;
+          esac
+
+      - name: Upload preview HTML as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-preview-${{ github.run_id }}
+          path: out/verify/
+          retention-days: 14

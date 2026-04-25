@@ -225,10 +225,85 @@ function ConfirmButton({ children, onConfirm, label='Delete', className='btn btn
   );
 }
 
+// ── WEEKDAY PILLS ────────────────────────────────────────────────────
+// active_weekdays uses Mon=0..Sun=6 (matches pipeline/db_config.py + the
+// existing seeder). null/empty = every day.
+const DOW_LABELS = ['M','T','W','T','F','S','S'];
+function WeekdayPills({ value, onChange, compact }) {
+  // null/[] means "every day"; toggle in/out of the array.
+  const v = Array.isArray(value) ? value : [];
+  const isAll = v.length === 0;
+  const toggle = (i) => {
+    if (isAll) onChange([0,1,2,3,4,5,6].filter(x => x !== i));
+    else if (v.includes(i))      onChange(v.filter(x => x !== i));
+    else                          onChange([...v, i].sort());
+  };
+  const tip = isAll ? 'every day' : v.map(i => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]).join(' ');
+  return (
+    <span className="row" style={{gap:3}} title={tip}>
+      {DOW_LABELS.map((lab, i) => {
+        const on = isAll || v.includes(i);
+        return (
+          <button key={i} type="button" onClick={()=>toggle(i)}
+            style={{
+              width: compact ? 18 : 22, height: compact ? 18 : 22,
+              borderRadius:'50%', fontSize: compact ? 10 : 11, fontWeight:800,
+              border:`1.5px solid ${on ? '#0e8d82' : '#e8dfd3'}`,
+              background: on ? '#e0f6f3' : '#fff',
+              color: on ? '#0e8d82' : '#9a8d7a', cursor:'pointer', padding:0,
+            }}>{lab}</button>
+        );
+      })}
+    </span>
+  );
+}
+
+// ── SOURCE VERIFY (CLI-driven) ───────────────────────────────────────
+// Verify isn't an Edge Function — it runs the canonical pipeline
+// extraction (cleaner.py + image_optimize.py) via:
+//
+//   python -m pipeline.verify_source --source-id N
+//   python -m pipeline.verify_source --category News
+//   python -m pipeline.verify_source --all
+//
+// Output is HTML in `out/verify/<timestamp>/`, openable locally; the
+// script also stamps `last_verified_at` in redesign_source_configs.
+function verifyCmdFor(target) {
+  // target: {kind:'id'|'category'|'all', value?}
+  if (target.kind === 'id')       return `python -m pipeline.verify_source --source-id ${target.value}`;
+  if (target.kind === 'category') return `python -m pipeline.verify_source --category ${JSON.stringify(target.value)}`;
+  return `python -m pipeline.verify_source --all`;
+}
+
+async function copyToClipboard(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { return false; }
+}
+
+// Days since timestamp, for the stale-source badge.
+function daysSince(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.round((Date.now() - t) / 86400000);
+}
+
+function VerifiedBadge({ iso }) {
+  const d = daysSince(iso);
+  if (d === null) return <span className="pill pill-warn" title="never verified">never</span>;
+  if (d > 60)     return <span className="pill" style={{background:'#fff0e8', color:'#c14e2a'}} title={`last verified ${iso}`}>{d}d ago</span>;
+  if (d > 30)    return <span className="pill pill-warn" title={`last verified ${iso}`}>{d}d</span>;
+  return <span className="pill pill-on" title={`last verified ${iso}`}>{d}d</span>;
+}
+
 // ── SOURCES TAB ──────────────────────────────────────────────────────
 function SourcesTab({ flash, categories }) {
   const [rows, setRows] = useState(null);
-  const [draft, setDraft] = useState({ category: '', name: '', rss_url: '', priority: 1, active: true });
+  const [draft, setDraft] = useState({
+    category:'', name:'', rss_url:'', priority:1, focus:'',
+    active:true, active_weekdays:[],
+  });
+  const [bulkCat, setBulkCat] = useState('');
 
   const load = async () => {
     const { data, error } = await sb.from('redesign_source_configs').select('*').order('category').order('priority');
@@ -238,14 +313,18 @@ function SourcesTab({ flash, categories }) {
 
   const add = async () => {
     if (!draft.category || !draft.name || !draft.rss_url) { flash('err', 'category, name, rss_url are required'); return; }
-    const { error } = await sb.from('redesign_source_configs').insert(draft);
+    const { error } = await sb.from('redesign_source_configs').insert({
+      ...draft,
+      active_weekdays: draft.active_weekdays.length ? draft.active_weekdays : null,
+      focus: draft.focus || null,
+    });
     if (error) flash('err', error.message);
-    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, active:true }); load(); }
+    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', active:true, active_weekdays:[] }); load(); }
   };
 
   const updateRow = async (id, patch) => {
     const { error } = await sb.from('redesign_source_configs').update(patch).eq('id', id);
-    if (error) flash('err', error.message); else { load(); }
+    if (error) flash('err', error.message); else load();
   };
 
   const remove = async (id) => {
@@ -253,8 +332,17 @@ function SourcesTab({ flash, categories }) {
     if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
   };
 
+  const showVerifyCmd = async (target, label) => {
+    const cmd = verifyCmdFor(target);
+    const ok = await copyToClipboard(cmd);
+    flash('ok', ok
+      ? `Copied to clipboard: ${cmd}`
+      : `Run locally: ${cmd}`);
+  };
+
   return (
     <div className="col" style={{gap:18}}>
+      {/* ── Add form ───────────────────────────────────────────────── */}
       <div className="card">
         <h3 style={{marginTop:0}}>Add source</h3>
         <div className="grid3">
@@ -266,8 +354,14 @@ function SourcesTab({ flash, categories }) {
           </div>
           <div className="col"><span className="label">Display name</span>
             <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
-          <div className="col"><span className="label">Priority</span>
+          <div className="col"><span className="label">Priority (lower = primary)</span>
             <input type="number" value={draft.priority} onChange={e=>setDraft({...draft, priority:parseInt(e.target.value||0)})}/></div>
+          <div className="col"><span className="label">Focus (e.g. history, geometry)</span>
+            <input value={draft.focus} onChange={e=>setDraft({...draft, focus:e.target.value})} placeholder="optional tag"/></div>
+          <div className="col" style={{gridColumn:'span 2'}}>
+            <span className="label">Active weekdays (none selected = every day)</span>
+            <WeekdayPills value={draft.active_weekdays} onChange={v=>setDraft({...draft, active_weekdays:v})}/>
+          </div>
         </div>
         <div className="col" style={{marginTop:10}}>
           <span className="label">RSS URL</span>
@@ -281,21 +375,71 @@ function SourcesTab({ flash, categories }) {
         </div>
       </div>
 
+      {/* ── Bulk verify controls ──────────────────────────────────── */}
+      <div className="card" style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10}}>
+        <div className="col" style={{gap:4}}>
+          <span className="label">Verify (runs locally — copies the CLI command)</span>
+          <span style={{fontSize:11, color:'#6b5c80'}}>
+            Verify pulls 3 latest articles + og:image and renders an HTML preview.
+            The CLI runs the canonical pipeline extraction (matches what the daily
+            run produces) and stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span>.
+          </span>
+        </div>
+        <div className="row" style={{gap:8}}>
+          <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)}>
+            <option value="">— Pick a category —</option>
+            {categories.map(c => <option key={c.slug} value={c.name}>{c.emoji} {c.name}</option>)}
+          </select>
+          <button className="btn btn-ghost btn-sm" disabled={!bulkCat}
+            onClick={()=>showVerifyCmd({kind:'category', value:bulkCat}, `category ${bulkCat}`)}>
+            Verify category
+          </button>
+          <button className="btn btn-sm" disabled={!rows || rows.length === 0}
+            onClick={()=>showVerifyCmd({kind:'all'}, 'all sources')}>
+            Verify all
+          </button>
+        </div>
+      </div>
+
+      {/* ── List ──────────────────────────────────────────────────── */}
       <div className="card">
         <table>
-          <thead><tr><th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Active</th><th></th></tr></thead>
+          <thead><tr>
+            <th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Focus</th><th>Days</th><th>State</th><th>Verified</th><th></th>
+          </tr></thead>
           <tbody>
             {rows?.map(r => (
               <tr key={r.id}>
                 <td>{r.category}</td>
                 <td><input style={{width:'100%'}} defaultValue={r.name} onBlur={e=>e.target.value!==r.name && updateRow(r.id, { name:e.target.value })}/></td>
                 <td><input style={{width:'100%'}} defaultValue={r.rss_url} onBlur={e=>e.target.value!==r.rss_url && updateRow(r.id, { rss_url:e.target.value })}/></td>
-                <td><input type="number" style={{width:60}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
-                <td><input type="checkbox" checked={r.active} onChange={e=>updateRow(r.id, { active:e.target.checked })}/></td>
-                <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+                <td><input type="number" style={{width:55}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
+                <td><input style={{width:'100%'}} defaultValue={r.focus||''} onBlur={e=>updateRow(r.id, { focus: e.target.value || null })} placeholder="—"/></td>
+                <td><WeekdayPills value={r.active_weekdays} onChange={v=>updateRow(r.id, { active_weekdays: v.length ? v : null })}/></td>
+                <td>
+                  <span className={r.active ? 'pill pill-on' : 'pill pill-off'}>
+                    {r.active ? 'active' : 'disabled'}
+                  </span>
+                </td>
+                <td><VerifiedBadge iso={r.last_verified_at}/></td>
+                <td>
+                  <span className="row" style={{gap:4, justifyContent:'flex-end'}}>
+                    <button className="btn btn-sm btn-ghost"
+                      title={r.active ? 'Disable (keep row)' : 'Enable'}
+                      onClick={()=>updateRow(r.id, { active: !r.active })}>
+                      {r.active ? 'Disable' : 'Enable'}
+                    </button>
+                    <button className="btn btn-sm btn-ghost"
+                      title="Copy CLI command to verify this source"
+                      onClick={()=>showVerifyCmd({kind:'id', value:r.id}, r.name)}>
+                      Verify
+                    </button>
+                    <ConfirmButton onConfirm={()=>remove(r.id)} />
+                  </span>
+                </td>
               </tr>
             ))}
-            {rows && rows.length === 0 && <tr><td colSpan="6" className="empty">No sources yet.</td></tr>}
+            {rows && rows.length === 0 && <tr><td colSpan="9" className="empty">No sources yet.</td></tr>}
           </tbody>
         </table>
       </div>

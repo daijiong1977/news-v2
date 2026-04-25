@@ -21,3 +21,6 @@ website/test_output/
 # Prototype scratch (not part of repo history)
 newdesign/screenshots/
 newdesign/uploads/
+
+# verify_source.py local output
+/out/verify/
