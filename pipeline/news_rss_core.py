@@ -733,16 +733,40 @@ but could be 1, 2, or 3). Each article has two rewritten English bodies:
 For each of the 2N slots (N articles × {easy, middle}) produce:
 
   [common to both easy and middle]
-  · keywords: 6 {term, explanation} pairs. EVERY term MUST literally appear (or
-    appear as a common inflection — "banned" for "ban", "fined" for "fine")
-    in the corresponding body. Do NOT invent concepts that aren't in the text.
+  · keywords: 6 {term, explanation} pairs. EVERY term MUST literally appear
+    (or as a common inflection — "banned" for "ban", "fined" for "fine") in
+    the corresponding body.
+    DIFFICULTY FILTER:
+      easy slot   → only words ABOVE grade-2 vocabulary (words a 10-year-old
+                    might not yet know). Skip everyday words like "school",
+                    "happy", "money", "team".
+      middle slot → only words ABOVE grade-3 / middle-school baseline
+                    vocabulary (words a 13-year-old might not know).
+                    Skip words a 7th-grader uses without thinking.
+    Examples of the bar to clear:
+      easy   ✓ "ceasefire", "negotiation", "endangered", "diplomat"
+             ✗ "school", "running", "interesting"
+      middle ✓ "unprecedented", "coalition", "sanction", "constitutional"
+             ✗ "election", "interesting", "important", "decided"
+    Each `explanation` is 1 short sentence in plain words a kid that age
+    would understand. Do NOT invent concepts that aren't in the text.
   · questions: 6 MCQ questions, each {question, options:[4], correct_answer}.
     correct_answer MUST match one option character-for-character.
 
   ———— easy slot (10-year-old reader) ————
   · background_read: array of 2-3 SIMPLE sentences giving RELATED real-world
     context. Add historical facts, related events, or concepts the kid might
-    not know. Avoid generic filler about the news source itself.
+    not know.
+    NAMED-ENTITY INTROS (REQUIRED): if the article names a famous person,
+    organization, or location that a 10-year-old might not recognize,
+    include a brief 1-clause intro inline. Examples:
+      · "President Donald Trump (the U.S. president since 2025)"
+      · "the United Nations (a group where almost all countries meet to
+        talk about big world problems)"
+      · "Gaza (a small piece of land along the Mediterranean Sea)"
+    Skip the intro for entities almost any 10-year-old knows (USA, China,
+    Apple, Google).
+    Avoid generic filler about the news source itself.
   · Article_Structure: array of 4 strings: WHO / WHAT / WHERE / WHY
     (format: "WHO: ...", "WHAT: ...", etc.) — specific answers drawn from the
     body, not a template.
@@ -754,8 +778,20 @@ For each of the 2N slots (N articles × {easy, middle}) produce:
   ———— middle slot (12-14 year old reader) ————
   · background_read: array of 3-5 richer sentences (150-250 words total).
     REQUIRE real historical facts, prior events, or named organizations a
-    12-year-old may not know. Define new terms briefly when used. No generic
-    statements about "this news source" or "how journalists work".
+    12-year-old may not know.
+    NAMED-ENTITY INTROS (REQUIRED): for prominent people, organizations,
+    or locations the article mentions, include a brief context clause —
+    role, what they do, why they matter. Examples:
+      · "Volodymyr Zelensky (Ukraine's president, in office since 2019)"
+      · "the IMF (the International Monetary Fund — a global lender of
+        last resort, owned by 190+ countries)"
+      · "the West Bank (a Palestinian territory occupied by Israel since
+        1967)"
+    Skip intros for entities a typical 7th-grader knows (NASA, NATO,
+    California). Aim for 2-4 named-entity intros across the
+    background_read paragraphs.
+    Define new terms briefly when used. No generic statements about
+    "this news source" or "how journalists work".
   · Article_Structure: MIND-TREE showing how THIS article is constructed.
     Array of strings, each a tree node. Use tree characters └─ ├─ and leading
     spaces for hierarchy. Example:

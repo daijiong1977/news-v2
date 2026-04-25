@@ -481,24 +481,57 @@ function WordMatchGame({ keywords, catColor, onClose }) {
   );
 }
 
+// Pronounce text using the browser's built-in Web Speech API. Cancels any
+// in-flight utterance so rapid taps don't queue up. en-US voice, slowed
+// slightly for kid clarity. No-op if the browser doesn't support it
+// (safe gracefully — speak() called on a missing API just returns).
+function speakWord(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text || ''));
+    u.lang = 'en-US';
+    u.rate = 0.9;
+    u.pitch = 1.0;
+    window.speechSynthesis.speak(u);
+  } catch (e) {
+    // Some embeds (iframes, restricted contexts) throw — ignore
+  }
+}
+
 function KeywordCard({ kw, idx, expanded, onToggle }) {
   const palette = [
     {bg:'#ffece8', c:'#ff6b5b'}, {bg:'#e0f6f3', c:'#17b3a6'}, {bg:'#eee5ff', c:'#9061f9'},
     {bg:'#fff4c2', c:'#c9931f'}, {bg:'#ffe4ef', c:'#ff6ba0'},
   ][idx % 5];
+  const onSpeak = (e) => { e.stopPropagation(); speakWord(kw.term); };
   return (
-    <button onClick={onToggle} style={{
+    <div style={{
       background: expanded ? palette.c : palette.bg,
       color: expanded ? '#fff' : '#1b1230',
-      border:'none', borderRadius:12, padding:'12px 14px', textAlign:'left',
-      cursor:'pointer', display:'flex', flexDirection:'column', gap:4,
+      borderRadius:12, padding:'12px 14px',
       transition:'all .2s',
       boxShadow:'0 2px 0 rgba(27,18,48,0.06)',
     }}>
-      <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:16, color: expanded ? '#fff' : palette.c}}>{kw.term}</div>
-      {expanded && <div style={{fontSize:12, lineHeight:1.4}}>{kw.def}</div>}
-      {!expanded && <div style={{fontSize:11, fontWeight:700, opacity:.65}}>Tap to reveal →</div>}
-    </button>
+      <button onClick={onToggle} style={{
+        all:'unset', cursor:'pointer', width:'100%',
+        display:'flex', alignItems:'center', gap:8,
+      }}>
+        <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:16, color: expanded ? '#fff' : palette.c, flex:1}}>{kw.term}</div>
+        <button onClick={onSpeak}
+          title="Read this word aloud"
+          aria-label={"Read aloud: " + kw.term}
+          style={{
+            all:'unset', cursor:'pointer',
+            width:28, height:28, borderRadius:999,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            background: expanded ? 'rgba(255,255,255,0.2)' : 'rgba(27,18,48,0.06)',
+            fontSize:14,
+          }}>🔊</button>
+      </button>
+      {expanded && <div style={{fontSize:12, lineHeight:1.4, marginTop:6}}>{kw.def}</div>}
+      {!expanded && <div style={{fontSize:11, fontWeight:700, opacity:.65, marginTop:4}}>Tap to reveal →</div>}
+    </div>
   );
 }
 
