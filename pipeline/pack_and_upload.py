@@ -63,8 +63,11 @@ def collect_files() -> list[tuple[Path, str]]:
 
 CATS = ("news", "science", "fun")
 # (field, min_count) — what a detail payload MUST contain to count as complete.
+# NOTE: keywords intentionally NOT required. They depend on the body's
+# vocabulary richness (future: Google-10k frequency-rank filter, rank >2000
+# for easy / >3000 for middle); plain-language bodies legitimately yield 0
+# qualifying terms. Don't block the bundle on that.
 DETAIL_MIN = [
-    ("keywords", 3),
     ("questions", 3),
     ("background_read", 1),
     ("Article_Structure", 3),
