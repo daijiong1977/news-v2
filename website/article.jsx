@@ -58,7 +58,7 @@ const KidStats = {
 };
 window.KidStats = KidStats;
 
-function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
+function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, updateTweak }) {
   const baseArticle = ARTICLES.find(a => a.id === articleId) || ARTICLES[0];
   // Resume at the tab the user was last on for this article (issue #2).
   // Whitelist against the known stage ids so a stale localStorage value
@@ -165,11 +165,19 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
       const weight = STEP_WEIGHTS[stageId] || 1;
 
       const next = { ...p };
-      if (fullyDone && !p.readToday.includes(article.id)) {
+      const justFinished = fullyDone && !p.readToday.includes(article.id);
+      if (justFinished) {
         next.readToday = [...p.readToday, article.id];
       }
       next.articleProgress = { ...ap, [article.id]: newAP };
       next.minutesToday = (p.minutesToday || 0) + weight;
+      // XP: bump tweaks.xp by article.xp the first time this article
+      // moves into readToday. Idempotent — once article.id is in
+      // readToday, justFinished is false, so re-completing doesn't
+      // double-credit.
+      if (justFinished && typeof updateTweak === 'function' && article.xp) {
+        updateTweak('xp', (cur) => (cur || 0) + (article.xp || 0));
+      }
       return next;
     });
     // Mirror to cloud (no-op if unavailable). Fire AFTER the state update

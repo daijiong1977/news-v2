@@ -210,9 +210,14 @@ function App() {
   }, []);
 
   const updateTweak = (key, val) => {
-    const edits = { [key]: val };
-    setTweaks(t => ({...t, ...edits}));
-    try { window.parent.postMessage({ type:'__edit_mode_set_keys', edits }, '*'); } catch {}
+    // Allow functional updates (setState-style) so callers can do
+    // `updateTweak('xp', cur => (cur || 0) + delta)` without first
+    // reading the latest tweaks.
+    setTweaks(t => {
+      const next = typeof val === 'function' ? val(t[key]) : val;
+      try { window.parent.postMessage({ type:'__edit_mode_set_keys', edits: { [key]: next } }, '*'); } catch {}
+      return { ...t, [key]: next };
+    });
   };
 
   // Apply theme to root
@@ -274,6 +279,7 @@ function App() {
           onComplete={onComplete}
           progress={progress}
           setProgress={setProgress}
+          updateTweak={updateTweak}
         />
       )}
 

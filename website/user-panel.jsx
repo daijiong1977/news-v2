@@ -372,35 +372,9 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
                 </div>
               </Section>
 
-              <Section label="Home page style" sub="What greets you on the homepage">
-                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-                  <HeroPick active={tweaks.heroVariant==='daily15'} onClick={()=>updateTweak('heroVariant','daily15')}
-                    title="Today's 15" sub="Start reading fast"
-                    preview={
-                      <div style={{background:'linear-gradient(135deg,#ffe2a8,#ffc0a8)', borderRadius:8, padding:8, height:60}}>
-                        <div style={{fontSize:9, fontWeight:800, color:'#c14e2a'}}>TODAY</div>
-                        <div style={{fontSize:14, fontWeight:900, color:'#1b1230', fontFamily:'Fraunces, serif'}}>15 <span style={{background:'#ffc83d', padding:'0 4px', borderRadius:3}}>min</span></div>
-                      </div>
-                    }
-                  />
-                  <HeroPick active={tweaks.heroVariant==='streak'} onClick={()=>updateTweak('heroVariant','streak')}
-                    title="Streak mode" sub="See your fire days"
-                    preview={
-                      <div style={{background:'linear-gradient(135deg,#ffe2a8,#ffc0a8)', borderRadius:8, padding:8, height:60, display:'flex', alignItems:'center', gap:6}}>
-                        <div style={{fontSize:20}}>🔥</div>
-                        <div>
-                          <div style={{fontSize:14, fontWeight:900, color:'#1b1230', fontFamily:'Fraunces, serif'}}>7 days</div>
-                          <div style={{display:'flex', gap:2}}>
-                            {[1,1,1,1,1,1,0].map((d,i)=>(
-                              <div key={i} style={{width:6, height:8, borderRadius:2, background: d?'#1b1230':'rgba(255,255,255,0.6)'}}/>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    }
-                  />
-                </div>
-              </Section>
+              {/* "Home page style" hero-variant picker removed —
+                  the hero is locked to the Today's-Top-3-Pick layout
+                  now, no user-facing variant left. */}
 
               <Section label="Quiz celebration" sub="Confetti when you get things right">
                 <label style={{display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'#fff', border:'2px solid #f0e8d8', borderRadius:14, cursor:'pointer'}}>
