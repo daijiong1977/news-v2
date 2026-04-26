@@ -1089,11 +1089,15 @@ def detail_enrich(rewrite_result: dict) -> dict:
             # Continue — the other level may still succeed.
 
     filter_keywords(details, rewrite_result)
-    # Augment with Python-extracted keywords (deterministic, body-guaranteed).
-    # LLM-emitted keywords keep their explanations; Python-added ones have
-    # empty explanations. Done last so it runs after the hallucination filter.
-    from .keyword_extractor import augment_details_with_keywords
-    augment_details_with_keywords(details, rewrite_result)
+    # NOTE: pipeline/keyword_extractor.augment_details_with_keywords used
+    # to run here as a safety net, padding each slot with deterministic
+    # body-grounded vocab (empty explanations). Pack-time scrub now
+    # drops definition-less keywords (a hover-card with no definition
+    # is dead UX), so the augment was producing junk that got
+    # immediately deleted. Removed 2026-04-26. The file stays in tree
+    # in case we wire a secondary LLM pass to backfill definitions
+    # for body-extracted vocab — at which point the augment can come
+    # back and its terms will pass the scrub.
     return {"details": details}
 
 
