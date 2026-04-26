@@ -40,8 +40,11 @@ BUCKET = "redesign-daily-content"
 RETENTION_DAYS = 30  # dated archives older than this get deleted
 
 # Allowlist of top-level files/dirs that ship to production.
+# parent.html / parent.jsx / kidsync.js are the parent-dashboard surface
+# (added 2026-04-25). Without them the deploy site has no /parent route.
 INCLUDE_FILES = {"index.html", "article.jsx", "home.jsx", "components.jsx",
                  "data.jsx", "user-panel.jsx", "admin.html",
+                 "parent.html", "parent.jsx", "kidsync.js",
                  "tokens.css", "fonts.css"}
 INCLUDE_DIRS = {"payloads", "article_payloads", "article_images", "article_pdfs",
                 "assets", "components"}
@@ -384,12 +387,22 @@ def check_not_overwriting_newer(sb) -> None:
 
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    validate_bundle(today)
+    # Republish mode: refresh latest.zip with the CURRENT website/ files
+    # (e.g. after a static-asset change like the parent dashboard) without
+    # re-running the full mining/LLM pipeline. Skips bundle validation
+    # (we're not changing today's content, so today's payloads may not
+    # exist locally), skips the "remote is newer" guard (same article
+    # content, just static assets), and skips dated-flat-files / archive
+    # index updates (no new content to register).
+    republish = os.environ.get("PACK_REPUBLISH_ONLY") == "1"
+    if not republish:
+        validate_bundle(today)
     body = build_zip()
     manifest = build_manifest(today, body)
     manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
-    check_not_overwriting_newer(sb)
+    if not republish:
+        check_not_overwriting_newer(sb)
 
     # Write zip in two locations: dated archive (immutable history) + latest.
     for key in (f"{today}.zip", "latest.zip"):
@@ -412,6 +425,14 @@ def main() -> None:
     log.info("manifest: version=%s · zip_bytes=%d · zip_sha256=%s · stories=%d",
              manifest["version"], manifest["zip_bytes"],
              manifest["zip_sha256"][:12], manifest["story_count"])
+
+    if republish:
+        # Republish: skip dated-flat-files + archive-index updates +
+        # retention sweep — none of those change when only static assets
+        # are refreshed. Same article content, just new HTML/JSX/CSS.
+        pub = f"{os.environ['SUPABASE_URL']}/storage/v1/object/public/{BUCKET}/latest.zip"
+        log.info("republish: skipped dated-flat / archive-index / retention. public URL: %s", pub)
+        return
 
     # Flat per-day files — the UI fetches these when user picks a past date.
     # Only add `today` to archive-index AFTER all flat files are confirmed

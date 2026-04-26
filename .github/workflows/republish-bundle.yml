@@ -1,0 +1,64 @@
+# Republish website bundle (no content regeneration)
+#
+# Refreshes Supabase Storage's `latest.zip` with the current `website/`
+# files in this repo — useful after a static-asset change (HTML / JSX / CSS)
+# when you don't want to spend LLM credits on a full pipeline run.
+#
+# After this finishes, dispatch the `kidsnews-v2 / Sync content from
+# Supabase` workflow (or wait for its 2h cron) to deploy the new bundle.
+#
+# Required secrets (already set for daily-pipeline):
+#   - SUPABASE_URL
+#   - SUPABASE_SERVICE_KEY
+
+name: republish-bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_kidsnews_sync:
+        description: "Also fire repository_dispatch on kidsnews-v2 (needs KIDSNEWS_DISPATCH_TOKEN)"
+        type: boolean
+        default: true
+
+jobs:
+  republish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pipeline dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pack + upload (republish-only mode)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PACK_REPUBLISH_ONLY: "1"
+        run: python -m pipeline.pack_and_upload
+
+      - name: Trigger kidsnews-v2 sync
+        if: inputs.trigger_kidsnews_sync && env.KIDSNEWS_DISPATCH_TOKEN != ''
+        env:
+          KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+        run: |
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${KIDSNEWS_DISPATCH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/daijiong1977/kidsnews-v2/dispatches \
+            -d '{"event_type":"news-v2-uploaded"}'
+          echo "✓ kidsnews-v2 sync dispatched"
+
+      - name: Note if dispatch skipped
+        if: inputs.trigger_kidsnews_sync && env.KIDSNEWS_DISPATCH_TOKEN == ''
+        env:
+          KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+        run: |
+          echo "::notice::KIDSNEWS_DISPATCH_TOKEN not set — kidsnews-v2 will sync on its 2h cron, or you can dispatch its workflow manually."
