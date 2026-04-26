@@ -38,6 +38,77 @@ function _OnbSection({ label, sub, children }) {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────
+// SignInNudge — slim banner above the daily ritual that tells anon
+// users their streak is at risk. Renders only when:
+//   (a) the kid has done onboarding (otherwise OnboardingScreen has
+//       its own loud sign-in CTA — don't double up)
+//   (b) they're NOT already Gmail-linked
+//   (c) they haven't dismissed it (`ohye_signin_nudge_dismissed`)
+// Tap → opens the user panel where IdentityExpander handles the
+// actual OAuth flow.
+// ────────────────────────────────────────────────────────────────────
+function SignInNudge({ tweaks, onOpenUserPanel }) {
+  const [identity, setIdentity] = useStateH(undefined);  // undefined = loading; null = anon
+  const [dismissed, setDismissed] = useStateH(() => {
+    try { return window.safeStorage?.get('ohye_signin_nudge_dismissed') === '1'; }
+    catch { return false; }
+  });
+  useEffectH(() => {
+    if (!window.kidsync || !window.kidsync.getIdentity) {
+      setIdentity(null);
+      return;
+    }
+    let cancelled = false;
+    window.kidsync.getIdentity().then(id => { if (!cancelled) setIdentity(id || null); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  // Hide while loading + after dismiss + when already Gmail-linked +
+  // when onboarding hasn't happened yet.
+  if (identity === undefined) return null;
+  if (dismissed) return null;
+  if (identity && identity.type === 'google') return null;
+  if (!tweaks || !(tweaks.userName || '').trim()) return null;
+
+  const dismiss = () => {
+    setDismissed(true);
+    try { window.safeStorage?.set('ohye_signin_nudge_dismissed', '1'); } catch {}
+  };
+
+  return (
+    <section style={{maxWidth:1180, margin:'14px auto 0', padding:'0 28px'}}>
+      <div style={{
+        display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
+        background:'linear-gradient(135deg, #fff9ef 0%, #ffe9bb 100%)',
+        border:'2px solid #1b1230', borderRadius:14,
+        padding:'10px 14px',
+        boxShadow:'0 3px 0 rgba(27,18,48,0.10)',
+      }}>
+        <div style={{fontSize:22}}>✨</div>
+        <div style={{flex:1, minWidth:200}}>
+          <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:14.5, color:'#1b1230', lineHeight:1.2}}>
+            Save your streak — sign in once
+          </div>
+          <div style={{fontSize:12, color:'#3a2a4a', marginTop:2, lineHeight:1.4}}>
+            Right now your reading lives <strong>only on this browser</strong>. Sign in with Google so it follows you anywhere.
+          </div>
+        </div>
+        <button onClick={onOpenUserPanel} style={{
+          background:'#1b1230', color:'#ffc83d', border:'none', borderRadius:10,
+          padding:'8px 14px', fontWeight:900, fontSize:12,
+          fontFamily:'Nunito, sans-serif', cursor:'pointer',
+          letterSpacing:'.04em', whiteSpace:'nowrap',
+        }}>🇬 Sign in →</button>
+        <button onClick={dismiss} title="Hide this for now" style={{
+          background:'transparent', color:'#9a8d7a', border:'none',
+          padding:'4px 6px', fontSize:18, fontWeight:700, cursor:'pointer',
+          lineHeight:1, fontFamily:'Nunito, sans-serif',
+        }}>×</button>
+      </div>
+    </section>
+  );
+}
+
 function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone }) {
   const cfg = window.SITE_CONFIG || {};
   const [name, setName] = useStateH(tweaks?.userName || '');
@@ -45,17 +116,47 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
   const [pickedLevel, setPickedLevel] = useStateH(level || 'Sprout');
   const [themeId, setThemeId] = useStateH(tweaks?.theme || 'sunny');
   const [lang, setLang] = useStateH(tweaks?.language || 'en');
+  const [signingIn, setSigningIn] = useStateH(false);
+  const [signInErr, setSignInErr] = useStateH(null);
 
   const ready = name.trim().length > 0;
 
-  const save = () => {
-    if (!ready) return;
+  const persistProfile = () => {
     updateTweak('userName', name.trim());
     updateTweak('avatar', avatarId);
     updateTweak('theme', themeId);
     updateTweak('language', lang);
     setLevel(pickedLevel);
+  };
+
+  const save = () => {
+    if (!ready) return;
+    persistProfile();
     onDone && onDone();
+  };
+
+  // Save profile fields FIRST so they survive the Google redirect, then
+  // kick off OAuth. The redirect comes back to the same URL; index.html's
+  // bootstrap useEffect picks up the auth callback and runs
+  // linkCurrentSession to bind the email server-side. After bind the
+  // tweaks are already there (because we wrote them above) and the
+  // onboarding gate's `userName` check passes — kid drops directly into
+  // pickup, no second walkthrough.
+  const saveAndSignIn = async () => {
+    if (!ready) return;
+    persistProfile();
+    setSigningIn(true); setSignInErr(null);
+    try {
+      if (!window.kidsync || !window.kidsync.signInWithGoogle) {
+        throw new Error('Sign-in not available on this device — continue without it.');
+      }
+      const r = await window.kidsync.signInWithGoogle();
+      if (!r || !r.redirected) throw new Error(r?.error || 'Sign-in failed');
+      // Page redirects to Google; nothing else to do here.
+    } catch (e) {
+      setSignInErr(e.message || String(e));
+      setSigningIn(false);
+    }
   };
 
   return (
@@ -186,29 +287,59 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
           </div>
         </_OnbSection>
 
-        {/* Phase-3 placeholder: parent sync */}
+        {/* ── Strong sign-in recommendation ─────────────────────────────
+            Without this, the streak + history live ONLY in this browser's
+            cache. Cleared cache = lost progress. Sign in once and the
+            kid's identity is anchored to a Gmail forever — moves across
+            devices, survives any cache wipe, unlocks parent dashboard. */}
         <div style={{
-          margin:'8px 0 24px', padding:'12px 16px', borderRadius:12,
-          background:'#fffaf0', border:'1.5px dashed #e8dfd3',
-          fontSize:12.5, color:'#6b5c80', textAlign:'center',
+          margin:'8px 0 18px', padding:'18px 18px 14px', borderRadius:16,
+          background:'#fff9ef', border:`2px solid ${theme.border || '#1b1230'}`,
+          boxShadow:'0 4px 0 rgba(27,18,48,0.10)',
         }}>
-          🛡️ <b>Parent?</b> Cross-device sync via Google sign-in is coming soon.
-          For now your progress lives on this device only.
+          <div style={{
+            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:19,
+            color:'#1b1230', letterSpacing:'-0.015em', marginBottom:6,
+          }}>
+            ✨ Save your streak — sign in once
+          </div>
+          <div style={{fontSize:13, color:'#3a2a4a', lineHeight:1.5, marginBottom:12}}>
+            Right now your reading lives <strong>only on this device</strong>. Sign in
+            with Google (or have a parent help) and it follows you to every browser,
+            every device. We never share your email — it's only used to remember you.
+          </div>
+          <button
+            onClick={saveAndSignIn} disabled={!ready || signingIn}
+            style={{
+              width:'100%', background: (ready && !signingIn) ? '#1b1230' : '#e8dfd3',
+              color: (ready && !signingIn) ? '#ffc83d' : '#9a8d7a',
+              border:'none', borderRadius:14, padding:'14px',
+              fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:15,
+              cursor: (ready && !signingIn) ? 'pointer' : 'not-allowed',
+              boxShadow: (ready && !signingIn) ? '0 4px 0 rgba(27,18,48,0.18)' : 'none',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+            }}>
+            <span style={{fontSize:18}}>🇬</span>
+            {signingIn ? 'Redirecting…' : 'Sign in with Google · recommended'}
+          </button>
+          {signInErr && (
+            <div style={{marginTop:8, fontSize:12, color:'#b22525'}}>{signInErr}</div>
+          )}
         </div>
 
-        {/* CTA */}
+        {/* "Skip — local only" — small text link, intentionally less
+            visually heavy than the primary sign-in CTA. We don't lock
+            the kid out; we just nudge hard. */}
         <button
           onClick={save} disabled={!ready}
           style={{
-            width:'100%', background: ready ? '#1b1230' : '#e8dfd3',
-            color: ready ? '#fff' : '#9a8d7a',
-            border:'none', borderRadius:16, padding:'16px',
-            fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:17,
+            width:'100%', background:'transparent',
+            color: ready ? '#6b5c80' : '#c9bfae',
+            border:'1.5px dashed #c9b99a', borderRadius:14, padding:'12px',
+            fontFamily:'Nunito, sans-serif', fontWeight:700, fontSize:13,
             cursor: ready ? 'pointer' : 'not-allowed',
-            boxShadow: ready ? '0 5px 0 rgba(27,18,48,0.18)' : 'none',
-            transition:'all .12s',
           }}>
-          {ready ? '▶ Save & start picking today\'s 3' : 'Type your name to continue'}
+          {ready ? 'Skip for now — save on this device only' : 'Type your name to continue'}
         </button>
       </div>
     </div>
@@ -916,6 +1047,18 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
     <div style={{background: theme.bg, minHeight:'100vh'}}>
       {/* ——————————— HEADER ——————————— */}
       <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} />
+
+      {/* ——————————— ANONYMOUS-USER SIGN-IN NUDGE ———————————
+          Slim dismissible banner above the daily ritual. Only renders
+          when (a) we're showing today (not archive), (b) the kid has
+          already done first-launch onboarding (so this isn't piled on
+          top of the OnboardingScreen sign-in prompt), (c) the kid
+          hasn't dismissed it, and (d) they're not already Gmail-linked.
+          One tap opens the user panel where IdentityExpander is
+          already default-expanded with the same Google CTA. */}
+      {!isArchive && (
+        <SignInNudge tweaks={tweaks} onOpenUserPanel={onOpenUserPanel}/>
+      )}
 
       {/* ——————————— TODAY'S PROGRESS BANNER (only when picks are locked) ——————————— */}
       {/* Chinese mode is summary-only — pick-3 ritual is skipped, so
