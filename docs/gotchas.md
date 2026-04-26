@@ -198,3 +198,22 @@ goal-customization wasn't worth threading a prop for one caption.
 other popover that lives in its own function component) for free
 references to parent-scope vars: `progress`, `tweaks`, `level`, `cat`.
 Each must come in via props.
+
+## 2026-04-26 · pgcrypto gen_random_bytes needs schema qualifier
+
+**Symptom:** `issue_magic_link` RPC returned `function gen_random_bytes
+(integer) does not exist` even though pgcrypto is enabled on the
+project.
+
+**Root cause:** Supabase installs pgcrypto into the `extensions`
+schema, not `public`. SECURITY DEFINER functions with
+`set search_path = public` only see `public` + `pg_catalog`, so the
+unqualified call to `gen_random_bytes` failed.
+
+**Fix:** call `extensions.gen_random_bytes(24)`. Same pattern works
+for any other extension function (`extensions.uuid_generate_v4()`,
+etc.). Don't widen search_path — keeps the SECURITY DEFINER attack
+surface tight.
+
+**Where:** `supabase/migrations/20260426_email_magic_link.sql`,
+patched via inline migration `magic_link_pgcrypto_fix`.
