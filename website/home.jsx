@@ -831,7 +831,35 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     : ((dailyPicks && dailyPicks.every(id => poolIds.has(id))) ? dailyPicks : defaultPicks);
   useEffectH(() => { window.safeStorage?.setJSON('ohye_daily_picks_v3', activePicks); }, [activePicks]);
   const swapPick = (idx, newId) => {
-    const next = [...activePicks]; next[idx] = newId; setDailyPicks(next);
+    const oldId = activePicks[idx];
+    // Reset the OUTGOING article's progress — it's no longer one of
+    // today's picks, so showing "50%" on the home page is misleading.
+    // Also drop it from readToday in case the user somehow finished it
+    // and is now swapping (rare; the swap button is hidden for done
+    // articles, but defensive).
+    if (oldId && oldId !== newId) {
+      setProgress(p => {
+        const ap = { ...(p.articleProgress || {}) };
+        if (ap[oldId]) delete ap[oldId];
+        const minutesDelta = (p.articleProgress && p.articleProgress[oldId])
+          ? -((p.articleProgress[oldId].steps || []).length * 1)  // weight ≈ 1 per step
+          : 0;
+        return {
+          ...p,
+          articleProgress: ap,
+          readToday: (p.readToday || []).filter(id => id !== oldId),
+          minutesToday: Math.max(0, (p.minutesToday || 0) + minutesDelta),
+        };
+      });
+    }
+    // Update the right state slot. When picksLocked, activePicks comes
+    // from picksLock.ids — without updating that, the swap "succeeds"
+    // but the locked stack snaps back to the old id on next render.
+    if (picksLocked) {
+      setPicksLock(L => ({ ...L, ids: L.ids.map((id, i) => i === idx ? newId : id) }));
+    } else {
+      const next = [...activePicks]; next[idx] = newId; setDailyPicks(next);
+    }
   };
   const daily3 = useMemoH(() => activePicks.map(id => displayPool.find(a => a.id === id)).filter(Boolean), [activePicks, displayPool]);
   const [swapOpen, setSwapOpen] = useStateH(null); // index being swapped
@@ -864,7 +892,10 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
   // Today, not archive, picks not yet locked → render pick screen and
   // bypass the rest of home. Archive mode keeps the standard browse.
   // MUST come after every hook call above to satisfy Rules of Hooks.
-  if (!isArchive && !picksLocked && displayPool.length >= 3) {
+  // Chinese mode is summary-only (no detail-page reading flow), so the
+  // pick-3 ritual + click-into-article behavior are both skipped — the
+  // kid (or parent auditing) just browses the cards.
+  if (!isArchive && !picksLocked && displayPool.length >= 3 && !isZh) {
     const dateLabel = new Date().toLocaleDateString('en-US',
       { weekday:'long', month:'short', day:'numeric' });
     // Pool of up to 9 candidates for the kid to choose from.
@@ -1055,7 +1086,14 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                         if (p > 0) return <span style={{fontSize:12, fontWeight:800, color:'#f4a24c', background:'#fff4e0', padding:'4px 10px', borderRadius:999, border:'1.5px solid #f4a24c'}}>{p}%</span>;
                         return null;
                       })()}
-                      {canSwap && (
+                      {/* Swap rules per user direction:
+                          · Science / Fun: hide swap once done — the slot
+                            is "spent" and re-swapping would feel like
+                            taking back credit.
+                          · News: swap always allowed — there's usually
+                            still appetite for a second news read of
+                            the day. */}
+                      {canSwap && (a.category === 'News' || !progress.readToday.includes(a.id)) && (
                         <button onClick={()=>setSwapOpen(i)} title={`Pick a different ${a.category} story`} style={{
                           background:'transparent', color:'#6b5c80',
                           border:'2px solid #f0e8d8', borderRadius:10,
@@ -1109,10 +1147,10 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
         ) : filtered.length === 3 && !isArchive ? (
           /* Editorial layout: big feature on top (photo left, article right) + 2 companions below */
           <div style={{display:'flex', flexDirection:'column', gap:20}}>
-            <ArticleCard article={filtered[0]} onOpen={()=>onOpen(filtered[0].id)} read={progress.readToday.includes(filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
+            <ArticleCard article={filtered[0]} onOpen={isZh ? null : ()=>onOpen(filtered[0].id)} read={progress.readToday.includes(filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
-              <ArticleCard article={filtered[1]} onOpen={()=>onOpen(filtered[1].id)} read={progress.readToday.includes(filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
-              <ArticleCard article={filtered[2]} onOpen={()=>onOpen(filtered[2].id)} read={progress.readToday.includes(filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
+              <ArticleCard article={filtered[1]} onOpen={isZh ? null : ()=>onOpen(filtered[1].id)} read={progress.readToday.includes(filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
+              <ArticleCard article={filtered[2]} onOpen={isZh ? null : ()=>onOpen(filtered[2].id)} read={progress.readToday.includes(filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
             </div>
           </div>
         ) : (
@@ -1122,7 +1160,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
             gap:20,
           }}>
             {filtered.map((a, i) => (
-              <ArticleCard key={a.id} article={a} onOpen={()=>onOpen(a.id)} read={progress.readToday.includes(a.id)} pct={_articlePct((progress.articleProgress||{})[a.id])} variant={i===0 && !isArchive ? 'feature' : 'normal'} />
+              <ArticleCard key={a.id} article={a} onOpen={isZh ? null : ()=>onOpen(a.id)} read={progress.readToday.includes(a.id)} pct={_articlePct((progress.articleProgress||{})[a.id])} variant={i===0 && !isArchive ? 'feature' : 'normal'} />
             ))}
           </div>
         )}
@@ -1469,10 +1507,15 @@ function ArticleCard({ article, onOpen, read, pct, variant }) {
   const [hover, setHover] = useStateH(false);
   const isFeature = variant === 'feature';
   const isTall = variant === 'tall-feature';
+  // No `onOpen` callback → render-only mode (used in zh mode where the
+  // detail page doesn't exist). Disable hover lift + click cursor so it
+  // looks like a poster, not a tappable card.
+  const clickable = typeof onOpen === 'function';
   return (
     <button
-      onClick={onOpen}
-      onMouseEnter={()=>setHover(true)}
+      onClick={clickable ? onOpen : undefined}
+      disabled={!clickable}
+      onMouseEnter={()=>clickable && setHover(true)}
       onMouseLeave={()=>setHover(false)}
       style={{
         background:'#fff',
@@ -1480,11 +1523,11 @@ function ArticleCard({ article, onOpen, read, pct, variant }) {
         borderRadius:22,
         padding:0,
         textAlign:'left',
-        cursor:'pointer',
+        cursor: clickable ? 'pointer' : 'default',
         overflow:'hidden',
         position:'relative',
-        transform: hover ? 'translateY(-4px) rotate(-0.3deg)' : 'translateY(0)',
-        boxShadow: hover ? '0 10px 0 rgba(27,18,48,0.08)' : '0 4px 0 rgba(27,18,48,0.06)',
+        transform: clickable && hover ? 'translateY(-4px) rotate(-0.3deg)' : 'translateY(0)',
+        boxShadow: clickable && hover ? '0 10px 0 rgba(27,18,48,0.08)' : '0 4px 0 rgba(27,18,48,0.06)',
         transition:'all .2s cubic-bezier(.3,1.4,.6,1)',
         gridColumn: isFeature ? 'span 2' : 'auto',
         display:'flex',
