@@ -325,7 +325,7 @@ function SourcesTab({ flash, categories }) {
   const [rows, setRows] = useState(null);
   const [draft, setDraft] = useState({
     category:'', name:'', rss_url:'', priority:1, focus:'',
-    active:true, active_weekdays:[],
+    enabled:true, active_weekdays:[],
   });
   const [bulkCat, setBulkCat] = useState('');
 
@@ -343,7 +343,7 @@ function SourcesTab({ flash, categories }) {
       focus: draft.focus || null,
     });
     if (error) flash('err', error.message);
-    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', active:true, active_weekdays:[] }); load(); }
+    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', enabled:true, active_weekdays:[] }); load(); }
   };
 
   const updateRow = async (id, patch) => {
@@ -390,7 +390,7 @@ function SourcesTab({ flash, categories }) {
         </div>
         <div className="row" style={{justifyContent:'space-between', marginTop:12}}>
           <label className="row" style={{gap:6, fontSize:13}}>
-            <input type="checkbox" checked={draft.active} onChange={e=>setDraft({...draft, active:e.target.checked})}/> active
+            <input type="checkbox" checked={draft.enabled} onChange={e=>setDraft({...draft, enabled:e.target.checked})}/> enabled
           </label>
           <button className="btn" onClick={add}>Add source</button>
         </div>
@@ -445,8 +445,8 @@ function SourcesTab({ flash, categories }) {
                 <td><input style={{width:'100%'}} defaultValue={r.focus||''} onBlur={e=>updateRow(r.id, { focus: e.target.value || null })} placeholder="—"/></td>
                 <td><WeekdayPills value={r.active_weekdays} onChange={v=>updateRow(r.id, { active_weekdays: v.length ? v : null })}/></td>
                 <td>
-                  <span className={r.active ? 'pill pill-on' : 'pill pill-off'}>
-                    {r.active ? 'active' : 'disabled'}
+                  <span className={r.enabled ? 'pill pill-on' : 'pill pill-off'}>
+                    {r.enabled ? 'enabled' : 'disabled'}
                   </span>
                 </td>
                 <td><VerifiedBadge iso={r.last_verified_at}/></td>
@@ -454,9 +454,9 @@ function SourcesTab({ flash, categories }) {
                 <td>
                   <span className="row" style={{gap:4, justifyContent:'flex-end'}}>
                     <button className="btn btn-sm btn-ghost"
-                      title={r.active ? 'Disable (keep row)' : 'Enable'}
-                      onClick={()=>updateRow(r.id, { active: !r.active })}>
-                      {r.active ? 'Disable' : 'Enable'}
+                      title={r.enabled ? 'Disable (keep row)' : 'Enable'}
+                      onClick={()=>updateRow(r.id, { enabled: !r.enabled })}>
+                      {r.enabled ? 'Disable' : 'Enable'}
                     </button>
                     <button className="btn btn-sm btn-ghost"
                       title="Copy CLI command to verify this source"
