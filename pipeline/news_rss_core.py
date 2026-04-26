@@ -633,14 +633,11 @@ You will receive N source articles. For EACH, produce THREE variants:
    · Simple but not baby-talk; explain any hard word inline in plain English:
      "a ceasefire (when both sides agree to stop fighting for a while)"
    · Short, punchy sentences; lead with a hook — not a summary
-   · card_summary: 6-9 sentences, MAX 120 words. Shown on the home-page card.
-     Opens with a hook, then covers the WHO / WHAT / WHERE / WHY in plain
-     words — enough that a kid understands the story without clicking. Uses
-     one or two concrete details (names, numbers, places). NOT a restatement
-     of the headline. Ends with punctuation.
-     # TODO(pick-3): tighten this to ≤50 words once we've validated the
-     # pick-3 flow with current 120-word summaries. Frontend currently
-     # truncates client-side to 50 in the pick screen.
+   · card_summary: 2-3 sentences, MAX 50 words. Shown on the home-page card
+     and inside the pick-3 picker. Opens with a hook, covers WHAT happened
+     and to WHOM / WHERE in plain words. Include ONE concrete detail (a
+     name, number, or place). NOT a restatement of the headline. Ends with
+     punctuation. Stay under 50 words — the kid is scanning, not reading.
 
 2. middle_en — English. READER IS A MIDDLE SCHOOLER (grade 7-8, age 12-14).
    · body: 320-350 words (STRICT — if under 320, add MORE vivid details,
@@ -649,13 +646,11 @@ You will receive N source articles. For EACH, produce THREE variants:
      "escalate", "sanction", "controversial", "coalition"); explain inline
      the first time you use a specialized term
    · Mix short impact sentences with longer, complex ones
-   · card_summary: 6-9 sentences, MAX 120 words. Shown on the home-page card.
-     Opens with a hook, covers the WHO / WHAT / WHERE / WHY plus one line on
-     the tension or stakes. Include 2-3 concrete details (names, numbers,
-     places, quotes) so a middle-schooler can grasp the story without
-     clicking. NOT a restatement of the headline. Ends with punctuation.
-     # TODO(pick-3): tighten this to ≤50 words once we've validated the
-     # pick-3 flow with current 120-word summaries.
+   · card_summary: 2-3 sentences, MAX 50 words. Shown on the home-page card
+     and inside the pick-3 picker. Opens with a hook, covers WHAT happened
+     and ONE specific detail (name, number, place, or stake). NOT a
+     restatement of the headline. Ends with punctuation. Stay under 50
+     words — the middle-schooler is scanning, not reading deeply.
 
 3. zh — 简体中文. 摘要卡片 only (no body, no quiz, no keywords).
    · headline: 有意思的中文标题 (可保留 CEO / iPhone / iPad 等专有名词为英文)
@@ -805,7 +800,10 @@ For each of the 2N slots (N articles × {easy, middle}) produce:
   [common to both easy and middle]
   · keywords: 6 {term, explanation} pairs. EVERY term MUST literally appear
     (or as a common inflection — "banned" for "ban", "fined" for "fine") in
-    the corresponding body.
+    the body of THIS SAME slot — do NOT take terms from a neighbouring
+    slot's body. If you cannot find 6 difficulty-appropriate terms in
+    THIS slot's body, return fewer (4 or 5) — never pad with terms from
+    elsewhere. An empty list is acceptable; a misaligned list is NOT.
     DIFFICULTY FILTER:
       easy slot   → only words ABOVE grade-2 vocabulary (words a 10-year-old
                     might not yet know). Skip everyday words like "school",
@@ -892,9 +890,12 @@ ACCURACY: facts in background_read must be real-world accurate. If unsure,
 prefer pattern statements over specific claims.
 
 REFERENCE, don't re-return: keys are "<i>_easy" / "<i>_middle" where i is the
-0-indexed article position. The exact set of keys you should produce is given
-in the user message — produce ONLY those keys, no more, no less. Do NOT echo
-the body text back.
+0-indexed article position. Each article's body is presented in the user
+message under its EXACT slot key (e.g. "SLOT KEY: 0_easy"). Generate fields
+for each key STRICTLY from THAT key's body — never pull material from a
+neighbouring article. The exact set of keys you should produce is given
+in the user message — produce ONLY those keys, no more, no less. Do NOT
+echo the body text back.
 
 Return ONLY valid JSON (no markdown fences):
 {
@@ -1019,7 +1020,12 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
 def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
     """Build an input covering only easy OR only middle slots (one slot per
     article). Smaller payload → less chance of malformed JSON under reasoner
-    load."""
+    load.
+
+    Slot/body alignment is reinforced by repeating the target slot key
+    INSIDE each article block — without this the reasoner has shipped
+    keywords from article N's body into slot key (N+1)_<level>.
+    """
     assert level in ("easy", "middle")
     arts = rewrite_result.get("articles") or []
     n = len(arts)
@@ -1027,17 +1033,30 @@ def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
     lines = [
         f"{n} article{'s' if n != 1 else ''} below. "
         f"Generate detail fields ONLY for the {level} level.",
-        f"REQUIRED keys (produce ONLY these): {expected_keys}",
+        f"REQUIRED output keys (produce ONLY these, in this exact spelling): {expected_keys}",
+        "",
+        "ALIGNMENT RULE: every field you generate for a given slot key MUST",
+        f"come from the body shown under that exact slot key below.  "
+        f"Do NOT shift, swap, or reorder. Keywords ESPECIALLY: every term",
+        f"in slot K_{level}'s `keywords` MUST appear (or as a common",
+        "inflection) in the body labeled K_" + level + ".",
         "",
     ]
     for i, art in enumerate(arts):
         v = art.get(f"{level}_en") or {}
-        lines.append(f"=== Article [id: {i}] ===")
-        lines.append(f"{level}_en headline: {v.get('headline','')}")
-        lines.append(f"{level}_en body ({len((v.get('body') or '').split())} words):")
+        slot = f"{i}_{level}"
+        lines.append(f"=== SLOT KEY: {slot}  (output key in your JSON: \"{slot}\") ===")
+        lines.append(f"Headline: {v.get('headline','')}")
+        lines.append(f"Body for slot {slot} ({len((v.get('body') or '').split())} words) ↓↓↓")
         lines.append((v.get("body") or ""))
+        lines.append(f"↑↑↑ end of body for slot {slot}")
         lines.append("")
-    lines.append(f"Return JSON with exactly {n} slot key{'s' if n != 1 else ''}: {expected_keys}.")
+    lines.append("")
+    lines.append(f"FINAL CHECKLIST before you return — verify each:")
+    lines.append(f"  · output keys are EXACTLY {expected_keys}, no extras, no shifts")
+    lines.append(f"  · for each slot K_{level}, every `keywords[].term` appears (or in")
+    lines.append(f"    common inflected form) in the body labeled K_{level} above")
+    lines.append(f"  · `correct_answer` for each question matches one of `options` literally")
     return "\n".join(lines)
 
 
