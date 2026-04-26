@@ -792,38 +792,27 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
   // the current pool.
   const [picksLock, setPicksLock] = useStateH(() => {
     const s = window.safeStorage?.getJSON('ohye_picks_lock_v1');
-    return (s && s.dayKey && Array.isArray(s.ids)) ? s : { dayKey: null, ids: [], bundleStamp: null };
+    return (s && s.dayKey && Array.isArray(s.ids)) ? s : { dayKey: null, ids: [] };
   });
   useEffectH(() => { window.safeStorage?.setJSON('ohye_picks_lock_v1', picksLock); }, [picksLock]);
   const todayKeyLocal = (new Date()).toDateString();
-  // Bundle stamp = freshest mined_at across the picked articles. Article
-  // IDs are slot-positional (e.g. "2026-04-26-news-2") so they stay
-  // stable when the pipeline re-runs same-day with fresh content. The
-  // mined_at timestamp is what actually changes between runs — using it
-  // as the lock fingerprint forces a re-pick whenever the bundle
-  // refreshes underneath us.
-  const _stampOf = (idArr) => {
-    const stamps = idArr
-      .map(id => displayPool.find(a => a.id === id)?.minedAt || '')
-      .filter(Boolean);
-    if (!stamps.length) return '';
-    return stamps.sort().reverse()[0]; // most recent
-  };
-  const _currentLockedStamp = useMemoH(() => _stampOf(picksLock.ids || []), [picksLock.ids, displayPool]);
-  // Legacy locks (no bundleStamp field) don't fail this check — they
-  // pass through. Only locks created post-fix can invalidate.
-  const _stampStillFresh = !picksLock.bundleStamp || picksLock.bundleStamp === _currentLockedStamp;
+  // Lock the kid's pick for the local calendar day. The slot-positional
+  // IDs (`2026-04-26-news-2`) plus the dayKey + "all ids still in pool"
+  // checks are sufficient to invalidate when the day rolls over OR when
+  // the kid switched level/language. Earlier we also kept a bundleStamp
+  // (freshest mined_at) and invalidated on mined_at drift — but every
+  // republish nudged mined_at and silently forced re-picks across same-
+  // day reloads, so the kid kept landing on the pickup screen. Removed.
   const picksLocked = !isArchive
     && picksLock.dayKey === todayKeyLocal
     && picksLock.ids.length === 3
-    && picksLock.ids.every(id => poolIds.has(id))
-    && _stampStillFresh;
+    && picksLock.ids.every(id => poolIds.has(id));
   const lockPicks = (ids) => {
-    setPicksLock({ dayKey: todayKeyLocal, ids, bundleStamp: _stampOf(ids) });
+    setPicksLock({ dayKey: todayKeyLocal, ids });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const resetPicks = () => {
-    setPicksLock({ dayKey: null, ids: [], bundleStamp: null });
+    setPicksLock({ dayKey: null, ids: [] });
     // Scroll to top so the kid actually SEES the pick screen instead of
     // being mid-page where the daily-3 stack used to be.
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -858,9 +847,7 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     if (picksLocked) {
       setPicksLock(L => {
         const newIds = L.ids.map((id, i) => i === idx ? newId : id);
-        // Re-stamp bundle so _stampStillFresh stays true after swap
-        // (the new article's mined_at may differ slightly).
-        return { ...L, ids: newIds, bundleStamp: _stampOf(newIds) };
+        return { ...L, ids: newIds };
       });
     } else {
       const next = [...activePicks]; next[idx] = newId; setDailyPicks(next);
@@ -1290,7 +1277,18 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
             <span style={{fontSize:11, opacity:0.7, marginLeft:4}}>▾</span>
           </button>
           {recentOpen && (
-            <RecentReadsPopover onClose={()=>setRecentOpen(false)} onOpenArticle={(id)=>{setRecentOpen(false); onOpenArticle(id);}} readIds={(progress&&progress.readToday)||[]}/>
+            <RecentReadsPopover
+              onClose={()=>setRecentOpen(false)}
+              onOpenArticle={(id)=>{setRecentOpen(false); onOpenArticle(id);}}
+              // Source: lifetime readHistory (survives midnight rollovers).
+              // Falls back to readToday for users whose saved state predates
+              // the readHistory field.
+              readIds={
+                (progress && Array.isArray(progress.readHistory) && progress.readHistory.length)
+                  ? progress.readHistory.map(e => (typeof e === 'string' ? e : e?.id)).filter(Boolean)
+                  : ((progress && progress.readToday) || [])
+              }
+            />
           )}
         </div>
 

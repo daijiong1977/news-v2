@@ -108,15 +108,25 @@ function App() {
     const base = {
       readToday: [], minutesToday: 0,
       articleProgress: {},  // { [id]: { steps: ['read','analyze',...], lastTab: 'analyze' } }
+      readHistory: [],      // running list of {id, at} — survives day rollovers
       dayKey: todayKey,
     };
     if (!saved) return base;
 
-    // Day-rollover reset — fire ONLY on an EXPLICIT older dayKey. Pre-
-    // change saves had no dayKey field; treating that as "different
-    // from today" would wipe an active reader's same-day progress on
-    // first load after deploy. Missing dayKey ⇒ stamp it, don't reset.
-    if (saved.dayKey && saved.dayKey !== todayKey) return base;
+    // Day-rollover reset — only wipes "today's counters" (readToday +
+    // minutesToday). articleProgress and readHistory are persistent
+    // history; wiping them stranded the streak popover and re-opened
+    // articles back at tab 1. Pre-change saves had no dayKey field;
+    // treating missing as "different from today" would wipe an active
+    // reader's same-day progress on first load after deploy. Missing
+    // dayKey ⇒ stamp it, don't reset.
+    if (saved.dayKey && saved.dayKey !== todayKey) {
+      return {
+        ...base,
+        articleProgress: saved.articleProgress || {},
+        readHistory: Array.isArray(saved.readHistory) ? saved.readHistory : [],
+      };
+    }
 
     // Legacy migration: articleProgress[id] used to be a single number
     // (0/25/50/75/100). Map those to the new {steps,lastTab} shape so
@@ -180,9 +190,19 @@ function App() {
   useEffect(() => {
     const checkRollover = () => {
       const now = new Date().toDateString();
-      setProgress(p => (p && p.dayKey === now)
-        ? p
-        : { readToday: [], minutesToday: 0, articleProgress: {}, dayKey: now });
+      setProgress(p => {
+        if (!p || p.dayKey === now) return p || { readToday: [], minutesToday: 0, articleProgress: {}, readHistory: [], dayKey: now };
+        // New day: reset today's counters but preserve articleProgress
+        // (per-article reading state) and readHistory (lifetime list of
+        // articles the kid has read). Without this, the streak/recents
+        // popover went empty every midnight.
+        return {
+          readToday: [], minutesToday: 0,
+          articleProgress: p.articleProgress || {},
+          readHistory: Array.isArray(p.readHistory) ? p.readHistory : [],
+          dayKey: now,
+        };
+      });
     };
     document.addEventListener('visibilitychange', checkRollover);
     return () => document.removeEventListener('visibilitychange', checkRollover);

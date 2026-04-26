@@ -139,3 +139,40 @@ Aim is to capture subtle traps that silently produce wrong-looking output (not c
 **Fix.** Verify deploys by **content-grepping** for a string that ONLY exists in the latest version, not by HTTP status code. e.g. `curl https://kidsnews.21mins.com/parent.jsx | grep -c "Email me the full report"`.
 
 **Lesson.** A 200 from `<project>.vercel.app` only means SOMETHING served the request. Always content-check after a deploy if there's any chance of name collision.
+
+## 2026-04-26 · picks-lock + progress wipe at midnight
+
+**Symptom:** users come to kidsnews.21mins.com and (a) every visit
+forces a re-pick of today's 3, (b) the streak/recents popover is
+empty even after reading articles yesterday/earlier today.
+
+**Root causes (two stacked bugs):**
+
+1. The dayKey rollover guard in `index.html` (initial load + visibility
+   change) wiped the entire `progress` object — including `articleProgress`
+   (per-article reading state) and the readToday list. The wipe is
+   correct for "today's counters" but kills the read history that the
+   streak popover sources from.
+2. The picks-lock invalidation in `home.jsx` compared a saved
+   `bundleStamp` (freshest mined_at across picks) against the current
+   pool's mined_at. Every pipeline rerun nudges mined_at, so any
+   republish silently invalidated the kid's lock and forced a re-pick
+   on the next reload.
+
+**Fix:**
+
+- Day rollover preserves `articleProgress` and a new lifetime
+  `readHistory: [{id, at}]` array. Only `readToday` + `minutesToday`
+  reset on midnight.
+- Streak/recents popover sources from `readHistory` (lifetime), falls
+  back to readToday for users on pre-fix saves.
+- `article.jsx` appends to `readHistory` whenever an article is
+  fully completed (idempotent: skip if last entry was the same id).
+- Removed the `bundleStamp` field from the picks-lock entirely.
+  The dayKey + "all ids still in pool" checks are sufficient.
+
+**How to spot the next variant:** if you see the symptom "kid lands on
+pickup screen on a same-day reload despite picking earlier", check the
+saved `ohye_picks_lock_v1` in browser devtools and confirm `dayKey`
+matches today's local toDateString. If picksLock is gone entirely,
+look for a `setPicksLock(...empty...)` path that fires unintentionally.

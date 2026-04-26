@@ -168,6 +168,15 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
       const justFinished = fullyDone && !p.readToday.includes(article.id);
       if (justFinished) {
         next.readToday = [...p.readToday, article.id];
+        // Append to lifetime readHistory (for the streak/recents popover
+        // that survives midnight rollovers). Idempotent: skip if the
+        // last entry was already this id.
+        const hist = Array.isArray(p.readHistory) ? p.readHistory : [];
+        const last = hist[hist.length - 1];
+        const lastId = typeof last === 'string' ? last : last?.id;
+        if (lastId !== article.id) {
+          next.readHistory = [...hist, { id: article.id, at: new Date().toISOString() }];
+        }
       }
       next.articleProgress = { ...ap, [article.id]: newAP };
       next.minutesToday = (p.minutesToday || 0) + weight;
