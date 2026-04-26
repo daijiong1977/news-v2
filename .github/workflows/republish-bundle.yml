@@ -20,6 +20,10 @@ on:
         description: "Also fire repository_dispatch on kidsnews-v2 (needs KIDSNEWS_DISPATCH_TOKEN)"
         type: boolean
         default: true
+      restore_from_date:
+        description: "RECOVERY: copy <YYYY-MM-DD>.zip → latest.zip and exit (no build). Leave blank for normal republish."
+        required: false
+        default: ""
 
 jobs:
   republish:
@@ -36,25 +40,68 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r requirements.txt
 
-      - name: Pack + upload (republish-only mode)
+      - name: Pack + upload (republish OR restore mode)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           PACK_REPUBLISH_ONLY: "1"
+          PACK_RESTORE_FROM_DATE: ${{ inputs.restore_from_date }}
         run: python -m pipeline.pack_and_upload
 
       - name: Trigger kidsnews-v2 sync
+        id: dispatch
         if: inputs.trigger_kidsnews_sync && env.KIDSNEWS_DISPATCH_TOKEN != ''
         env:
           KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
         run: |
+          # Stamp the time we triggered the dispatch — the verify step
+          # below uses this as the lower bound for "is the new sync run
+          # fresher than what we just kicked off?"
+          DISPATCH_AT=$(date -u +%s)
+          echo "dispatch_at=${DISPATCH_AT}" >> "$GITHUB_OUTPUT"
           curl -fsS -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${KIDSNEWS_DISPATCH_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/daijiong1977/kidsnews-v2/dispatches \
             -d '{"event_type":"news-v2-uploaded"}'
-          echo "✓ kidsnews-v2 sync dispatched"
+          echo "✓ kidsnews-v2 sync dispatched at $(date -u -d @${DISPATCH_AT} +%FT%TZ)"
+
+      - name: Verify kidsnews-v2 sync completed with fresh content
+        # Polls the kidsnews-v2 repo's latest commit. It must be:
+        #  · authored AFTER the dispatch fired (so it's the one we kicked off)
+        #  · authored by the sync bot (so it's a real sync commit, not a manual edit)
+        # Fails the workflow if neither condition is met within 90 seconds — better
+        # to surface a stale deploy here than let the parent dashboard look fine
+        # while serving 2-day-old articles.
+        if: inputs.trigger_kidsnews_sync && steps.dispatch.outputs.dispatch_at != ''
+        env:
+          KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+          DISPATCH_AT: ${{ steps.dispatch.outputs.dispatch_at }}
+        run: |
+          set -e
+          for i in $(seq 1 18); do
+            sleep 5
+            COMMIT=$(curl -fsS \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${KIDSNEWS_DISPATCH_TOKEN}" \
+              "https://api.github.com/repos/daijiong1977/kidsnews-v2/commits?per_page=1")
+            COMMIT_ISO=$(echo "$COMMIT" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d[0]['commit']['author']['date'])")
+            COMMIT_AUTHOR=$(echo "$COMMIT" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d[0]['commit']['author']['name'])")
+            COMMIT_AT=$(date -u -d "$COMMIT_ISO" +%s)
+            if [ "$COMMIT_AT" -ge "$DISPATCH_AT" ] && [ "$COMMIT_AUTHOR" = "kidsnews-v2 sync bot" ]; then
+              echo "✓ kidsnews-v2 has a fresh sync commit at $COMMIT_ISO (author: $COMMIT_AUTHOR)"
+              echo "  attempt $i/18 ($((i*5)) seconds after dispatch)"
+              exit 0
+            fi
+            echo "  attempt $i/18: latest commit is $COMMIT_ISO by $COMMIT_AUTHOR — waiting…"
+          done
+          echo "::error::Sync did not produce a fresh kidsnews-v2 commit within 90s. Possible causes:"
+          echo "  · KIDSNEWS_DISPATCH_TOKEN missing 'Actions: write' on kidsnews-v2 (returns 403)"
+          echo "  · kidsnews-v2 sync detected no content change (the 'No content changes' guard)"
+          echo "  · kidsnews-v2 sync workflow itself errored — check its Actions tab"
+          echo "Recovery: re-run this workflow, OR dispatch kidsnews-v2 sync-from-supabase.yml manually."
+          exit 1
 
       - name: Note if dispatch skipped
         if: inputs.trigger_kidsnews_sync && env.KIDSNEWS_DISPATCH_TOKEN == ''

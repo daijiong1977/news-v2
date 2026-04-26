@@ -39,30 +39,47 @@ WEB = ROOT / "website"
 BUCKET = "redesign-daily-content"
 RETENTION_DAYS = 30  # dated archives older than this get deleted
 
-# Allowlist of top-level files/dirs that ship to production.
-# parent.html / parent.jsx / kidsync.js are the parent-dashboard surface
-# (added 2026-04-25). Without them the deploy site has no /parent route.
-INCLUDE_FILES = {"index.html", "article.jsx", "home.jsx", "components.jsx",
-                 "data.jsx", "user-panel.jsx", "admin.html",
-                 "parent.html", "parent.jsx", "kidsync.js",
-                 "tokens.css", "fonts.css"}
-INCLUDE_DIRS = {"payloads", "article_payloads", "article_images", "article_pdfs",
-                "assets", "components"}
+# Allowlist of files/dirs that ship to production. Split into SHELL
+# (HTML/JSX/CSS — the app surface) and CONTENT (payloads + images —
+# the daily-mined data). In republish-only mode, SHELL comes from the
+# news-v2 git repo while CONTENT is taken from the *existing*
+# latest.zip on Supabase Storage — so a republish refreshes the app
+# code without clobbering today's freshly-mined articles.
+SHELL_FILES = {"index.html", "article.jsx", "home.jsx", "components.jsx",
+               "data.jsx", "user-panel.jsx", "admin.html",
+               "parent.html", "parent.jsx", "kidsync.js",
+               "tokens.css", "fonts.css"}
+SHELL_DIRS = {"assets", "components"}
+CONTENT_DIRS = {"payloads", "article_payloads", "article_images", "article_pdfs"}
+
+# Backward-compat aliases (other callers may import these).
+INCLUDE_FILES = SHELL_FILES
+INCLUDE_DIRS = SHELL_DIRS | CONTENT_DIRS
 
 
-def collect_files() -> list[tuple[Path, str]]:
+def collect_files(content_root: Path | None = None) -> list[tuple[Path, str]]:
+    """Pack list. SHELL always comes from WEB; CONTENT comes from
+    `content_root` if given (republish mode), else WEB."""
     out: list[tuple[Path, str]] = []
-    for name in INCLUDE_FILES:
+    for name in SHELL_FILES:
         p = WEB / name
         if p.is_file():
             out.append((p, name))
-    for d in INCLUDE_DIRS:
+    for d in SHELL_DIRS:
         base = WEB / d
         if not base.is_dir():
             continue
         for p in base.rglob("*"):
             if p.is_file() and not p.name.startswith("."):
                 out.append((p, str(p.relative_to(WEB))))
+    croot = content_root if content_root is not None else WEB
+    for d in CONTENT_DIRS:
+        base = croot / d
+        if not base.is_dir():
+            continue
+        for p in base.rglob("*"):
+            if p.is_file() and not p.name.startswith("."):
+                out.append((p, str(p.relative_to(croot))))
     return out
 
 
@@ -180,9 +197,9 @@ def validate_bundle(today: str) -> None:
              len(needed_images))
 
 
-def build_zip() -> bytes:
+def build_zip(content_root: Path | None = None) -> bytes:
     buf = BytesIO()
-    files = collect_files()
+    files = collect_files(content_root=content_root)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for p, arc in files:
             zf.write(p, arcname=arc)
@@ -385,22 +402,80 @@ def check_not_overwriting_newer(sb) -> None:
         log.warning("ALLOW_STALE_UPLOAD=1 set — proceeding despite: %s", msg)
 
 
+def restore_latest_from(sb, date_str: str) -> None:
+    """One-shot recovery: copy <date>.zip → latest.zip (and the manifest).
+    Used when a botched republish or interrupted pipeline left
+    latest.zip pointing at content older than the most recent good
+    pipeline output. Idempotent."""
+    log.info("restore: pulling %s.zip from %s", date_str, BUCKET)
+    zip_blob = sb.storage.from_(BUCKET).download(f"{date_str}.zip")
+    try:
+        manifest_blob = sb.storage.from_(BUCKET).download(f"{date_str}-manifest.json")
+    except Exception:
+        manifest_blob = None
+    sb.storage.from_(BUCKET).upload(
+        path="latest.zip", file=zip_blob,
+        file_options={"content-type": "application/zip", "upsert": "true"},
+    )
+    log.info("restore: uploaded latest.zip <= %s.zip (%d bytes)", date_str, len(zip_blob))
+    if manifest_blob:
+        sb.storage.from_(BUCKET).upload(
+            path="latest-manifest.json", file=manifest_blob,
+            file_options={"content-type": "application/json", "upsert": "true"},
+        )
+        log.info("restore: uploaded latest-manifest.json <= %s-manifest.json", date_str)
+
+
 def main() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    # Republish mode: refresh latest.zip with the CURRENT website/ files
-    # (e.g. after a static-asset change like the parent dashboard) without
-    # re-running the full mining/LLM pipeline. Skips bundle validation
-    # (we're not changing today's content, so today's payloads may not
-    # exist locally), skips the "remote is newer" guard (same article
-    # content, just static assets), and skips dated-flat-files / archive
-    # index updates (no new content to register).
+
+    # Restore mode: short-circuit; just copy a known-good dated zip
+    # to latest.zip and exit. No build, no validation.
+    restore_date = os.environ.get("PACK_RESTORE_FROM_DATE", "").strip()
+    if restore_date:
+        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+        restore_latest_from(sb, restore_date)
+        return
+
+    # Republish mode: refresh latest.zip with the CURRENT shell files
+    # (HTML/JSX/CSS) from this repo while PRESERVING today's article
+    # content from the existing latest.zip on Supabase. Without this
+    # preservation step, a republish would clobber freshly-mined
+    # articles with whatever stale payloads happen to be committed in
+    # git. Skips: bundle validation (today's content lives in remote
+    # zip, not local), "remote is newer" guard (same article content),
+    # and dated-flat-files / archive-index / retention sweep (those
+    # are content-driven, not shell-driven).
     republish = os.environ.get("PACK_REPUBLISH_ONLY") == "1"
-    if not republish:
+    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+    if republish:
+        # Pull current latest.zip and extract CONTENT_DIRS to a temp dir
+        # so build_zip() can read content from there + shell from WEB.
+        import tempfile
+        tmp = tempfile.mkdtemp(prefix="pack_republish_")
+        content_root = Path(tmp)
+        try:
+            blob = sb.storage.from_(BUCKET).download("latest.zip")
+            with zipfile.ZipFile(BytesIO(blob)) as zf:
+                # Only extract CONTENT_DIRS — shell files in the existing
+                # zip are stale by definition (that's why we're republishing).
+                for info in zf.infolist():
+                    top = info.filename.split("/", 1)[0]
+                    if top in CONTENT_DIRS:
+                        zf.extract(info, tmp)
+            log.info("republish: extracted content from existing latest.zip into %s", tmp)
+        except Exception as e:
+            # No remote latest.zip yet (first deploy) → fall back to local.
+            log.warning("republish: could not pull existing latest.zip (%s); falling back to local content", e)
+            content_root = None
+        body = build_zip(content_root=content_root)
+    else:
         validate_bundle(today)
-    body = build_zip()
+        body = build_zip()
+
     manifest = build_manifest(today, body)
     manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
     if not republish:
         check_not_overwriting_newer(sb)
 
