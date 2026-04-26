@@ -746,7 +746,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
   );
 }
 
-function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
+function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
   const isZh = tweaks && tweaks.language === 'zh';
