@@ -176,3 +176,25 @@ pickup screen on a same-day reload despite picking earlier", check the
 saved `ohye_picks_lock_v1` in browser devtools and confirm `dayKey`
 matches today's local toDateString. If picksLock is gone entirely,
 look for a `setPicksLock(...empty...)` path that fires unintentionally.
+
+## 2026-04-26 · streak popover crashes the page on empty state
+
+**Symptom:** clicking 🔥 STREAK on home took the page to "empty site"
+(blank). Reproducible whenever the user has no `readToday` entries —
+which became the common state after the morning's progress-wipe fix
+landed (kids who read yesterday no longer have today's readToday).
+
+**Root cause:** `RecentReadsPopover` is a separate component without
+the parent `goal` variable in scope, but its empty-state copy
+referenced `{goal}` directly. `Uncaught ReferenceError: goal is not
+defined` killed the React tree → blank white page (no boundary above
+the streak button to catch it).
+
+**Fix:** hardcoded "21 min" — the brand promise is fixed at 21, the
+goal-customization wasn't worth threading a prop for one caption.
+`website/home.jsx` line 1331.
+
+**How to spot the next variant:** search RecentReadsPopover (and any
+other popover that lives in its own function component) for free
+references to parent-scope vars: `progress`, `tweaks`, `level`, `cat`.
+Each must come in via props.
