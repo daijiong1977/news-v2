@@ -387,7 +387,9 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress }) {
         )}
 
         {detailReady && tab === 'discuss' && (
-          <DiscussTab article={article} paragraphs={paragraphs} onDone={()=>{ bumpStep('discuss'); onComplete(); }} />
+          <DiscussTab article={article} paragraphs={paragraphs}
+            onSavedFinal={()=>bumpStep('discuss')}
+            onDone={()=>{ bumpStep('discuss'); onComplete(); }} />
         )}
       </div>
 
@@ -1029,7 +1031,7 @@ function RoundCompare({ round, n, total, defaultOpen = true }) {
   );
 }
 
-function DiscussTab({ article, paragraphs, onDone }) {
+function DiscussTab({ article, paragraphs, onDone, onSavedFinal }) {
   // Restore iteration history for THIS article — survives reloads.
   // Shape: { rounds: [{userText, aiResult, at}], currentDraft, savedFinal }
   const draftKey = `ohye_response_${article.storyId}_${article.level || 'unk'}`;
@@ -1061,7 +1063,25 @@ function DiscussTab({ article, paragraphs, onDone }) {
   const pickReaction = (r) => {
     setReaction(r);
     KidStats.setReaction(article.storyId || article.id, article.level, r);
+    // Picking a reaction is also a natural "I'm done thinking" signal —
+    // credit the discuss step so the article shows 100% even if the
+    // kid never clicks the explicit "✓ All done →" button.
+    if (typeof onSavedFinal === 'function') onSavedFinal();
   };
+
+  // Auto-credit 'discuss' the moment the kid saves their final answer.
+  // Without this the article sticks at 75% (read+analyze+quiz=3/4 steps)
+  // because most kids save final + react + leave instead of clicking the
+  // "✓ All done →" button. Idempotent — bumpStep already no-ops if the
+  // step is in the list.
+  const _savedFinalFiredRef = useRefA(false);
+  useEffectA(() => {
+    if (savedFinal && !_savedFinalFiredRef.current) {
+      _savedFinalFiredRef.current = true;
+      if (typeof onSavedFinal === 'function') onSavedFinal();
+    }
+    if (!savedFinal) _savedFinalFiredRef.current = false;
+  }, [savedFinal]);
 
   const wordCount = countWords(currentDraft);
   const meetsMin = wordCount >= MIN_WORDS;
