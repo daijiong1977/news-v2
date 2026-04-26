@@ -22,7 +22,7 @@
     sbPromise = new Promise(function (resolve) {
       if (window.supabase && window.supabase.createClient) {
         resolve(window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
         }));
         return;
       }
@@ -32,7 +32,7 @@
       s.onload = function () {
         try {
           resolve(window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+            auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
           }));
         } catch (e) { resolve(null); }
       };
