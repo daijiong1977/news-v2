@@ -161,7 +161,23 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
 
       const newSteps = [...curSteps, stageId];
       const fullyDone = STEP_IDS.every(s => newSteps.includes(s));
-      const newAP = { ...cur, steps: newSteps };
+      // Snapshot the small set of fields the Continue-reading rail needs
+      // to render an article card without hitting ARTICLES (which is
+      // swapped out when the kid is on today's bundle). Only set on the
+      // first write — preserves whatever the original day stamped.
+      const dateMatch = article.id.match(/^(\d{4}-\d{2}-\d{2})/);
+      const newAP = {
+        ...cur,
+        steps: newSteps,
+        lastTab: stageId,
+        lastTouchedAt: new Date().toISOString(),
+        title: cur.title || article.title || '',
+        category: cur.category || article.category || '',
+        level: cur.level || article.level || '',
+        imageURL: cur.imageURL || article.image || '',
+        readMins: cur.readMins || article.readMins || 7,
+        archiveDate: cur.archiveDate || (dateMatch ? dateMatch[1] : null),
+      };
       const weight = STEP_WEIGHTS[stageId] || 1;
 
       const next = { ...p };

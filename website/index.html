@@ -69,6 +69,21 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "xp": 0
 }/*EDITMODE-END*/;
 
+// Drop articleProgress entries whose date prefix is older than 10 days.
+// Keeps the kid's continue-reading rail useful without unbounded growth
+// across long-term use. Date is the YYYY-MM-DD prefix on the article id.
+function pruneArticleProgress(ap) {
+  const out = {};
+  const cutoff = Date.now() - 10 * 24 * 60 * 60 * 1000;
+  for (const [id, v] of Object.entries(ap || {})) {
+    const m = id.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!m) { out[id] = v; continue; }
+    const ts = new Date(m[1] + 'T00:00:00').getTime();
+    if (Number.isFinite(ts) && ts >= cutoff) out[id] = v;
+  }
+  return out;
+}
+
 function App() {
   // All localStorage access goes through window.safeStorage (defined in
   // data.jsx) so private-mode / quota-exhausted browsers degrade gracefully
@@ -123,7 +138,7 @@ function App() {
     if (saved.dayKey && saved.dayKey !== todayKey) {
       return {
         ...base,
-        articleProgress: saved.articleProgress || {},
+        articleProgress: pruneArticleProgress(saved.articleProgress || {}),
         readHistory: Array.isArray(saved.readHistory) ? saved.readHistory : [],
       };
     }
@@ -147,7 +162,7 @@ function App() {
         };
       }
     }
-    return { ...base, ...saved, articleProgress: ap, dayKey: todayKey };
+    return { ...base, ...saved, articleProgress: pruneArticleProgress(ap), dayKey: todayKey };
   });
 
   const [tweaks, setTweaks] = useState(() => {
@@ -198,7 +213,7 @@ function App() {
         // popover went empty every midnight.
         return {
           readToday: [], minutesToday: 0,
-          articleProgress: p.articleProgress || {},
+          articleProgress: pruneArticleProgress(p.articleProgress || {}),
           readHistory: Array.isArray(p.readHistory) ? p.readHistory : [],
           dayKey: now,
         };
@@ -282,6 +297,23 @@ function App() {
         <HomePage
           onOpen={onOpen}
           onOpenArchive={(d)=>{ setArchiveDay(d); setCat('All'); window.scrollTo({top:0}); }}
+          onResume={async (item)=>{
+            // Continue-reading: open an article from a past day. Swap to
+            // the right archive bundle FIRST so window.ARTICLES has the
+            // listing the article reader does its lookup against, then
+            // route to the article. Without the await the reader opens
+            // before ARTICLES swaps and falls back to a stub view.
+            if (!item || !item.id) return;
+            try {
+              if (item.archiveDate && typeof window.loadArchive === 'function') {
+                await window.loadArchive(item.archiveDate);
+              }
+              setArchiveDay(item.archiveDate || null);
+              setRoute({ page:'article', articleId: item.id });
+            } catch (e) {
+              console.warn('[resume] failed to load archive', item.archiveDate, e);
+            }
+          }}
           archiveDay={archiveDay}
           level={level} setLevel={setLevel}
           cat={cat} setCat={setCat}

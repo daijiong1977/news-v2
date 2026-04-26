@@ -746,7 +746,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
   );
 }
 
-function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
+function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
   const isZh = tweaks && tweaks.language === 'zh';
@@ -1280,6 +1280,11 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
             <RecentReadsPopover
               onClose={()=>setRecentOpen(false)}
               onOpenArticle={(id)=>{setRecentOpen(false); onOpenArticle(id);}}
+              onResumeItem={(item)=>{
+                setRecentOpen(false);
+                if (typeof onResume === 'function') onResume(item);
+                else if (typeof onOpenArticle === 'function') onOpenArticle(item.id);
+              }}
               // Source: lifetime readHistory (survives midnight rollovers).
               // Falls back to readToday for users whose saved state predates
               // the readHistory field.
@@ -1287,6 +1292,27 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
                 (progress && Array.isArray(progress.readHistory) && progress.readHistory.length)
                   ? progress.readHistory.map(e => (typeof e === 'string' ? e : e?.id)).filter(Boolean)
                   : ((progress && progress.readToday) || [])
+              }
+              // In-progress = articleProgress entries with steps.length > 0
+              // and < 4. Sort newest first; the snapshot fields rendered by
+              // the popover come from articleProgress directly so we don't
+              // need ARTICLES to be on the right day.
+              inProgress={
+                Object.entries((progress && progress.articleProgress) || {})
+                  .filter(([id, v]) => v && Array.isArray(v.steps) && v.steps.length > 0 && v.steps.length < 4)
+                  .map(([id, v]) => ({
+                    id,
+                    title: v.title || id,
+                    category: v.category || 'News',
+                    level: v.level || 'Tree',
+                    imageURL: v.imageURL || '',
+                    readMins: v.readMins || 7,
+                    archiveDate: v.archiveDate || (id.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || null),
+                    percent: Math.round((v.steps.length / 4) * 100),
+                    lastTouchedAt: v.lastTouchedAt || '',
+                  }))
+                  .sort((a, b) => (b.lastTouchedAt || '').localeCompare(a.lastTouchedAt || ''))
+                  .slice(0, 10)
               }
             />
           )}
@@ -1304,7 +1330,7 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
 function _HeaderOldContentRemoved() { return null; }
 
 // ——————————— RECENT READS POPOVER ———————————
-function RecentReadsPopover({ onClose, onOpenArticle, readIds }) {
+function RecentReadsPopover({ onClose, onOpenArticle, onResumeItem, readIds, inProgress }) {
   // Take most recent 15 articles the user has read (from readIds, in order)
   const recent = [];
   const seen = new Set();
@@ -1314,6 +1340,7 @@ function RecentReadsPopover({ onClose, onOpenArticle, readIds }) {
     const a = ARTICLES.find(x => x.id === id);
     if (a) { recent.push(a); seen.add(id); }
   }
+  const continueItems = Array.isArray(inProgress) ? inProgress : [];
   return (
     <>
       <div onClick={onClose} style={{position:'fixed', inset:0, zIndex:40}}/>
@@ -1322,6 +1349,34 @@ function RecentReadsPopover({ onClose, onOpenArticle, readIds }) {
         background:'#fff', borderRadius:18, border:'2px solid #1b1230', boxShadow:'0 10px 0 rgba(27,18,48,0.15)',
         padding:14, maxHeight:440, overflow:'auto',
       }}>
+        {/* ——— Continue reading (in-progress, last 10 days) ——— */}
+        {continueItems.length > 0 && (
+          <div style={{marginBottom:14}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8}}>
+              <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>📖 Continue reading</div>
+              <div style={{fontSize:11, color:'#9a8d7a', fontWeight:700}}>{continueItems.length}</div>
+            </div>
+            {continueItems.map(it => {
+              const catColor = CATEGORIES.find(c => c.label === it.category)?.color || '#1b1230';
+              return (
+                <button key={it.id} onClick={()=>onResumeItem && onResumeItem(it)} style={{
+                  display:'flex', gap:10, alignItems:'center', width:'100%', textAlign:'left',
+                  background:'transparent', border:'none', padding:'8px 6px', borderRadius:10, cursor:'pointer',
+                  borderBottom:'1px dashed #f0e8d8',
+                }} onMouseEnter={e=>e.currentTarget.style.background='#fff9ef'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <div style={{width:8, height:32, borderRadius:4, background: catColor, flexShrink:0}}/>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontWeight:800, fontSize:13, color:'#1b1230', lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{it.title}</div>
+                    <div style={{fontSize:11, color:'#6b5c80', fontWeight:600, marginTop:2}}>
+                      {it.archiveDate || ''} · {it.percent}% done
+                    </div>
+                  </div>
+                  <div style={{fontSize:11, color:catColor, fontWeight:800, flexShrink:0}}>Resume →</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10}}>
           <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>🔥 Recently read</div>
           <div style={{fontSize:11, color:'#9a8d7a', fontWeight:700}}>Last {recent.length}</div>
