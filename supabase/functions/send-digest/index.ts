@@ -29,6 +29,14 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+// CORS — the parent dashboard calls this from the browser via the
+// "Send me a copy now" button. send-email-v2 uses the same pattern.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function pct(n: number, d: number) { return d ? Math.round((n / d) * 100) : 0; }
@@ -193,8 +201,15 @@ async function buildAndSend(parent: Parent): Promise<{ ok: boolean; reason?: str
 // ── HTTP entrypoint ─────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  // Browser preflight — must return CORS headers and 204 (or 200) before
+  // the actual POST is allowed.
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (!SUPABASE_URL || !SERVICE_KEY) {
-    return new Response(JSON.stringify({ error: "Missing SUPABASE_URL/SERVICE_ROLE_KEY" }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Missing SUPABASE_URL/SERVICE_ROLE_KEY" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   // Accept tuning knobs via query OR JSON body (cron uses body).
@@ -214,7 +229,9 @@ Deno.serve(async (req) => {
     .neq("digest_cadence", "off");
   if (qEmail) q = q.eq("email", qEmail);
   const { data: parents, error } = await q;
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (error) return new Response(JSON.stringify({ error: error.message }), {
+    status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
   // ?force=1 bypasses the "is_due" cadence check (e.g. for manual test
   // sends from the dashboard). Cadence='off' is still excluded — never
@@ -239,6 +256,6 @@ Deno.serve(async (req) => {
     skipped: results.filter(r => !r.ok).length,
     results,
   }, null, 2), {
-    headers: { "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
