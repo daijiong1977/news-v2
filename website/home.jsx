@@ -270,7 +270,7 @@ function PickCard({ story, picked, variant, onSelect }) {
       marginBottom: variant === 'feature' ? 10 : 8,
     }}>
       <span style={{fontSize: variant === 'feature' ? 14 : 13}}>{c.emoji}</span>
-      {story.category} · {story.readMins} min
+      {story.category}
     </div>
   );
 
@@ -792,20 +792,38 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
   // the current pool.
   const [picksLock, setPicksLock] = useStateH(() => {
     const s = window.safeStorage?.getJSON('ohye_picks_lock_v1');
-    return (s && s.dayKey && Array.isArray(s.ids)) ? s : { dayKey: null, ids: [] };
+    return (s && s.dayKey && Array.isArray(s.ids)) ? s : { dayKey: null, ids: [], bundleStamp: null };
   });
   useEffectH(() => { window.safeStorage?.setJSON('ohye_picks_lock_v1', picksLock); }, [picksLock]);
   const todayKeyLocal = (new Date()).toDateString();
+  // Bundle stamp = freshest mined_at across the picked articles. Article
+  // IDs are slot-positional (e.g. "2026-04-26-news-2") so they stay
+  // stable when the pipeline re-runs same-day with fresh content. The
+  // mined_at timestamp is what actually changes between runs — using it
+  // as the lock fingerprint forces a re-pick whenever the bundle
+  // refreshes underneath us.
+  const _stampOf = (idArr) => {
+    const stamps = idArr
+      .map(id => displayPool.find(a => a.id === id)?.minedAt || '')
+      .filter(Boolean);
+    if (!stamps.length) return '';
+    return stamps.sort().reverse()[0]; // most recent
+  };
+  const _currentLockedStamp = useMemoH(() => _stampOf(picksLock.ids || []), [picksLock.ids, displayPool]);
+  // Legacy locks (no bundleStamp field) don't fail this check — they
+  // pass through. Only locks created post-fix can invalidate.
+  const _stampStillFresh = !picksLock.bundleStamp || picksLock.bundleStamp === _currentLockedStamp;
   const picksLocked = !isArchive
     && picksLock.dayKey === todayKeyLocal
     && picksLock.ids.length === 3
-    && picksLock.ids.every(id => poolIds.has(id));
+    && picksLock.ids.every(id => poolIds.has(id))
+    && _stampStillFresh;
   const lockPicks = (ids) => {
-    setPicksLock({ dayKey: todayKeyLocal, ids });
+    setPicksLock({ dayKey: todayKeyLocal, ids, bundleStamp: _stampOf(ids) });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const resetPicks = () => {
-    setPicksLock({ dayKey: null, ids: [] });
+    setPicksLock({ dayKey: null, ids: [], bundleStamp: null });
     // Scroll to top so the kid actually SEES the pick screen instead of
     // being mid-page where the daily-3 stack used to be.
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -926,7 +944,9 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
       <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} />
 
       {/* ——————————— TODAY'S PROGRESS BANNER (only when picks are locked) ——————————— */}
-      {!isArchive && picksLocked && (
+      {/* Chinese mode is summary-only — pick-3 ritual is skipped, so
+          there's nothing for the sticky progress banner to track. */}
+      {!isArchive && picksLocked && !isZh && (
         <TodayBanner
           daily3={daily3}
           progress={progress}
@@ -1070,7 +1090,10 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
                       </div>
                       <div style={{
                         fontSize:16, color:'#3a2a4a', lineHeight:1.5,
-                        display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:4, overflow:'hidden',
+                        // 6-line clamp — card_summary is server-side-bounded
+                        // to ≤50 words, which fits in 5-6 lines at this
+                        // size. 4 lines was cutting trailing punctuation.
+                        display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:6, overflow:'hidden',
                       }}>
                         {_shortHook(a.summary, 60)}
                       </div>
