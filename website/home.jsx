@@ -1178,10 +1178,15 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
         </section>
       )}
 
-      {/* ——————————— TODAY'S PICK BANNER (hidden in archive) ———————————
+      {/* ——————————— TODAY'S PICK BANNER (hidden in archive + zh) ———————————
           Single column, full-width. Title row on top, 3 cards stacked
-          full-width below. Greeting moved to the sticky TodayBanner. */}
-      {!isArchive && (
+          full-width below. Greeting moved to the sticky TodayBanner.
+          Chinese mode is summary-only audit (no pick-3 ritual, no
+          "open the article reader" interaction), so the whole banner
+          is hidden — kid/parent in zh mode just browses category cards
+          below. The pickup-route gate + sticky-TodayBanner check `!isZh`
+          for the same reason; this third surface was missed. */}
+      {!isArchive && !isZh && (
       <section style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 0'}}>
         <div style={{
           background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
