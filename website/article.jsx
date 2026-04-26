@@ -683,19 +683,19 @@ function KeywordCard({ kw, idx, expanded, onToggle }) {
           display:'flex', alignItems:'center', gap:8,
           outline:'none',
         }}>
-        <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:16, color: expanded ? '#fff' : palette.c, flex:1}}>{kw.term}</div>
+        <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:19, color: expanded ? '#fff' : palette.c, flex:1}}>{kw.term}</div>
         <button onClick={onSpeak}
           title="Read this word aloud"
           aria-label={"Read aloud: " + kw.term}
           style={{
             all:'unset', cursor:'pointer',
-            width:28, height:28, borderRadius:999,
+            width:32, height:32, borderRadius:999,
             display:'flex', alignItems:'center', justifyContent:'center',
             background: expanded ? 'rgba(255,255,255,0.2)' : 'rgba(27,18,48,0.06)',
-            fontSize:14,
+            fontSize:16,
           }}>🔊</button>
       </div>
-      {expanded && <div style={{fontSize:12, lineHeight:1.4, marginTop:6}}>{kw.def}</div>}
+      {expanded && <div style={{fontSize:15, lineHeight:1.5, marginTop:8}}>{kw.def}</div>}
       {!expanded && <div style={{fontSize:11, fontWeight:700, opacity:.65, marginTop:4}}>Tap to reveal →</div>}
     </div>
   );
