@@ -215,9 +215,15 @@ def _keyword_in_body(term: str, body: str) -> bool:
 
 
 def _scrub_detail_payload_bytes(b: bytes) -> bytes:
-    """Drop keywords whose term doesn't appear in the payload body.
-    Returns a re-serialized JSON bytes object. Never throws — on any
-    parsing problem we return the input unchanged."""
+    """Filter keywords down to the ones that are useful to a kid:
+      1. Term must appear (suffix-aware) in the body — no hallucinations.
+      2. Term must have a non-empty `explanation` — without a definition
+         there's nothing to show on hover/click, so the highlight is
+         dead weight (and often a noise word like "Imagine"/"you're"
+         from the Python deterministic-extract fallback).
+
+    Returns re-serialized JSON bytes. Never throws — on any parse
+    problem we return the input unchanged."""
     try:
         d = json.loads(b)
     except Exception:
@@ -228,15 +234,25 @@ def _scrub_detail_payload_bytes(b: bytes) -> bytes:
     kws = d.get("keywords") or []
     if not isinstance(kws, list):
         return b
-    kept, dropped = [], []
+    kept, dropped_no_match, dropped_no_def = [], [], []
     for k in kws:
-        if isinstance(k, dict) and _keyword_in_body((k.get("term") or "").strip(), body):
-            kept.append(k)
-        elif isinstance(k, dict):
-            dropped.append(k.get("term"))
-    if dropped:
+        if not isinstance(k, dict):
+            continue
+        term = (k.get("term") or "").strip()
+        defn = (k.get("explanation") or "").strip()
+        if not _keyword_in_body(term, body):
+            dropped_no_match.append(term)
+            continue
+        if not defn:
+            dropped_no_def.append(term)
+            continue
+        kept.append(k)
+    if dropped_no_match:
         log.warning("    scrub: dropped %d hallucinated keywords (kept %d): %s",
-                    len(dropped), len(kept), dropped[:8])
+                    len(dropped_no_match), len(kept), dropped_no_match[:8])
+    if dropped_no_def:
+        log.warning("    scrub: dropped %d definition-less keywords (kept %d): %s",
+                    len(dropped_no_def), len(kept), dropped_no_def[:8])
     d["keywords"] = kept
     return json.dumps(d, ensure_ascii=False).encode()
 
