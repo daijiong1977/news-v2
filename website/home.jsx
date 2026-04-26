@@ -849,37 +849,17 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     : ((dailyPicks && dailyPicks.every(id => poolIds.has(id))) ? dailyPicks : defaultPicks);
   useEffectH(() => { window.safeStorage?.setJSON('ohye_daily_picks_v3', activePicks); }, [activePicks]);
   const swapPick = (idx, newId) => {
-    const oldId = activePicks[idx];
-    // Reset the OUTGOING article's progress — it's no longer one of
-    // today's picks, so showing "50%" on the home page is misleading.
-    // Also drop it from readToday in case the user somehow finished it
-    // and is now swapping (rare; the swap button is hidden for done
-    // articles, but defensive).
-    if (oldId && oldId !== newId) {
-      setProgress(p => {
-        const ap = { ...(p.articleProgress || {}) };
-        if (ap[oldId]) delete ap[oldId];
-        const minutesDelta = (p.articleProgress && p.articleProgress[oldId])
-          ? -((p.articleProgress[oldId].steps || []).length * 1)  // weight ≈ 1 per step
-          : 0;
-        return {
-          ...p,
-          articleProgress: ap,
-          readToday: (p.readToday || []).filter(id => id !== oldId),
-          minutesToday: Math.max(0, (p.minutesToday || 0) + minutesDelta),
-        };
-      });
-    }
-    // Update the right state slot. When picksLocked, activePicks comes
-    // from picksLock.ids — without updating that, the swap "succeeds"
-    // but the locked stack snaps back to the old id on next render.
-    // Also refresh bundleStamp: the new article's mined_at may differ
-    // from the rest of the locked set, and without re-stamping, the
-    // _stampStillFresh check would invalidate the lock and bounce the
-    // kid back to the pick screen mid-swap.
+    // Swap is a view-only change: progress.articleProgress is keyed by
+    // article id, so the outgoing article's % naturally hides (it's no
+    // longer in daily3) and reappears unchanged if the kid swaps back.
+    // No setProgress mutation here — minutesToday + readToday continue
+    // to reflect what the kid actually did, regardless of which slots
+    // are currently shown.
     if (picksLocked) {
       setPicksLock(L => {
         const newIds = L.ids.map((id, i) => i === idx ? newId : id);
+        // Re-stamp bundle so _stampStillFresh stays true after swap
+        // (the new article's mined_at may differ slightly).
         return { ...L, ids: newIds, bundleStamp: _stampOf(newIds) };
       });
     } else {
