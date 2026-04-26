@@ -118,6 +118,9 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
   const [lang, setLang] = useStateH(tweaks?.language || 'en');
   const [signingIn, setSigningIn] = useStateH(false);
   const [signInErr, setSignInErr] = useStateH(null);
+  const [magicEmailOpen, setMagicEmailOpen] = useStateH(false);
+  const [magicEmail, setMagicEmail] = useStateH('');
+  const [magicSentTo, setMagicSentTo] = useStateH(null);
 
   const ready = name.trim().length > 0;
 
@@ -155,6 +158,32 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
       // Page redirects to Google; nothing else to do here.
     } catch (e) {
       setSignInErr(e.message || String(e));
+      setSigningIn(false);
+    }
+  };
+
+  // Magic-link path. We persist the profile so when the kid clicks the
+  // link from their email and lands back on this URL, index.html's
+  // boot consumes the magic token + binds email→client_id, and the
+  // onboarding gate is already past (userName is set).
+  const saveAndSendMagic = async () => {
+    if (!ready) return;
+    const cleaned = (magicEmail || '').trim().toLowerCase();
+    if (!cleaned || cleaned.indexOf('@') < 1) {
+      setSignInErr('Please type a valid email.');
+      return;
+    }
+    persistProfile();
+    setSigningIn(true); setSignInErr(null);
+    try {
+      if (!window.kidsync || !window.kidsync.requestMagicLink) {
+        throw new Error('Email sign-in not available on this device.');
+      }
+      await window.kidsync.requestMagicLink(cleaned);
+      setMagicSentTo(cleaned);
+    } catch (e) {
+      setSignInErr(e.message || String(e));
+    } finally {
       setSigningIn(false);
     }
   };
@@ -322,6 +351,56 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
             <span style={{fontSize:18}}>🇬</span>
             {signingIn ? 'Redirecting…' : 'Sign in with Google · recommended'}
           </button>
+
+          {/* Magic-link alternative for kids/parents without Google. Tap
+              "or use email" to expand a small inline form. After "Send
+              link" the kid sees a confirmation + can close the tab and
+              continue from the email's link on any device. */}
+          {!magicEmailOpen && !magicSentTo && (
+            <button onClick={() => setMagicEmailOpen(true)} style={{
+              width:'100%', marginTop:8,
+              background:'transparent', color:'#3a2a4a',
+              border:'1.5px solid #e8dfd3', borderRadius:14, padding:'10px',
+              fontFamily:'Nunito, sans-serif', fontWeight:700, fontSize:13,
+              cursor:'pointer',
+            }}>📧 or use email instead (no Google account)</button>
+          )}
+          {magicEmailOpen && !magicSentTo && (
+            <div style={{marginTop:8}}>
+              <input
+                type="email" inputMode="email" autoComplete="email"
+                placeholder="you@example.com"
+                value={magicEmail}
+                onChange={e => setMagicEmail(e.target.value)}
+                style={{
+                  width:'100%', boxSizing:'border-box',
+                  fontFamily:'Nunito, sans-serif', fontWeight:700, fontSize:14,
+                  padding:'10px 12px', borderRadius:12, border:'2px solid #1b1230',
+                  background:'#fff', color:'#1b1230', outline:'none',
+                }}
+              />
+              <button onClick={saveAndSendMagic} disabled={!ready || signingIn || !magicEmail.includes('@')} style={{
+                width:'100%', marginTop:8,
+                background: (ready && magicEmail.includes('@') && !signingIn) ? '#1b1230' : '#e8dfd3',
+                color: (ready && magicEmail.includes('@') && !signingIn) ? '#ffc83d' : '#9a8d7a',
+                border:'none', borderRadius:12, padding:'10px',
+                fontFamily:'Nunito, sans-serif', fontWeight:900, fontSize:14,
+                cursor: (ready && magicEmail.includes('@') && !signingIn) ? 'pointer' : 'not-allowed',
+              }}>
+                {signingIn ? 'Sending…' : '📧 Send me a magic link'}
+              </button>
+            </div>
+          )}
+          {magicSentTo && (
+            <div style={{marginTop:10, padding:'10px 12px', borderRadius:12, background:'#e0f6f3', border:'1.5px solid #17b3a6'}}>
+              <div style={{display:'flex', alignItems:'center', gap:6, color:'#0e8d82', fontWeight:800, fontSize:13}}>
+                <span>✓</span> Sent to {magicSentTo}
+              </div>
+              <div style={{fontSize:12, color:'#3a2a4a', marginTop:4, lineHeight:1.4}}>
+                Open your email and tap the link. (Check spam if it doesn't appear in a minute.) Expires in 30 minutes.
+              </div>
+            </div>
+          )}
           {signInErr && (
             <div style={{marginTop:8, fontSize:12, color:'#b22525'}}>{signInErr}</div>
           )}

@@ -242,7 +242,28 @@ function App() {
     const hash = window.location.hash || '';
     const search = window.location.search || '';
     const looksLikeOAuthBounce = /access_token=|code=|state=/.test(hash + search);
+    // Magic-link landing — `?magic=<token>` from the email link. We
+    // consume + rewrite client_id BEFORE the OAuth check so the two
+    // can't fight if a user somehow combines them. Then strip ?magic=
+    // so refreshes don't re-attempt consumption.
+    const magicMatch = search.match(/[?&]magic=([^&]+)/);
     (async () => {
+      try {
+        if (magicMatch && window.kidsync && typeof window.kidsync.consumeMagicLink === 'function') {
+          const token = decodeURIComponent(magicMatch[1]);
+          const r = await window.kidsync.consumeMagicLink(token);
+          // Strip the param either way — invalid tokens shouldn't keep retrying.
+          try {
+            const clean = window.location.pathname + window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
+            history.replaceState(null, '', clean.endsWith('?') ? clean.slice(0, -1) : clean);
+          } catch (e) {}
+          if (r && r.ok) {
+            console.log('[boot] magic link consumed');
+          } else if (r && r.error) {
+            console.warn('[boot] magic link rejected:', r.error);
+          }
+        }
+      } catch (e) { console.warn('[boot] consumeMagicLink failed', e); }
       try {
         if (looksLikeOAuthBounce && window.kidsync && typeof window.kidsync.linkCurrentSession === 'function') {
           const r = await window.kidsync.linkCurrentSession();

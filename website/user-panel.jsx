@@ -112,8 +112,10 @@ function IdentityExpander() {
   // without an extra tap. Gmail-signed-in users get it collapsed since
   // the green checkmark says "you're already covered."
   const [open, setOpen] = useStateU(true);
-  const [mode, setMode] = useStateU(null);           // 'code' | 'google' | null
+  const [mode, setMode] = useStateU(null);           // 'code' | 'google' | 'email' | null
   const [codeInput, setCodeInput] = useStateU('');
+  const [emailInput, setEmailInput] = useStateU('');
+  const [emailSentTo, setEmailSentTo] = useStateU(null);
   const [busy, setBusy] = useStateU(false);
   const [err, setErr] = useStateU(null);
   const [showCode, setShowCode] = useStateU(null);   // 6-digit code if user hits "share my code"
@@ -167,6 +169,22 @@ function IdentityExpander() {
       // Page will redirect; nothing else to do here.
     } catch (e) {
       setErr(e.message || String(e));
+      setBusy(false);
+    }
+  };
+
+  const sendMagicLink = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const cleaned = (emailInput || '').trim().toLowerCase();
+      if (!cleaned || cleaned.indexOf('@') < 1) {
+        throw new Error('Please type a valid email address.');
+      }
+      await window.kidsync.requestMagicLink(cleaned);
+      setEmailSentTo(cleaned);
+    } catch (e) {
+      setErr(e.message || String(e));
+    } finally {
       setBusy(false);
     }
   };
@@ -252,6 +270,9 @@ function IdentityExpander() {
                   <button onClick={() => setMode('google')} style={kidBtnStyle(false, true)}>
                     🇬  Sign in with Google · recommended
                   </button>
+                  <button onClick={() => setMode('email')} style={{...kidBtnStyle(false), marginTop:8}}>
+                    📧  Send me a magic link by email
+                  </button>
                   <button onClick={() => setMode('code')} style={{...kidBtnStyle(false), marginTop:8}}>
                     🔢  I already have a 6-digit code
                   </button>
@@ -282,6 +303,50 @@ function IdentityExpander() {
                     🇬 Continue with Google
                   </button>
                   <button onClick={() => { setMode(null); setErr(null); }} style={{marginTop:8, ...kidLinkStyle}}>← back</button>
+                </div>
+              )}
+              {mode === 'email' && (
+                <div>
+                  {!emailSentTo ? (
+                    <>
+                      <div style={{marginBottom:10}}>
+                        Type any email — we'll send a one-tap sign-in link. No password.
+                      </div>
+                      <input
+                        type="email" autoComplete="email" inputMode="email"
+                        placeholder="you@example.com"
+                        value={emailInput}
+                        onChange={e => setEmailInput(e.target.value)}
+                        style={{
+                          width:'100%', boxSizing:'border-box',
+                          fontFamily:'Nunito, sans-serif', fontWeight:700, fontSize:14,
+                          padding:'10px 12px', borderRadius:12, border:'2px solid #1b1230',
+                          background:'#fff', color:'#1b1230', outline:'none',
+                        }}
+                      />
+                      <button onClick={sendMagicLink} disabled={busy || !emailInput.includes('@')} style={{
+                        ...kidBtnStyle(busy || !emailInput.includes('@'), true),
+                        marginTop:8,
+                        opacity: emailInput.includes('@') ? 1 : 0.5,
+                      }}>
+                        {busy ? 'Sending…' : '📧 Send me a magic link'}
+                      </button>
+                    </>
+                  ) : (
+                    <div>
+                      <div style={{display:'flex', alignItems:'center', gap:8, color:'#0e8d82', fontWeight:800, marginBottom:6}}>
+                        <span style={{fontSize:18}}>✓</span>
+                        <span>Sent to {emailSentTo}</span>
+                      </div>
+                      <div style={{fontSize:12, color:'#3a2a4a', lineHeight:1.5}}>
+                        Open your email and tap the link. It expires in 30 minutes. (Check spam if you don't see it within a minute.)
+                      </div>
+                      <button onClick={() => { setEmailSentTo(null); setEmailInput(''); }} style={{marginTop:10, ...kidLinkStyle}}>
+                        ↻ Send to a different email
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => { setMode(null); setErr(null); setEmailInput(''); setEmailSentTo(null); }} style={{marginTop:10, ...kidLinkStyle}}>← back</button>
                 </div>
               )}
               {mode === 'code' && (
