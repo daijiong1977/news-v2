@@ -197,12 +197,66 @@ def validate_bundle(today: str) -> None:
              len(needed_images))
 
 
+# Suffix-aware keyword match — same pattern the UI uses to decide which
+# tokens to highlight, so we only ship keywords the highlight pass will
+# actually find. Without this, an LLM glitch (off-by-one across articles,
+# hallucinated terms, level-mismatch) ships highlight-targets that don't
+# exist in the body — which is what readers see as "all the keywords are
+# not in the article."
+_KEYWORD_SUFFIX_RE = r"(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers|ion|ions)?"
+
+
+def _keyword_in_body(term: str, body: str) -> bool:
+    if not term or not body:
+        return False
+    import re
+    pattern = rf"\b{re.escape(term)}{_KEYWORD_SUFFIX_RE}\b"
+    return bool(re.search(pattern, body, flags=re.IGNORECASE))
+
+
+def _scrub_detail_payload_bytes(b: bytes) -> bytes:
+    """Drop keywords whose term doesn't appear in the payload body.
+    Returns a re-serialized JSON bytes object. Never throws — on any
+    parsing problem we return the input unchanged."""
+    try:
+        d = json.loads(b)
+    except Exception:
+        return b
+    if not isinstance(d, dict):
+        return b
+    body = d.get("summary") or ""
+    kws = d.get("keywords") or []
+    if not isinstance(kws, list):
+        return b
+    kept, dropped = [], []
+    for k in kws:
+        if isinstance(k, dict) and _keyword_in_body((k.get("term") or "").strip(), body):
+            kept.append(k)
+        elif isinstance(k, dict):
+            dropped.append(k.get("term"))
+    if dropped:
+        log.warning("    scrub: dropped %d hallucinated keywords (kept %d): %s",
+                    len(dropped), len(kept), dropped[:8])
+    d["keywords"] = kept
+    return json.dumps(d, ensure_ascii=False).encode()
+
+
 def build_zip(content_root: Path | None = None) -> bytes:
     buf = BytesIO()
     files = collect_files(content_root=content_root)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for p, arc in files:
-            zf.write(p, arcname=arc)
+            # Detail payload? Scrub keywords against the body before
+            # the bytes go into the zip. Belt-and-suspenders against
+            # any upstream filter_keywords miss.
+            if arc.startswith("article_payloads/") and arc.endswith((".json",)) and (
+                arc.endswith("/easy.json") or arc.endswith("/middle.json")
+            ):
+                raw = p.read_bytes()
+                cleaned = _scrub_detail_payload_bytes(raw)
+                zf.writestr(arc, cleaned)
+            else:
+                zf.write(p, arcname=arc)
     log.info("Packed %d files (%d bytes)", len(files), buf.tell())
     return buf.getvalue()
 
