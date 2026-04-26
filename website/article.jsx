@@ -838,10 +838,52 @@ function WRow({ label, emoji, value }) {
 }
 
 // ——————— QUIZ TAB (split view with article reference) ———————
+// Deterministic shuffle source — a small seeded RNG so each retry
+// reshuffles consistently within that attempt (no flicker on re-render).
+function _mulberry32(seed) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns, quizShow, setQuizShow, onFinish }) {
-  const q = article.quiz[quizIdx];
-  const done = quizAns.length === article.quiz.length && quizAns.every(a => a !== undefined);
-  const correct = quizAns.filter((a,i) => a === article.quiz[i].a).length;
+  // Retry counter — bumps each time the kid taps "🔁 Try again". The
+  // first attempt (retryCount=0) keeps the LLM's original order; from
+  // attempt 1 onward we deterministically shuffle BOTH the question
+  // sequence AND each question's option sequence so re-takes don't
+  // turn into "I just remember A→C→B from last time".
+  const [retryCount, setRetryCount] = useStateA(0);
+  const quiz = useMemoA(() => {
+    if (retryCount === 0 || !article.quiz || article.quiz.length === 0) {
+      return article.quiz || [];
+    }
+    const rand = _mulberry32(retryCount * 9301 + article.quiz.length * 49297);
+    // Shuffle question order (Fisher-Yates). Track original index to
+    // remap the correct-answer pointer later.
+    const qs = article.quiz.map((q) => ({ ...q }));
+    for (let i = qs.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [qs[i], qs[j]] = [qs[j], qs[i]];
+    }
+    // Shuffle each question's options + remap `a` to the new index.
+    return qs.map((q) => {
+      const correctText = (q.options || [])[q.a];
+      const opts = (q.options || []).slice();
+      for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [opts[i], opts[j]] = [opts[j], opts[i]];
+      }
+      const newA = opts.indexOf(correctText);
+      return { ...q, options: opts, a: newA >= 0 ? newA : 0 };
+    });
+  }, [article.quiz, retryCount]);
+
+  const q = quiz[quizIdx];
+  const done = quizAns.length === quiz.length && quizAns.every(a => a !== undefined);
+  const correct = quizAns.filter((a, i) => a === quiz[i].a).length;
   const catColor = getCatColor(article.category);
 
   // Track when this attempt started so we can stamp duration_ms on log.
@@ -859,7 +901,7 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
       _logged.current = true;
       KidStats.logQuizAttempt(
         article.storyId || article.id, article.level,
-        quizAns, correct, article.quiz.length,
+        quizAns, correct, quiz.length,
         Date.now() - (_quizStartRef.current || Date.now())
       );
     }
@@ -871,17 +913,23 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
       <div style={{background:'#fff', borderRadius:22, padding:'44px', border:'2px solid #f0e8d8', textAlign:'center', maxWidth:560, margin:'0 auto'}}>
         <div style={{fontSize:64, marginBottom:8}}>🎉</div>
         <h2 style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:36, color:'#1b1230', margin:'0 0 6px'}}>
-          {correct === article.quiz.length ? 'Perfect!' : correct >= article.quiz.length/2 ? 'Nice work!' : 'Good try!'}
+          {correct === quiz.length ? 'Perfect!' : correct >= quiz.length/2 ? 'Nice work!' : 'Good try!'}
         </h2>
         <p style={{fontSize:16, color:'#6b5c80', margin:'0 0 18px'}}>
-          You got <b>{correct}</b> out of <b>{article.quiz.length}</b> right.
+          You got <b>{correct}</b> out of <b>{quiz.length}</b> right.
         </p>
-        <div style={{marginBottom:20}}><StarMeter filled={correct} total={article.quiz.length}/></div>
+        <div style={{marginBottom:20}}><StarMeter filled={correct} total={quiz.length}/></div>
         <div style={{display:'inline-flex', gap:10, padding:'10px 16px', background:'#fff4c2', borderRadius:14, marginBottom:28}}>
           <span style={{fontWeight:800, color:'#8a6d00'}}>⭐ +{article.xp} XP earned!</span>
         </div>
         <div style={{display:'flex', justifyContent:'center', gap:12}}>
-          <BigButton bg="#fff" color="#1b1230" onClick={()=>{ setQuizAns([]); setQuizIdx(0); setQuizShow(false);}} style={{boxShadow:'0 4px 0 rgba(0,0,0,0.08)', border:'2px solid #f0e8d8'}}>🔁 Try again</BigButton>
+          <BigButton bg="#fff" color="#1b1230" onClick={()=>{
+            // Bumping retryCount reshuffles questions + options via the
+            // useMemo above, so a re-take isn't a "remember the order"
+            // exercise. Reset all quiz state along with it.
+            setRetryCount(c => c + 1);
+            setQuizAns([]); setQuizIdx(0); setQuizShow(false);
+          }} style={{boxShadow:'0 4px 0 rgba(0,0,0,0.08)', border:'2px solid #f0e8d8'}}>🔁 Try again</BigButton>
           <BigButton bg="#17b3a6" color="#fff" onClick={onFinish}>Next: Think time →</BigButton>
         </div>
       </div>
@@ -912,10 +960,10 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
             <div style={{fontSize:24}}>🎯</div>
             <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:20, color:'#1b1230', margin:0}}>Quick quiz</h2>
           </div>
-          <div style={{fontSize:13, fontWeight:800, color:'#6b5c80'}}>Q {quizIdx+1}/{article.quiz.length}</div>
+          <div style={{fontSize:13, fontWeight:800, color:'#6b5c80'}}>Q {quizIdx+1}/{quiz.length}</div>
         </div>
         <div style={{height:8, background:'#f0e8d8', borderRadius:999, marginBottom:22, overflow:'hidden'}}>
-          <div style={{height:'100%', width:`${(quizIdx/article.quiz.length)*100}%`, background:'#17b3a6', borderRadius:999, transition:'width .4s'}}/>
+          <div style={{height:'100%', width:`${(quizIdx/quiz.length)*100}%`, background:'#17b3a6', borderRadius:999, transition:'width .4s'}}/>
         </div>
 
         <h3 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:22, color:'#1b1230', marginBottom:18, lineHeight:1.25}}>{q.q}</h3>
@@ -951,7 +999,7 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
         {quizShow && (
           <div style={{marginTop:18, display:'flex', justifyContent:'flex-end'}}>
             <BigButton bg="#ffc83d" color="#1b1230" onClick={()=>{ setQuizShow(false); setQuizIdx(quizIdx+1); }}>
-              {quizIdx+1 < article.quiz.length ? 'Next question →' : 'See results →'}
+              {quizIdx+1 < quiz.length ? 'Next question →' : 'See results →'}
             </BigButton>
           </div>
         )}
