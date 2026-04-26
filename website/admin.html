@@ -391,11 +391,12 @@ function SourcesTab({ flash, categories }) {
           <input value={draft.rss_url} onChange={e=>setDraft({...draft, rss_url:e.target.value})} placeholder="https://…/feed.rss"/>
         </div>
         <div className="row" style={{gap:14, marginTop:10, alignItems:'center'}}>
-          <label className="row" style={{gap:6, fontSize:13}}>
+          <label className="row" style={{gap:6, fontSize:13}}
+            title="full = pipeline scrapes the article URL for the body (use this 99% of the time, including for any new source). light = pipeline trusts the RSS &lt;description&gt; field as the full body — only set this if the feed already includes the article text inline.">
             <span className="label" style={{margin:0}}>Flow</span>
             <select value={draft.flow} onChange={e=>setDraft({...draft, flow:e.target.value})}>
-              <option value="full">full (article body)</option>
-              <option value="light">light (summary only)</option>
+              <option value="full">full — scrape article page (default)</option>
+              <option value="light">light — trust RSS body</option>
             </select>
           </label>
           <label className="row" style={{gap:6, fontSize:13}}>
