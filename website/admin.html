@@ -484,52 +484,160 @@ function SourcesTab({ flash, categories }) {
   );
 }
 
-// Modal that explains both ways to run the Verify pipeline (local CLI
-// or GitHub Actions cloud) and provides one-click access to each.
+// Modal that runs the Verify pipeline via the verify-source edge fn,
+// shows a progress bar while the GitHub Actions run completes, and
+// embeds the resulting HTML preview when it lands.
 function VerifyModal({ target, label, onClose }) {
-  const cmd = verifyCmdFor(target);
   const param = verifyTargetParam(target);
-  const [copyState, setCopyState] = useState('idle');
-  const onCopy = async () => {
-    const ok = await copyToClipboard(cmd);
-    setCopyState(ok ? 'ok' : 'fail');
-    setTimeout(()=>setCopyState('idle'), 2000);
+  const cmd = verifyCmdFor(target);
+  const [phase, setPhase] = React.useState('idle');     // idle|dispatching|running|done|error
+  const [run, setRun] = React.useState(null);           // {run_id, html_url, started_at}
+  const [previewUrl, setPreviewUrl] = React.useState(null);
+  const [errMsg, setErrMsg] = React.useState(null);
+  const [elapsed, setElapsed] = React.useState(0);
+  const startRef = React.useRef(0);
+  const pollRef = React.useRef(null);
+
+  const tick = () => {
+    if (startRef.current) setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
   };
+
+  const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+
+  const callEdge = async (body) => {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Sign in first.');
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/verify-source`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+    return j;
+  };
+
+  const runVerify = async () => {
+    setPhase('dispatching'); setErrMsg(null); setPreviewUrl(null);
+    startRef.current = Date.now(); setElapsed(0);
+    const tickerId = setInterval(tick, 500);
+    try {
+      const dispatched = await callEdge({ action: 'dispatch', target: param });
+      setRun(dispatched);
+      setPhase('running');
+      pollRef.current = setInterval(async () => {
+        try {
+          const s = await callEdge({ action: 'status', run_id: dispatched.run_id, target: param });
+          if (s.status === 'completed') {
+            stopPoll();
+            clearInterval(tickerId);
+            if (s.conclusion === 'success') {
+              setPreviewUrl(s.html_preview_url);
+              setPhase('done');
+            } else {
+              setErrMsg(`Workflow ${s.conclusion}. Open run ↗ to inspect.`);
+              setPhase('error');
+            }
+          }
+        } catch (e) {
+          stopPoll(); clearInterval(tickerId);
+          setErrMsg(String(e.message || e));
+          setPhase('error');
+        }
+      }, 3000);
+    } catch (e) {
+      clearInterval(tickerId);
+      setErrMsg(String(e.message || e));
+      setPhase('error');
+    }
+  };
+
+  React.useEffect(() => () => stopPoll(), []);
+
+  const isBusy = phase === 'dispatching' || phase === 'running';
+
   return (
-    <div onClick={onClose} style={{
+    <div onClick={isBusy ? undefined : onClose} style={{
       position:'fixed', inset:0, background:'rgba(27,18,48,0.55)', zIndex:50,
       display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+      overflowY:'auto',
     }}>
-      <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:560, width:'100%'}}>
+      <div onClick={e=>e.stopPropagation()} className="card" style={{
+        maxWidth: previewUrl ? 1000 : 560, width:'100%', maxHeight:'90vh', overflowY:'auto',
+      }}>
         <div className="row" style={{justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
           <h3 style={{margin:0}}>Verify <span style={{color:'#9061f9'}}>{label}</span></h3>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
-        </div>
-        <p style={{fontSize:13, color:'#6b5c80', lineHeight:1.5, margin:'0 0 18px'}}>
-          Verify pulls 3 latest articles + og:image from this RSS feed and renders an HTML preview using
-          the canonical pipeline (so it matches what the daily run produces).
-          On success it stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span>.
-        </p>
-
-        <div className="card" style={{background:'#fff9ef', border:'2px solid #f0e8d8', marginBottom:14}}>
-          <div className="label" style={{marginBottom:6}}>☁️ Cloud — GitHub Actions (recommended)</div>
-          <p style={{fontSize:13, color:'#1b1230', lineHeight:1.5, margin:'0 0 10px'}}>
-            Click the link, then in <b>Run workflow</b> set <b>target</b> to:
-            <span className="pre" style={{padding:'2px 6px', marginLeft:6, fontWeight:700}}>{param}</span>
-          </p>
-          <a href={VERIFY_WORKFLOW_URL} target="_blank" rel="noopener"
-             className="btn" style={{textDecoration:'none', display:'inline-block'}}>
-            Open verify-source.yml ↗
-          </a>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={isBusy} title={isBusy ? 'Wait for run to finish' : ''}>✕</button>
         </div>
 
-        <div className="card" style={{background:'#fff', border:'2px solid #f0e8d8'}}>
-          <div className="label" style={{marginBottom:6}}>💻 Local — copy &amp; paste in your terminal</div>
-          <div className="pre" style={{padding:'8px 10px', fontSize:12.5, marginBottom:10, userSelect:'all'}}>{cmd}</div>
-          <button className="btn btn-sm" onClick={onCopy}>
-            {copyState === 'ok' ? '✓ Copied' : copyState === 'fail' ? '✗ Copy failed — select text manually' : 'Copy command'}
-          </button>
-        </div>
+        {phase === 'idle' && (
+          <>
+            <p style={{fontSize:13, color:'#6b5c80', lineHeight:1.5, margin:'0 0 14px'}}>
+              Pulls the latest 3 articles + og:image from this feed and renders an HTML preview using the
+              canonical pipeline. Stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span> on success.
+              Runs on GitHub Actions; takes ~1-2 minutes.
+            </p>
+            <div className="row" style={{gap:10, marginBottom:14}}>
+              <button className="btn" onClick={runVerify}>☁️ Run verify now</button>
+            </div>
+            <details style={{marginTop:8}}>
+              <summary style={{fontSize:12, color:'#6b5c80', cursor:'pointer'}}>Or run locally</summary>
+              <div className="pre" style={{padding:'8px 10px', fontSize:12.5, marginTop:8, userSelect:'all'}}>{cmd}</div>
+            </details>
+          </>
+        )}
+
+        {(phase === 'dispatching' || phase === 'running') && (
+          <div>
+            <div style={{fontSize:13, color:'#1b1230', marginBottom:10, fontWeight:600}}>
+              {phase === 'dispatching' ? 'Dispatching workflow…' : `Running on GitHub Actions… ${elapsed}s`}
+            </div>
+            <div style={{height:8, background:'#f0e8d8', borderRadius:999, overflow:'hidden', marginBottom:10}}>
+              <div style={{
+                height:'100%',
+                width: `${Math.min(95, 5 + elapsed * 0.8)}%`,
+                background:'linear-gradient(90deg, #9061f9, #ff6ba0)',
+                borderRadius:999,
+                transition:'width .3s',
+              }}/>
+            </div>
+            {run && (
+              <div style={{fontSize:12, color:'#6b5c80'}}>
+                <a href={run.html_url} target="_blank" rel="noopener" style={{color:'#1f5fd1'}}>Open run ↗</a>
+                {' · '}poll every 3s · usually 60-90s
+              </div>
+            )}
+          </div>
+        )}
+
+        {phase === 'done' && previewUrl && (
+          <>
+            <div style={{display:'flex', gap:10, alignItems:'center', marginBottom:10}}>
+              <span className="pill pill-on" style={{background:'#d4f3ef', color:'#0e8d82'}}>✓ Success in {elapsed}s</span>
+              <a href={previewUrl} target="_blank" rel="noopener" style={{fontSize:12, color:'#1f5fd1'}}>Open in new tab ↗</a>
+              {run && <a href={run.html_url} target="_blank" rel="noopener" style={{fontSize:12, color:'#9a8d7a'}}>GH run ↗</a>}
+            </div>
+            <iframe src={previewUrl} title="Verify preview"
+              style={{width:'100%', height:'70vh', border:'1px solid #f0e8d8', borderRadius:8, background:'#fff'}}/>
+          </>
+        )}
+
+        {phase === 'done' && !previewUrl && (
+          <div className="err" style={{marginTop:10}}>
+            Run completed but no preview HTML found in Supabase Storage. {run && <a href={run.html_url} target="_blank" rel="noopener">Open run ↗</a>} for the artifact.
+          </div>
+        )}
+
+        {phase === 'error' && (
+          <div className="err" style={{marginTop:10}}>
+            <b>Verify failed.</b> {errMsg}
+            {run && <> · <a href={run.html_url} target="_blank" rel="noopener">Open run ↗</a></>}
+            <div style={{marginTop:10}}>
+              <button className="btn btn-sm" onClick={runVerify}>↻ Retry</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
