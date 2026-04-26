@@ -1328,7 +1328,7 @@ function RecentReadsPopover({ onClose, onOpenArticle, readIds }) {
         </div>
         {recent.length === 0 ? (
           <div style={{padding:'24px 8px', textAlign:'center', color:'#9a8d7a', fontSize:13}}>
-            You haven't read anything yet today. Start your {goal} min!
+            You haven't read anything yet today. Start your 21 min!
           </div>
         ) : recent.map(a => {
           const catColor = CATEGORIES.find(c => c.label === a.category)?.color || '#1b1230';
