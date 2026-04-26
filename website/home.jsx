@@ -873,8 +873,15 @@ function HomePage({ onOpen, onOpenArchive, level, setLevel, cat, setCat, progres
     // Update the right state slot. When picksLocked, activePicks comes
     // from picksLock.ids — without updating that, the swap "succeeds"
     // but the locked stack snaps back to the old id on next render.
+    // Also refresh bundleStamp: the new article's mined_at may differ
+    // from the rest of the locked set, and without re-stamping, the
+    // _stampStillFresh check would invalidate the lock and bounce the
+    // kid back to the pick screen mid-swap.
     if (picksLocked) {
-      setPicksLock(L => ({ ...L, ids: L.ids.map((id, i) => i === idx ? newId : id) }));
+      setPicksLock(L => {
+        const newIds = L.ids.map((id, i) => i === idx ? newId : id);
+        return { ...L, ids: newIds, bundleStamp: _stampOf(newIds) };
+      });
     } else {
       const next = [...activePicks]; next[idx] = newId; setDailyPicks(next);
     }
