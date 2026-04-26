@@ -966,6 +966,81 @@ function PairingCodeInput({ onLinked }) {
   );
 }
 
+// "Email recovery code" — issues a 24-hour recovery code for the
+// currently-selected kid and emails it to the signed-in parent. The
+// kid types the code on their (cache-cleared / new-browser) device,
+// where it claims the kid's existing client_id back. This is the
+// fallback for kids who never signed in with Gmail themselves —
+// parent's Gmail becomes the durable identity anchor.
+function RecoveryCodeButton({ session, selectedKid }) {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null); // null | 'ok' | err string
+  if (!selectedKid) return null;
+  const send = async () => {
+    if (!sb || !session?.user?.email) return;
+    setBusy(true); setStatus(null);
+    try {
+      const codeRes = await sb.rpc('generate_parent_recovery_code', { p_client_id: selectedKid.client_id });
+      if (codeRes.error) throw new Error(codeRes.error.message);
+      const code = codeRes.data;
+      if (!code) throw new Error('No code returned');
+      const kidName = selectedKid.display_name || 'your kid';
+      const subject = `kidsnews · recovery code for ${kidName}`;
+      const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#fff9ef;padding:24px;color:#1b1230;">
+        <h2 style="font-family:Georgia,serif;margin:0 0 12px;">Recovery code for ${kidName}</h2>
+        <p style="font-size:14px;color:#3a2a4a;line-height:1.5;">
+          On the device where ${kidName} wants to use kidsnews, open the profile panel and choose
+          <strong>I have a 6-digit code</strong>, then enter:
+        </p>
+        <div style="font-family:Georgia,serif;font-weight:900;font-size:42px;letter-spacing:.2em;background:#fff;padding:18px 24px;border:2.5px solid #1b1230;border-radius:18px;display:inline-block;margin:14px 0;">
+          ${code}
+        </div>
+        <p style="font-size:12px;color:#9a8d7a;line-height:1.5;">
+          This code is single-use and expires in 24 hours. After ${kidName} claims it, all
+          their reading streak and history come back. If they sign in with Google during
+          this session, they won't need a recovery code next time.
+        </p>
+      </div>`;
+      const text = `Recovery code for ${kidName}: ${code}\n\nThis code is single-use and expires in 24 hours.`;
+      const res = await fetch(SUPABASE_URL + '/functions/v1/send-email-v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to_email: session.user.email,
+          subject, html, message: text,
+          from_name: 'kidsnews',
+        }),
+      });
+      const data = await res.json();
+      if (data && data.success) setStatus('ok');
+      else setStatus((data && data.error) || `send-email-v2 ${res.status}`);
+    } catch (e) {
+      setStatus(e.message || String(e));
+    }
+    setBusy(false);
+    setTimeout(() => setStatus(null), 8000);
+  };
+  return (
+    <div style={{ marginTop: 8, fontSize: 12 }}>
+      <button onClick={send} disabled={busy} style={{
+        background: '#fff', color: '#1b1230',
+        border: '1.5px solid #f0e8d8', borderRadius: 999,
+        padding: '5px 12px', fontWeight: 800, fontSize: 12,
+        cursor: busy ? 'wait' : 'pointer',
+        fontFamily: 'Nunito, sans-serif',
+      }}>
+        📧 {busy ? 'Sending…' : `Email recovery code for ${selectedKid.display_name || 'kid'}`}
+      </button>
+      {status === 'ok' && (
+        <span style={{ marginLeft: 10, color: '#0e8d82', fontWeight: 700 }}>✓ Sent — check {session.user.email}</span>
+      )}
+      {status && status !== 'ok' && (
+        <span style={{ marginLeft: 10, color: '#b22525', fontWeight: 700 }}>⚠ {status}</span>
+      )}
+    </div>
+  );
+}
+
 function CloudBanner({ session, kids, signIn, signOut, source, setSource, selectedKidId, setSelectedKidId, refreshKids, parentRow, stats }) {
   if (!session) {
     return (
@@ -1021,6 +1096,10 @@ function CloudBanner({ session, kids, signIn, signOut, source, setSource, select
           </div>
         )}
         <PairingCodeInput onLinked={() => refreshKids && refreshKids()}/>
+        <RecoveryCodeButton
+          session={session}
+          selectedKid={kids.find(k => k.client_id === selectedKidId) || kids[0]}
+        />
         <DigestCadenceToggle parentRow={parentRow} session={session} stats={stats} onChanged={() => refreshKids && refreshKids()}/>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
