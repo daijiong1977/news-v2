@@ -281,6 +281,7 @@ function collectStats(dayFilter) {
   ).length;
 
   return {
+    __source: 'local',
     tweaks, progress, clientId,
     availableDays, dayFilter: dayFilter || null,
     articleStats, discussionList, wrongAnswers,
@@ -362,63 +363,185 @@ function useKids(session) {
   return { kids, loading, error, refresh, parentRow };
 }
 
-// Build a digest HTML email from the local-mode stats (the same shape
-// `collectStats()` returns). Used by the "Send me a copy now" button so
-// it works on devices where the kid is NOT linked to a cloud parent
-// account — which is most of them.
-function buildLocalDigestHtml(stats) {
+// Build a SELF-CONTAINED digest HTML email mirroring every section the
+// dashboard renders. The parent reads this from any inbox without going
+// back to the dashboard — important because the parent may not be signed
+// in (or even on the same device) when they open the email.
+function buildDigestHtml(stats, opts) {
+  opts = opts || {};
+  const sourceLabel = opts.sourceLabel || 'This device';
   const tw = stats.tweaks || {};
-  const cat = (c) => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:#f5f0e8;color:#1b1230;">${c || '—'}</span>`;
+  const E = (s) => String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const fmtMs = (ms) => {
     if (!ms || ms < 1000) return '—';
     const sec = Math.round(ms / 1000);
     if (sec < 60) return sec + 's';
     const min = Math.floor(sec / 60);
-    return min < 60 ? min + 'm' : Math.floor(min / 60) + 'h ' + (min % 60) + 'm';
+    if (min < 60) return (sec % 60) ? min + 'm ' + (sec % 60) + 's' : min + 'm';
+    return Math.floor(min / 60) + 'h ' + (min % 60) + 'm';
   };
-  const escape = (s) => String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  const articleRows = stats.articleStats.slice(0, 10).map(a => {
-    const stepIcons = ['read','analyze','quiz','discuss']
-      .map(s => a.steps.includes(s) ? '✓' : '·').join(' ');
-    const quizBit = a.lastQuiz ? `<b>${a.lastQuiz.correct}/${a.lastQuiz.total}</b>` : '—';
+  const fmtRel = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso); if (isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+  const cat = (c) => {
+    const cl = (CATEGORY_COLORS && CATEGORY_COLORS[c]) || { color: '#1b1230', bg: '#f5f0e8', emoji: '·' };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${cl.bg};color:${cl.color};">${cl.emoji} ${E(c) || '—'}</span>`;
+  };
+  const reactionLabel = (r) => {
+    const m = REACTION_LABELS && REACTION_LABELS[r];
+    return m ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${m.bg};color:${m.color};">${m.emoji} ${m.label}</span>` : '';
+  };
+  const tile = (n, label) =>
+    `<td style="background:#fff9ef;border:1px solid #f0e8d8;border-radius:8px;padding:12px;text-align:center;width:25%;"><div style="font-family:Georgia,serif;font-size:26px;font-weight:900;color:#1b1230;line-height:1;">${n}</div><div style="font-size:11px;color:#6b5c80;text-transform:uppercase;letter-spacing:.06em;margin-top:4px;">${label}</div></td>`;
+  const h2 = (s) =>
+    `<h2 style="font-family:Georgia,serif;color:#1b1230;font-size:18px;margin:26px 0 10px;border-bottom:2px solid #f0e8d8;padding-bottom:6px;">${s}</h2>`;
+  const h3 = (s) =>
+    `<h3 style="font-family:Georgia,serif;color:#1b1230;font-size:14px;margin:14px 0 6px;color:#6b5c80;text-transform:uppercase;letter-spacing:.06em;">${s}</h3>`;
+
+  // ── Articles list (full detail per article) ───────────────────────
+  const articleBlocks = stats.articleStats.map((a) => {
+    const stepBadge = (id, label) => {
+      const done = a.steps.includes(id);
+      return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${done?'#d4f3ef':'#f5f0e8'};color:${done?'#0e8d82':'#9a8d7a'};margin-right:6px;">${done?'✅':'·'} ${label}</span>`;
+    };
+    let quizDetail = '';
+    if (a.lastQuiz && a.quizDef && a.quizDef.length) {
+      const rows = a.lastQuiz.picks.map((pick, i) => {
+        if (i >= a.quizDef.length) return '';
+        const q = a.quizDef[i];
+        const right = pick === q.a;
+        return `<tr><td style="padding:6px 8px;border-bottom:1px dotted #f0e8d8;font-size:12.5px;color:#1b1230;">
+          <b>${i+1}. ${E(q.q)}</b><br>
+          <span style="color:${right?'#0e8d82':'#b22525'};">${right?'✓':'✗'} Picked: <i>${E(q.options[pick] || '(blank)')}</i></span>
+          ${right ? '' : `<br><span style="color:#0e8d82;">✓ Correct: <b>${E(q.options[q.a])}</b></span>`}
+        </td></tr>`;
+      }).join('');
+      quizDetail = `<div style="margin-top:8px;background:#fff9ef;border:1px solid #f0e8d8;border-radius:8px;padding:8px 10px;">
+        <div style="font-size:11px;color:#6b5c80;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Last quiz · ${a.lastQuiz.correct}/${a.lastQuiz.total}${a.lastQuiz.durationMs?` · ${fmtMs(a.lastQuiz.durationMs)}`:''}${a.quizAttempts.length>1?` · ${a.quizAttempts.length} attempts`:''}</div>
+        <table style="width:100%;border-collapse:collapse;">${rows}</table>
+      </div>`;
+    }
+    let discussDetail = '';
+    if (a.discussion && a.discussion.rounds && a.discussion.rounds.length) {
+      const rounds = a.discussion.rounds.map((r, i) =>
+        `<div style="margin-top:6px;padding:8px 10px;background:#fff;border:1px solid #f0e8d8;border-radius:6px;font-size:12.5px;line-height:1.5;color:#1b1230;white-space:pre-wrap;">
+          <span style="color:#6b5c80;font-weight:700;font-size:11px;">Round ${i+1} · ${fmtRel(r.at)}</span><br>
+          ${E(r.userText)}
+        </div>`).join('');
+      const finalBlock = a.discussion.savedFinal && a.discussion.currentDraft
+        ? `<div style="margin-top:6px;padding:8px 10px;background:#d6f3ed;border:1.5px solid #17b3a6;border-radius:6px;font-size:12.5px;line-height:1.5;color:#1b1230;white-space:pre-wrap;">
+            <span style="color:#0e8d82;font-weight:800;font-size:11px;">⭐ Final saved</span><br>
+            ${E(a.discussion.currentDraft)}
+          </div>` : '';
+      discussDetail = `<div style="margin-top:8px;background:#fff9ef;border:1px solid #f0e8d8;border-radius:8px;padding:8px 10px;">
+        <div style="font-size:11px;color:#6b5c80;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Discussion · ${a.discussion.rounds.length} round${a.discussion.rounds.length===1?'':'s'}${a.discussion.savedFinal?' · ⭐ saved as final':''}</div>
+        ${finalBlock}${rounds}
+      </div>`;
+    }
+    return `<div style="background:#fff;border:1px solid #f0e8d8;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+      <div style="font-family:Georgia,serif;font-weight:900;font-size:15px;color:#1b1230;line-height:1.3;margin-bottom:6px;">${E(a.title)}</div>
+      <div style="margin-bottom:8px;">${cat(a.category)} ${a.level?`<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:#fff4c2;color:#8a6d00;margin-left:4px;">${E(a.level)}</span>`:''} <span style="color:#9a8d7a;font-size:11px;margin-left:6px;">${fmtMs(a.timeMs)} reading time</span></div>
+      <div style="margin-bottom:6px;">
+        ${stepBadge('read','Read')}${stepBadge('analyze','Background')}${stepBadge('quiz','Quiz')}${stepBadge('discuss','Discussion')}
+        ${a.reaction?reactionLabel(a.reaction):''}
+      </div>
+      ${quizDetail}
+      ${discussDetail}
+    </div>`;
+  }).join('');
+
+  // ── Quiz performance — totals + by-category bars + recent wrong ──
+  const catRows = Object.entries(stats.catStats || {}).map(([c, s]) => {
+    const right = s.total ? Math.round((s.correct / s.total) * 100) : 0;
+    const wrong = 100 - right;
     return `<tr>
-      <td style="padding:8px 6px;border-bottom:1px dashed #f0e8d8;font-size:13px;">${escape(a.title.slice(0, 70))}${a.title.length>70?'…':''}<br><span style="color:#9a8d7a;font-size:11px;">${cat(a.category)} · steps: ${stepIcons} · quiz ${quizBit} · ${fmtMs(a.timeMs)}</span></td>
+      <td style="padding:5px 8px;font-size:12px;font-weight:800;color:#1b1230;">${cat(c)}</td>
+      <td style="padding:5px 8px;font-size:12px;color:#6b5c80;">${right}% right · ${wrong}% wrong · ${s.articles} articles</td>
     </tr>`;
   }).join('');
-  const wrongRows = stats.wrongAnswers.slice(0, 5).map(w => `
-    <tr><td style="padding:8px 6px;border-bottom:1px dashed #f0e8d8;font-size:13px;">
-      <b>${escape(w.question)}</b><br>
-      <span style="color:#b22525;">✗ Picked: ${escape(w.picked || '(blank)')}</span><br>
-      <span style="color:#0e8d82;">✓ Correct: ${escape(w.correct)}</span>
-    </td></tr>`).join('');
-  const reactionsBit = ['love','thinky','meh','dislike']
-    .filter(k => stats.reactionCounts[k] > 0)
-    .map(k => `${({love:'💖',thinky:'🤔',meh:'😐',dislike:'👎'})[k]} ${stats.reactionCounts[k]}`)
-    .join(' · ') || '— none yet —';
-  const tile = (n, label) => `<td style="background:#fff9ef;border:1px solid #f0e8d8;border-radius:8px;padding:12px;text-align:center;width:25%;"><div style="font-family:Georgia,serif;font-size:24px;font-weight:900;color:#1b1230;">${n}</div><div style="font-size:11px;color:#6b5c80;text-transform:uppercase;">${label}</div></td>`;
-  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff9ef;color:#1b1230;padding:24px;max-width:680px;margin:0 auto;">
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-family:Georgia,serif;font-size:28px;font-weight:900;">kidsnews</div>
-      <div style="font-size:13px;color:#6b5c80;">Reading report · this device</div>
-    </div>
-    <p style="font-size:15px;line-height:1.6;">Hi! Here's <b>${escape(tw.userName || 'your kid')}</b>'s reading on this device:</p>
-    <table style="width:100%;border-collapse:collapse;margin:14px 0;">
+  const wrongRows = (stats.wrongAnswers || []).map((w) => `
+    <div style="background:#fff9ef;border:1px dashed #e8dcc6;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12.5px;color:#1b1230;line-height:1.5;">
+      <div style="font-size:11px;color:#6b5c80;margin-bottom:3px;">${cat(w.category)} · ${E(w.articleTitle.slice(0, 70))}${w.articleTitle.length > 70 ? '…' : ''}</div>
+      <b>${E(w.question)}</b><br>
+      <span style="color:#b22525;">✗ Picked: <i>${E(w.picked || '(blank)')}</i></span><br>
+      <span style="color:#0e8d82;">✓ Correct: <b>${E(w.correct)}</b></span>
+    </div>`).join('');
+
+  // ── Discussion drafts — full text per saved/draft entry ──────────
+  const discussBlocks = (stats.discussionList || []).map((d) =>
+    `<div style="background:#fff;border:1px solid #f0e8d8;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-family:Georgia,serif;font-weight:800;font-size:14px;color:#1b1230;margin-bottom:4px;">${d.savedFinal?'⭐ ':''}${E(d.title)}</div>
+      <div style="font-size:11px;color:#9a8d7a;margin-bottom:6px;">${cat(d.category)} · ${d.wordCount} words · ${d.rounds} round${d.rounds===1?'':'s'}${d.updatedAt?' · '+fmtRel(d.updatedAt):''}</div>
+      <div style="font-size:13px;line-height:1.55;color:#1b1230;white-space:pre-wrap;">${E(d.finalText)}</div>
+    </div>`).join('');
+
+  // ── Reactions ────────────────────────────────────────────────────
+  const reactionTiles = ['love','thinky','meh','dislike'].map((k) => {
+    const m = (REACTION_LABELS && REACTION_LABELS[k]) || {};
+    const n = (stats.reactionCounts && stats.reactionCounts[k]) || 0;
+    return `<td style="background:${m.bg||'#fff9ef'};border:2px solid ${m.color||'#f0e8d8'};border-radius:8px;padding:10px;text-align:center;width:25%;">
+      <div style="font-size:24px;">${m.emoji||''}</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;color:${m.color||'#1b1230'};">${n}</div>
+      <div style="font-size:10px;font-weight:800;color:${m.color||'#6b5c80'};">${m.label||k}</div>
+    </td>`;
+  }).join('');
+
+  // ── Settings table ──────────────────────────────────────────────
+  const settings = [
+    ['Name', tw.userName || '—'],
+    ['Avatar', tw.avatar || '—'],
+    ['Reading level', tw.level === 'Tree' ? '🌳 Tree (ages 11–13)' : tw.level === 'Sprout' ? '🌱 Sprout (ages 8–10)' : '—'],
+    ['Language', tw.language === 'zh' ? '🇨🇳 中文' : tw.language === 'en' ? '🇬🇧 English' : '—'],
+    ['Theme', tw.theme || '—'],
+    ['Daily goal', `${tw.dailyGoal || 21} minutes`],
+    ['Streak', `${tw.streakDays || 0} days`],
+  ].map(([k,v]) => `<tr><td style="padding:5px 8px;font-weight:700;color:#6b5c80;font-size:13px;width:35%;">${k}</td><td style="padding:5px 8px;color:#1b1230;font-size:13px;">${E(v)}</td></tr>`).join('');
+
+  // ── Today (only meaningful when source = local) ──────────────────
+  const today = (stats.progress && stats.progress.minutesToday >= 0) ? `
+    ${h2('Today')}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
       <tr>
-        ${tile(stats.articlesTouched, 'articles touched')}
+        ${tile(stats.progress.minutesToday || 0, 'of ' + (tw.dailyGoal || 21) + ' min')}
+        ${tile((stats.progress.readToday || []).length, 'finished today')}
+        ${tile(Object.keys(stats.progress.articleProgress || {}).length, 'started today')}
+        ${tile((tw.streakDays || 0), 'day streak')}
+      </tr>
+    </table>` : '';
+
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff9ef;color:#1b1230;padding:24px;max-width:720px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-family:Georgia,serif;font-size:30px;font-weight:900;">kidsnews</div>
+      <div style="font-size:13px;color:#6b5c80;">Reading report · ${E(sourceLabel)} · ${new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #f0e8d8;border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+      <div style="font-family:Georgia,serif;font-size:20px;font-weight:900;color:#1b1230;margin-bottom:4px;">${E(tw.userName || 'kidsnews reader')}</div>
+      <div style="font-size:12px;color:#6b5c80;">${tw.level||'—'} · ${tw.language==='zh'?'中文':'English'} · ${tw.dailyGoal||21} min/day · 🔥 ${tw.streakDays||0}-day streak</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr>
+        ${tile(stats.articlesTouched, 'articles')}
         ${tile(stats.totalAttempts, 'quizzes')}
         ${tile(stats.avgPct + '%', 'avg correct')}
         ${tile(fmtMs(stats.totalReadingMs), 'reading time')}
       </tr>
     </table>
-    ${articleRows ? `<h3 style="font-family:Georgia,serif;color:#1b1230;font-size:16px;margin:18px 0 6px;">Articles</h3><table style="width:100%;border-collapse:collapse;">${articleRows}</table>` : ''}
-    ${wrongRows ? `<h3 style="font-family:Georgia,serif;color:#1b1230;font-size:16px;margin:18px 0 6px;">Recent quiz misses</h3><table style="width:100%;border-collapse:collapse;">${wrongRows}</table>` : ''}
-    <h3 style="font-family:Georgia,serif;color:#1b1230;font-size:16px;margin:18px 0 6px;">Reactions</h3>
-    <p style="font-size:14px;color:#1b1230;">${reactionsBit}</p>
-    <p style="margin-top:24px;text-align:center;">
-      <a href="https://kidsnews.21mins.com/parent.html" style="display:inline-block;background:#1b1230;color:#ffc83d;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:800;font-size:14px;">Open dashboard ↗</a>
-    </p>
-    <p style="margin-top:30px;font-size:11px;color:#9a8d7a;text-align:center;">
-      Sent on demand from this device's data. Sign in with Google + link the kid for cross-device history + scheduled digests.
+    ${today}
+    ${articleBlocks ? `${h2('Articles ('+stats.articleStats.length+')')}${articleBlocks}` : ''}
+    ${(stats.totalAttempts > 0 || catRows || wrongRows) ? h2('Quiz performance') : ''}
+    ${stats.totalAttempts > 0 ? `<p style="font-size:13px;color:#1b1230;margin:0 0 10px;"><b>${stats.totalAttempts}</b> quizzes taken · <b>${stats.avgPct}%</b> avg correct · <b>${stats.totalCorrect}</b> questions right · <b>${stats.retried}</b> articles retried</p>` : ''}
+    ${catRows ? `${h3('By category (last attempt per article)')}<table style="width:100%;border-collapse:collapse;margin-bottom:10px;">${catRows}</table>` : ''}
+    ${wrongRows ? `${h3('Recent wrong answers')}${wrongRows}` : ''}
+    ${discussBlocks ? `${h2('Discussion drafts')}${discussBlocks}` : ''}
+    ${(stats.reactionCounts && (stats.reactionCounts.love+stats.reactionCounts.thinky+stats.reactionCounts.meh+stats.reactionCounts.dislike) > 0) ? `${h2('Reactions')}<table style="width:100%;border-collapse:collapse;"><tr>${reactionTiles}</tr></table>` : ''}
+    ${h2('Kid settings')}
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #f0e8d8;border-radius:10px;">${settings}</table>
+    <p style="margin-top:30px;font-size:11px;color:#9a8d7a;text-align:center;line-height:1.6;">
+      This report is self-contained — everything from the dashboard is in this email.<br>
+      Source: ${E(sourceLabel)} · sent ${new Date().toLocaleString()}<br>
+      To change cadence or unsubscribe, sign in at kidsnews.21mins.com/parent.html
     </p>
   </div>`;
 }
@@ -443,21 +566,25 @@ function DigestCadenceToggle({ parentRow, session, stats, onChanged }) {
   };
 
   const sendNow = async () => {
-    // Recipient: signed-in email if present, else prompt. We need
-    // SOMEWHERE to send the email — but we don't need a cloud-linked
-    // kid, since this digest is built from this device's localStorage.
+    // Recipient: signed-in email if present, else prompt.
     let toEmail = (session && session.user && session.user.email) || '';
     if (!toEmail) {
-      const v = window.prompt('Email this device\'s report to:');
+      const v = window.prompt('Email this report to:');
       if (!v || !v.includes('@')) return;
       toEmail = v.trim();
     }
     setBusySend(true); setSendStatus(null);
     try {
-      if (!stats || !stats.tweaks) throw new Error('No local data to report yet — open kidsnews on this device first.');
-      const html = buildLocalDigestHtml(stats);
-      const subject = `kidsnews · ${stats.tweaks.userName || 'kid'}'s reading on this device`;
-      const text = `kidsnews reading report from this device.\n\nOpen the dashboard: ${window.location.origin}/parent.html`;
+      if (!stats || !stats.tweaks) throw new Error('No data to report yet — open kidsnews on this device first.');
+      const sourceLabel = stats.__source === 'cloud'
+        ? `Cloud · ${stats.tweaks.userName || 'kid'}`
+        : 'This device';
+      const html = buildDigestHtml(stats, { sourceLabel });
+      const kidName = stats.tweaks.userName || 'kid';
+      const subject = `kidsnews · ${kidName}'s full reading report`;
+      const text = `kidsnews · ${kidName}'s reading report\n\n` +
+        `${stats.articlesTouched} articles · ${stats.totalAttempts} quizzes · ${stats.avgPct}% avg correct.\n\n` +
+        `(Open in any HTML-capable email client to see the full report — every section of the dashboard is included.)`;
       const res = await fetch(SUPABASE_URL + '/functions/v1/send-email-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -494,14 +621,14 @@ function DigestCadenceToggle({ parentRow, session, stats, onChanged }) {
         }}>{c.label}</button>
       ))}
       <button onClick={sendNow} disabled={busySend}
-        title="Email a snapshot of this device's reading data to your inbox"
+        title="Email the full report (every dashboard section) to your inbox"
         style={{
           background: '#fff', color: '#1b1230',
           border: '2px solid #ffc83d', borderRadius: 999,
           padding: '4px 12px', fontWeight: 800, fontSize: 12,
           cursor: busySend ? 'wait' : 'pointer',
           fontFamily: 'Nunito, sans-serif',
-        }}>{busySend ? 'Sending…' : '📤 Send this device\'s report'}</button>
+        }}>{busySend ? 'Sending…' : '📤 Email me the full report'}</button>
       {sendStatus === 'ok' && (
         <span style={{ color: '#0e8d82', fontWeight: 800 }}>✓ Sent — check your inbox.</span>
       )}
@@ -729,6 +856,7 @@ async function cloudCollectStats(clientId, dayFilter) {
   // already accurate from the construction above.)
 
   return {
+    __source: 'cloud',
     tweaks, progress, clientId,
     availableDays, dayFilter: dayFilter || null,
     articleStats, discussionList, wrongAnswers,
@@ -1332,7 +1460,7 @@ function Dashboard() {
         source={source} setSource={setSource}
         selectedKidId={selectedKidId} setSelectedKidId={setSelectedKidId}
         refreshKids={refreshKids} parentRow={parentRow}
-        stats={localStats}
+        stats={stats}
       />
       {source === 'cloud' && cloudLoading && (
         <div className="pd-card" style={{ textAlign: 'center', color: '#9a8d7a' }}>Loading from the cloud…</div>
