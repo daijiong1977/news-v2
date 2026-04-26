@@ -411,14 +411,13 @@ function SourcesTab({ flash, categories }) {
             <option value="">— Pick a category —</option>
             {categories.map(c => <option key={c.slug} value={c.name}>{c.emoji} {c.name}</option>)}
           </select>
-          <button className="btn btn-ghost btn-sm" disabled={!bulkCat}
+          <button className="btn btn-sm" disabled={!bulkCat}
             onClick={()=>showVerifyCmd({kind:'category', value:bulkCat}, `category ${bulkCat}`)}>
             Verify category
           </button>
-          <button className="btn btn-sm" disabled={!rows || rows.length === 0}
-            onClick={()=>showVerifyCmd({kind:'all'}, 'all sources')}>
-            Verify all
-          </button>
+          <span style={{fontSize:11, color:'#9a8d7a'}}>
+            (~10-15s for ~9 sources × 3 articles each)
+          </span>
         </div>
       </div>
 
@@ -492,7 +491,11 @@ function SourcesTab({ flash, categories }) {
 function VerifyModal({ target, label, onClose }) {
   const param = verifyTargetParam(target);
   const cmd = verifyCmdFor(target);
-  const isInline = target.kind === 'id';
+  // Both id:N (single source) and category:NAME (~9 sources) run inline
+  // in the edge function. "all" was removed — too many fetches for one
+  // invocation; if you need a global verify, run the GitHub Actions
+  // workflow which uses the canonical Python pipeline.
+  const isInline = target.kind === 'id' || target.kind === 'category';
   const [phase, setPhase] = React.useState('idle');   // idle|running|done|error
   const [html, setHtml] = React.useState(null);
   const [errMsg, setErrMsg] = React.useState(null);
@@ -542,24 +545,16 @@ function VerifyModal({ target, label, onClose }) {
         {phase === 'idle' && (
           <>
             <p style={{fontSize:13, color:'#6b5c80', lineHeight:1.5, margin:'0 0 14px'}}>
-              {isInline
-                ? <>Fetches this RSS feed, pulls the top 3 articles, grabs each article's og:image + title + description, and renders a self-contained preview. Runs in Supabase (~5s); stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span> on success.</>
-                : <>Bulk verify (category / all) runs the canonical Python pipeline on GitHub Actions — image optimization, persisted artifact. Single-source verify runs inline.</>}
+              {target.kind === 'id'
+                ? <>Fetches this RSS feed, pulls the top 3 articles, grabs each article's og:image + title + description, and renders a self-contained preview. ~5s.</>
+                : <>Fetches every enabled source in this category (typically ~9 sources) in parallel, pulls top 3 articles from each, and renders one combined preview. ~10-15s.</>}
+              {' '}Runs in the Supabase edge fn; stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span> on success.
             </p>
             <div className="row" style={{gap:10, marginBottom:14, flexWrap:'wrap'}}>
-              {isInline && <button className="btn" onClick={runVerify}>☁️ Run verify now</button>}
-              {!isInline && (
-                <a href={VERIFY_WORKFLOW_URL} target="_blank" rel="noopener" className="btn"
-                   style={{textDecoration:'none', display:'inline-block'}}>Open verify-source.yml ↗</a>
-              )}
-              {!isInline && (
-                <span style={{fontSize:12, color:'#6b5c80'}}>
-                  set <b>target</b> to <span className="pre" style={{padding:'2px 6px'}}>{param}</span>
-                </span>
-              )}
+              <button className="btn" onClick={runVerify}>☁️ Run verify now</button>
             </div>
             <details style={{marginTop:8}}>
-              <summary style={{fontSize:12, color:'#6b5c80', cursor:'pointer'}}>Or run locally (canonical pipeline)</summary>
+              <summary style={{fontSize:12, color:'#6b5c80', cursor:'pointer'}}>Or run locally (canonical Python pipeline — image optimization)</summary>
               <div className="pre" style={{padding:'8px 10px', fontSize:12.5, marginTop:8, userSelect:'all'}}>{cmd}</div>
             </details>
           </>
@@ -573,14 +568,16 @@ function VerifyModal({ target, label, onClose }) {
             <div style={{height:8, background:'#f0e8d8', borderRadius:999, overflow:'hidden', marginBottom:10}}>
               <div style={{
                 height:'100%',
-                width: `${Math.min(95, 10 + elapsed * 12)}%`,
+                width: `${Math.min(95, 5 + elapsed * 6)}%`,
                 background:'linear-gradient(90deg, #9061f9, #ff6ba0)',
                 borderRadius:999,
                 transition:'width .3s',
               }}/>
             </div>
             <div style={{fontSize:12, color:'#6b5c80'}}>
-              Fetching RSS, then 3 article pages in parallel · usually 3-6s
+              {target.kind === 'category'
+                ? 'Fetching all sources in parallel — usually 10-15s'
+                : 'Fetching RSS, then 3 article pages in parallel · usually 3-6s'}
             </div>
           </div>
         )}

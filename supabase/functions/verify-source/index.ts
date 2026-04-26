@@ -151,31 +151,23 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]!));
 }
 
-function renderPreview(opts: {
-  source: { id: number; name: string; category: string; rss_url: string };
-  generatedAt: string;
-  articles: Array<{
-    title: string; link: string; pubDate: string;
-    feedDescription: string;
-    og: { image: string; title: string; description: string; siteName: string };
-    error?: string;
-  }>;
-}): string {
-  const { source, generatedAt, articles } = opts;
-  const cards = articles.map((a, i) => `
-    <article style="background:#fff;border:1px solid #e2dccc;border-radius:14px;overflow:hidden;margin-bottom:18px;display:grid;grid-template-columns:1fr 2fr;gap:0;">
+// Render ONE source's preview as a fragment (sub-doc). Used standalone
+// for id:N and concatenated for category:X.
+function renderSourceBlock(source: any, generatedAt: string, articles: any[], topError: string | null = null): string {
+  const cards = articles.map((a: any, i: number) => `
+    <article style="background:#fff;border:1px solid #e2dccc;border-radius:14px;overflow:hidden;margin-bottom:14px;display:grid;grid-template-columns:1fr 2fr;gap:0;">
       ${a.og.image
-        ? `<div style="background:url('${escapeHtml(a.og.image)}') center/cover, #f0e8d8; min-height:220px;"></div>`
-        : `<div style="background:#f0e8d8;min-height:220px;display:flex;align-items:center;justify-content:center;color:#9a8d7a;font-size:13px;">no og:image</div>`}
-      <div style="padding:16px 20px;">
+        ? `<div style="background:url('${escapeHtml(a.og.image)}') center/cover, #f0e8d8; min-height:200px;"></div>`
+        : `<div style="background:#f0e8d8;min-height:200px;display:flex;align-items:center;justify-content:center;color:#9a8d7a;font-size:13px;">no og:image</div>`}
+      <div style="padding:14px 18px;">
         <div style="font-size:11px;color:#9a8d7a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">
           Article ${i + 1}${a.pubDate ? " · " + escapeHtml(a.pubDate) : ""}
         </div>
-        <h2 style="font-family:Georgia,serif;font-size:20px;font-weight:900;color:#1b1230;margin:0 0 8px;line-height:1.25;">
+        <h3 style="font-family:Georgia,serif;font-size:18px;font-weight:900;color:#1b1230;margin:0 0 8px;line-height:1.25;">
           ${escapeHtml(a.og.title || a.title || "(untitled)")}
-        </h2>
-        <p style="font-size:14px;color:#3a2a4a;line-height:1.55;margin:0 0 10px;">
-          ${escapeHtml(a.og.description || a.feedDescription || "(no description)").slice(0, 400)}
+        </h3>
+        <p style="font-size:13.5px;color:#3a2a4a;line-height:1.55;margin:0 0 10px;">
+          ${escapeHtml(a.og.description || a.feedDescription || "(no description)").slice(0, 360)}
         </p>
         ${a.error ? `<div style="font-size:12px;color:#b22525;margin-bottom:8px;">⚠ ${escapeHtml(a.error)}</div>` : ""}
         <div style="font-size:11px;color:#9a8d7a;">
@@ -186,35 +178,46 @@ function renderPreview(opts: {
       </div>
     </article>
   `).join("");
+  const innerBody = topError
+    ? `<div style="background:#ffe4e4;border:1px solid #ff6b5b;border-radius:10px;padding:14px;color:#b22525;">⚠ Failed to fetch RSS: ${escapeHtml(topError)}</div>`
+    : (cards || `<div style="background:#fff4c2;border:1px solid #f0e8d8;border-radius:10px;padding:12px;color:#8a6d00;">RSS feed had no parseable items.</div>`);
+  return `
+    <section style="margin-bottom:24px;">
+      <header style="background:#fff;border:1px solid #e2dccc;border-radius:14px;padding:14px 18px;margin-bottom:14px;">
+        <h2 style="font-family:Georgia,serif;font-size:20px;margin:0 0 6px;">
+          ${escapeHtml(source.name)}
+          <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:800;background:#fff4c2;color:#8a6d00;margin-left:6px;">${escapeHtml(source.category)}</span>
+        </h2>
+        <div style="font-size:12px;color:#6b5c80;">
+          RSS: <a href="${escapeHtml(source.rss_url)}" target="_blank" rel="noopener" style="color:#1f5fd1;">${escapeHtml(source.rss_url)}</a><br>
+          Generated: ${escapeHtml(generatedAt)} · ${articles.length} article${articles.length === 1 ? "" : "s"}
+        </div>
+      </header>
+      ${innerBody}
+    </section>
+  `;
+}
+
+function wrapInDoc(title: string, bodyHtml: string): string {
   return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Verify · ${escapeHtml(source.name)}</title>
+<html><head><meta charset="utf-8"><title>${title}</title>
 <style>
   body { margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#fff9ef; color:#1b1230; }
-  header { background:#fff; border:1px solid #e2dccc; border-radius:14px; padding:16px 20px; margin-bottom:20px; }
-  header h1 { font-family:Georgia,serif; font-size:22px; margin:0 0 6px; }
-  header .meta { font-size:12px; color:#6b5c80; }
-  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:800; background:#fff4c2; color:#8a6d00; }
 </style></head>
-<body>
-  <header>
-    <h1>${escapeHtml(source.name)} <span class="pill">${escapeHtml(source.category)}</span></h1>
-    <div class="meta">
-      RSS: <a href="${escapeHtml(source.rss_url)}" target="_blank" rel="noopener" style="color:#1f5fd1;">${escapeHtml(source.rss_url)}</a><br>
-      Generated: ${escapeHtml(generatedAt)} · ${articles.length} article${articles.length === 1 ? "" : "s"}
-    </div>
-  </header>
-  ${cards || `<div style="background:#fff4c2;border:1px solid #f0e8d8;border-radius:10px;padding:14px;color:#8a6d00;">RSS feed had no parseable items.</div>`}
-</body></html>`;
+<body>${bodyHtml}</body></html>`;
 }
 
 // ── Per-source verification ────────────────────────────────────────
-async function verifyOne(source: any): Promise<string> {
+// Returns ONE source's HTML BLOCK (header + 3 cards) as a fragment —
+// not a whole document. The category renderer wraps multiple of these.
+async function verifyOneFragment(source: any): Promise<string> {
   const generatedAt = new Date().toISOString();
   let articles: any[] = [];
+  let topError: string | null = null;
   try {
     const xml = await fetchTextWithTimeout(source.rss_url, 8000);
     const items = parseFeed(xml, 3);
-    articles = await Promise.all(items.map(async (it) => {
+    articles = await Promise.all(items.map(async (it: any) => {
       try {
         if (!it.link) return { ...it, og: { image: "", title: "", description: "", siteName: "" } };
         const html = await fetchTextWithTimeout(it.link, 8000);
@@ -224,20 +227,41 @@ async function verifyOne(source: any): Promise<string> {
       }
     }));
   } catch (e) {
-    return renderPreview({
-      source, generatedAt,
-      articles: [{
-        title: "(failed to fetch RSS)",
-        link: source.rss_url, pubDate: "",
-        feedDescription: "",
-        og: { image: "", title: "", description: "", siteName: "" },
-        error: String((e as Error).message || e),
-      }],
-    });
+    topError = String((e as Error).message || e);
   }
-  // Stamp last_verified_at
-  await sb.from("redesign_source_configs").update({ last_verified_at: generatedAt }).eq("id", source.id);
-  return renderPreview({ source, generatedAt, articles });
+  // Stamp last_verified_at on success (any RSS articles came back).
+  if (!topError) {
+    await sb.from("redesign_source_configs").update({ last_verified_at: generatedAt }).eq("id", source.id);
+  }
+  return renderSourceBlock(source, generatedAt, articles, topError);
+}
+
+async function verifyOneFull(source: any): Promise<string> {
+  const fragment = await verifyOneFragment(source);
+  return wrapInDoc(`Verify · ${escapeHtml(source.name)}`, fragment);
+}
+
+async function verifyCategory(category: string): Promise<string> {
+  const { data: sources, error } = await sb.from("redesign_source_configs")
+    .select("id, name, category, rss_url, enabled, is_backup")
+    .eq("category", category)
+    .eq("enabled", true)
+    .order("priority", { ascending: true });
+  if (error) throw error;
+  if (!sources || !sources.length) {
+    return wrapInDoc(`Verify · ${escapeHtml(category)} · 0 sources`,
+      `<div style="background:#fff4c2;border:1px solid #f0e8d8;border-radius:10px;padding:14px;color:#8a6d00;">No enabled sources in this category.</div>`);
+  }
+  // Fan out across sources. Each verifyOneFragment fans out 3 article
+  // fetches internally — 9 sources × (1 RSS + 3 article fetches) = ~36
+  // concurrent fetches at peak. Edge runtime handles that fine.
+  const fragments = await Promise.all(sources.map(s => verifyOneFragment(s)));
+  const joined = fragments.join("\n");
+  const header = `<div style="background:#1b1230;color:#ffc83d;padding:14px 20px;border-radius:14px;margin-bottom:20px;">
+    <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;">${escapeHtml(category)} category</div>
+    <div style="font-size:12px;opacity:.85;">${sources.length} enabled source${sources.length === 1 ? "" : "s"} · generated ${escapeHtml(new Date().toISOString())}</div>
+  </div>`;
+  return wrapInDoc(`Verify · ${escapeHtml(category)} · ${sources.length} sources`, header + joined);
 }
 
 Deno.serve(async (req) => {
@@ -251,34 +275,44 @@ Deno.serve(async (req) => {
     await requireAdmin(req);
     const body = await req.json();
     const target: string = String(body.target || "").trim();
-    if (!/^id:\d+$/.test(target)) {
-      // category:* and all are still supported via the GH Actions path
-      // (which optimizes images + writes per-day artifacts). The inline
-      // edge fn covers the most common case (one source).
+
+    // id:N — single source, ~5s
+    const idMatch = target.match(/^id:(\d+)$/);
+    if (idMatch) {
+      const sid = Number(idMatch[1]);
+      const { data: source, error } = await sb.from("redesign_source_configs")
+        .select("id, name, category, rss_url, enabled")
+        .eq("id", sid).maybeSingle();
+      if (error) throw error;
+      if (!source) {
+        return new Response(JSON.stringify({ error: `source id ${sid} not found` }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const html = await verifyOneFull(source);
       return new Response(JSON.stringify({
-        error: "Inline verify supports only id:N. For category:* / all, use the GitHub Actions path.",
-      }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        ok: true, target,
+        source: { id: source.id, name: source.name, category: source.category },
+        html, generatedAt: new Date().toISOString(),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const sid = Number(target.slice(3));
-    const { data: source, error } = await sb.from("redesign_source_configs")
-      .select("id, name, category, rss_url, enabled")
-      .eq("id", sid).maybeSingle();
-    if (error) throw error;
-    if (!source) {
-      return new Response(JSON.stringify({ error: `source id ${sid} not found` }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+    // category:NAME — fan out across all enabled sources in that category, ~10-15s
+    const catMatch = target.match(/^category:([A-Za-z][A-Za-z0-9 _-]*)$/);
+    if (catMatch) {
+      const cat = catMatch[1];
+      const html = await verifyCategory(cat);
+      return new Response(JSON.stringify({
+        ok: true, target,
+        category: cat,
+        html, generatedAt: new Date().toISOString(),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const html = await verifyOne(source);
+
     return new Response(JSON.stringify({
-      ok: true, target,
-      source: { id: source.id, name: source.name, category: source.category },
-      html,
-      generatedAt: new Date().toISOString(),
+      error: "Invalid target. Use id:N or category:NAME (all-source verify removed — too many fetches for a single edge-fn invocation).",
     }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: String((e as Error).message || e) }), {
