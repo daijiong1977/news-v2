@@ -169,5 +169,121 @@
         });
       });
     },
+
+    // ── Identity transfer (kid self-claim) ─────────────────────────
+    // Kid types a 6-digit code on a new device. Server returns the
+    // canonical client_id; we rewrite localStorage so all subsequent
+    // kidsync calls use the claimed identity. Returns the new id on
+    // success, null on failure (UI shows "code is invalid or expired").
+    lookupCode: function (code) {
+      if (!code || typeof code !== 'string') return Promise.resolve(null);
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return null;
+        return sb.rpc('lookup_pairing_code', { p_code: code.trim() }).then(function (res) {
+          if (res && res.error) {
+            console.warn('[kidsync] lookup_pairing_code failed:', res.error.message);
+            return null;
+          }
+          var cid = res && res.data;
+          if (!cid) return null;
+          // Swap the local client_id. Future events belong to this id.
+          try { window.safeStorage && window.safeStorage.set('ohye_client_id', cid); } catch (e) {}
+          return cid;
+        });
+      });
+    },
+
+    // Gmail SSO. Returns a Promise resolving to { redirected: true } —
+    // Supabase redirects the page to Google. After the redirect comes
+    // back, the app should call linkCurrentSession() to bind the
+    // signed-in email to a client_id.
+    signInWithGoogle: function () {
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return { redirected: false, error: 'auth unavailable' };
+        return sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin + window.location.pathname },
+        }).then(function (res) {
+          return { redirected: !res.error, error: res.error ? res.error.message : null };
+        });
+      });
+    },
+
+    // After OAuth redirect lands, call this. It fetches the session,
+    // reads auth.email(), and binds it server-side. Returns the
+    // canonical client_id (which may differ from the local one if the
+    // email was already linked from another device). Caller should
+    // rewrite localStorage if the returned id != current.
+    linkCurrentSession: function () {
+      var localCid = clientId();
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return null;
+        return sb.auth.getSession().then(function (sess) {
+          if (!sess.data.session) return null;
+          return sb.rpc('claim_or_create_kid_for_email', {
+            p_local_client_id: localCid,
+          }).then(function (res) {
+            if (res && res.error) {
+              console.warn('[kidsync] claim_or_create_kid_for_email failed:', res.error.message);
+              return null;
+            }
+            var canonical = res && res.data;
+            if (canonical && canonical !== localCid) {
+              try { window.safeStorage && window.safeStorage.set('ohye_client_id', canonical); } catch (e) {}
+            }
+            return {
+              clientId: canonical || localCid,
+              email: sess.data.session.user && sess.data.session.user.email || null,
+            };
+          });
+        });
+      });
+    },
+
+    signOut: function () {
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return null;
+        return sb.auth.signOut();
+      });
+    },
+
+    // Returns { type: 'anon'|'google', clientId, email? }.
+    // Used by the Profile panel to render "Signed in as …" vs
+    // "Your code: 123456".
+    getIdentity: function () {
+      var localCid = clientId();
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return { type: 'anon', clientId: localCid };
+        return sb.auth.getSession().then(function (sess) {
+          var email = sess && sess.data && sess.data.session
+            && sess.data.session.user && sess.data.session.user.email;
+          return email
+            ? { type: 'google', clientId: localCid, email: email }
+            : { type: 'anon',   clientId: localCid };
+        });
+      });
+    },
+
+    // ── Cloud history hydration ────────────────────────────────────
+    // Called on every app boot. Returns the kid's last N reading
+    // events from Supabase so the streak popover + Continue rail
+    // can render even after a localStorage clear or a fresh device.
+    // Resolves to [] on any failure (offline, RPC error). Never throws.
+    fetchHistory: function (limit) {
+      var cid = clientId(); if (!cid) return Promise.resolve([]);
+      var n = Number(limit) || 100;
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return [];
+        return sb.rpc('get_reading_history', { p_client_id: cid, p_limit: n })
+          .then(function (res) {
+            if (res && res.error) {
+              console.warn('[kidsync] get_reading_history failed:', res.error.message);
+              return [];
+            }
+            return Array.isArray(res.data) ? res.data : [];
+          })
+          .catch(function (e) { console.warn('[kidsync] history threw:', e); return []; });
+      });
+    },
   };
 })();

@@ -92,6 +92,258 @@ function UserButton({ tweaks, onClick, streak, level }) {
 }
 
 // —————————— PAIRING EXPANDER ——————————
+// IdentityExpander — kid-side identity panel. Shows current sign-in
+// state (anonymous code OR Gmail email) and the two ways to claim an
+// existing identity on a new device:
+//
+//   1. "Sign in with Google" — Supabase OAuth. After the redirect the
+//      app calls linkCurrentSession() to bind the email server-side
+//      and rewrite localStorage's client_id to the canonical one.
+//   2. "I have a 6-digit code" — kid types a code from another device's
+//      kidsync.generatePairingCode(). lookupCode() swaps the local
+//      client_id and we reload to refresh history.
+//
+// Defined at module scope to keep React from re-mounting on each panel
+// render (otherwise ephemeral state like a generated code would die).
+function IdentityExpander() {
+  const [identity, setIdentity] = useStateU(null);   // {type, email?, clientId}
+  // Default open for anonymous users — "Sign in to save your streak"
+  // is the durable-recovery anchor and we want kids/parents to see it
+  // without an extra tap. Gmail-signed-in users get it collapsed since
+  // the green checkmark says "you're already covered."
+  const [open, setOpen] = useStateU(true);
+  const [mode, setMode] = useStateU(null);           // 'code' | 'google' | null
+  const [codeInput, setCodeInput] = useStateU('');
+  const [busy, setBusy] = useStateU(false);
+  const [err, setErr] = useStateU(null);
+  const [showCode, setShowCode] = useStateU(null);   // 6-digit code if user hits "share my code"
+  const [showCodeExpiresAt, setShowCodeExpiresAt] = useStateU(null);
+  const [tick, setTick] = useStateU(0);
+
+  React.useEffect(() => {
+    if (!window.kidsync || !window.kidsync.getIdentity) return;
+    window.kidsync.getIdentity().then((id) => {
+      setIdentity(id);
+      // Auto-collapse if the kid is already Gmail-linked — recovery is
+      // already covered, no need to nag.
+      if (id && id.type === 'google') setOpen(false);
+    }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    if (!showCodeExpiresAt) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [showCodeExpiresAt]);
+
+  const codeRemaining = showCodeExpiresAt
+    ? Math.max(0, Math.floor((Date.parse(showCodeExpiresAt) - Date.now()) / 1000))
+    : 0;
+  const codeRemLabel = codeRemaining > 0
+    ? `${Math.floor(codeRemaining/60)}:${String(codeRemaining%60).padStart(2,'0')}`
+    : 'expired';
+
+  const claimCode = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const cleaned = codeInput.replace(/\D/g, '').slice(0, 6);
+      if (cleaned.length !== 6) throw new Error('Please enter all 6 digits.');
+      const r = await window.kidsync.lookupCode(cleaned);
+      if (!r) throw new Error('That code is invalid or expired. Generate a new one on the other device.');
+      // localStorage already updated by kidsync. Reload so history hydrates.
+      window.location.reload();
+    } catch (e) {
+      setErr(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signInGoogle = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await window.kidsync.signInWithGoogle();
+      if (!r || !r.redirected) throw new Error(r?.error || 'Could not start Google sign-in.');
+      // Page will redirect; nothing else to do here.
+    } catch (e) {
+      setErr(e.message || String(e));
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    if (!window.kidsync || !window.kidsync.signOut) return;
+    await window.kidsync.signOut();
+    window.location.reload();
+  };
+
+  const generateMyCode = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await window.kidsync.generatePairingCode();
+      if (!r || !r.code) throw new Error('Could not generate code.');
+      setShowCode(r.code);
+      setShowCodeExpiresAt(r.expiresAt);
+    } catch (e) {
+      setErr(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isGoogle = identity && identity.type === 'google';
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: '100%', background: '#fff', border: '2px solid #f0e8d8',
+        borderRadius: 14, padding: '12px 16px', cursor: 'pointer',
+        fontWeight: 800, fontSize: 14, color: '#1b1230',
+        fontFamily: 'Nunito, sans-serif', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 20 }}>{isGoogle ? '✓' : '✨'}</span>
+        <span style={{ flex: 1 }}>
+          {isGoogle
+            ? `Signed in as ${identity.email}`
+            : 'Save your streak — sign in once'}
+        </span>
+        <span style={{ color: '#9a8d7a', transform: open ? 'rotate(180deg)' : 'rotate(0)' }}>⌄</span>
+      </button>
+
+      {open && (
+        <div style={{
+          marginTop: 8, padding: '14px 16px',
+          background: '#fff9ef', border: '1.5px dashed #c9b99a', borderRadius: 14,
+          fontSize: 13, color: '#3a2a4a', lineHeight: 1.5,
+        }}>
+          {isGoogle ? (
+            // Already signed in — show email + sign out + share code
+            <div>
+              <div style={{marginBottom:8}}>Your reading streak is saved on Google. Sign in on any device to see it.</div>
+              {!showCode && (
+                <button onClick={generateMyCode} disabled={busy} style={kidBtnStyle(busy)}>
+                  Show a 6-digit code (for non-Google devices)
+                </button>
+              )}
+              {showCode && (
+                <div>
+                  <div style={kidCodeStyle}>{showCode}</div>
+                  <div style={{textAlign:'center', fontSize:12, color: codeRemaining > 0 ? '#0e8d82' : '#b22525', fontWeight:700}}>
+                    ⏱ Expires in {codeRemLabel}
+                  </div>
+                </div>
+              )}
+              <button onClick={signOut} style={{
+                marginTop: 12, background:'transparent', color:'#b22525',
+                border:'1.5px solid #f0c8c0', borderRadius:999,
+                padding:'6px 14px', fontWeight:700, fontSize:12, cursor:'pointer',
+                fontFamily:'Nunito, sans-serif',
+              }}>Sign out</button>
+            </div>
+          ) : (
+            // Anon — show two paths to claim or share an identity
+            <div>
+              {!mode && (
+                <>
+                  <div style={{marginBottom:12, fontSize:13, color:'#1b1230'}}>
+                    Right now your streak only lives in <strong>this browser</strong>. If the cache clears, it's gone. Sign in once and your streak follows you anywhere.
+                  </div>
+                  <button onClick={() => setMode('google')} style={kidBtnStyle(false, true)}>
+                    🇬  Sign in with Google · recommended
+                  </button>
+                  <button onClick={() => setMode('code')} style={{...kidBtnStyle(false), marginTop:8}}>
+                    🔢  I already have a 6-digit code
+                  </button>
+                  <div style={{marginTop:14, paddingTop:12, borderTop:'1px dashed #e2dccc', fontSize:12, color:'#6b5c80'}}>
+                    Or share <em>your</em> code with another device:
+                  </div>
+                  {!showCode && (
+                    <button onClick={generateMyCode} disabled={busy} style={{...kidBtnStyle(busy), marginTop:8}}>
+                      Show my 6-digit code
+                    </button>
+                  )}
+                  {showCode && (
+                    <div style={{marginTop:8}}>
+                      <div style={kidCodeStyle}>{showCode}</div>
+                      <div style={{textAlign:'center', fontSize:12, color: codeRemaining > 0 ? '#0e8d82' : '#b22525', fontWeight:700}}>
+                        ⏱ Expires in {codeRemLabel}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {mode === 'google' && (
+                <div>
+                  <div style={{marginBottom:10}}>
+                    Sign in once with Google. Your reading history follows your account.
+                  </div>
+                  <button onClick={signInGoogle} disabled={busy} style={kidBtnStyle(busy, true)}>
+                    🇬 Continue with Google
+                  </button>
+                  <button onClick={() => { setMode(null); setErr(null); }} style={{marginTop:8, ...kidLinkStyle}}>← back</button>
+                </div>
+              )}
+              {mode === 'code' && (
+                <div>
+                  <div style={{marginBottom:10}}>
+                    Get the 6-digit code from your other device's "Show my code" button.
+                  </div>
+                  <input
+                    inputMode="numeric"
+                    pattern="\d{6}"
+                    placeholder="123456"
+                    value={codeInput}
+                    onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    style={{
+                      width:'100%', boxSizing:'border-box',
+                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:24, textAlign:'center',
+                      letterSpacing:'.2em',
+                      padding:'10px 12px', borderRadius:12, border:'2px solid #1b1230',
+                      background:'#fff', color:'#1b1230', outline:'none',
+                    }}
+                  />
+                  <button onClick={claimCode} disabled={busy || codeInput.length !== 6} style={{
+                    ...kidBtnStyle(busy || codeInput.length !== 6),
+                    marginTop:8,
+                    opacity: codeInput.length === 6 ? 1 : 0.5,
+                  }}>
+                    {busy ? 'Checking…' : 'Use this code'}
+                  </button>
+                  <button onClick={() => { setMode(null); setErr(null); setCodeInput(''); }} style={{marginTop:8, ...kidLinkStyle}}>← back</button>
+                </div>
+              )}
+            </div>
+          )}
+          {err && <div style={{ marginTop: 10, color: '#b22525', fontSize: 12 }}>{err}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const kidCodeStyle = {
+  fontFamily: 'Fraunces, serif', fontWeight: 900, fontSize: 36,
+  letterSpacing: '.2em', color: '#1b1230', textAlign: 'center',
+  padding: '12px 0', userSelect: 'all',
+};
+const kidLinkStyle = {
+  background:'transparent', color:'#6b5c80',
+  border:'none', padding:0, fontSize:12, fontWeight:700, cursor:'pointer',
+  fontFamily:'Nunito, sans-serif', textAlign:'left',
+};
+function kidBtnStyle(disabled, primary) {
+  return {
+    width:'100%', background: primary ? '#1b1230' : '#fff',
+    color: primary ? '#fff' : '#1b1230',
+    border: primary ? 'none' : '1.5px solid #f0e8d8',
+    borderRadius: 12, padding:'10px 14px', fontWeight: 800, fontSize: 14,
+    cursor: disabled ? 'wait' : 'pointer',
+    fontFamily: 'Nunito, sans-serif', textAlign:'left',
+    display:'flex', alignItems:'center', gap:8,
+  };
+}
+
 // "Pair with parent" — for the cross-device case where the parent is on
 // their own phone, not on the kid's tablet. Calls window.kidsync's RPC,
 // shows the 6-digit code with a 10-min countdown. Defined at module
@@ -423,6 +675,10 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
                   <BigStat icon="📖" val={`${storiesRead}`} label="Stories today"/>
                   <BigStat icon="🏆" val={`${badges}`} label="Badges"/>
                 </div>
+              </Section>
+
+              <Section label="Sync" sub="So your streak follows you to other devices.">
+                <IdentityExpander/>
               </Section>
 
               <Section label="Parent / teacher" sub="">

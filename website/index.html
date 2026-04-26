@@ -222,6 +222,71 @@ function App() {
     document.addEventListener('visibilitychange', checkRollover);
     return () => document.removeEventListener('visibilitychange', checkRollover);
   }, []);
+  // Cloud bootstrap — once per app launch. Two responsibilities:
+  //
+  //   1. If we just bounced back from a Google OAuth redirect (URL has
+  //      ?code= or #access_token=), call linkCurrentSession() so the
+  //      signed-in email gets bound to a client_id server-side. The
+  //      RPC may rewrite localStorage's ohye_client_id if this email
+  //      is already linked to a different (canonical) id elsewhere.
+  //   2. Pull the kid's last 100 reading events from Supabase and
+  //      merge them into local readHistory + articleProgress. This is
+  //      the read side of cloud sync — without it, claiming an
+  //      identity (or just clearing the cache) leaves the kid with an
+  //      empty UI even though events exist server-side.
+  //
+  // Both steps are best-effort. Failures fall back to local-only state
+  // (the website continues to work fully offline-from-cloud).
+  useEffect(() => {
+    let cancelled = false;
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const looksLikeOAuthBounce = /access_token=|code=|state=/.test(hash + search);
+    (async () => {
+      try {
+        if (looksLikeOAuthBounce && window.kidsync && typeof window.kidsync.linkCurrentSession === 'function') {
+          const r = await window.kidsync.linkCurrentSession();
+          if (r && r.clientId) {
+            // Strip the OAuth token fragment so refreshes don't re-link.
+            try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+          }
+        }
+      } catch (e) { console.warn('[boot] linkCurrentSession failed', e); }
+      try {
+        if (window.kidsync && typeof window.kidsync.fetchHistory === 'function') {
+          const events = await window.kidsync.fetchHistory(100);
+          if (cancelled || !Array.isArray(events) || events.length === 0) return;
+          // Translate cloud events into local readHistory shape and merge.
+          // Cloud rows: { story_id, step, occurred_at, day_key, ... }
+          // Local readHistory: [{ id, at }] — we use the LISTING id (with
+          // level suffix) so it matches what article.jsx writes; the
+          // cloud only knows storyId. We rebuild the listing id by
+          // pairing storyId with the kid's current level. Worst case
+          // the suffix is wrong and the streak popover skips it (it
+          // does an ARTICLES.find by id, returns null, the entry is
+          // dropped — no crash).
+          setProgress(p => {
+            const cur = p || { readToday: [], minutesToday: 0, articleProgress: {}, readHistory: [], dayKey: new Date().toDateString() };
+            const haveIds = new Set((cur.readHistory || []).map(e => typeof e === 'string' ? e : e?.id));
+            const lvlSuffix = (ss.get('ohye_level') === 'Sprout') ? '-easy' : '-middle';
+            const merged = (cur.readHistory || []).slice();
+            for (const ev of events) {
+              if (ev.step !== 'discuss' && ev.step !== 'finish') continue; // only completed reads
+              const id = ev.story_id + lvlSuffix;
+              if (haveIds.has(id)) continue;
+              haveIds.add(id);
+              merged.push({ id, at: ev.occurred_at });
+            }
+            // Keep last 200 to stay bounded.
+            merged.sort((a, b) => (a.at || '').localeCompare(b.at || ''));
+            return { ...cur, readHistory: merged.slice(-200) };
+          });
+        }
+      } catch (e) { console.warn('[boot] fetchHistory failed', e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     ss.setJSON('ohye_tweaks', tweaks);
     // Mirror to cloud (no-op if unavailable). Light touch: only the
