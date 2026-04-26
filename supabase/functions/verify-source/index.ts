@@ -309,8 +309,52 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // url:<RSS_URL> — ad-hoc preview before adding a new source. Doesn't
+    // touch the DB at all — no row created, no last_verified_at stamped.
+    // Used by the admin's "Preview" button so an editor can confirm a
+    // feed parses + serves real og:images before committing it.
+    if (target.startsWith("url:")) {
+      const rss = target.slice(4);
+      try {
+        new URL(rss); // throws on garbage
+      } catch {
+        return new Response(JSON.stringify({ error: "url: target must be a valid http(s) URL" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Synthetic source so renderSourceBlock + verifyOneFragment work
+      // unchanged. Skip the last_verified_at stamp since there's no row.
+      const adhoc = { id: -1, name: body.name || "(preview)", category: body.category || "—", rss_url: rss };
+      const generatedAt = new Date().toISOString();
+      let articles: any[] = [];
+      let topError: string | null = null;
+      try {
+        const xml = await fetchTextWithTimeout(rss, 8000);
+        const items = parseFeed(xml, 3);
+        articles = await Promise.all(items.map(async (it: any) => {
+          try {
+            if (!it.link) return { ...it, og: { image: "", title: "", description: "", siteName: "" } };
+            const html = await fetchTextWithTimeout(it.link, 8000);
+            return { ...it, feedDescription: it.description, og: extractOg(html) };
+          } catch (e) {
+            return { ...it, feedDescription: it.description, og: { image: "", title: "", description: "", siteName: "" }, error: String((e as Error).message || e) };
+          }
+        }));
+      } catch (e) {
+        topError = String((e as Error).message || e);
+      }
+      const fragment = renderSourceBlock(adhoc, generatedAt, articles, topError);
+      const html = wrapInDoc(`Preview · ${escapeHtml(adhoc.name)}`, fragment);
+      return new Response(JSON.stringify({
+        ok: !topError, target,
+        articleCount: articles.length,
+        hasErrors: articles.some(a => a.error) || !!topError,
+        html, generatedAt,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({
-      error: "Invalid target. Use id:N or category:NAME (all-source verify removed — too many fetches for a single edge-fn invocation).",
+      error: "Invalid target. Use id:N (saved source), category:NAME (saved sources in a category), or url:<rss> (ad-hoc preview).",
     }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

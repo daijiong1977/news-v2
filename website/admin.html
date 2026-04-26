@@ -272,16 +272,18 @@ function WeekdayPills({ value, onChange, compact }) {
 // through. Old behavior — silent clipboard copy — was confusing
 // because the toast was easy to miss and made the button look broken.
 function verifyCmdFor(target) {
-  // target: {kind:'id'|'category'|'all', value?}
+  // target: {kind:'id'|'category'|'all'|'url', value?}
   if (target.kind === 'id')       return `python -m pipeline.verify_source --source-id ${target.value}`;
   if (target.kind === 'category') return `python -m pipeline.verify_source --category ${JSON.stringify(target.value)}`;
+  if (target.kind === 'url')      return `# ad-hoc preview — no Python equivalent.\n# Visit the RSS URL directly in a browser, or use:\ncurl -s ${JSON.stringify(target.value)} | head -200`;
   return `python -m pipeline.verify_source --all`;
 }
 
-// GitHub Actions workflow_dispatch input mapping.
+// Edge-function target string.
 function verifyTargetParam(target) {
   if (target.kind === 'id')       return `id:${target.value}`;
   if (target.kind === 'category') return `category:${target.value}`;
+  if (target.kind === 'url')      return `url:${target.value}`;
   return 'all';
 }
 
@@ -325,7 +327,7 @@ function SourcesTab({ flash, categories }) {
   const [rows, setRows] = useState(null);
   const [draft, setDraft] = useState({
     category:'', name:'', rss_url:'', priority:1, focus:'',
-    enabled:true, active_weekdays:[],
+    flow:'full', enabled:true, active_weekdays:[],
   });
   const [bulkCat, setBulkCat] = useState('');
 
@@ -343,7 +345,7 @@ function SourcesTab({ flash, categories }) {
       focus: draft.focus || null,
     });
     if (error) flash('err', error.message);
-    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', enabled:true, active_weekdays:[] }); load(); }
+    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', flow:'full', enabled:true, active_weekdays:[] }); load(); }
   };
 
   const updateRow = async (id, patch) => {
@@ -388,10 +390,30 @@ function SourcesTab({ flash, categories }) {
           <span className="label">RSS URL</span>
           <input value={draft.rss_url} onChange={e=>setDraft({...draft, rss_url:e.target.value})} placeholder="https://…/feed.rss"/>
         </div>
-        <div className="row" style={{justifyContent:'space-between', marginTop:12}}>
+        <div className="row" style={{gap:14, marginTop:10, alignItems:'center'}}>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <span className="label" style={{margin:0}}>Flow</span>
+            <select value={draft.flow} onChange={e=>setDraft({...draft, flow:e.target.value})}>
+              <option value="full">full (article body)</option>
+              <option value="light">light (summary only)</option>
+            </select>
+          </label>
           <label className="row" style={{gap:6, fontSize:13}}>
             <input type="checkbox" checked={draft.enabled} onChange={e=>setDraft({...draft, enabled:e.target.checked})}/> enabled
           </label>
+        </div>
+        <div className="row" style={{justifyContent:'space-between', marginTop:12, gap:10}}>
+          <button className="btn btn-ghost btn-sm"
+            disabled={!draft.rss_url}
+            onClick={()=>{
+              if (!draft.rss_url) return;
+              showVerifyCmd(
+                { kind:'url', value: draft.rss_url, name: draft.name || '(unnamed)', category: draft.category || '—' },
+                draft.name || draft.rss_url,
+              );
+            }}>
+            👀 Preview RSS first
+          </button>
           <button className="btn" onClick={add}>Add source</button>
         </div>
       </div>
@@ -491,11 +513,10 @@ function SourcesTab({ flash, categories }) {
 function VerifyModal({ target, label, onClose }) {
   const param = verifyTargetParam(target);
   const cmd = verifyCmdFor(target);
-  // Both id:N (single source) and category:NAME (~9 sources) run inline
-  // in the edge function. "all" was removed — too many fetches for one
-  // invocation; if you need a global verify, run the GitHub Actions
-  // workflow which uses the canonical Python pipeline.
-  const isInline = target.kind === 'id' || target.kind === 'category';
+  // id:N (single source), category:NAME (~9 sources), and url:<rss>
+  // (ad-hoc preview-before-add) all run inline in the edge function.
+  // "all" was removed — too many fetches for one invocation.
+  const isInline = target.kind === 'id' || target.kind === 'category' || target.kind === 'url';
   const [phase, setPhase] = React.useState('idle');   // idle|running|done|error
   const [html, setHtml] = React.useState(null);
   const [errMsg, setErrMsg] = React.useState(null);
@@ -509,10 +530,15 @@ function VerifyModal({ target, label, onClose }) {
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Sign in first.');
+      const reqBody = { target: param };
+      // For ad-hoc preview, pass the user's chosen name + category so
+      // the rendered HTML's header reflects the source they're about
+      // to add (instead of a placeholder).
+      if (target.kind === 'url') { reqBody.name = target.name; reqBody.category = target.category; }
       const r = await fetch(`${SUPABASE_URL}/functions/v1/verify-source`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: param }),
+        body: JSON.stringify(reqBody),
       });
       const j = await r.json();
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
@@ -546,9 +572,10 @@ function VerifyModal({ target, label, onClose }) {
           <>
             <p style={{fontSize:13, color:'#6b5c80', lineHeight:1.5, margin:'0 0 14px'}}>
               {target.kind === 'id'
-                ? <>Fetches this RSS feed, pulls the top 3 articles, grabs each article's og:image + title + description, and renders a self-contained preview. ~5s.</>
-                : <>Fetches every enabled source in this category (typically ~9 sources) in parallel, pulls top 3 articles from each, and renders one combined preview. ~10-15s.</>}
-              {' '}Runs in the Supabase edge fn; stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span> on success.
+                ? <>Fetches this RSS feed, pulls the top 3 articles, grabs each article's og:image + title + description, and renders a self-contained preview. ~5s. Stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span>.</>
+                : target.kind === 'category'
+                ? <>Fetches every enabled source in this category (typically ~9 sources) in parallel, pulls top 3 articles from each, and renders one combined preview. ~10-15s.</>
+                : <>Ad-hoc preview of an RSS URL <b>before</b> you save it. Doesn't write anything to the DB — just shows what the top 3 articles + og:images look like. Use this to sanity-check a feed before clicking <i>Add source</i>.</>}
             </p>
             <div className="row" style={{gap:10, marginBottom:14, flexWrap:'wrap'}}>
               <button className="btn" onClick={runVerify}>☁️ Run verify now</button>
