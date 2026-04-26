@@ -258,22 +258,34 @@ function WeekdayPills({ value, onChange, compact }) {
   );
 }
 
-// ── SOURCE VERIFY (CLI-driven) ───────────────────────────────────────
-// Verify isn't an Edge Function — it runs the canonical pipeline
-// extraction (cleaner.py + image_optimize.py) via:
+// ── SOURCE VERIFY ────────────────────────────────────────────────────
+// Two paths depending on where the operator is:
 //
-//   python -m pipeline.verify_source --source-id N
-//   python -m pipeline.verify_source --category News
-//   python -m pipeline.verify_source --all
+//   · Local run:  python -m pipeline.verify_source --source-id N
+//   · Cloud run:  GitHub Actions → Verify source(s) → workflow_dispatch
+//                 with target='id:N' (or 'category:NAME' or 'all').
+//                 Output uploads to Supabase Storage at verify/<ts>/
+//                 and as a GitHub Actions artifact (14-day retention).
 //
-// Output is HTML in `out/verify/<timestamp>/`, openable locally; the
-// script also stamps `last_verified_at` in redesign_source_configs.
+// The button below opens a modal showing both options + a direct link
+// to the GitHub Actions dispatch page so non-CLI editors can click
+// through. Old behavior — silent clipboard copy — was confusing
+// because the toast was easy to miss and made the button look broken.
 function verifyCmdFor(target) {
   // target: {kind:'id'|'category'|'all', value?}
   if (target.kind === 'id')       return `python -m pipeline.verify_source --source-id ${target.value}`;
   if (target.kind === 'category') return `python -m pipeline.verify_source --category ${JSON.stringify(target.value)}`;
   return `python -m pipeline.verify_source --all`;
 }
+
+// GitHub Actions workflow_dispatch input mapping.
+function verifyTargetParam(target) {
+  if (target.kind === 'id')       return `id:${target.value}`;
+  if (target.kind === 'category') return `category:${target.value}`;
+  return 'all';
+}
+
+const VERIFY_WORKFLOW_URL = 'https://github.com/daijiong1977/news-v2/actions/workflows/verify-source.yml';
 
 async function copyToClipboard(text) {
   try { await navigator.clipboard.writeText(text); return true; }
@@ -344,12 +356,9 @@ function SourcesTab({ flash, categories }) {
     if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
   };
 
-  const showVerifyCmd = async (target, label) => {
-    const cmd = verifyCmdFor(target);
-    const ok = await copyToClipboard(cmd);
-    flash('ok', ok
-      ? `Copied to clipboard: ${cmd}`
-      : `Run locally: ${cmd}`);
+  const [verifyModal, setVerifyModal] = useState(null);
+  const showVerifyCmd = (target, label) => {
+    setVerifyModal({ target, label });
   };
 
   return (
@@ -463,6 +472,64 @@ function SourcesTab({ flash, categories }) {
             {rows && rows.length === 0 && <tr><td colSpan="10" className="empty">No sources yet.</td></tr>}
           </tbody>
         </table>
+      </div>
+
+      {verifyModal && (
+        <VerifyModal
+          target={verifyModal.target}
+          label={verifyModal.label}
+          onClose={()=>setVerifyModal(null)}/>
+      )}
+    </div>
+  );
+}
+
+// Modal that explains both ways to run the Verify pipeline (local CLI
+// or GitHub Actions cloud) and provides one-click access to each.
+function VerifyModal({ target, label, onClose }) {
+  const cmd = verifyCmdFor(target);
+  const param = verifyTargetParam(target);
+  const [copyState, setCopyState] = useState('idle');
+  const onCopy = async () => {
+    const ok = await copyToClipboard(cmd);
+    setCopyState(ok ? 'ok' : 'fail');
+    setTimeout(()=>setCopyState('idle'), 2000);
+  };
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'rgba(27,18,48,0.55)', zIndex:50,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    }}>
+      <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:560, width:'100%'}}>
+        <div className="row" style={{justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+          <h3 style={{margin:0}}>Verify <span style={{color:'#9061f9'}}>{label}</span></h3>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <p style={{fontSize:13, color:'#6b5c80', lineHeight:1.5, margin:'0 0 18px'}}>
+          Verify pulls 3 latest articles + og:image from this RSS feed and renders an HTML preview using
+          the canonical pipeline (so it matches what the daily run produces).
+          On success it stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span>.
+        </p>
+
+        <div className="card" style={{background:'#fff9ef', border:'2px solid #f0e8d8', marginBottom:14}}>
+          <div className="label" style={{marginBottom:6}}>☁️ Cloud — GitHub Actions (recommended)</div>
+          <p style={{fontSize:13, color:'#1b1230', lineHeight:1.5, margin:'0 0 10px'}}>
+            Click the link, then in <b>Run workflow</b> set <b>target</b> to:
+            <span className="pre" style={{padding:'2px 6px', marginLeft:6, fontWeight:700}}>{param}</span>
+          </p>
+          <a href={VERIFY_WORKFLOW_URL} target="_blank" rel="noopener"
+             className="btn" style={{textDecoration:'none', display:'inline-block'}}>
+            Open verify-source.yml ↗
+          </a>
+        </div>
+
+        <div className="card" style={{background:'#fff', border:'2px solid #f0e8d8'}}>
+          <div className="label" style={{marginBottom:6}}>💻 Local — copy &amp; paste in your terminal</div>
+          <div className="pre" style={{padding:'8px 10px', fontSize:12.5, marginBottom:10, userSelect:'all'}}>{cmd}</div>
+          <button className="btn btn-sm" onClick={onCopy}>
+            {copyState === 'ok' ? '✓ Copied' : copyState === 'fail' ? '✗ Copy failed — select text manually' : 'Copy command'}
+          </button>
+        </div>
       </div>
     </div>
   );
