@@ -46,7 +46,20 @@
     try {
       var ss = window.safeStorage;
       var id = ss && ss.get('ohye_client_id');
-      return (typeof id === 'string' && id.length > 8) ? id : null;
+      if (typeof id === 'string' && id.length > 8) return id;
+      // Lazily mint the id via data.jsx's getClientId() if it's available
+      // (it persists to localStorage). Otherwise generate a UUID-shaped
+      // string here. Without this, kidsync silently no-ops for any kid
+      // who never triggered fetchAIFeedback — i.e. most of them — and
+      // the parent dashboard's auto-claim has nothing to claim.
+      if (typeof window.getClientId === 'function') {
+        var minted = window.getClientId();
+        if (typeof minted === 'string' && minted.length > 8) return minted;
+      }
+      var newId = 'cid-' + Date.now().toString(36) + '-'
+        + Math.random().toString(36).slice(2, 10);
+      if (ss) ss.set('ohye_client_id', newId);
+      return newId;
     } catch (e) { return null; }
   }
 

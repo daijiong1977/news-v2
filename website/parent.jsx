@@ -362,10 +362,72 @@ function useKids(session) {
   return { kids, loading, error, refresh, parentRow };
 }
 
+// Build a digest HTML email from the local-mode stats (the same shape
+// `collectStats()` returns). Used by the "Send me a copy now" button so
+// it works on devices where the kid is NOT linked to a cloud parent
+// account — which is most of them.
+function buildLocalDigestHtml(stats) {
+  const tw = stats.tweaks || {};
+  const cat = (c) => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:#f5f0e8;color:#1b1230;">${c || '—'}</span>`;
+  const fmtMs = (ms) => {
+    if (!ms || ms < 1000) return '—';
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return sec + 's';
+    const min = Math.floor(sec / 60);
+    return min < 60 ? min + 'm' : Math.floor(min / 60) + 'h ' + (min % 60) + 'm';
+  };
+  const escape = (s) => String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const articleRows = stats.articleStats.slice(0, 10).map(a => {
+    const stepIcons = ['read','analyze','quiz','discuss']
+      .map(s => a.steps.includes(s) ? '✓' : '·').join(' ');
+    const quizBit = a.lastQuiz ? `<b>${a.lastQuiz.correct}/${a.lastQuiz.total}</b>` : '—';
+    return `<tr>
+      <td style="padding:8px 6px;border-bottom:1px dashed #f0e8d8;font-size:13px;">${escape(a.title.slice(0, 70))}${a.title.length>70?'…':''}<br><span style="color:#9a8d7a;font-size:11px;">${cat(a.category)} · steps: ${stepIcons} · quiz ${quizBit} · ${fmtMs(a.timeMs)}</span></td>
+    </tr>`;
+  }).join('');
+  const wrongRows = stats.wrongAnswers.slice(0, 5).map(w => `
+    <tr><td style="padding:8px 6px;border-bottom:1px dashed #f0e8d8;font-size:13px;">
+      <b>${escape(w.question)}</b><br>
+      <span style="color:#b22525;">✗ Picked: ${escape(w.picked || '(blank)')}</span><br>
+      <span style="color:#0e8d82;">✓ Correct: ${escape(w.correct)}</span>
+    </td></tr>`).join('');
+  const reactionsBit = ['love','thinky','meh','dislike']
+    .filter(k => stats.reactionCounts[k] > 0)
+    .map(k => `${({love:'💖',thinky:'🤔',meh:'😐',dislike:'👎'})[k]} ${stats.reactionCounts[k]}`)
+    .join(' · ') || '— none yet —';
+  const tile = (n, label) => `<td style="background:#fff9ef;border:1px solid #f0e8d8;border-radius:8px;padding:12px;text-align:center;width:25%;"><div style="font-family:Georgia,serif;font-size:24px;font-weight:900;color:#1b1230;">${n}</div><div style="font-size:11px;color:#6b5c80;text-transform:uppercase;">${label}</div></td>`;
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff9ef;color:#1b1230;padding:24px;max-width:680px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:900;">kidsnews</div>
+      <div style="font-size:13px;color:#6b5c80;">Reading report · this device</div>
+    </div>
+    <p style="font-size:15px;line-height:1.6;">Hi! Here's <b>${escape(tw.userName || 'your kid')}</b>'s reading on this device:</p>
+    <table style="width:100%;border-collapse:collapse;margin:14px 0;">
+      <tr>
+        ${tile(stats.articlesTouched, 'articles touched')}
+        ${tile(stats.totalAttempts, 'quizzes')}
+        ${tile(stats.avgPct + '%', 'avg correct')}
+        ${tile(fmtMs(stats.totalReadingMs), 'reading time')}
+      </tr>
+    </table>
+    ${articleRows ? `<h3 style="font-family:Georgia,serif;color:#1b1230;font-size:16px;margin:18px 0 6px;">Articles</h3><table style="width:100%;border-collapse:collapse;">${articleRows}</table>` : ''}
+    ${wrongRows ? `<h3 style="font-family:Georgia,serif;color:#1b1230;font-size:16px;margin:18px 0 6px;">Recent quiz misses</h3><table style="width:100%;border-collapse:collapse;">${wrongRows}</table>` : ''}
+    <h3 style="font-family:Georgia,serif;color:#1b1230;font-size:16px;margin:18px 0 6px;">Reactions</h3>
+    <p style="font-size:14px;color:#1b1230;">${reactionsBit}</p>
+    <p style="margin-top:24px;text-align:center;">
+      <a href="https://kidsnews.21mins.com/parent.html" style="display:inline-block;background:#1b1230;color:#ffc83d;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:800;font-size:14px;">Open dashboard ↗</a>
+    </p>
+    <p style="margin-top:30px;font-size:11px;color:#9a8d7a;text-align:center;">
+      Sent on demand from this device's data. Sign in with Google + link the kid for cross-device history + scheduled digests.
+    </p>
+  </div>`;
+}
+
 // Cadence toggle + "Send me a copy now" button. The "Send now" button
-// posts to send-digest with ?force=1&email=<self> so the parent can preview
-// the email format without waiting for the cron.
-function DigestCadenceToggle({ parentRow, session, onChanged }) {
+// builds an email from THIS DEVICE's localStorage stats and posts to
+// send-email-v2 directly — works regardless of whether a kid is linked
+// to a cloud parent account, which is the common case.
+function DigestCadenceToggle({ parentRow, session, stats, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [busySend, setBusySend] = useState(false);
   const [sendStatus, setSendStatus] = useState(null); // null | 'ok' | string(err)
@@ -381,30 +443,37 @@ function DigestCadenceToggle({ parentRow, session, onChanged }) {
   };
 
   const sendNow = async () => {
-    if (!session || !session.user || !session.user.email) return;
+    // Recipient: signed-in email if present, else prompt. We need
+    // SOMEWHERE to send the email — but we don't need a cloud-linked
+    // kid, since this digest is built from this device's localStorage.
+    let toEmail = (session && session.user && session.user.email) || '';
+    if (!toEmail) {
+      const v = window.prompt('Email this device\'s report to:');
+      if (!v || !v.includes('@')) return;
+      toEmail = v.trim();
+    }
     setBusySend(true); setSendStatus(null);
     try {
-      const url = SUPABASE_URL + '/functions/v1/send-digest?force=1&email=' + encodeURIComponent(session.user.email);
-      const res = await fetch(url, {
+      if (!stats || !stats.tweaks) throw new Error('No local data to report yet — open kidsnews on this device first.');
+      const html = buildLocalDigestHtml(stats);
+      const subject = `kidsnews · ${stats.tweaks.userName || 'kid'}'s reading on this device`;
+      const text = `kidsnews reading report from this device.\n\nOpen the dashboard: ${window.location.origin}/parent.html`;
+      const res = await fetch(SUPABASE_URL + '/functions/v1/send-email-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({
+          to_email: toEmail,
+          subject, html, message: text,
+          from_name: 'kidsnews parent dashboard',
+        }),
       });
       const data = await res.json();
-      if (data && data.sent === 1) {
-        setSendStatus('ok');
-        onChanged && onChanged();
-      } else {
-        const reason = (data && data.results && data.results[0] && data.results[0].reason)
-          || (data && data.error)
-          || 'No kids linked yet — claim a kid first.';
-        setSendStatus(reason);
-      }
+      if (data && data.success) setSendStatus('ok');
+      else setSendStatus((data && data.error) || `send-email-v2 ${res.status}`);
     } catch (e) {
       setSendStatus(e.message || String(e));
     }
     setBusySend(false);
-    // Auto-dismiss after a few seconds.
     setTimeout(() => setSendStatus(null), 6000);
   };
 
@@ -424,16 +493,15 @@ function DigestCadenceToggle({ parentRow, session, onChanged }) {
           cursor: busy ? 'wait' : 'pointer', fontFamily: 'Nunito, sans-serif',
         }}>{c.label}</button>
       ))}
-      <button onClick={sendNow} disabled={busySend || cur === 'off'}
-        title={cur === 'off' ? 'Set a cadence first' : 'Send a digest to your inbox right now'}
+      <button onClick={sendNow} disabled={busySend}
+        title="Email a snapshot of this device's reading data to your inbox"
         style={{
           background: '#fff', color: '#1b1230',
           border: '2px solid #ffc83d', borderRadius: 999,
           padding: '4px 12px', fontWeight: 800, fontSize: 12,
-          cursor: (busySend || cur === 'off') ? 'not-allowed' : 'pointer',
-          opacity: cur === 'off' ? 0.55 : 1,
+          cursor: busySend ? 'wait' : 'pointer',
           fontFamily: 'Nunito, sans-serif',
-        }}>{busySend ? 'Sending…' : '📤 Send me a copy now'}</button>
+        }}>{busySend ? 'Sending…' : '📤 Send this device\'s report'}</button>
       {sendStatus === 'ok' && (
         <span style={{ color: '#0e8d82', fontWeight: 800 }}>✓ Sent — check your inbox.</span>
       )}
@@ -770,7 +838,7 @@ function PairingCodeInput({ onLinked }) {
   );
 }
 
-function CloudBanner({ session, kids, signIn, signOut, source, setSource, selectedKidId, setSelectedKidId, refreshKids, parentRow }) {
+function CloudBanner({ session, kids, signIn, signOut, source, setSource, selectedKidId, setSelectedKidId, refreshKids, parentRow, stats }) {
   if (!session) {
     return (
       <div style={{
@@ -825,7 +893,7 @@ function CloudBanner({ session, kids, signIn, signOut, source, setSource, select
           </div>
         )}
         <PairingCodeInput onLinked={() => refreshKids && refreshKids()}/>
-        <DigestCadenceToggle parentRow={parentRow} session={session} onChanged={() => refreshKids && refreshKids()}/>
+        <DigestCadenceToggle parentRow={parentRow} session={session} stats={stats} onChanged={() => refreshKids && refreshKids()}/>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'inline-flex', borderRadius: 10, overflow: 'hidden', border: '2px solid #f0e8d8' }}>
@@ -1264,6 +1332,7 @@ function Dashboard() {
         source={source} setSource={setSource}
         selectedKidId={selectedKidId} setSelectedKidId={setSelectedKidId}
         refreshKids={refreshKids} parentRow={parentRow}
+        stats={localStats}
       />
       {source === 'cloud' && cloudLoading && (
         <div className="pd-card" style={{ textAlign: 'center', color: '#9a8d7a' }}>Loading from the cloud…</div>
