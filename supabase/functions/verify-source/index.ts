@@ -1,29 +1,31 @@
-// Verify-source dispatcher for the kidsnews admin page.
+// Verify-source — render a 3-article preview for an RSS source, in
+// the edge function itself. No GitHub Actions, no PAT.
 //
-// Two actions over one POST endpoint:
+// Auth: caller's JWT must belong to a user listed in
+// public.redesign_admin_users (same gate the admin page uses).
 //
-//   POST { action: "dispatch", target: "id:7" | "category:News" | "all" }
-//     → Dispatches the news-v2 verify-source.yml workflow with the
-//       given target + upload=true. Polls /actions/runs to find the
-//       run that just started and returns { run_id, html_url }.
+// Flow:
+//   1. Look up the source row by id.
+//   2. Fetch its RSS feed; pull top 3 items via a tiny regex parser
+//      (good enough for RSS/Atom — we only need title/link/pubDate/desc).
+//   3. For each item: fetch the article URL, extract og:image /
+//      og:title / og:description from the response HTML. Strip
+//      banner-crop params from og:image (the cleaner.py gotcha:
+//      Squarespace / IEEE Spectrum CMSes embed `coordinates=` /
+//      `rect=` / `crop=` to force 2:1 share crops that chop heads).
+//   4. Render a self-contained HTML preview and return it. Also
+//      stamp last_verified_at on the source row.
 //
-//   POST { action: "status", run_id: 12345 }
-//     → Reads the run's status. If completed, lists the most recent
-//       verify/<ts>/ folder in Supabase Storage and returns the
-//       per-target HTML preview public URL.
-//
-// Auth model: caller must be an authenticated user listed in
-// public.redesign_admin_users (same gate the admin page itself uses).
-// GitHub PAT lives in public.secrets.GH_PAT (Actions: Read and write
-// on daijiong1977/news-v2). CORS is open so the admin page can hit it.
+// The admin modal just renders the returned HTML in an iframe via
+// the srcdoc attribute. No storage upload needed — the preview is
+// ephemeral by design (run again to refresh).
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const GH_REPO      = Deno.env.get("GH_REPO") ?? "daijiong1977/news-v2";
-const WF_FILENAME  = "verify-source.yml";
+const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -35,132 +37,207 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-async function readGhPat(): Promise<string> {
-  const { data, error } = await sb.rpc("get_secret", { secret_name: "GH_PAT" });
-  if (error) throw new Error("get_secret failed: " + error.message);
-  if (!data) throw new Error("GH_PAT not configured in public.secrets");
-  return String(data);
-}
+const UA = "kidsnews-verify/1.0 (+https://kidsnews.21mins.com)";
 
-// Authentication: caller must be an admin. We verify via the auth header
-// the browser passes (the supabase-js client attaches it automatically).
 async function requireAdmin(req: Request): Promise<string> {
   const auth = req.headers.get("authorization") || "";
   if (!auth.startsWith("Bearer ")) throw new Error("Sign-in required");
   const token = auth.slice("Bearer ".length);
-  // Use a request-scoped client so RLS sees the user's JWT.
-  const ub = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+  const ub = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: { user }, error } = await ub.auth.getUser(token);
   if (error || !user || !user.email) throw new Error("Auth failed");
-  // Use service-role client (sb) to read admin allowlist regardless of RLS shape.
   const { data: row } = await sb.from("redesign_admin_users").select("email").eq("email", user.email).maybeSingle();
   if (!row) throw new Error("Not an admin");
   return user.email;
 }
 
-async function ghDispatch(target: string): Promise<{ stamped_at: string }> {
-  const pat = await readGhPat();
-  const url = `https://api.github.com/repos/${GH_REPO}/actions/workflows/${WF_FILENAME}/dispatches`;
-  const stampedAt = new Date().toISOString();
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "Authorization": `Bearer ${pat}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    body: JSON.stringify({
-      ref: "main",
-      inputs: { target, upload: "true" },
-    }),
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`GH dispatch failed (${res.status}): ${t}`);
-  }
-  return { stamped_at: stampedAt };
+// ── RSS / Atom parsing ─────────────────────────────────────────────
+// Regex-only — no DOMParser. We're not building an RSS reader, just
+// peeking at the latest 3 entries. Handles both <item>...</item> and
+// Atom's <entry>...</entry>.
+function unwrapCdata(s: string): string {
+  return s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
 }
 
-async function findNewestRun(stampedAt: string): Promise<any> {
-  const pat = await readGhPat();
-  // The dispatch returns 204 with no body, so we have to look up the run.
-  // Poll up to ~10 attempts spaced 1s.
-  for (let i = 0; i < 10; i++) {
-    await new Promise(r => setTimeout(r, 1000));
-    const url = `https://api.github.com/repos/${GH_REPO}/actions/workflows/${WF_FILENAME}/runs?event=workflow_dispatch&per_page=5`;
-    const res = await fetch(url, {
-      headers: {
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${pat}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function stripTags(s: string): string {
+  return s.replace(/<[^>]+>/g, "").trim();
+}
+
+function parseFeed(xml: string, max = 3): { title: string; link: string; pubDate: string; description: string }[] {
+  const block = /<(item|entry)\b[\s\S]*?<\/\1>/g;
+  const out: any[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = block.exec(xml)) && out.length < max) {
+    const seg = m[0];
+    const title = unwrapCdata((seg.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "");
+    let link = (seg.match(/<link[^>]*?href=["']([^"']+)["']/i) || [])[1]
+            || (seg.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1]
+            || "";
+    link = unwrapCdata(link);
+    const pubDate = unwrapCdata(
+      (seg.match(/<(?:pubDate|published|updated|dc:date)[^>]*>([\s\S]*?)<\/(?:pubDate|published|updated|dc:date)>/i) || [])[1] || ""
+    );
+    let description = unwrapCdata(
+      (seg.match(/<(?:description|summary|content[^>]*?)[^>]*>([\s\S]*?)<\/(?:description|summary|content)>/i) || [])[1] || ""
+    );
+    description = stripTags(decodeEntities(description)).slice(0, 600);
+    out.push({
+      title: stripTags(decodeEntities(title)),
+      link,
+      pubDate,
+      description,
     });
-    if (!res.ok) continue;
-    const data = await res.json();
-    const runs = data.workflow_runs || [];
-    // Find the first run created at or after stamped_at.
-    const stampMs = Date.parse(stampedAt);
-    const match = runs.find((r: any) => Date.parse(r.created_at) >= stampMs - 2000);
-    if (match) return match;
   }
-  throw new Error("Couldn't find the new run after 10s of polling");
+  return out;
 }
 
-async function getRunStatus(runId: number): Promise<any> {
-  const pat = await readGhPat();
-  const url = `https://api.github.com/repos/${GH_REPO}/actions/runs/${runId}`;
-  const res = await fetch(url, {
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "Authorization": `Bearer ${pat}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
-  if (!res.ok) throw new Error(`status fetch failed (${res.status})`);
-  return res.json();
-}
-
-// After completion, find the verify/<ts>/ folder in Supabase Storage
-// that matches this run. We list folders inside `verify/` and pick the
-// one with mtime closest to (after) the run's started_at.
-async function findHtmlPreview(runStartedAt: string, target: string): Promise<string | null> {
-  // List "verify/" prefix in redesign-daily-content.
-  const { data: tsFolders, error } = await sb.storage.from("redesign-daily-content").list("verify", {
-    limit: 50,
-    sortBy: { column: "created_at", order: "desc" },
-  });
-  if (error || !tsFolders) return null;
-  const startedMs = Date.parse(runStartedAt);
-  // Folder name format: YYYYMMDD-HHMMSS (UTC).
-  const fmt = (n: number) => String(n).padStart(2, "0");
-  const folderTime = (name: string) => {
-    const m = name.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/);
-    if (!m) return null;
-    return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+// ── og: meta extraction ────────────────────────────────────────────
+function extractOg(html: string): { image: string; title: string; description: string; siteName: string } {
+  const grab = (key: string) => {
+    const re1 = new RegExp(`<meta\\s+[^>]*?(?:property|name)\\s*=\\s*["']og:${key}["'][^>]*?content\\s*=\\s*["']([^"']+)["']`, "i");
+    const re2 = new RegExp(`<meta\\s+[^>]*?content\\s*=\\s*["']([^"']+)["'][^>]*?(?:property|name)\\s*=\\s*["']og:${key}["']`, "i");
+    return (html.match(re1) || html.match(re2) || [])[1] || "";
   };
-  const candidate = tsFolders
-    .map(f => ({ name: f.name, t: folderTime(f.name) }))
-    .filter(f => f.t !== null && f.t >= startedMs - 60_000) // within 1m
-    .sort((a, b) => (a.t! - b.t!))[0];
-  if (!candidate) return null;
-  // List files inside that folder and pick the first .html.
-  const { data: files } = await sb.storage.from("redesign-daily-content").list(`verify/${candidate.name}`, {
-    limit: 50,
-    sortBy: { column: "created_at", order: "asc" },
-  });
-  if (!files || !files.length) return null;
-  // Pick the file matching the source if target=id:N, else first html.
-  let chosen = files.find(f => f.name.endsWith(".html"));
-  if (target.startsWith("id:")) {
-    const sid = target.slice(3);
-    const m = files.find(f => f.name.includes(`source_${sid}_`) || f.name.includes(`-${sid}-`));
-    if (m) chosen = m;
+  return {
+    image: stripBannerCrop(grab("image")),
+    title: decodeEntities(grab("title")),
+    description: decodeEntities(grab("description")),
+    siteName: decodeEntities(grab("site_name")),
+  };
+}
+
+// Mirror of pipeline/cleaner.py · _strip_banner_crop_params(). Some
+// CMSes pre-crop og:image to a 2:1 social banner via query params,
+// chopping heads off portraits. Always strip those before showing.
+function stripBannerCrop(url: string): string {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    ["coordinates", "rect", "crop", "g_focus", "g"].forEach(p => u.searchParams.delete(p));
+    return u.toString();
+  } catch {
+    return url;
   }
-  if (!chosen) return null;
-  return `${SUPABASE_URL}/storage/v1/object/public/redesign-daily-content/verify/${candidate.name}/${chosen.name}`;
+}
+
+async function fetchTextWithTimeout(url: string, ms = 8000): Promise<string> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html,*/*;q=0.8" }, signal: ctrl.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.text();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// ── Render a self-contained HTML preview ───────────────────────────
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]!));
+}
+
+function renderPreview(opts: {
+  source: { id: number; name: string; category: string; rss_url: string };
+  generatedAt: string;
+  articles: Array<{
+    title: string; link: string; pubDate: string;
+    feedDescription: string;
+    og: { image: string; title: string; description: string; siteName: string };
+    error?: string;
+  }>;
+}): string {
+  const { source, generatedAt, articles } = opts;
+  const cards = articles.map((a, i) => `
+    <article style="background:#fff;border:1px solid #e2dccc;border-radius:14px;overflow:hidden;margin-bottom:18px;display:grid;grid-template-columns:1fr 2fr;gap:0;">
+      ${a.og.image
+        ? `<div style="background:url('${escapeHtml(a.og.image)}') center/cover, #f0e8d8; min-height:220px;"></div>`
+        : `<div style="background:#f0e8d8;min-height:220px;display:flex;align-items:center;justify-content:center;color:#9a8d7a;font-size:13px;">no og:image</div>`}
+      <div style="padding:16px 20px;">
+        <div style="font-size:11px;color:#9a8d7a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">
+          Article ${i + 1}${a.pubDate ? " · " + escapeHtml(a.pubDate) : ""}
+        </div>
+        <h2 style="font-family:Georgia,serif;font-size:20px;font-weight:900;color:#1b1230;margin:0 0 8px;line-height:1.25;">
+          ${escapeHtml(a.og.title || a.title || "(untitled)")}
+        </h2>
+        <p style="font-size:14px;color:#3a2a4a;line-height:1.55;margin:0 0 10px;">
+          ${escapeHtml(a.og.description || a.feedDescription || "(no description)").slice(0, 400)}
+        </p>
+        ${a.error ? `<div style="font-size:12px;color:#b22525;margin-bottom:8px;">⚠ ${escapeHtml(a.error)}</div>` : ""}
+        <div style="font-size:11px;color:#9a8d7a;">
+          ${a.og.siteName ? escapeHtml(a.og.siteName) + " · " : ""}
+          <a href="${escapeHtml(a.link)}" target="_blank" rel="noopener" style="color:#1f5fd1;">open ↗</a>
+          ${a.og.image ? ` · <a href="${escapeHtml(a.og.image)}" target="_blank" rel="noopener" style="color:#9a8d7a;">img ↗</a>` : ""}
+        </div>
+      </div>
+    </article>
+  `).join("");
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><title>Verify · ${escapeHtml(source.name)}</title>
+<style>
+  body { margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#fff9ef; color:#1b1230; }
+  header { background:#fff; border:1px solid #e2dccc; border-radius:14px; padding:16px 20px; margin-bottom:20px; }
+  header h1 { font-family:Georgia,serif; font-size:22px; margin:0 0 6px; }
+  header .meta { font-size:12px; color:#6b5c80; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:800; background:#fff4c2; color:#8a6d00; }
+</style></head>
+<body>
+  <header>
+    <h1>${escapeHtml(source.name)} <span class="pill">${escapeHtml(source.category)}</span></h1>
+    <div class="meta">
+      RSS: <a href="${escapeHtml(source.rss_url)}" target="_blank" rel="noopener" style="color:#1f5fd1;">${escapeHtml(source.rss_url)}</a><br>
+      Generated: ${escapeHtml(generatedAt)} · ${articles.length} article${articles.length === 1 ? "" : "s"}
+    </div>
+  </header>
+  ${cards || `<div style="background:#fff4c2;border:1px solid #f0e8d8;border-radius:10px;padding:14px;color:#8a6d00;">RSS feed had no parseable items.</div>`}
+</body></html>`;
+}
+
+// ── Per-source verification ────────────────────────────────────────
+async function verifyOne(source: any): Promise<string> {
+  const generatedAt = new Date().toISOString();
+  let articles: any[] = [];
+  try {
+    const xml = await fetchTextWithTimeout(source.rss_url, 8000);
+    const items = parseFeed(xml, 3);
+    articles = await Promise.all(items.map(async (it) => {
+      try {
+        if (!it.link) return { ...it, og: { image: "", title: "", description: "", siteName: "" } };
+        const html = await fetchTextWithTimeout(it.link, 8000);
+        return { ...it, feedDescription: it.description, og: extractOg(html) };
+      } catch (e) {
+        return { ...it, feedDescription: it.description, og: { image: "", title: "", description: "", siteName: "" }, error: String((e as Error).message || e) };
+      }
+    }));
+  } catch (e) {
+    return renderPreview({
+      source, generatedAt,
+      articles: [{
+        title: "(failed to fetch RSS)",
+        link: source.rss_url, pubDate: "",
+        feedDescription: "",
+        og: { image: "", title: "", description: "", siteName: "" },
+        error: String((e as Error).message || e),
+      }],
+    });
+  }
+  // Stamp last_verified_at
+  await sb.from("redesign_source_configs").update({ last_verified_at: generatedAt }).eq("id", source.id);
+  return renderPreview({ source, generatedAt, articles });
 }
 
 Deno.serve(async (req) => {
@@ -173,49 +250,35 @@ Deno.serve(async (req) => {
     }
     await requireAdmin(req);
     const body = await req.json();
-    const action = body.action;
-    if (action === "dispatch") {
-      const target = String(body.target || "").trim();
-      if (!/^(all|category:[A-Za-z]+|id:\d+)$/.test(target)) {
-        return new Response(JSON.stringify({ error: "Invalid target" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const { stamped_at } = await ghDispatch(target);
-      const run = await findNewestRun(stamped_at);
+    const target: string = String(body.target || "").trim();
+    if (!/^id:\d+$/.test(target)) {
+      // category:* and all are still supported via the GH Actions path
+      // (which optimizes images + writes per-day artifacts). The inline
+      // edge fn covers the most common case (one source).
       return new Response(JSON.stringify({
-        run_id: run.id, html_url: run.html_url, status: run.status,
-        started_at: run.created_at, target,
+        error: "Inline verify supports only id:N. For category:* / all, use the GitHub Actions path.",
       }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (action === "status") {
-      const runId = Number(body.run_id);
-      if (!Number.isFinite(runId)) {
-        return new Response(JSON.stringify({ error: "run_id required" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const run = await getRunStatus(runId);
-      let html_preview_url: string | null = null;
-      if (run.status === "completed" && run.conclusion === "success") {
-        html_preview_url = await findHtmlPreview(run.created_at, body.target || "all");
-      }
-      return new Response(JSON.stringify({
-        run_id: runId,
-        status: run.status,                 // queued | in_progress | completed
-        conclusion: run.conclusion,         // success | failure | null
-        started_at: run.created_at,
-        updated_at: run.updated_at,
-        html_url: run.html_url,
-        html_preview_url,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const sid = Number(target.slice(3));
+    const { data: source, error } = await sb.from("redesign_source_configs")
+      .select("id, name, category, rss_url, enabled")
+      .eq("id", sid).maybeSingle();
+    if (error) throw error;
+    if (!source) {
+      return new Response(JSON.stringify({ error: `source id ${sid} not found` }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    return new Response(JSON.stringify({ error: "Unknown action" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const html = await verifyOne(source);
+    return new Response(JSON.stringify({
+      ok: true, target,
+      source: { id: source.id, name: source.name, category: source.category },
+      html,
+      generatedAt: new Date().toISOString(),
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: String((e as Error).message || e) }), {
