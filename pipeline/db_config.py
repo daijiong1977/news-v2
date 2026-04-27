@@ -98,16 +98,6 @@ def _row_to_source(row: dict) -> NewsSource:
     )
 
 
-def _weekday_active(active_weekdays, today_weekday: int) -> bool:
-    """Mon=0 .. Sun=6 — match the seeder's convention."""
-    if not active_weekdays:
-        return True
-    try:
-        return today_weekday in [int(x) for x in active_weekdays]
-    except Exception:
-        return True
-
-
 def _ensure_src_cache() -> dict[str, list[dict]]:
     """One round-trip; cache the raw rows grouped by category."""
     global _src_cache
@@ -124,34 +114,33 @@ def _ensure_src_cache() -> dict[str, list[dict]]:
 
 
 def load_sources(category_name: str, *, today_weekday: int | None = None) -> list[NewsSource]:
-    """Enabled non-backup sources for `category_name`.
+    """Enabled non-backup sources for `category_name`, ordered for LRU rotation.
 
     Selection rules (in order):
       1. enabled = true
       2. is_backup = false
-      3. active_weekdays — HARD pin if set (e.g. "Sport only on weekends");
-         empty/null means every day (default).
-      4. ORDER BY last_used_at NULLS FIRST, priority ASC
+      3. ORDER BY last_used_at NULLS FIRST, priority ASC
          → least-recently-used sources surface first, breaking ties by
          the manual priority column. Pipeline downstream usually picks
          the top N from this list (max_per_source × N), so rotation
-         emerges naturally.
+         emerges naturally — never picks the same source two days in a
+         row when there are alternates available.
 
-    `today_weekday` lets callers pin a specific day (testing). When
-    omitted, uses today's UTC weekday (Mon=0).
+    Note: `today_weekday` is kept for back-compat but no longer affects
+    selection. Earlier versions had a per-source `active_weekdays` pin
+    ("Sports only on weekends"); we removed it to cut maintenance —
+    every category is expected to keep ≥3 evergreen sources, and the
+    LRU sort is enough rotation by itself.
     """
     global _src_cache
     if _src_cache is None:
         raw_by_cat = _ensure_src_cache()
-        wd = today_weekday if today_weekday is not None \
-             else datetime.now(timezone.utc).weekday()
         out: dict[str, list[NewsSource]] = {}
         for cat, rows in raw_by_cat.items():
             kept: list[tuple[str, int, NewsSource]] = []  # (last_used_iso_or_blank, priority, src)
             for r in rows:
                 if not r.get("enabled"): continue
                 if r.get("is_backup"):  continue
-                if not _weekday_active(r.get("active_weekdays"), wd): continue
                 last_used = r.get("last_used_at") or ""   # NULL → "" sorts before any iso string
                 pri = int(r.get("priority") or 99)
                 kept.append((last_used, pri, _row_to_source(r)))

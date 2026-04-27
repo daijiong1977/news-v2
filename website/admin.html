@@ -225,39 +225,6 @@ function ConfirmButton({ children, onConfirm, label='Delete', className='btn btn
   );
 }
 
-// ── WEEKDAY PILLS ────────────────────────────────────────────────────
-// active_weekdays uses Mon=0..Sun=6 (matches pipeline/db_config.py + the
-// existing seeder). null/empty = every day.
-const DOW_LABELS = ['M','T','W','T','F','S','S'];
-function WeekdayPills({ value, onChange, compact }) {
-  // null/[] means "every day"; toggle in/out of the array.
-  const v = Array.isArray(value) ? value : [];
-  const isAll = v.length === 0;
-  const toggle = (i) => {
-    if (isAll) onChange([0,1,2,3,4,5,6].filter(x => x !== i));
-    else if (v.includes(i))      onChange(v.filter(x => x !== i));
-    else                          onChange([...v, i].sort());
-  };
-  const tip = isAll ? 'every day' : v.map(i => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]).join(' ');
-  return (
-    <span className="row" style={{gap:3}} title={tip}>
-      {DOW_LABELS.map((lab, i) => {
-        const on = isAll || v.includes(i);
-        return (
-          <button key={i} type="button" onClick={()=>toggle(i)}
-            style={{
-              width: compact ? 18 : 22, height: compact ? 18 : 22,
-              borderRadius:'50%', fontSize: compact ? 10 : 11, fontWeight:800,
-              border:`1.5px solid ${on ? '#0e8d82' : '#e8dfd3'}`,
-              background: on ? '#e0f6f3' : '#fff',
-              color: on ? '#0e8d82' : '#9a8d7a', cursor:'pointer', padding:0,
-            }}>{lab}</button>
-        );
-      })}
-    </span>
-  );
-}
-
 // ── SOURCE VERIFY ────────────────────────────────────────────────────
 // Two paths depending on where the operator is:
 //
@@ -327,7 +294,7 @@ function SourcesTab({ flash, categories }) {
   const [rows, setRows] = useState(null);
   const [draft, setDraft] = useState({
     category:'', name:'', rss_url:'', priority:1, focus:'',
-    flow:'full', enabled:true, active_weekdays:[],
+    flow:'full', enabled:true,
   });
   const [bulkCat, setBulkCat] = useState('');
 
@@ -341,11 +308,11 @@ function SourcesTab({ flash, categories }) {
     if (!draft.category || !draft.name || !draft.rss_url) { flash('err', 'category, name, rss_url are required'); return; }
     const { error } = await sb.from('redesign_source_configs').insert({
       ...draft,
-      active_weekdays: draft.active_weekdays.length ? draft.active_weekdays : null,
+      active_weekdays: null,    // legacy column; selection is pure LRU now
       focus: draft.focus || null,
     });
     if (error) flash('err', error.message);
-    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', flow:'full', enabled:true, active_weekdays:[] }); load(); }
+    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', flow:'full', enabled:true }); load(); }
   };
 
   const updateRow = async (id, patch) => {
@@ -381,10 +348,6 @@ function SourcesTab({ flash, categories }) {
             <input type="number" value={draft.priority} onChange={e=>setDraft({...draft, priority:parseInt(e.target.value||0)})}/></div>
           <div className="col"><span className="label">Focus (e.g. history, geometry)</span>
             <input value={draft.focus} onChange={e=>setDraft({...draft, focus:e.target.value})} placeholder="optional tag"/></div>
-          <div className="col" style={{gridColumn:'span 2'}}>
-            <span className="label">Active weekdays (none selected = every day)</span>
-            <WeekdayPills value={draft.active_weekdays} onChange={v=>setDraft({...draft, active_weekdays:v})}/>
-          </div>
         </div>
         <div className="col" style={{marginTop:10}}>
           <span className="label">RSS URL</span>
@@ -448,7 +411,7 @@ function SourcesTab({ flash, categories }) {
       <div className="card">
         <table>
           <thead><tr>
-            <th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Focus</th><th>Days</th><th>State</th><th>Verified</th><th>Last used</th><th></th>
+            <th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Focus</th><th>State</th><th>Verified</th><th>Last used</th><th></th>
           </tr></thead>
           <tbody>
             {rows?.map(r => (
@@ -466,7 +429,6 @@ function SourcesTab({ flash, categories }) {
                 <td><input style={{width:'100%'}} defaultValue={r.rss_url} onBlur={e=>e.target.value!==r.rss_url && updateRow(r.id, { rss_url:e.target.value })}/></td>
                 <td><input type="number" style={{width:55}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
                 <td><input style={{width:'100%'}} defaultValue={r.focus||''} onBlur={e=>updateRow(r.id, { focus: e.target.value || null })} placeholder="—"/></td>
-                <td><WeekdayPills value={r.active_weekdays} onChange={v=>updateRow(r.id, { active_weekdays: v.length ? v : null })}/></td>
                 <td>
                   <span className={r.enabled ? 'pill pill-on' : 'pill pill-off'}>
                     {r.enabled ? 'enabled' : 'disabled'}
