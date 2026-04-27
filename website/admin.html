@@ -1052,6 +1052,239 @@ function buildDailyCron({hour, minute}) {
 }
 
 // ── PIPELINE / CRON TAB ──────────────────────────────────────────────
+// "Manual run" card — admin clicks a button → trigger-pipeline edge
+// function dispatches the GitHub workflow → returns the run id + URL
+// so the admin can click straight to the running job. The PAT lives
+// only on the edge function (env var GITHUB_DISPATCH_TOKEN); never
+// touches the kid's localStorage.
+function ManualRunCard({ cfg, flash }) {
+  const [busy, setBusy] = useState(false);
+  const [lastResult, setLastResult] = useState(null); // { workflow, runUrl, runId, dispatchedAt, status?, conclusion? }
+  const [variant, setVariant] = useState(cfg?.pipeline_variant || 'mega');
+  const [resumeFrom, setResumeFrom] = useState('');
+  const pollRef = useRef(null);
+
+  // Stop polling on unmount so we don't leak intervals.
+  useEffect(() => () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
+
+  const callEdge = async (body) => {
+    const sess = await sb.auth.getSession();
+    const token = sess?.data?.session?.access_token;
+    if (!token) throw new Error('Sign in first');
+    const url = `${SUPABASE_URL}/functions/v1/trigger-pipeline`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      const msg = data.hint ? `${data.error} — ${data.hint}` : (data.error || `HTTP ${res.status}`);
+      throw new Error(msg);
+    }
+    return data;
+  };
+
+  const refreshStatus = async (runId) => {
+    try {
+      console.log('[trigger-pipeline] status check for run', runId);
+      const data = await callEdge({ action: 'status', runId });
+      console.log('[trigger-pipeline] status:', data.status, data.conclusion || '');
+      setLastResult(prev => prev && prev.runId === runId ? { ...prev, ...data } : prev);
+      if (data.status === 'completed') {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        if (data.conclusion === 'success') flash('ok', `✓ Run #${runId} completed successfully`);
+        else                                flash('err', `✗ Run #${runId} ended: ${data.conclusion}`);
+      }
+    } catch (e) {
+      console.warn('[trigger-pipeline] status error:', e.message);
+    }
+  };
+
+  const startPolling = (runId) => {
+    if (pollRef.current) { clearInterval(pollRef.current); }
+    let elapsed = 0;
+    const tick = () => {
+      elapsed += 5;
+      // Cap at 30 minutes. Daily-pipeline mega runs take ~10-20 min.
+      if (elapsed > 1800) {
+        clearInterval(pollRef.current); pollRef.current = null;
+        console.log('[trigger-pipeline] poll timeout after 30 min — check GitHub manually');
+        return;
+      }
+      refreshStatus(runId);
+    };
+    pollRef.current = setInterval(tick, 5000);
+    // Also tick once now so the user sees the queued/in_progress state ~5s sooner.
+    setTimeout(() => refreshStatus(runId), 1000);
+  };
+
+  const dispatch = async (workflow, inputs = {}) => {
+    setBusy(true); setLastResult(null);
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    console.log('[trigger-pipeline] dispatch:', workflow, inputs);
+    try {
+      const data = await callEdge({ workflow, inputs });
+      console.log('[trigger-pipeline] dispatched:', data);
+      setLastResult(data);
+      flash('ok', `Dispatched ${workflow}${data.runId ? ` · run #${data.runId}` : ''}`);
+      if (data.runId) startPolling(data.runId);
+    } catch (e) {
+      console.error('[trigger-pipeline] error:', e.message);
+      flash('err', e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Friendly status badge — emoji + color reflect the run state.
+  const statusBadge = (status, conclusion) => {
+    if (!status) return null;
+    const map = {
+      queued:        { icon: '⏳', label: 'Queued',      bg: '#fff4c2', fg: '#8a6d00' },
+      in_progress:   { icon: '🔄', label: 'Running',     bg: '#e0f6f3', fg: '#0e6e64' },
+      completed:     conclusion === 'success'
+        ? { icon: '✓', label: 'Succeeded',  bg: '#d4f3ef', fg: '#0e8d82' }
+        : { icon: '✗', label: conclusion || 'Failed', bg: '#ffe4e4', fg: '#b22525' },
+    };
+    const m = map[status] || { icon: '•', label: status, bg: '#f0e8d8', fg: '#6b5c80' };
+    return (
+      <span style={{
+        display:'inline-block', padding:'3px 9px', borderRadius:999,
+        fontSize:12, fontWeight:800, background: m.bg, color: m.fg, marginLeft:8,
+      }}>{m.icon} {m.label}</span>
+    );
+  };
+
+  return (
+    <div className="card">
+      <h3 style={{marginTop:0}}>Manual run</h3>
+      <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
+        Bypass the schedule and trigger a workflow from this page. The PAT
+        used for dispatch sits server-side in the
+        <code style={{margin:'0 4px'}}>trigger-pipeline</code> edge function;
+        no token leaves the browser.
+      </p>
+
+      {/* Daily pipeline */}
+      <div style={{padding:'12px 0', borderTop:'1px dashed #e2dccc'}}>
+        <div style={{fontWeight:800, fontSize:14, marginBottom:8}}>📰 Daily pipeline</div>
+        <div className="row" style={{gap:10, alignItems:'flex-end', flexWrap:'wrap'}}>
+          <label className="col" style={{gap:4, fontSize:12}}>
+            <span className="label" style={{margin:0}}>Variant</span>
+            <select value={variant} onChange={e=>setVariant(e.target.value)}>
+              <option value="mega">mega — fewer LLM calls</option>
+              <option value="current">current — legacy per-source vet</option>
+            </select>
+          </label>
+          <label className="col" style={{gap:4, fontSize:12}}>
+            <span className="label" style={{margin:0}}>Resume from (mega only)</span>
+            <select value={resumeFrom} onChange={e=>setResumeFrom(e.target.value)}>
+              <option value="">— start fresh —</option>
+              <option value="stage2_picks">stage2_picks</option>
+              <option value="verify">verify</option>
+              <option value="rewrite">rewrite</option>
+              <option value="stage3_safety">stage3_safety</option>
+              <option value="enrich">enrich</option>
+              <option value="persist">persist</option>
+            </select>
+          </label>
+          <button className="btn"
+            disabled={busy}
+            onClick={()=>dispatch('daily-pipeline.yml', {
+              pipeline_variant: variant,
+              ...(resumeFrom ? { resume_from: resumeFrom } : {}),
+            })}>
+            {busy ? '⏳ Dispatching…' : '▶ Run pipeline now'}
+          </button>
+        </div>
+      </div>
+
+      {/* Republish bundle */}
+      <div style={{padding:'12px 0', borderTop:'1px dashed #e2dccc'}}>
+        <div style={{fontWeight:800, fontSize:14, marginBottom:8}}>📦 Republish bundle</div>
+        <p style={{fontSize:12, color:'#6b5c80', margin:'0 0 8px'}}>
+          Repacks <code>latest.zip</code> from current <code>website/</code> + dispatches
+          kidsnews-v2 sync. Use this after editing site code without re-running the pipeline.
+        </p>
+        <button className="btn"
+          disabled={busy}
+          onClick={()=>dispatch('republish-bundle.yml', { trigger_kidsnews_sync: 'true' })}>
+          {busy ? '⏳ Dispatching…' : '↻ Republish + sync'}
+        </button>
+      </div>
+
+      {/* Parent digest */}
+      <div style={{padding:'12px 0', borderTop:'1px dashed #e2dccc'}}>
+        <div style={{fontWeight:800, fontSize:14, marginBottom:8}}>📬 Parent digest</div>
+        <p style={{fontSize:12, color:'#6b5c80', margin:'0 0 8px'}}>
+          Send the parent email digest now (instead of waiting for the cron). Reads
+          all parents whose <code>digest_cadence ≠ off</code>.
+        </p>
+        <button className="btn"
+          disabled={busy}
+          onClick={()=>dispatch('parent-digest.yml', {})}>
+          {busy ? '⏳ Dispatching…' : '✉ Send digests now'}
+        </button>
+      </div>
+
+      {/* Last dispatch — auto-polls every 5s until 'completed' or 30 min */}
+      {lastResult && (
+        <div style={{
+          marginTop:14, padding:'12px 14px',
+          background: lastResult.status === 'completed'
+            ? (lastResult.conclusion === 'success' ? '#e0f6f3' : '#ffe4e4')
+            : '#fff9ef',
+          border: `1px solid ${
+            lastResult.status === 'completed'
+              ? (lastResult.conclusion === 'success' ? '#9bd2c8' : '#f0c8c0')
+              : '#e2dccc'
+          }`,
+          borderRadius:10, fontSize:13,
+        }}>
+          <div style={{fontWeight:800, color:'#1b1230', marginBottom:4}}>
+            Dispatched {lastResult.workflow}
+            {lastResult.runId ? ` · run #${lastResult.runId}` : ''}
+            {statusBadge(lastResult.status, lastResult.conclusion)}
+          </div>
+          <div style={{fontSize:12, color:'#3a2a4a'}}>
+            at {fmt(lastResult.dispatchedAt)}
+            {Object.keys(lastResult.inputs || {}).length > 0 && (
+              <> · inputs: <code>{JSON.stringify(lastResult.inputs)}</code></>
+            )}
+          </div>
+          <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap'}}>
+            {lastResult.runUrl && (
+              <a href={lastResult.runUrl} target="_blank" rel="noopener"
+                 style={{color:'#1f5fd1', fontWeight:700, fontSize:12}}>
+                Watch on GitHub Actions ↗
+              </a>
+            )}
+            {lastResult.runId && lastResult.status !== 'completed' && (
+              <button className="btn btn-sm" onClick={()=>refreshStatus(lastResult.runId)}>
+                ↻ Refresh status
+              </button>
+            )}
+            {lastResult.status === 'in_progress' && (
+              <span style={{fontSize:11, color:'#6b5c80'}}>
+                Auto-refreshing every 5s · ⏱
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{
+        marginTop:14, padding:'8px 12px', fontSize:11, color:'#9a8d7a',
+        background:'#fff9ef', border:'1px dashed #e2dccc', borderRadius:8,
+      }}>
+        Equivalent CLI:
+        <pre className="json" style={{margin:'4px 0 0', fontSize:11}}>{`gh workflow run daily-pipeline.yml --repo daijiong1977/news-v2 -f pipeline_variant=${variant}`}</pre>
+      </div>
+    </div>
+  );
+}
+
 function PipelineTab({ flash }) {
   const [cfg, setCfg] = useState(null);
   // Default to Eastern — user said this is easier for them. localStorage
@@ -1189,16 +1422,7 @@ function PipelineTab({ flash }) {
         {cfg.last_fired_at && <div style={{marginTop:10, fontSize:12, color:'#6b5c80'}}>Last fired: {fmt(cfg.last_fired_at)}</div>}
       </div>
 
-      <div className="card">
-        <h3 style={{marginTop:0}}>Manual run</h3>
-        <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
-          For an instant run that bypasses the schedule, use:
-        </p>
-        <pre className="json">gh workflow run daily-pipeline.yml --repo daijiong1977/news-v2 -f pipeline_variant={cfg.pipeline_variant}</pre>
-        <p style={{fontSize:12, color:'#6b5c80'}}>
-          (A "Trigger now" button from the admin UI requires storing a GitHub PAT — deferred to v2 of this admin.)
-        </p>
-      </div>
+      <ManualRunCard cfg={cfg} flash={flash}/>
     </div>
   );
 }
