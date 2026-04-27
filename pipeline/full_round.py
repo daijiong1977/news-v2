@@ -188,25 +188,43 @@ ALGORITHM you must follow:
   still ends up with 3 picks. If that source has no more candidates,
   swap in any other candidate from a different source in that category.
 
-  STEP 3 — Within-category topic diversity. If your 3 picks in one
-  category are all about the same theme (3 election stories, 3 climate
-  stories, etc.), swap one to a different topic from the alternates.
-  Goal: 3 different topic clusters per category.
+  STEP 3 — Within-category SOURCE diversity (HARD RULE). Each of the 3
+  picks in a category MUST come from a DIFFERENT source unless the
+  category genuinely has fewer than 3 distinct sources contributing
+  candidates. Concretely:
+    · If the category's input has candidates from ≥ 3 different sources,
+      your 3 picks must each come from a different source.
+    · If only 2 sources contributed, the 3rd pick may repeat one of
+      those sources — but pick the one with the most alternates so
+      you can still diversify topics.
+    · If only 1 source contributed, all 3 picks come from it
+      (unavoidable).
+  When swapping for source-diversity, prefer the swap that ALSO
+  improves topic diversity (Step 4). Promote an alternate_X from the
+  under-represented source over a choice_2 from the over-represented
+  one.
 
-  STEP 4 — Final check. You must end up with 9 distinct stories:
-  3 News + 3 Science + 3 Fun. No cross-cat dups. Diverse topics within
-  each cat. Output each pick as its `cid`.
+  STEP 4 — Within-category TOPIC diversity. After source-diversity is
+  satisfied, if the 3 picks are all about the same theme (3 election
+  stories, 3 climate stories, etc.), swap one to a different topic
+  from the alternates. Goal: 3 different topic clusters per category.
+
+  STEP 5 — Final check. You must end up with 9 distinct stories:
+  3 News + 3 Science + 3 Fun. No cross-cat dups. Each category's
+  3 picks come from 3 different sources (unless the category had
+  fewer than 3 sources to begin with). Diverse topics within each
+  cat. Output each pick as its `cid`.
 
 PREFERENCES (use to break ties between equally-valid options):
   · Lower slot wins (choice_1 > choice_2 > alternate_0 > alternate_1).
-  · Different sources within a cat are preferred over two picks from
-    the same source on the same day.
 
 DEGRADATION (only when the pool is genuinely too thin to satisfy the
 contract): if a category truly has fewer than 3 distinct
 non-duplicate stories available across all its candidates, you may
 return 2 in that category. Never 1 or 0 unless that category had no
-candidates at all in the input.
+candidates at all in the input. Source-diversity automatically
+relaxes when a category has fewer than 3 sources contributing
+(see STEP 3) — you don't need a separate exception for that case.
 
 OUTPUT — valid JSON only, no markdown fences:
 {
@@ -265,6 +283,95 @@ def _build_curator_input(buckets_by_cat: dict[str, dict]) -> tuple[str, dict[int
     return "\n".join(parts), registry
 
 
+_SLOT_RANK = {"choice_1": 0, "choice_2": 1, "alternate_0": 2, "alternate_1": 3}
+
+
+def _enforce_source_diversity(
+    picks_by_cat: dict[str, list[dict]],
+    buckets_by_cat: dict[str, dict],
+) -> dict[str, list[dict]]:
+    """Walk each category and ensure no source contributes more than one
+    pick — unless the category genuinely has fewer than 3 sources.
+
+    Strategy per category:
+      1. If <3 sources contributed candidates, leave alone (degrade-OK).
+      2. Otherwise, for each duplicated source, find an alternate from
+         an UNUSED source bucket (preferring the lowest-slot candidate
+         in that bucket so the editorial quality stays intact).
+      3. Replace the duplicate's worst-slot pick (e.g. an alternate_1
+         beats a choice_1 swap) so the better pick survives.
+      4. Repeat until no duplicates OR no unused sources remain.
+
+    Idempotent: a clean input passes through unchanged.
+    """
+    from collections import Counter
+
+    for cat, picks in picks_by_cat.items():
+        if len(picks) < 2:
+            continue
+        all_src_names = set((buckets_by_cat.get(cat) or {}).keys())
+        if len(all_src_names) < 3:
+            # Category truly thin on sources — degradation acceptable.
+            continue
+
+        used_winner_ids = {id(p["winner"]) for p in picks}
+
+        # Iterative swap loop with a hard guard against infinite loops.
+        for _ in range(6):
+            srcs_in_use = [p["source"].name for p in picks]
+            counter = Counter(srcs_in_use)
+            dups = [name for name, c in counter.items() if c > 1]
+            if not dups:
+                break
+            unused_srcs = all_src_names - set(srcs_in_use)
+            if not unused_srcs:
+                break
+
+            # Pick replacement from the unused source with the lowest-slot
+            # candidate (best editorial quality).
+            replacement = None
+            replacement_src_name = None
+            for src_name in sorted(unused_srcs):
+                bundle = (buckets_by_cat.get(cat) or {}).get(src_name) or {}
+                cands = bundle.get("candidates") or []
+                if not cands:
+                    continue
+                # First candidate from this bundle — they're already
+                # ordered by slot in the curator's input.
+                cand = cands[0]
+                if id(cand["winner"]) in used_winner_ids:
+                    continue
+                replacement = {
+                    "source": bundle.get("source"),
+                    "winner": cand["winner"],
+                    "winner_slot": cand.get("slot", "choice_1"),
+                }
+                replacement_src_name = src_name
+                break
+            if not replacement:
+                break
+
+            # Replace the WORST-slot pick from any duplicated source.
+            dup_idxs = [i for i, p in enumerate(picks) if p["source"].name in dups]
+            dup_idxs.sort(
+                key=lambda i: _SLOT_RANK.get(picks[i].get("winner_slot", ""), 99),
+                reverse=True,
+            )
+            replace_at = dup_idxs[0]
+            old_src = picks[replace_at]["source"].name
+            old_slot = picks[replace_at].get("winner_slot", "?")
+            log.info(
+                "  [%s] source-diversity swap: %s/%s → %s/%s",
+                cat, old_src, old_slot,
+                replacement_src_name, replacement["winner_slot"],
+            )
+            used_winner_ids.discard(id(picks[replace_at]["winner"]))
+            used_winner_ids.add(id(replacement["winner"]))
+            picks[replace_at] = replacement
+
+    return picks_by_cat
+
+
 def holistic_curate_picks(buckets_by_cat: dict[str, dict]) -> dict[str, list[dict]]:
     """Single LLM call that sees all candidates and picks 3 per category
     with cross-cat dedup + within-cat topic diversity in one shot.
@@ -317,6 +424,15 @@ def holistic_curate_picks(buckets_by_cat: dict[str, dict]) -> dict[str, list[dic
                 "winner": info["winner"],
                 "winner_slot": info["slot"],
             })
+
+    # Post-curator: enforce source-diversity within each category.
+    # The system prompt asks the LLM to do this, but it sometimes lapses
+    # — particularly when one source has stronger choice_1 + choice_2
+    # than other sources' choice_1. This pass swaps duplicate-source
+    # picks for an alternate from an unused-source bucket whenever
+    # one is available. No-op when the category genuinely has fewer
+    # than 3 sources contributing candidates.
+    out = _enforce_source_diversity(out, buckets_by_cat)
 
     # Log the picks succinctly so the run log is readable
     for cat, ws in out.items():
