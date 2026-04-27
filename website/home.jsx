@@ -80,7 +80,9 @@ function SignInNudge({ tweaks, onOpenUserPanel }) {
   // when onboarding hasn't happened yet.
   if (identity === undefined) return null;
   if (dismissed) return null;
-  if (identity && identity.type === 'google') return null;
+  // Hide for any signed-in identity (Gmail OR magic-link email).
+  // Both anchor recovery; nudging signed-in kids is just nagging.
+  if (identity && (identity.type === 'google' || identity.type === 'email')) return null;
   if (!tweaks || !(tweaks.userName || '').trim()) return null;
 
   const dismiss = () => {

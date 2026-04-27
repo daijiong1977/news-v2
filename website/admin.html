@@ -716,7 +716,10 @@ function CategoriesTab({ flash, onChanged }) {
 // ── AI PROVIDERS TAB ─────────────────────────────────────────────────
 function AIProvidersTab({ flash }) {
   const [rows, setRows] = useState(null);
-  const empty = { name:'', base_url:'https://api.deepseek.com', model_id:'deepseek-chat', api_key_secret:'DEEPSEEK_API_KEY', role:'any', enabled:true, priority:100, max_tokens_default:null, temperature_default:null };
+  // Add-form defaults: model_id seeded with V4 Pro since that's the
+  // currently-recommended SKU (75% discount through 2026-05-05).
+  // Fall back to deepseek-v4-flash if cost matters more than reasoning.
+  const empty = { name:'', base_url:'https://api.deepseek.com', model_id:'deepseek-v4-pro', api_key_secret:'DEEPSEEK_API_KEY', role:'any', enabled:true, priority:0, max_tokens_default:null, temperature_default:null };
   const [draft, setDraft] = useState(empty);
 
   const load = async () => {
@@ -741,12 +744,31 @@ function AIProvidersTab({ flash }) {
 
   return (
     <div className="col" style={{gap:18}}>
-      <div className="card" style={{background:'#fff4e0', borderColor:'#f4c4ad'}}>
-        <div style={{fontSize:13, color:'#c14e2a'}}>
-          ⚠️ <b>Phase 2 wiring pending.</b> Edits land in
-          <span className="pre" style={{margin:'0 6px'}}>redesign_ai_providers</span>
-          immediately, but the pipeline still calls DeepSeek directly until the
-          per-role provider lookup ships.
+      <div className="card" style={{background:'#e0f6f3', borderColor:'#9bd2c8'}}>
+        <div style={{fontSize:13, color:'#0e6e64', lineHeight:1.5}}>
+          ✅ <b>Live.</b> Pipeline reads this table on every run via
+          <span className="pre" style={{margin:'0 6px'}}>select_provider(role)</span>
+          (lowest <code>priority</code> wins among <code>enabled</code> rows).
+          Currently seeded: <b>DeepSeek V4 Pro</b> (priority 0, on 75% discount through
+          2026-05-05) with <b>DeepSeek V4 Flash</b> (priority 1) as fallback.
+          To switch back when the discount ends, raise V4 Pro's priority or flip <code>enabled</code> → false.
+        </div>
+      </div>
+      <div className="card" style={{background:'#fff9ef', borderColor:'#e2dccc'}}>
+        <div style={{fontSize:12.5, color:'#6b5c80', lineHeight:1.5}}>
+          <b>Quick presets:</b>
+          <button className="btn small" style={{margin:'0 6px'}}
+            onClick={()=>setDraft({...empty, name:'DeepSeek V4 Pro (discount)', model_id:'deepseek-v4-pro', priority:0})}>
+            DeepSeek V4 Pro · discount
+          </button>
+          <button className="btn small" style={{margin:'0 6px'}}
+            onClick={()=>setDraft({...empty, name:'DeepSeek V4 Flash', model_id:'deepseek-v4-flash', priority:1})}>
+            DeepSeek V4 Flash · cheap
+          </button>
+          <button className="btn small" style={{margin:'0 6px'}}
+            onClick={()=>setDraft({...empty, name:'OpenAI gpt-4o-mini', base_url:'https://api.openai.com/v1', model_id:'gpt-4o-mini', api_key_secret:'OPENAI_API_KEY', priority:50})}>
+            OpenAI gpt-4o-mini
+          </button>
         </div>
       </div>
       <div className="card">

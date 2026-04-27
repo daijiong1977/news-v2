@@ -741,6 +741,13 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
                 </div>
               </Section>
 
+              {/* Sync moved above 'Your progress' — it's the most
+                  important affordance (recovery anchor) so users
+                  see it without scrolling past stats. */}
+              <Section label="Sync" sub="So your streak follows you to other devices.">
+                <IdentityExpander/>
+              </Section>
+
               <Section label="Your progress" sub="">
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
                   <BigStat icon="🔥" val={`${tweaks.streakDays ?? 0}`} label="Day streak" brand/>
@@ -748,10 +755,6 @@ function UserPanel({ tweaks, updateTweak, level, setLevel, onClose, progress }) 
                   <BigStat icon="📖" val={`${storiesRead}`} label="Stories today"/>
                   <BigStat icon="🏆" val={`${badges}`} label="Badges"/>
                 </div>
-              </Section>
-
-              <Section label="Sync" sub="So your streak follows you to other devices.">
-                <IdentityExpander/>
               </Section>
 
               <Section label="Parent / teacher" sub="">
