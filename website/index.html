@@ -43,7 +43,7 @@
 <!-- kidsync — vanilla JS bridge that mirrors localStorage writes to
      Supabase RPCs (parent dashboard cloud mode). Loaded BEFORE data.jsx
      so window.kidsync is available everywhere downstream. -->
-<script src="kidsync.js?v=20260427emailid"></script>
+<script src="kidsync.js?v=20260427pickssync"></script>
 
 <script type="text/babel" src="data.jsx?v=20260425g"></script>
 <script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
@@ -309,6 +309,18 @@ function App() {
               setLevel(cloudP.level);
               ss.set('ohye_level', cloudP.level);
             }
+            // Today's 3 picks. Cloud has dayKey + ids. If dayKey matches
+            // local today, hydrate picksLock so the kid doesn't get
+            // bounced through pickup again on a fresh device.
+            if (cloudP.today_picks_date && Array.isArray(cloudP.today_picks_json)) {
+              const todayKey = new Date().toDateString();
+              if (cloudP.today_picks_date === todayKey && cloudP.today_picks_json.length === 3) {
+                ss.setJSON('ohye_picks_lock_v1', {
+                  dayKey: cloudP.today_picks_date,
+                  ids: cloudP.today_picks_json,
+                });
+              }
+            }
           } else {
             // No cloud row yet (brand-new anonymous user, never linked).
             // Eagerly upload the local tweaks so the row exists for any
@@ -340,17 +352,58 @@ function App() {
             const cur = p || { readToday: [], minutesToday: 0, articleProgress: {}, readHistory: [], dayKey: new Date().toDateString() };
             const haveIds = new Set((cur.readHistory || []).map(e => typeof e === 'string' ? e : e?.id));
             const lvlSuffix = (ss.get('ohye_level') === 'Sprout') ? '-easy' : '-middle';
+
+            // 1. Build/extend readHistory (lifetime list of completed reads).
             const merged = (cur.readHistory || []).slice();
             for (const ev of events) {
-              if (ev.step !== 'discuss' && ev.step !== 'finish') continue; // only completed reads
+              if (ev.step !== 'discuss' && ev.step !== 'finish') continue;
               const id = ev.story_id + lvlSuffix;
               if (haveIds.has(id)) continue;
               haveIds.add(id);
               merged.push({ id, at: ev.occurred_at });
             }
-            // Keep last 200 to stay bounded.
             merged.sort((a, b) => (a.at || '').localeCompare(b.at || ''));
-            return { ...cur, readHistory: merged.slice(-200) };
+
+            // 2. Reconstruct articleProgress (per-article steps + lastTab)
+            //    from the same event stream. Each event = one (story, step)
+            //    transition; group by article id, union the steps, take the
+            //    most-recent occurred_at as lastTouchedAt + lastTab. Local
+            //    progress (with snapshot fields) wins on the snapshot keys
+            //    (title/category/imageURL etc.); cloud wins on steps when
+            //    it has more (kid read on another device since last sync).
+            const localAP = cur.articleProgress || {};
+            const fromCloud = {};
+            for (const ev of events) {
+              const id = ev.story_id + lvlSuffix;
+              const slot = fromCloud[id] || { steps: [], lastTab: 'read', lastTouchedAt: '' };
+              if (!slot.steps.includes(ev.step)) slot.steps.push(ev.step);
+              if ((ev.occurred_at || '') > (slot.lastTouchedAt || '')) {
+                slot.lastTouchedAt = ev.occurred_at;
+                slot.lastTab = ev.step;
+              }
+              fromCloud[id] = slot;
+            }
+            const mergedAP = { ...localAP };
+            for (const [id, cloudSlot] of Object.entries(fromCloud)) {
+              const local = mergedAP[id];
+              if (!local || typeof local !== 'object') {
+                mergedAP[id] = cloudSlot;
+              } else {
+                // Union of steps (cloud may have more), latest lastTouchedAt
+                // wins for lastTab. Snapshot fields (title, category, etc.)
+                // come from local — cloud doesn't have them.
+                const stepsSet = new Set([...(local.steps || []), ...(cloudSlot.steps || [])]);
+                const newer = (cloudSlot.lastTouchedAt || '') > (local.lastTouchedAt || '');
+                mergedAP[id] = {
+                  ...local,
+                  steps: [...stepsSet],
+                  lastTab: newer ? cloudSlot.lastTab : (local.lastTab || cloudSlot.lastTab),
+                  lastTouchedAt: newer ? cloudSlot.lastTouchedAt : (local.lastTouchedAt || cloudSlot.lastTouchedAt),
+                };
+              }
+            }
+
+            return { ...cur, readHistory: merged.slice(-200), articleProgress: mergedAP };
           });
         }
       } catch (e) { console.warn('[boot] fetchHistory failed', e); }

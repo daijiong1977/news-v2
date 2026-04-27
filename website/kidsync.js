@@ -95,6 +95,18 @@
         p_daily_goal: tweaks.dailyGoal || 21,
       });
     },
+    // Called from home.jsx whenever the kid's daily 3 picks change
+    // (lock, swap, repick). Tiny payload — just a date key + 3 ids.
+    // Server upserts redesign_kid_profiles.today_picks_*.
+    upsertPicks: function (dayKey, ids) {
+      var cid = clientId(); if (!cid) return;
+      if (!dayKey || !Array.isArray(ids)) return;
+      rpc('set_today_picks', {
+        p_client_id: cid,
+        p_day_key: dayKey,
+        p_ids: ids,
+      });
+    },
     // Called from article.jsx bumpStep — one row per step transition. The
     // append-only event log is what drives the parent's day-by-day chart.
     recordReadingEvent: function (storyId, step, opts) {

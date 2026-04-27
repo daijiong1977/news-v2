@@ -1034,10 +1034,17 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
     && picksLock.ids.every(id => poolIds.has(id));
   const lockPicks = (ids) => {
     setPicksLock({ dayKey: todayKeyLocal, ids });
+    if (window.kidsync && typeof window.kidsync.upsertPicks === 'function') {
+      window.kidsync.upsertPicks(todayKeyLocal, ids);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const resetPicks = () => {
     setPicksLock({ dayKey: null, ids: [] });
+    if (window.kidsync && typeof window.kidsync.upsertPicks === 'function') {
+      // Mirror the reset to cloud so a fresh device doesn't see stale picks.
+      window.kidsync.upsertPicks(null, []);
+    }
     // Scroll to top so the kid actually SEES the pick screen instead of
     // being mid-page where the daily-3 stack used to be.
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1072,6 +1079,9 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
     if (picksLocked) {
       setPicksLock(L => {
         const newIds = L.ids.map((id, i) => i === idx ? newId : id);
+        if (window.kidsync && typeof window.kidsync.upsertPicks === 'function') {
+          window.kidsync.upsertPicks(L.dayKey || todayKeyLocal, newIds);
+        }
         return { ...L, ids: newIds };
       });
     } else {
