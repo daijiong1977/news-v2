@@ -1124,14 +1124,27 @@ function ManualRunCard({ cfg, flash }) {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     console.log('[trigger-pipeline] dispatch:', workflow, inputs);
     try {
+      // Pre-flight diagnostics — these errors used to throw silently
+      // and just bounce the spinner off; surfacing them in the result
+      // card so the user sees WHY nothing happened.
+      const sess = await sb.auth.getSession();
+      const sessUser = sess?.data?.session?.user?.email;
+      const sessTokenLen = sess?.data?.session?.access_token?.length || 0;
+      console.log('[trigger-pipeline] session:', { email: sessUser, tokenLen: sessTokenLen });
+      if (!sessTokenLen) {
+        throw new Error(`No Supabase session (sb.auth.getSession() returned no access_token). Sign-in expired? Try Sign out + Sign in.`);
+      }
+
       const data = await callEdge({ workflow, inputs });
       console.log('[trigger-pipeline] dispatched:', data);
       setLastResult(data);
       flash('ok', `Dispatched ${workflow}${data.runId ? ` · run #${data.runId}` : ''}`);
       if (data.runId) startPolling(data.runId);
     } catch (e) {
-      console.error('[trigger-pipeline] error:', e.message);
+      console.error('[trigger-pipeline] error:', e.message, e);
       flash('err', e.message || String(e));
+      // Surface in the card too so the user sees it after the toast fades.
+      setLastResult({ ok: false, errorMessage: e.message || String(e), workflow });
     } finally {
       setBusy(false);
     }
@@ -1232,16 +1245,33 @@ function ManualRunCard({ cfg, flash }) {
       {lastResult && (
         <div style={{
           marginTop:14, padding:'12px 14px',
-          background: lastResult.status === 'completed'
-            ? (lastResult.conclusion === 'success' ? '#e0f6f3' : '#ffe4e4')
-            : '#fff9ef',
+          background: lastResult.errorMessage
+            ? '#ffe4e4'
+            : lastResult.status === 'completed'
+              ? (lastResult.conclusion === 'success' ? '#e0f6f3' : '#ffe4e4')
+              : '#fff9ef',
           border: `1px solid ${
-            lastResult.status === 'completed'
-              ? (lastResult.conclusion === 'success' ? '#9bd2c8' : '#f0c8c0')
-              : '#e2dccc'
+            lastResult.errorMessage
+              ? '#f0c8c0'
+              : lastResult.status === 'completed'
+                ? (lastResult.conclusion === 'success' ? '#9bd2c8' : '#f0c8c0')
+                : '#e2dccc'
           }`,
           borderRadius:10, fontSize:13,
         }}>
+          {lastResult.errorMessage ? (
+            <>
+              <div style={{fontWeight:800, color:'#b22525', marginBottom:4}}>
+                ⚠ Dispatch failed{lastResult.workflow ? ` (${lastResult.workflow})` : ''}
+              </div>
+              <pre className="json" style={{margin:0, whiteSpace:'pre-wrap', fontSize:12}}>{lastResult.errorMessage}</pre>
+              <div style={{marginTop:6, fontSize:11, color:'#6b5c80'}}>
+                Open F12 → Console for the full stack and any
+                <code style={{margin:'0 4px'}}>[trigger-pipeline]</code> log lines.
+              </div>
+            </>
+          ) : (
+          <>
           <div style={{fontWeight:800, color:'#1b1230', marginBottom:4}}>
             Dispatched {lastResult.workflow}
             {lastResult.runId ? ` · run #${lastResult.runId}` : ''}
@@ -1271,6 +1301,8 @@ function ManualRunCard({ cfg, flash }) {
               </span>
             )}
           </div>
+          </>
+          )}
         </div>
       )}
 
