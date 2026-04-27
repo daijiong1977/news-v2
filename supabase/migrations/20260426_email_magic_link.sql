@@ -62,15 +62,29 @@ end;
 $$;
 grant execute on function public.issue_magic_link(text) to anon, authenticated;
 
+-- consume_magic_link returns table(client_id, email) so the client can
+-- both swap localStorage.ohye_client_id AND persist the email as the
+-- "Signed in as" label. (Magic-link sign-in doesn't go through Supabase
+-- Auth, so the client has nowhere else to learn the email from.)
+--
+-- #variable_conflict use_column tells plpgsql to prefer column refs
+-- over OUT-parameter refs when there's a name collision — the OUT
+-- parameter `email` would otherwise shadow the `email` column in the
+-- table queries inside this function. Without the directive, every
+-- bare `email` reference threw "column reference is ambiguous".
 create or replace function public.consume_magic_link(
   p_token text,
   p_local_client_id uuid
 )
-returns uuid
+returns table (
+  client_id uuid,
+  email     text
+)
 language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_column
 declare
   v_email text;
   v_canonical uuid;
@@ -99,7 +113,8 @@ begin
   if v_canonical is not null then
     update public.redesign_kid_email_links set updated_at = now() where email = v_email;
     update public.redesign_kid_profiles set last_seen_at = now() where client_id = v_canonical;
-    return v_canonical;
+    return query select v_canonical, v_email;
+    return;
   end if;
 
   insert into public.redesign_kid_profiles (client_id)
@@ -108,7 +123,7 @@ begin
   insert into public.redesign_kid_email_links (email, client_id)
     values (v_email, p_local_client_id);
 
-  return p_local_client_id;
+  return query select p_local_client_id, v_email;
 end;
 $$;
 grant execute on function public.consume_magic_link(text, uuid) to anon, authenticated;

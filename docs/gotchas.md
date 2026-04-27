@@ -277,3 +277,36 @@ only mirror when the value is provably user-driven (e.g. dirty
 flag pattern).
 
 **Where:** `website/index.html`, search for `cloudPullDoneRef`.
+
+## 2026-04-27 · plpgsql OUT-parameter shadows table column
+
+**Symptom:** consume_magic_link RPC threw `column reference "email"
+is ambiguous`, but the bug was invisible client-side: the bootstrap
+caller awaited the returned promise, didn't log the error loudly, and
+unconditionally stripped `?magic=` from the URL anyway. From the
+user's POV: clicked the email link → page loaded → URL bar clean →
+Profile still showed "Sign in" → "magic link doesn't work."
+
+**Root cause:** the function declared `returns table(client_id uuid,
+email text)` for the new shape. `email` is now BOTH an OUT parameter
+AND a column in two queried tables (`redesign_email_magic_links` and
+`redesign_kid_email_links`). Bare `email` in the function body —
+e.g. `select email into v_email from redesign_email_magic_links` —
+becomes ambiguous. plpgsql defaults to "error on conflict", not
+"prefer column."
+
+**Fix:** add `#variable_conflict use_column` directive at the top of
+the function body. Tells plpgsql to prefer column references when
+there's a name collision; local vars (v_email, v_canonical) are
+unambiguously variables so they resolve normally. Alternative would
+be to qualify every bare column ref with the table name, but the
+directive is one line.
+
+**General lesson:** any `returns table(...)` function with column-
+shaped OUT parameters needs either qualifying or the directive. Goes
+double for SECURITY DEFINER functions where the silent rollback
+hides the error from the API caller (`consumed_at` stayed null even
+though the function "returned" — actually the whole tx rolled back).
+
+**Where:** `supabase/migrations/20260426_email_magic_link.sql`,
+applied via `consume_magic_link_unambiguous` apply_migration.
