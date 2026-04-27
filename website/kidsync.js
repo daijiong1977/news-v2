@@ -286,25 +286,40 @@
     },
 
     signOut: function () {
+      // Drop the locally-persisted "signed in via email" label, then
+      // tell Supabase to drop the OAuth session (no-op for magic-link
+      // identities that never had one). Both ops are best-effort.
+      try { window.safeStorage && window.safeStorage.remove('ohye_signed_email'); } catch (e) {}
       return ensureSupabase().then(function (sb) {
         if (!sb) return null;
         return sb.auth.signOut();
       });
     },
 
-    // Returns { type: 'anon'|'google', clientId, email? }.
-    // Used by the Profile panel to render "Signed in as …" vs
-    // "Your code: 123456".
+    // Returns { type: 'anon'|'google'|'email', clientId, email? }.
+    // Three identities the popover renders differently:
+    //   * google — Supabase Auth session present (OAuth)
+    //   * email  — magic-link consumed; email persisted to localStorage
+    //              (no Supabase Auth session involved)
+    //   * anon   — no signed identity
+    // Magic-link identities are NOT Supabase Auth sessions, so we read
+    // their email from localStorage instead of session.user.email.
     getIdentity: function () {
       var localCid = clientId();
+      var savedEmail;
+      try { savedEmail = window.safeStorage && window.safeStorage.get('ohye_signed_email'); } catch (e) {}
       return ensureSupabase().then(function (sb) {
-        if (!sb) return { type: 'anon', clientId: localCid };
+        if (!sb) {
+          return savedEmail
+            ? { type: 'email', clientId: localCid, email: savedEmail }
+            : { type: 'anon',  clientId: localCid };
+        }
         return sb.auth.getSession().then(function (sess) {
           var email = sess && sess.data && sess.data.session
             && sess.data.session.user && sess.data.session.user.email;
-          return email
-            ? { type: 'google', clientId: localCid, email: email }
-            : { type: 'anon',   clientId: localCid };
+          if (email) return { type: 'google', clientId: localCid, email: email };
+          if (savedEmail) return { type: 'email', clientId: localCid, email: savedEmail };
+          return { type: 'anon', clientId: localCid };
         });
       });
     },
@@ -358,9 +373,10 @@
     },
 
     // Called from the URL handler when ?magic=<token> shows up. Returns
-    // the canonical client_id (which may differ from the local one if
-    // the email was already linked from another device). Caller handles
-    // localStorage rewrite + URL cleanup.
+    // {ok, clientId, email} — the RPC now returns both pieces so we
+    // can persist the email locally as the "signed in via" label
+    // (Supabase Auth isn't involved on the magic-link path, so
+    // auth.getSession() doesn't know about this identity).
     consumeMagicLink: function (token) {
       var localCid = clientId(); if (!localCid) return Promise.resolve(null);
       return ensureSupabase().then(function (sb) {
@@ -373,12 +389,18 @@
             console.warn('[kidsync] consume_magic_link failed:', res.error.message);
             return { ok: false, error: res.error.message };
           }
-          var canonical = res && res.data;
-          if (!canonical) return { ok: false, error: 'No client_id returned' };
+          var rows = res && res.data;
+          var row = Array.isArray(rows) ? rows[0] : rows;
+          if (!row || !row.client_id) return { ok: false, error: 'No client_id returned' };
+          var canonical = row.client_id;
+          var email = row.email;
           if (canonical !== localCid) {
             try { window.safeStorage && window.safeStorage.set('ohye_client_id', canonical); } catch (e) {}
           }
-          return { ok: true, clientId: canonical };
+          if (email) {
+            try { window.safeStorage && window.safeStorage.set('ohye_signed_email', email); } catch (e) {}
+          }
+          return { ok: true, clientId: canonical, email: email };
         });
       });
     },

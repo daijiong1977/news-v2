@@ -126,9 +126,9 @@ function IdentityExpander() {
     if (!window.kidsync || !window.kidsync.getIdentity) return;
     window.kidsync.getIdentity().then((id) => {
       setIdentity(id);
-      // Auto-collapse if the kid is already Gmail-linked — recovery is
-      // already covered, no need to nag.
-      if (id && id.type === 'google') setOpen(false);
+      // Auto-collapse for any signed-in identity (Gmail OR magic-link
+      // email) — both cover recovery, no need to nag.
+      if (id && (id.type === 'google' || id.type === 'email')) setOpen(false);
     }).catch(() => {});
   }, []);
 
@@ -210,6 +210,8 @@ function IdentityExpander() {
   };
 
   const isGoogle = identity && identity.type === 'google';
+  const isEmail  = identity && identity.type === 'email';
+  const isSignedIn = isGoogle || isEmail;
 
   return (
     <div style={{ marginTop: 8 }}>
@@ -220,10 +222,10 @@ function IdentityExpander() {
         fontFamily: 'Nunito, sans-serif', textAlign: 'left',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        <span style={{ fontSize: 20 }}>{isGoogle ? '✓' : '✨'}</span>
+        <span style={{ fontSize: 20 }}>{isSignedIn ? '✓' : '✨'}</span>
         <span style={{ flex: 1 }}>
-          {isGoogle
-            ? `Signed in as ${identity.email}`
+          {isSignedIn
+            ? `${isGoogle ? '🇬' : '📧'} Signed in as ${identity.email}`
             : 'Save your streak — sign in once'}
         </span>
         <span style={{ color: '#9a8d7a', transform: open ? 'rotate(180deg)' : 'rotate(0)' }}>⌄</span>
@@ -235,10 +237,16 @@ function IdentityExpander() {
           background: '#fff9ef', border: '1.5px dashed #c9b99a', borderRadius: 14,
           fontSize: 13, color: '#3a2a4a', lineHeight: 1.5,
         }}>
-          {isGoogle ? (
-            // Already signed in — show email + sign out + share code
+          {isSignedIn ? (
+            // Already signed in (Gmail OR magic-link email) — show
+            // identity + sign out + share code option for non-Google
+            // devices.
             <div>
-              <div style={{marginBottom:8}}>Your reading streak is saved on Google. Sign in on any device to see it.</div>
+              <div style={{marginBottom:8}}>
+                {isGoogle
+                  ? 'Your reading streak is saved on Google. Sign in on any device to see it.'
+                  : `Your reading streak is saved to ${identity.email}. Type the same email on any device to come back.`}
+              </div>
               {!showCode && (
                 <button onClick={generateMyCode} disabled={busy} style={kidBtnStyle(busy)}>
                   Show a 6-digit code (for non-Google devices)
