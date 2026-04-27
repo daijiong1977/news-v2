@@ -627,7 +627,10 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
             if cid in used:
                 continue
             brief = r["brief"]
-            art = _fetch_and_enrich(dict(brief))
+            # Stage 1.5 already body-fetched this brief; reuse the cached
+            # article dict to avoid a second HTTP round-trip per pick.
+            cached = brief.get("_probe_art") if isinstance(brief, dict) else None
+            art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
             ok, reason = verify_article_content(art)
             if not ok:
                 log.info("  [%s] rank %s body-verify FAIL: %s",
@@ -678,7 +681,8 @@ def promote_spare_and_rewrite(cat: str, spares: list[dict]) -> tuple[dict | None
         if not spare.get("_unverified_spare"):
             continue
         brief = spare.get("_winner_brief") or {}
-        art = _fetch_and_enrich(dict(brief))
+        cached = brief.get("_probe_art") if isinstance(brief, dict) else None
+        art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
         ok, _ = verify_article_content(art)
         if not ok:
             continue
@@ -1294,6 +1298,72 @@ def main_mega() -> None:
                  sum(len(b) for b in out.values()), rejected_total)
         return out
     briefs_by_cat = _load_or_run("stage1", _stage1_runner)
+
+    # ---- Stage 1.5: body probe + length gate + per-cat cap ----
+    # Fetch each surviving brief's body in parallel, drop if word_count
+    # is outside [PROBE_MIN_WORDS, PROBE_MAX_WORDS], then keep the first
+    # PROBE_MAX_PER_CAT (RSS feed order ≈ newest first). The fetched
+    # article dict is cached on the brief as "_probe_art" so
+    # verify_picks_lazy can skip re-fetching downstream.
+    PROBE_MIN_WORDS = 350
+    PROBE_MAX_WORDS = 1200
+    PROBE_MAX_PER_CAT = 10
+    PROBE_WORKERS = 8
+
+    def _probe_one(brief: dict) -> dict:
+        from .news_rss_core import _fetch_and_enrich
+        try:
+            art = _fetch_and_enrich(dict(brief))
+        except Exception as e:  # noqa: BLE001
+            log.warning("  probe fetch failed for %s: %s",
+                        brief.get("link", "")[:80], e)
+            art = {"word_count": 0, "body": "", "og_image": None}
+        wc = int(art.get("word_count") or 0)
+        return {"brief": brief, "art": art, "wc": wc}
+
+    def _stage1_5_runner():
+        from concurrent.futures import ThreadPoolExecutor
+        t0 = time.monotonic()
+        log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %d) ===",
+                 PROBE_MIN_WORDS, PROBE_MAX_WORDS, PROBE_MAX_PER_CAT)
+        out: dict[str, list[dict]] = {}
+        kept_total = 0
+        dropped_thin = 0
+        dropped_long = 0
+        for cat, briefs in briefs_by_cat.items():
+            if not briefs:
+                out[cat] = []
+                continue
+            with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
+                results = list(ex.map(_probe_one, briefs))
+            kept: list[dict] = []
+            for r in results:
+                wc = r["wc"]
+                if wc < PROBE_MIN_WORDS:
+                    dropped_thin += 1
+                    continue
+                if wc > PROBE_MAX_WORDS:
+                    dropped_long += 1
+                    continue
+                b = r["brief"]
+                b["_probe_art"] = r["art"]
+                b["word_count"] = wc
+                kept.append(b)
+                if len(kept) >= PROBE_MAX_PER_CAT:
+                    break
+            out[cat] = kept
+            kept_total += len(kept)
+            log.info("  [%s] probe: %d kept / %d input (dropped %d thin, %d long)",
+                     cat, len(kept), len(briefs),
+                     sum(1 for r in results if r["wc"] < PROBE_MIN_WORDS),
+                     sum(1 for r in results if r["wc"] > PROBE_MAX_WORDS))
+        _set_phase("phase_a_probe", t0,
+                   counts={c: len(b) for c, b in out.items()},
+                   dropped_thin=dropped_thin,
+                   dropped_long=dropped_long,
+                   kept=kept_total)
+        return out
+    briefs_by_cat = _load_or_run("phase_a_probe", _stage1_5_runner)
 
     # ---- Stage 2: mega-curator (1 LLM call, 5 ranked per cat) ----
     def _stage2_runner():
