@@ -48,7 +48,13 @@ ALGORITHM (internal, don't output intermediate work):
   3. PICK 5 PER CAT, RANKED:
      - Prefer high interest_peak (max of importance / fun / kid_appeal)
        AND low safety_total.
-     - Prefer DIFFERENT topic clusters and DIFFERENT sources within a cat.
+     - Prefer DIFFERENT topic clusters within a cat.
+     - HARD RULE — source diversity in top 3: ranks 1, 2, 3 of each
+       category MUST come from THREE DIFFERENT sources (different
+       `src=` value). Only break this rule if the category has fewer
+       than 3 sources contributing candidates after the safety vet —
+       in that case state so explicitly in `reasoning`. Ranks 4-5 may
+       repeat a source freely (they are spares).
      - Cross-category tiebreak (same cluster wanted by two cats):
          News × Fun     → keep the Fun pick
          News × Science → keep the Science pick
@@ -187,7 +193,83 @@ def mega_curate(
                 "vet": pick_vet,
             })
 
+    out = _enforce_top3_source_diversity(out)
+
     for cat, picks in out.items():
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),
                  ", ".join(f"rank{p['rank']}={p['source'].name}" for p in picks[:6]))
     return out, vet, reasoning
+
+
+def _enforce_top3_source_diversity(
+    ranked_by_cat: dict[str, list[dict]],
+) -> dict[str, list[dict]]:
+    """Enforce: top 3 ranks per category must come from 3 DIFFERENT
+    sources. The system prompt asks for this as a HARD RULE but the LLM
+    sometimes still picks duplicates when one source dominates the pool.
+
+    Strategy per category:
+      - Look at ranks 1-3. If a source repeats, find a swap candidate
+        from ranks 4-5 (spares) whose source is NOT already in top 3.
+      - Swap the WORST-rank duplicate (e.g. rank 3) with that spare.
+      - The spare loses its rank-4/5 slot and gets the vacated rank.
+      - Idempotent: clean input passes through; degraded categories
+        (fewer than 3 distinct sources in the curator's top 5) are
+        left alone with a warning.
+    """
+    from collections import Counter
+
+    for cat, picks in ranked_by_cat.items():
+        if len(picks) < 3:
+            continue
+
+        # Iterative swap with a hard guard against infinite loops.
+        # Even when the full ranked top 5 has <3 distinct sources we
+        # still try, because reducing top 3 from "3 dups of one source"
+        # to "2 from one + 1 from another" is real progress. The inner
+        # loop bails cleanly when no swap candidate exists.
+        for _ in range(4):
+            top3 = picks[:3]
+            top3_srcs = [p["source"].name for p in top3]
+            counter = Counter(top3_srcs)
+            dups = [name for name, c in counter.items() if c > 1]
+            if not dups:
+                break
+
+            # Find the WORST-rank duplicate slot in top 3 (highest rank
+            # value among duplicates).
+            dup_idx = max(
+                (i for i in range(3) if picks[i]["source"].name in dups),
+                key=lambda i: picks[i]["rank"],
+            )
+
+            # Find a spare (rank 4-5) whose source is NOT in top 3.
+            spare_idx = next(
+                (j for j in range(3, len(picks))
+                 if picks[j]["source"].name not in top3_srcs),
+                None,
+            )
+            if spare_idx is None:
+                log.warning("  [%s] source-diversity: dup=%s but no spare "
+                            "with a different source — top 3 stays "
+                            "degraded (only %d distinct sources in "
+                            "curator's top %d)",
+                            cat, dups,
+                            len({p["source"].name for p in picks}),
+                            len(picks))
+                break
+
+            old = picks[dup_idx]
+            new = picks[spare_idx]
+            log.info(
+                "  [%s] source-diversity swap: rank%d/%s ↔ rank%d/%s",
+                cat, old["rank"], old["source"].name,
+                new["rank"], new["source"].name,
+            )
+            # Swap rank values so list stays in rank order
+            old_rank, new_rank = old["rank"], new["rank"]
+            picks[dup_idx], picks[spare_idx] = new, old
+            picks[dup_idx]["rank"] = old_rank
+            picks[spare_idx]["rank"] = new_rank
+
+    return ranked_by_cat
