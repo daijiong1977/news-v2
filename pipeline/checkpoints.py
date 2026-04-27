@@ -31,6 +31,7 @@ log = logging.getLogger("checkpoint")
 STAGES = (
     "phase_a",         # after RSS fetch (briefs_by_cat)
     "stage1",          # after forbidden filter
+    "phase_a_probe",   # after body probe + length gate + per-cat cap
     "stage2_picks",    # after curator (ranked_by_cat)
     "verify",          # after body+image verify (stories_by_cat)
     "rewrite",         # after rewrite (rewrites_by_cat)
