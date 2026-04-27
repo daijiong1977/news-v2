@@ -43,7 +43,7 @@
 <!-- kidsync — vanilla JS bridge that mirrors localStorage writes to
      Supabase RPCs (parent dashboard cloud mode). Loaded BEFORE data.jsx
      so window.kidsync is available everywhere downstream. -->
-<script src="kidsync.js?v=20260426profile"></script>
+<script src="kidsync.js?v=20260426authrace"></script>
 
 <script type="text/babel" src="data.jsx?v=20260425g"></script>
 <script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
@@ -264,11 +264,18 @@ function App() {
           }
         }
       } catch (e) { console.warn('[boot] consumeMagicLink failed', e); }
+      // ALWAYS try to link — covers two cases:
+      //   (a) OAuth bounce-back: URL has ?code=, exchange happens, we
+      //       create the email_link via RPC.
+      //   (b) Cached session, clean URL: previous sign-in succeeded
+      //       (session in localStorage) but the email_link RPC never
+      //       fired (e.g. timing race the first time). On this reload
+      //       linkCurrentSession is idempotent and self-heals.
       try {
-        if (looksLikeOAuthBounce && window.kidsync && typeof window.kidsync.linkCurrentSession === 'function') {
+        if (window.kidsync && typeof window.kidsync.linkCurrentSession === 'function') {
           const r = await window.kidsync.linkCurrentSession();
-          if (r && r.clientId) {
-            // Strip the OAuth token fragment so refreshes don't re-link.
+          if (r && r.clientId && looksLikeOAuthBounce) {
+            // Strip the OAuth token fragment so refreshes don't re-exchange.
             try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
           }
         }

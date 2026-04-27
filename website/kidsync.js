@@ -209,17 +209,62 @@
       });
     },
 
-    // After OAuth redirect lands, call this. It fetches the session,
-    // reads auth.email(), and binds it server-side. Returns the
-    // canonical client_id (which may differ from the local one if the
-    // email was already linked from another device). Caller should
-    // rewrite localStorage if the returned id != current.
+    // Idempotent: bind the current authenticated session's email to
+    // a client_id server-side. Returns null if not signed in. Safe to
+    // call on every bootstrap — the RPC just returns the existing
+    // canonical id when the email is already linked.
+    //
+    // Two timing pitfalls this guards against:
+    //
+    //   1. PKCE OAuth callback race — when the page lands with ?code=
+    //      in the URL, Supabase JS auto-exchanges the code for a
+    //      session ASYNCHRONOUSLY. getSession() right after createClient
+    //      can return null because the exchange hasn't completed yet.
+    //      We wait up to 3s for the SIGNED_IN event before giving up.
+    //
+    //   2. Stripped-URL case — once the URL is cleaned (we do this
+    //      after the first successful link), reloads no longer have
+    //      ?code=. But the session DID persist to localStorage. So a
+    //      previously-failed sign-in will self-heal on the next page
+    //      load: linkCurrentSession finds the cached session, the RPC
+    //      runs, the email_link gets created.
     linkCurrentSession: function () {
       var localCid = clientId();
       return ensureSupabase().then(function (sb) {
         if (!sb) return null;
-        return sb.auth.getSession().then(function (sess) {
-          if (!sess.data.session) return null;
+
+        function waitForSession() {
+          return new Promise(function (resolve) {
+            var done = false, sub = null;
+            var timer = setTimeout(function () {
+              if (done) return; done = true;
+              if (sub && sub.subscription) sub.subscription.unsubscribe();
+              resolve(null);
+            }, 3000);
+            // First: is the session already there (cached / already exchanged)?
+            sb.auth.getSession().then(function (r) {
+              if (done) return;
+              if (r.data.session) {
+                done = true; clearTimeout(timer);
+                if (sub && sub.subscription) sub.subscription.unsubscribe();
+                resolve(r.data.session);
+              }
+            });
+            // Second: subscribe to SIGNED_IN in case the exchange is
+            // still in flight (PKCE auto-exchange after createClient).
+            sub = sb.auth.onAuthStateChange(function (evt, s) {
+              if (done) return;
+              if (s && (evt === 'SIGNED_IN' || evt === 'INITIAL_SESSION')) {
+                done = true; clearTimeout(timer);
+                if (sub && sub.subscription) sub.subscription.unsubscribe();
+                resolve(s);
+              }
+            }).data;
+          });
+        }
+
+        return waitForSession().then(function (session) {
+          if (!session) return null;
           return sb.rpc('claim_or_create_kid_for_email', {
             p_local_client_id: localCid,
           }).then(function (res) {
@@ -233,7 +278,7 @@
             }
             return {
               clientId: canonical || localCid,
-              email: sess.data.session.user && sess.data.session.user.email || null,
+              email: session.user && session.user.email || null,
             };
           });
         });
