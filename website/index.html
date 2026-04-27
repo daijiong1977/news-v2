@@ -43,7 +43,7 @@
 <!-- kidsync — vanilla JS bridge that mirrors localStorage writes to
      Supabase RPCs (parent dashboard cloud mode). Loaded BEFORE data.jsx
      so window.kidsync is available everywhere downstream. -->
-<script src="kidsync.js?v=20260426authrace"></script>
+<script src="kidsync.js?v=20260426nooverwrite"></script>
 
 <script type="text/babel" src="data.jsx?v=20260425g"></script>
 <script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
@@ -289,11 +289,12 @@ function App() {
       try {
         if (window.kidsync && typeof window.kidsync.fetchProfile === 'function') {
           const cloudP = await window.kidsync.fetchProfile();
-          if (cloudP && !cancelled) {
-            // Merge: cloud wins for fields the cloud has values for, but
-            // we only override the local field when cloud has a non-empty
-            // value (guards against blanking out a setting the kid only
-            // ever set on this device).
+          if (cancelled) return;
+          if (cloudP) {
+            // Merge: cloud wins for non-empty fields. Local-only
+            // settings (e.g. a setting changed on this device since
+            // the last cloud upload) survive because we skip empty
+            // cloud values.
             setTweaks(t => {
               const next = { ...t };
               if (cloudP.display_name) next.userName = cloudP.display_name;
@@ -301,8 +302,6 @@ function App() {
               if (cloudP.language)     next.language = cloudP.language;
               if (cloudP.theme)        next.theme = cloudP.theme;
               if (cloudP.daily_goal)   next.dailyGoal = cloudP.daily_goal;
-              // tweaks.level mirrors the top-level `level` state (see
-              // the drift-fix comment above) — sync both.
               if (cloudP.level)        next.level = cloudP.level;
               return next;
             });
@@ -310,9 +309,20 @@ function App() {
               setLevel(cloudP.level);
               ss.set('ohye_level', cloudP.level);
             }
+          } else {
+            // No cloud row yet (brand-new anonymous user, never linked).
+            // Eagerly upload the local tweaks so the row exists for any
+            // future device claim. Bypasses the cloudPullDoneRef gate
+            // because we own the upload sequencing here.
+            if (window.kidsync && typeof window.kidsync.upsertKidProfile === 'function') {
+              window.kidsync.upsertKidProfile(tweaks);
+            }
           }
         }
       } catch (e) { console.warn('[boot] fetchProfile failed', e); }
+      // Cloud pull (or skip) is done. Future tweaks changes can now
+      // upload to cloud through the gated useEffect.
+      cloudPullDoneRef.current = true;
       try {
         if (window.kidsync && typeof window.kidsync.fetchHistory === 'function') {
           const events = await window.kidsync.fetchHistory(100);
@@ -348,10 +358,28 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // Always persist tweaks to localStorage on change.
+  useEffect(() => { ss.setJSON('ohye_tweaks', tweaks); }, [tweaks]);
+
+  // Cloud upload of tweaks — gated on cloud-pull completion.
+  //
+  // The hard-learned lesson: useEffect([tweaks]) fires on FIRST mount
+  // with whatever tweaks the page started with — usually local defaults
+  // (en / Tree / etc.) on a freshly-claimed device. Without this gate,
+  // the mount-time upload races ahead of the bootstrap fetchProfile
+  // pull and overwrites the canonical cloud row with the new device's
+  // defaults. Net effect: signing in on a second device CORRUPTED the
+  // cloud copy of the kid's settings instead of restoring them.
+  //
+  // Fix: ref-flag `cloudPullDone` flips true at the end of the
+  // bootstrap fetchProfile path. Until that flips, the upload effect
+  // is a no-op. After it flips, the next legitimate user-driven tweak
+  // change uploads normally. (The bootstrap also eagerly uploads if
+  // it learns the cloud row doesn't exist yet, so brand-new users
+  // still establish their cloud row on first sign-in.)
+  const cloudPullDoneRef = React.useRef(false);
   useEffect(() => {
-    ss.setJSON('ohye_tweaks', tweaks);
-    // Mirror to cloud (no-op if unavailable). Light touch: only the
-    // profile-shaped fields, never streak/xp counters.
+    if (!cloudPullDoneRef.current) return;
     if (window.kidsync && typeof window.kidsync.upsertKidProfile === 'function') {
       window.kidsync.upsertKidProfile(tweaks);
     }

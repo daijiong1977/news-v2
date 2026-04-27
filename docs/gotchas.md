@@ -239,3 +239,41 @@ that exists only on this device). Also calls `setLevel` + writes
 
 **Where:** `kidsync.js::fetchProfile`, `index.html` bootstrap
 useEffect, migration `get_kid_profile`.
+
+## 2026-04-27 · profile UPLOAD on every mount overwrote cloud profile
+
+**Symptom:** signing in with Gmail on a second device never restored
+the kid's settings. Worse — it actively CORRUPTED the cloud row,
+overwriting zh/Sprout/jiong with the new device's en/Tree/defaults.
+
+**Root cause:** index.html had a `useEffect([tweaks])` that mirrored
+local tweaks to cloud via upsertKidProfile. React fires that on the
+INITIAL mount with whatever local tweaks are at boot — usually
+defaults on a freshly-claimed device. The mount-time upload raced
+ahead of the bootstrap's fetchProfile pull, so by the time we tried
+to read the kid's "real" cloud values, they had already been
+overwritten with the new device's defaults.
+
+The fetchProfile pull then merged the (now-corrupted) defaults back
+into local tweaks, completing the appearance of "sync did nothing"
+— but actually it had just self-corrupted.
+
+**Fix:**
+1. Split the persistence into two effects. localStorage write always
+   fires (fast, can't hurt). Cloud upload is gated by a useRef flag
+   `cloudPullDoneRef` that flips true ONLY after the bootstrap
+   fetchProfile path completes.
+2. Bootstrap now: a) pulls cloud profile, merges into local tweaks if
+   present; b) if NO cloud row exists (brand new anonymous user),
+   eagerly uploads local tweaks once so the row exists for future
+   claims; c) flips the ref so post-bootstrap user-driven changes
+   upload normally.
+
+**Generalisable lesson:** any "mirror local → cloud" effect that
+fires on mount is a corruption hazard if the local state can be
+"defaults from a fresh-page load" rather than "the user's chosen
+values." Either gate behind a "we've finished pulling" flag, or
+only mirror when the value is provably user-driven (e.g. dirty
+flag pattern).
+
+**Where:** `website/index.html`, search for `cloudPullDoneRef`.
