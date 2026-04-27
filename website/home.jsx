@@ -13,6 +13,19 @@ function _articlePct(ap) {
   return Math.min(100, steps.length * 25);
 }
 
+// Read state from articleProgress alone (the persistent, 10-day-bounded
+// dictionary). readToday only knows TODAY's completes — using it as the
+// "read" source meant past-day reads (visible in archive view + Continue
+// rail) couldn't show their completion checkmark, only today's could.
+// articleProgress.steps.length===4 is the right signal: persists for 10
+// days, survives midnight rollover, works for any day's articles.
+function _isDoneArticle(progress, articleId) {
+  const ap = ((progress && progress.articleProgress) || {})[articleId];
+  if (!ap) return false;
+  if (typeof ap === 'number') return ap >= 100;
+  return ((ap.steps || []).length) >= 4;
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Onboarding — first-launch setup screen (≤ 2 min)
 // ────────────────────────────────────────────────────────────────────
@@ -1371,10 +1384,10 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
         ) : filtered.length === 3 && !isArchive ? (
           /* Editorial layout: big feature on top (photo left, article right) + 2 companions below */
           <div style={{display:'flex', flexDirection:'column', gap:20}}>
-            <ArticleCard article={filtered[0]} onOpen={isZh ? null : ()=>onOpen(filtered[0].id)} read={progress.readToday.includes(filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
+            <ArticleCard article={filtered[0]} onOpen={isZh ? null : ()=>onOpen(filtered[0].id)} read={_isDoneArticle(progress, filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
-              <ArticleCard article={filtered[1]} onOpen={isZh ? null : ()=>onOpen(filtered[1].id)} read={progress.readToday.includes(filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
-              <ArticleCard article={filtered[2]} onOpen={isZh ? null : ()=>onOpen(filtered[2].id)} read={progress.readToday.includes(filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
+              <ArticleCard article={filtered[1]} onOpen={isZh ? null : ()=>onOpen(filtered[1].id)} read={_isDoneArticle(progress, filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
+              <ArticleCard article={filtered[2]} onOpen={isZh ? null : ()=>onOpen(filtered[2].id)} read={_isDoneArticle(progress, filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
             </div>
           </div>
         ) : (
@@ -1384,7 +1397,7 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
             gap:20,
           }}>
             {filtered.map((a, i) => (
-              <ArticleCard key={a.id} article={a} onOpen={isZh ? null : ()=>onOpen(a.id)} read={progress.readToday.includes(a.id)} pct={_articlePct((progress.articleProgress||{})[a.id])} variant={i===0 && !isArchive ? 'feature' : 'normal'} />
+              <ArticleCard key={a.id} article={a} onOpen={isZh ? null : ()=>onOpen(a.id)} read={_isDoneArticle(progress, a.id)} pct={_articlePct((progress.articleProgress||{})[a.id])} variant={i===0 && !isArchive ? 'feature' : 'normal'} />
             ))}
           </div>
         )}
@@ -1541,6 +1554,10 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
                   .sort((a, b) => (b.lastTouchedAt || '').localeCompare(a.lastTouchedAt || ''))
                   .slice(0, 10)
               }
+              // Snapshot fallback for past-day reads — popover finds the
+              // article metadata here when ARTICLES (currently-loaded
+              // bundle) doesn't contain the id.
+              articleProgress={(progress && progress.articleProgress) || {}}
             />
           )}
         </div>
@@ -1557,15 +1574,42 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
 function _HeaderOldContentRemoved() { return null; }
 
 // ——————————— RECENT READS POPOVER ———————————
-function RecentReadsPopover({ onClose, onOpenArticle, onResumeItem, readIds, inProgress }) {
-  // Take most recent 15 articles the user has read (from readIds, in order)
+function RecentReadsPopover({ onClose, onOpenArticle, onResumeItem, readIds, inProgress, articleProgress }) {
+  // Take most recent 15 articles the user has read (from readIds, in order).
+  // Source order:
+  //   1. Try ARTICLES.find — works for articles in the currently-loaded
+  //      bundle (today's, or whatever archive day is active).
+  //   2. Fall back to the articleProgress snapshot — articles read on a
+  //      different day still render their title/category/image because
+  //      we stash those fields on the first step bump (see article.jsx).
+  // Without the fallback, past-day completed reads silently disappeared
+  // from the popover whenever the user wasn't viewing that day's bundle.
   const recent = [];
   const seen = new Set();
+  const apMap = articleProgress || {};
   for (let i = readIds.length - 1; i >= 0 && recent.length < 15; i--) {
     const id = readIds[i];
     if (seen.has(id)) continue;
     const a = ARTICLES.find(x => x.id === id);
-    if (a) { recent.push(a); seen.add(id); }
+    if (a) {
+      recent.push({ ...a, _resumable: false });
+      seen.add(id);
+      continue;
+    }
+    const snap = apMap[id];
+    if (snap && typeof snap === 'object' && snap.title) {
+      const m = id.match(/^(\d{4}-\d{2}-\d{2})/);
+      recent.push({
+        id,
+        title: snap.title,
+        category: snap.category || 'News',
+        level: snap.level || '',
+        readMins: snap.readMins || 7,
+        archiveDate: snap.archiveDate || (m ? m[1] : null),
+        _resumable: true,
+      });
+      seen.add(id);
+    }
   }
   const continueItems = Array.isArray(inProgress) ? inProgress : [];
   return (

@@ -43,7 +43,7 @@
 <!-- kidsync — vanilla JS bridge that mirrors localStorage writes to
      Supabase RPCs (parent dashboard cloud mode). Loaded BEFORE data.jsx
      so window.kidsync is available everywhere downstream. -->
-<script src="kidsync.js?v=20260426oauth"></script>
+<script src="kidsync.js?v=20260426profile"></script>
 
 <script type="text/babel" src="data.jsx?v=20260425g"></script>
 <script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
@@ -273,6 +273,39 @@ function App() {
           }
         }
       } catch (e) { console.warn('[boot] linkCurrentSession failed', e); }
+      // Pull the kid's persisted profile (language/level/avatar/theme/
+      // daily_goal/display_name) from the cloud — this is what restores
+      // a returning kid's choices when they sign in on a new browser.
+      // Without this, the profile UPLOAD (upsertKidProfile) was working
+      // since day one but there was no DOWNLOAD path, so a fresh
+      // browser landed on defaults even after the identity claim.
+      try {
+        if (window.kidsync && typeof window.kidsync.fetchProfile === 'function') {
+          const cloudP = await window.kidsync.fetchProfile();
+          if (cloudP && !cancelled) {
+            // Merge: cloud wins for fields the cloud has values for, but
+            // we only override the local field when cloud has a non-empty
+            // value (guards against blanking out a setting the kid only
+            // ever set on this device).
+            setTweaks(t => {
+              const next = { ...t };
+              if (cloudP.display_name) next.userName = cloudP.display_name;
+              if (cloudP.avatar)       next.avatar = cloudP.avatar;
+              if (cloudP.language)     next.language = cloudP.language;
+              if (cloudP.theme)        next.theme = cloudP.theme;
+              if (cloudP.daily_goal)   next.dailyGoal = cloudP.daily_goal;
+              // tweaks.level mirrors the top-level `level` state (see
+              // the drift-fix comment above) — sync both.
+              if (cloudP.level)        next.level = cloudP.level;
+              return next;
+            });
+            if (cloudP.level) {
+              setLevel(cloudP.level);
+              ss.set('ohye_level', cloudP.level);
+            }
+          }
+        }
+      } catch (e) { console.warn('[boot] fetchProfile failed', e); }
       try {
         if (window.kidsync && typeof window.kidsync.fetchHistory === 'function') {
           const events = await window.kidsync.fetchHistory(100);

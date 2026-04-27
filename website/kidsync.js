@@ -338,6 +338,27 @@
       });
     },
 
+    // ── Profile pull-down ──────────────────────────────────────────
+    // Returns the kid's persisted profile (display_name, avatar, level,
+    // language, theme, daily_goal) from the cloud, or null if the kid
+    // doesn't have a row yet (anonymous user who never bumped a tweak).
+    // Used on bootstrap after a claim to restore preferences a kid set
+    // on another device. Caller decides whether to overwrite local.
+    fetchProfile: function () {
+      var cid = clientId(); if (!cid) return Promise.resolve(null);
+      return ensureSupabase().then(function (sb) {
+        if (!sb) return null;
+        return sb.rpc('get_kid_profile', { p_client_id: cid }).then(function (res) {
+          if (res && res.error) {
+            console.warn('[kidsync] get_kid_profile failed:', res.error.message);
+            return null;
+          }
+          var rows = res && res.data;
+          return (Array.isArray(rows) && rows.length) ? rows[0] : null;
+        });
+      });
+    },
+
     // ── Cloud history hydration ────────────────────────────────────
     // Called on every app boot. Returns the kid's last N reading
     // events from Supabase so the streak popover + Continue rail

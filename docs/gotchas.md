@@ -217,3 +217,25 @@ surface tight.
 
 **Where:** `supabase/migrations/20260426_email_magic_link.sql`,
 patched via inline migration `magic_link_pgcrypto_fix`.
+
+## 2026-04-26 · profile only synced UP, never DOWN
+
+**Symptom:** "I signed in on machine A with Chinese mode + Tree level.
+Signed in on machine B with the same Gmail — language/level/avatar
+all defaulted, didn't carry over."
+
+**Root cause:** `upsertKidProfile` has fired on every tweaks change
+since the parent dashboard shipped (index.html line 215) — so the
+cloud row HAD the kid's settings the whole time. There was just no
+read path. Bootstrap fetched events but not the profile row. Fresh
+device → cloud profile sat unread → local defaults won.
+
+**Fix:** new RPC `get_kid_profile(p_client_id)` (anon, returns
+display_name/avatar/level/language/theme/daily_goal). Bootstrap
+calls it after linkCurrentSession, merges into local tweaks (cloud
+wins for non-empty fields only — guards against blanking a setting
+that exists only on this device). Also calls `setLevel` + writes
+`ohye_level` so the top-level state mirror stays consistent.
+
+**Where:** `kidsync.js::fetchProfile`, `index.html` bootstrap
+useEffect, migration `get_kid_profile`.
