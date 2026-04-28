@@ -1075,10 +1075,16 @@ def detail_enrich(rewrite_result: dict) -> dict:
     details: dict = {}
     for level in ("easy", "middle"):
         try:
+            # V4 Pro thinking-mode CoT consumes more of the max_tokens
+            # budget than the previous reasoner. 2026-04-28 17:06 UTC
+            # scheduled run truncated middle-level News enrichment at
+            # 12k → 0 questions / 0 background_read / 0 Article_Structure
+            # → pack_and_upload refused → no bundle deployed. Same root
+            # cause as the curator fix in 25583aa.
             res = deepseek_reasoner_call(
                 DETAIL_ENRICH_PROMPT,
                 _detail_enrich_input_single_level(rewrite_result, level),
-                max_tokens=12000,
+                max_tokens=20000,
             )
             for k, v in (res.get("details") or {}).items():
                 details[k] = v
