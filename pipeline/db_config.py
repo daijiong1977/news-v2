@@ -141,6 +141,13 @@ def load_sources(category_name: str, *, today_weekday: int | None = None) -> lis
             for r in rows:
                 if not r.get("enabled"): continue
                 if r.get("is_backup"):  continue
+                # Sourcefinder mining engine (separate repo) writes
+                # candidates with state='probation' to this table.
+                # Skip anything that isn't fully promoted to live.
+                # state column may be missing on older rows — treat
+                # NULL as 'live' for backwards compat.
+                state = r.get("state")
+                if state is not None and state != "live": continue
                 last_used = r.get("last_used_at") or ""   # NULL → "" sorts before any iso string
                 pri = int(r.get("priority") or 99)
                 kept.append((last_used, pri, _row_to_source(r)))
