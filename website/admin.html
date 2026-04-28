@@ -1460,6 +1460,233 @@ function PipelineTab({ flash }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// SOURCE HEALTH TAB — sourcefinder weekly DeepSeek verdicts
+// ─────────────────────────────────────────────────────────────────────
+function SourceHealthTab({ flash }) {
+  const [report, setReport] = useState(null);
+  const [enabledMap, setEnabledMap] = useState({}); // source_name -> bool
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setBusy(true);
+    // Latest report for kidsnews vertical
+    const { data: reports, error } = await sb
+      .from('engine_source_reports')
+      .select('*')
+      .eq('vertical', 'kidsnews')
+      .order('generated_at', { ascending: false })
+      .limit(1);
+    if (error) { flash('err', error.message); setBusy(false); return; }
+    setReport(reports?.[0] || null);
+
+    // Current enabled state per source so we can render toggles
+    const { data: srcs } = await sb
+      .from('redesign_source_configs')
+      .select('id, name, enabled, state');
+    const m = {};
+    (srcs || []).forEach(s => { m[s.name] = { id: s.id, enabled: !!s.enabled, state: s.state || 'live' }; });
+    setEnabledMap(m);
+    setBusy(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggleEnabled = async (sourceName) => {
+    const row = enabledMap[sourceName];
+    if (!row) { flash('err', `unknown source: ${sourceName}`); return; }
+    const { error } = await sb
+      .from('redesign_source_configs')
+      .update({ enabled: !row.enabled })
+      .eq('id', row.id);
+    if (error) flash('err', error.message);
+    else {
+      flash('ok', `${sourceName} ${row.enabled ? 'disabled' : 'enabled'}`);
+      load();
+    }
+  };
+
+  const verdictBadge = (v) => {
+    const palette = {
+      KEEP:  { bg:'#d4edda', fg:'#155724' },
+      WATCH: { bg:'#fff3cd', fg:'#856404' },
+      DROP:  { bg:'#f8d7da', fg:'#721c24' },
+    };
+    const p = palette[v] || { bg:'#eee', fg:'#333' };
+    return <span style={{
+      display:'inline-block', padding:'2px 10px', borderRadius:12,
+      fontWeight:600, background:p.bg, color:p.fg, fontSize:12,
+    }}>{v}</span>;
+  };
+
+  if (busy && !report) return <div className="card">Loading…</div>;
+  if (!report) return (
+    <div className="card">
+      <p style={{margin:0}}>No source health report yet.</p>
+      <p style={{margin:'8px 0 0', color:'#777', fontSize:13}}>
+        Reports run weekly Monday 06:00 UTC. Trigger manually with{' '}
+        <code>gh workflow run health.yml -R daijiong1977/sourcefinder</code>.
+      </p>
+    </div>
+  );
+
+  const sources = (report.sources || []);
+  const counts = sources.reduce((acc, s) => {
+    acc[s.verdict] = (acc[s.verdict] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline'}}>
+          <h3 style={{margin:0}}>Source Health</h3>
+          <span style={{fontSize:13, color:'#777'}}>
+            {new Date(report.generated_at).toLocaleString()} ·{' '}
+            {report.window_start} → {report.window_end}
+          </span>
+        </div>
+        <p style={{margin:'12px 0 4px'}}>{report.summary}</p>
+        <div style={{display:'flex', gap:14, marginTop:8, fontSize:13}}>
+          <span>{verdictBadge('KEEP')} {counts.KEEP || 0}</span>
+          <span>{verdictBadge('WATCH')} {counts.WATCH || 0}</span>
+          <span>{verdictBadge('DROP')} {counts.DROP || 0}</span>
+        </div>
+      </div>
+
+      <div className="card" style={{padding:0, overflow:'hidden'}}>
+        <table style={{width:'100%', borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:'#f7f7f7', textAlign:'left'}}>
+              <th style={{padding:'10px 12px'}}>Source</th>
+              <th style={{padding:'10px 12px'}}>Cat</th>
+              <th style={{padding:'10px 12px'}}>Verdict</th>
+              <th style={{padding:'10px 12px', textAlign:'right'}}>Score</th>
+              <th style={{padding:'10px 12px'}}>Reasoning</th>
+              <th style={{padding:'10px 12px', textAlign:'right'}}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sources
+              .slice()
+              .sort((a, b) => (a.category || '').localeCompare(b.category || '')
+                              || (a.source_name || '').localeCompare(b.source_name || ''))
+              .map((s, i) => {
+                const cur = enabledMap[s.source_name];
+                return (
+                  <tr key={i} style={{borderTop:'1px solid #eee'}}>
+                    <td style={{padding:'10px 12px', fontWeight:500}}>{s.source_name}</td>
+                    <td style={{padding:'10px 12px', color:'#555'}}>{s.category}</td>
+                    <td style={{padding:'10px 12px'}}>{verdictBadge(s.verdict)}</td>
+                    <td style={{padding:'10px 12px', textAlign:'right', color:'#555'}}>{s.score}</td>
+                    <td style={{padding:'10px 12px', color:'#555', fontSize:13}}>{s.reasoning}</td>
+                    <td style={{padding:'10px 12px', textAlign:'right'}}>
+                      {cur ? (
+                        <button
+                          className="btn"
+                          onClick={() => toggleEnabled(s.source_name)}
+                          style={cur.enabled
+                            ? {background:'#fff', color:'#a40', border:'1px solid #c93'}
+                            : {background:'#155724', color:'#fff'}}
+                        >
+                          {cur.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                      ) : <span style={{color:'#999', fontSize:12}}>not in pool</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// MINING CONSOLE TAB — sourcefinder discovery + probation status
+// ─────────────────────────────────────────────────────────────────────
+function MiningConsoleTab({ flash }) {
+  const [runs, setRuns] = useState([]);
+  const [probation, setProbation] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setBusy(true);
+    const [{ data: rs }, { data: ps }] = await Promise.all([
+      sb.from('engine_mining_runs')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(10),
+      sb.from('redesign_source_configs')
+        .select('id, name, category, subbucket, state, rss_url')
+        .eq('state', 'probation'),
+    ]);
+    setRuns(rs || []);
+    setProbation(ps || []);
+    setBusy(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div>
+      <div className="card" style={{marginBottom:16}}>
+        <h3 style={{margin:'0 0 12px'}}>Probation pool ({probation.length})</h3>
+        {probation.length === 0
+          ? <p style={{margin:0, color:'#777'}}>No sources currently on probation.</p>
+          : <table style={{width:'100%', borderCollapse:'collapse'}}>
+              <thead><tr style={{background:'#f7f7f7'}}>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Source</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Category</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Subbucket</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>RSS</th>
+              </tr></thead>
+              <tbody>
+                {probation.map(p => (
+                  <tr key={p.id} style={{borderTop:'1px solid #eee'}}>
+                    <td style={{padding:'8px 12px'}}>{p.name}</td>
+                    <td style={{padding:'8px 12px'}}>{p.category}</td>
+                    <td style={{padding:'8px 12px'}}>{p.subbucket || '—'}</td>
+                    <td style={{padding:'8px 12px', fontSize:12, fontFamily:'monospace'}}>{p.rss_url}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        }
+      </div>
+
+      <div className="card">
+        <h3 style={{margin:'0 0 12px'}}>Recent mining runs</h3>
+        {runs.length === 0
+          ? <p style={{margin:0, color:'#777'}}>No mining runs yet. Trigger via{' '}
+              <code>gh workflow run mining.yml -R daijiong1977/sourcefinder</code>.</p>
+          : <table style={{width:'100%', borderCollapse:'collapse'}}>
+              <thead><tr style={{background:'#f7f7f7'}}>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Started</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Cat / Sub</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Trigger</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Status</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Discovered → Triaged → Probation</th>
+              </tr></thead>
+              <tbody>
+                {runs.map(r => (
+                  <tr key={r.id} style={{borderTop:'1px solid #eee'}}>
+                    <td style={{padding:'8px 12px', fontSize:12}}>{new Date(r.started_at).toLocaleString()}</td>
+                    <td style={{padding:'8px 12px'}}>{r.category}/{r.subbucket || '—'}</td>
+                    <td style={{padding:'8px 12px', color:'#555', fontSize:12}}>{r.trigger}</td>
+                    <td style={{padding:'8px 12px'}}>{r.status}</td>
+                    <td style={{padding:'8px 12px', textAlign:'right', fontSize:12, color:'#555'}}>
+                      {r.candidates_discovered ?? 0} → {r.candidates_triaged ?? 0} → {r.candidates_promoted_to_probation ?? 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // ADMIN UI — main app
 // ─────────────────────────────────────────────────────────────────────
 function AdminUI({ session, onSignOut, onSignIn }) {
@@ -1475,6 +1702,8 @@ function AdminUI({ session, onSignOut, onSignIn }) {
 
   const tabs = [
     ['sources',    '📡 Sources'],
+    ['health',     '🩺 Source Health'],
+    ['mining',     '⛏️ Mining Console'],
     ['categories', '🏷️ Categories'],
     ['providers',  '🤖 AI Providers'],
     ['admins',     '👥 Admins'],
@@ -1497,6 +1726,8 @@ function AdminUI({ session, onSignOut, onSignIn }) {
       </div>
 
       {tab === 'sources'    && <SourcesTab flash={flash} categories={categories}/>}
+      {tab === 'health'     && <SourceHealthTab flash={flash}/>}
+      {tab === 'mining'     && <MiningConsoleTab flash={flash}/>}
       {tab === 'categories' && <CategoriesTab flash={flash} onChanged={loadCategories}/>}
       {tab === 'providers'  && <AIProvidersTab flash={flash}/>}
       {tab === 'admins'     && <AdminUsersTab flash={flash} session={session}/>}
