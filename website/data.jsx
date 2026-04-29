@@ -170,10 +170,48 @@ function listingBaseFor(archiveDate) {
 // reload, so a fresh build always pulls latest.
 const _archiveCache = new Map();
 
+// Search-result extras. The redesign_search_index can hold rows whose
+// story_id is no longer in the day's listing JSON — happens when the
+// pipeline runs twice on the same date and overwrites the listing
+// while the article_payloads/ directory accumulates orphan stories.
+// To make those still openable, stash a synthetic listing entry
+// keyed by archiveDate; loadPayloads merges it into the bundle so
+// ArticlePage's ARTICLES.find can locate the row and the detail
+// fetch succeeds (the per-story payload file is still on storage).
+const _archiveExtras = {};   // { [archiveDate]: [article, ...] }
+
+function _mergeExtras(list, archiveDate) {
+  const key = archiveDate || '__today__';
+  const extras = _archiveExtras[key];
+  if (!extras || !extras.length) return list;
+  const ids = new Set(list.map(a => a.id));
+  return list.concat(extras.filter(a => !ids.has(a.id)));
+}
+
+// Build a synthetic listing entry from a search-result row so the
+// article reader can render it even when the day's listing JSON has
+// been overwritten by a later pipeline run.
+function synthesizeArticleFromSearchRow(r) {
+  if (!r || !r.story_id || !r.published_date) return null;
+  const lvl = r.level === 'zh' ? 'cn' : (r.level || 'middle');
+  const cat = (r.category || 'News').toLowerCase();   // listingToArticle wants lowercase
+  const entry = {
+    id: r.story_id,
+    title: r.title || '',
+    summary: '',
+    image_url: r.image_url || '',
+    source: r.source_name || '',
+    time_ago: '',
+    mined_at: '',
+    source_published_at: '',
+  };
+  return listingToArticle(entry, cat, lvl, r.published_date);
+}
+
 async function loadPayloads(archiveDate = null) {
   const cacheKey = archiveDate || '__today__';
   if (_archiveCache.has(cacheKey)) {
-    return _archiveCache.get(cacheKey);
+    return _mergeExtras(_archiveCache.get(cacheKey), archiveDate);
   }
   const cats = ["news", "science", "fun"];
   const levels = ["easy", "middle", "cn"];
@@ -205,8 +243,22 @@ async function loadPayloads(archiveDate = null) {
   const results = await Promise.all(tasks);
   const all = results.flat();
   _archiveCache.set(cacheKey, all);
-  return all;
+  return _mergeExtras(all, archiveDate);
 }
+
+// Stash a synthetic listing entry so the next loadArchive() call
+// (and any cached return) includes it. Used when opening an article
+// from a search result whose story_id was overwritten in the day's
+// listing.
+function stashSearchExtra(r) {
+  const a = synthesizeArticleFromSearchRow(r);
+  if (!a) return null;
+  const key = a.archiveDate || '__today__';
+  const cur = _archiveExtras[key] || [];
+  _archiveExtras[key] = cur.filter(x => x.id !== a.id).concat([a]);
+  return a;
+}
+window.stashSearchExtra = stashSearchExtra;
 
 // Fetch the list of available archive days from Supabase.
 // Returns { dates: [...], updated_at } or { dates: [] } on failure.

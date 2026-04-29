@@ -516,12 +516,58 @@ function App() {
   };
   const onBack = () => setRoute({ page:'home', articleId:null });
   const onComplete = () => setRoute({ page:'home', articleId:null });
+  const onOpenSearch = () => setRoute({ page:'search', articleId:null });
+  // Search-result click. Same dance as onResume: load the past-day
+  // bundle FIRST so window.ARTICLES has the entry, THEN flip archiveDay
+  // and route. Without the await the article reader would open before
+  // ARTICLES swapped and fall back to a stub view.
+  const onOpenSearchResult = async (r) => {
+    if (!r || !r.story_id || !r.published_date) return;
+    // ZH search rows have no detail page (the cn payload is summary-only
+    // and ArticlePage routes those away). Redirect to the English twin
+    // (Tree first, then any English level) so the user lands on a
+    // working detail page — same logic as the streak-popover onOpen()
+    // path. If no twin is available, fall back to opening the cn id;
+    // ArticlePage will then redirect itself if it can.
+    let lvlSuffix = r.level === 'zh' ? 'cn' : (r.level || 'middle');
+    // Stash a synthetic listing entry BEFORE loadArchive runs so the
+    // bundle that ArticlePage reads from contains this story even
+    // when the day's listing JSON was overwritten by a later pipeline
+    // run (the per-story payload file is still on storage).
+    if (typeof window.stashSearchExtra === 'function') {
+      window.stashSearchExtra(r);
+    }
+    try {
+      if (typeof window.loadArchive === 'function') {
+        await window.loadArchive(r.published_date);
+      }
+      // Re-pick level for zh hits now that ARTICLES is loaded —
+      // prefer the Tree-level English twin for the same storyId.
+      if (r.level === 'zh' && Array.isArray(window.ARTICLES)) {
+        const twin = window.ARTICLES.find(a => a.storyId === r.story_id && a.language === 'en' && a.level === 'Tree')
+                  || window.ARTICLES.find(a => a.storyId === r.story_id && a.language === 'en');
+        if (twin) lvlSuffix = twin.id.split('-').pop();
+      }
+      setArchiveDay(r.published_date);
+      setRoute({ page:'article', articleId: `${r.story_id}-${lvlSuffix}` });
+    } catch (e) {
+      console.warn('[search] open failed', r, e);
+    }
+  };
 
   return (
     <div data-screen-label={route.page==='home' ? '01 Home' : '02 Article'} style={{minHeight:'100vh', background: theme.bg}}>
-      {route.page === 'home' ? (
+      {route.page === 'search' && window.SearchPage ? (
+        <window.SearchPage
+          onBack={onBack}
+          onOpenResult={onOpenSearchResult}
+          level={level}
+          language={tweaks.language || 'en'}
+        />
+      ) : route.page === 'home' ? (
         <HomePage
           onOpen={onOpen}
+          onOpenSearch={onOpenSearch}
           onOpenArchive={async (d) => {
             // PRE-load ARTICLES before flipping archiveDay state so the
             // first re-render after the click already has the right

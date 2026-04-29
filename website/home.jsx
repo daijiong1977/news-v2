@@ -971,7 +971,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
   );
 }
 
-function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
+function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
   const isZh = tweaks && tweaks.language === 'zh';
@@ -1155,7 +1155,7 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
   return (
     <div style={{background: theme.bg, minHeight:'100vh'}}>
       {/* ——————————— HEADER ——————————— */}
-      <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} onOpenArchive={onOpenArchive} />
+      <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} onOpenArchive={onOpenArchive} onOpenSearch={onOpenSearch} />
 
       {/* ——————————— ANONYMOUS-USER SIGN-IN NUDGE ———————————
           Slim dismissible banner above the daily ritual. Only renders
@@ -1504,10 +1504,9 @@ function DatePopover({ onPick, onClose }) {
 }
 
 // ——————————— HEADER ———————————
-function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, recentOpen, setRecentOpen, onOpenArticle, onOpenArchive }) {
+function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, recentOpen, setRecentOpen, onOpenArticle, onOpenArchive, onOpenSearch }) {
   theme = theme || { bg:'#fff9ef', chip:'#f0e8d8' };
   tweaks = tweaks || {};
-  const [searchOpen, setSearchOpen] = useStateH(false);
   return (
     <header style={{
       background: theme.bg,
@@ -1520,34 +1519,13 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
 
         <div style={{flex:1}}/>
 
-        {/* Search button — opens search popover. Searches all archived articles. */}
-        <div style={{position:'relative'}}>
-          <button onClick={() => setSearchOpen(v => !v)} style={{
-            background:'#1b1230', color:'#fff', border:'none',
-            width:42, height:42, borderRadius:21, cursor:'pointer',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            fontSize:18,
-          }} title="Search archives">🔍</button>
-          {searchOpen && window.SearchPopover && (
-            <window.SearchPopover
-              onClose={() => setSearchOpen(false)}
-              onOpenResult={(r) => {
-                setSearchOpen(false);
-                if (typeof onOpenArchive === 'function' && r.published_date) {
-                  onOpenArchive(r.published_date);
-                  // Open the article after archive loads. Use storyId-level
-                  // mapping so onOpen() finds the right entry in ARTICLES.
-                  setTimeout(() => {
-                    if (typeof onOpenArticle === 'function') {
-                      const lvlSuffix = r.level === 'zh' ? 'cn' : r.level;
-                      onOpenArticle(`${r.story_id}-${lvlSuffix}`);
-                    }
-                  }, 50);
-                }
-              }}
-            />
-          )}
-        </div>
+        {/* Search button — opens dedicated search page. */}
+        <button onClick={() => { if (typeof onOpenSearch === 'function') onOpenSearch(); }} style={{
+          background:'#1b1230', color:'#fff', border:'none',
+          width:42, height:42, borderRadius:21, cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:18,
+        }} title="Search archives">🔍</button>
 
         {/* Streak pill → opens recent reads popover */}
         <div style={{position:'relative'}}>
@@ -1620,16 +1598,45 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
 
 function _HeaderOldContentRemoved() { return null; }
 
-// ——————————— RECENT READS POPOVER ———————————
-// ——————————— SEARCH POPOVER ———————————
-// Full-text search across all archived articles. Hits the
-// archive-search edge function which queries redesign_search_index
-// (tsvector + GIN). Results are date-DESC + ts_rank-DESC.
-function SearchPopover({ onClose, onOpenResult }) {
+// ——————————— SEARCH PAGE ———————————
+// Full-page (Google-style) full-text search across all archived
+// articles. Hits the archive-search edge function which queries
+// redesign_search_index (tsvector + GIN). Results are date-DESC +
+// ts_rank-DESC. Routed via App's route.page === 'search'.
+//
+// Image URLs in the search index are stored as relative paths
+// like "/article_images/article_xxx.webp". For TODAY those resolve
+// at the site root; for past dates the file lives under Supabase
+// storage at <ARCHIVE_BASE>/<published_date>/article_images/...
+// We always go through storage here because rows only land in the
+// search index AFTER pack_and_upload runs (so the file is on
+// storage by the time it's searchable, regardless of date).
+function searchResultImageUrl(r) {
+  const raw = r && r.image_url;
+  if (!raw) return '';
+  if (raw.startsWith('http')) return raw;
+  const rel = raw.replace(/^\//, '');
+  const base = (typeof window !== 'undefined' && window.ARCHIVE_BASE) || '';
+  // Without a base+date, we can't be sure the file is at the site
+  // root (a row indexed for a past date won't exist there). Return
+  // empty and let the placeholder render rather than ship a broken
+  // image request.
+  if (!base || !r.published_date) return '';
+  return `${base}/${r.published_date}/${rel}`;
+}
+
+function SearchPage({ onBack, onOpenResult, level, language }) {
   const [q, setQ] = useStateH("");
   const [results, setResults] = useStateH([]);
   const [loading, setLoading] = useStateH(false);
   const [hasSearched, setHasSearched] = useStateH(false);
+
+  // Map the user's current preference into the search-index level
+  // value. Search ONLY returns rows for the user's chosen mode —
+  // no cross-language or cross-level surprises.
+  const indexLevel = (language === 'zh') ? 'zh'
+                    : (level === 'Sprout') ? 'easy'
+                    : 'middle';
 
   // Debounced search — 300ms idle, no submit button needed.
   useEffectH(() => {
@@ -1638,107 +1645,138 @@ function SearchPopover({ onClose, onOpenResult }) {
     let cancelled = false;
     const t = setTimeout(async () => {
       setLoading(true);
-      const r = await window.archiveSearch(term, { limit: 10 });
+      const r = await window.archiveSearch(term, { limit: 20, level: indexLevel });
       if (cancelled) return;
       setLoading(false);
       setHasSearched(true);
       setResults((r && Array.isArray(r.results)) ? r.results : []);
     }, 300);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [q]);
+  }, [q, indexLevel]);
 
   return (
-    <>
-      <div onClick={onClose} style={{
-        position:'fixed', top:0, left:0, right:0, bottom:0,
-        zIndex:60, background:'rgba(0,0,0,0.18)',
-      }}/>
+    <div style={{minHeight:'100vh', background:'#f7f5f0', fontFamily:'Nunito, sans-serif'}}>
+      {/* Slim header strip with back + search box */}
       <div style={{
-        position:'absolute', top:48, right:0, width: 'min(420px, 90vw)',
-        zIndex:61, background:'#fff', borderRadius:14,
-        boxShadow:'0 10px 32px rgba(0,0,0,0.22)', padding:14,
-        maxHeight:'calc(100vh - 80px)', display:'flex', flexDirection:'column',
+        background:'#fff', borderBottom:'1px solid #eee',
+        position:'sticky', top:0, zIndex:30,
       }}>
-        <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:10}}>
+        <div style={{
+          maxWidth:780, margin:'0 auto', padding:'12px 20px',
+          display:'flex', alignItems:'center', gap:12,
+        }}>
+          <button onClick={onBack} style={{
+            background:'transparent', border:'none', cursor:'pointer',
+            fontSize:22, color:'#1b1230', padding:'4px 6px', lineHeight:1,
+          }} title="Back">←</button>
+          <div style={{
+            fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20,
+            color:'#1b1230', marginRight:6,
+          }}>Search</div>
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search past articles…"
+            placeholder="Search all past articles…"
+            aria-label="Search past articles"
             style={{
-              flex:1, padding:'10px 12px', border:'1.5px solid #ddd',
-              borderRadius:10, fontSize:15, outline:'none',
-              fontFamily:'Nunito, sans-serif',
+              flex:1, padding:'10px 14px', border:'1.5px solid #ddd',
+              borderRadius:24, fontSize:15, outline:'none',
+              fontFamily:'Nunito, sans-serif', background:'#fafafa',
             }}
           />
-          <button onClick={onClose} style={{
-            background:'transparent', border:'1px solid #ddd', borderRadius:8,
-            padding:'8px 12px', cursor:'pointer', fontSize:13, color:'#444',
-          }}>Close</button>
         </div>
+        <div style={{
+          maxWidth:780, margin:'0 auto', padding:'0 20px 10px',
+          fontSize:11, color:'#888', letterSpacing:'.04em',
+          textTransform:'uppercase',
+        }}>
+          Searching <strong>
+            {indexLevel === 'zh' ? '中文' : indexLevel === 'easy' ? 'Sprout' : 'Tree'}
+          </strong> articles · change level in your profile to switch
+        </div>
+      </div>
 
-        {loading && <div style={{padding:'10px 4px', fontSize:13, color:'#777'}}>Searching…</div>}
-
-        {!loading && hasSearched && results.length === 0 && (
-          <div style={{padding:'10px 4px', fontSize:13, color:'#777'}}>
-            No matches. Try fewer words, or a synonym.
+      {/* Results list */}
+      <div style={{maxWidth:780, margin:'0 auto', padding:'18px 20px 60px'}}>
+        {!q.trim() && !loading && (
+          <div style={{padding:'30px 4px', fontSize:14, color:'#888', textAlign:'center'}}>
+            Type a word or phrase to search every past article.<br/>
+            Tip: double quotes for exact phrase — <code>"climate change"</code>.
           </div>
         )}
 
-        <div style={{overflowY:'auto', flex:1, marginTop:4}}>
-          {results.map(r => (
+        {loading && <div style={{padding:'18px 4px', fontSize:14, color:'#777'}}>Searching…</div>}
+
+        {!loading && hasSearched && results.length === 0 && (
+          <div style={{padding:'24px 4px', fontSize:14, color:'#777', textAlign:'center'}}>
+            No matches for <strong>"{q}"</strong>. Try fewer words, or a synonym.
+          </div>
+        )}
+
+        {!loading && hasSearched && results.length > 0 && (
+          <div style={{fontSize:12, color:'#888', marginBottom:12, paddingLeft:4}}>
+            About {results.length} result{results.length === 1 ? '' : 's'}
+          </div>
+        )}
+
+        {results.map(r => {
+          const imgSrc = searchResultImageUrl(r);
+          return (
             <button
               key={`${r.story_id}-${r.level}`}
               onClick={() => onOpenResult(r)}
               style={{
-                display:'flex', gap:10, padding:'10px', width:'100%',
-                background:'#fafafa', border:'none', borderRadius:10,
-                marginBottom:6, cursor:'pointer', textAlign:'left',
-                alignItems:'flex-start',
+                display:'flex', gap:14, padding:'14px', width:'100%',
+                background:'#fff', border:'1px solid #eee', borderRadius:12,
+                marginBottom:10, cursor:'pointer', textAlign:'left',
+                alignItems:'flex-start', boxShadow:'0 1px 2px rgba(0,0,0,0.04)',
               }}
             >
-              {r.image_url ? (
-                <img src={r.image_url.startsWith('http') ? r.image_url : ('/' + r.image_url.replace(/^\//, ''))}
-                     alt="" loading="lazy" style={{
-                  width:64, height:48, objectFit:'cover', borderRadius:6,
-                  background:'#ddd', flexShrink:0,
-                }}/>
+              {imgSrc ? (
+                <img
+                  src={imgSrc}
+                  alt=""
+                  loading="lazy"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  style={{
+                    width:96, height:72, objectFit:'cover', borderRadius:8,
+                    background:'#e8e4dc', flexShrink:0,
+                  }}
+                />
               ) : (
                 <div style={{
-                  width:64, height:48, borderRadius:6, background:'#ddd',
+                  width:96, height:72, borderRadius:8, background:'#e8e4dc',
                   flexShrink:0, display:'flex', alignItems:'center',
-                  justifyContent:'center', color:'#888', fontSize:11,
+                  justifyContent:'center', color:'#aaa', fontSize:12,
                 }}>—</div>
               )}
               <div style={{flex:1, minWidth:0}}>
-                <div style={{fontWeight:700, fontSize:14, lineHeight:1.3,
-                              marginBottom:3, color:'#1b1230'}}>
+                <div style={{fontSize:11, color:'#888', marginBottom:4,
+                              textTransform:'uppercase', letterSpacing:'.04em'}}>
+                  {r.published_date} · {r.category} · {r.level === 'zh' ? '中文' : (r.level === 'easy' ? 'Sprout' : 'Tree')}
+                  {r.source_name ? <span> · {r.source_name}</span> : null}
+                </div>
+                <div style={{fontFamily:'Fraunces, serif', fontWeight:800,
+                              fontSize:17, lineHeight:1.25, marginBottom:6,
+                              color:'#1b1230'}}>
                   {r.title}
                 </div>
-                <div style={{fontSize:11, color:'#888', marginBottom:4}}>
-                  {r.published_date} · {r.category} · {r.level}
-                </div>
                 <div
-                  style={{fontSize:12, color:'#555', lineHeight:1.4,
+                  style={{fontSize:13, color:'#555', lineHeight:1.45,
                           overflow:'hidden', display:'-webkit-box',
-                          WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}
+                          WebkitLineClamp:3, WebkitBoxOrient:'vertical'}}
                   dangerouslySetInnerHTML={{ __html: r.snippet || '' }}
                 />
               </div>
             </button>
-          ))}
-        </div>
-
-        {!hasSearched && !loading && (
-          <div style={{padding:'8px 4px', fontSize:12, color:'#aaa', marginTop:6}}>
-            Tip: use double quotes for exact phrase, e.g. <code>"climate change"</code>.
-          </div>
-        )}
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }
-window.SearchPopover = SearchPopover;
+window.SearchPage = SearchPage;
 
 
 function RecentReadsPopover({ onClose, onOpenArticle, onResumeItem, readIds, inProgress, articleProgress }) {
