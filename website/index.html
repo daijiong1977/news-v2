@@ -108,6 +108,13 @@ function App() {
   });
   const [archiveDay, setArchiveDay] = useState(() => {
     // archiveDay is "YYYY-MM-DD" (string) or null for today.
+    // PRIORITY: URL pathname (/archive/<date>) takes precedence over
+    // sessionStorage so deep-links to a specific archive day land on
+    // that day's content even from a fresh tab.
+    try {
+      const m = (window.location.pathname || '').match(/^\/archive\/(\d{4}-\d{2}-\d{2})\/?$/);
+      if (m) return m[1];
+    } catch (e) {}
     const v = ss.get('ohye_archive_day');
     if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
     if (v) ss.remove('ohye_archive_day');  // clear legacy numeric values
@@ -186,6 +193,18 @@ function App() {
   useEffect(() => {
     if (archiveDay) ss.set('ohye_archive_day', String(archiveDay));
     else ss.remove('ohye_archive_day');
+
+    // Sync the URL to the current archive state. Without this, clicking
+    // "Return to today" (sets archiveDay=null) would leave the URL stuck
+    // at /archive/<date> — confusing on refresh and breaking relative
+    // fetches in any old code that hadn't migrated to absolute paths.
+    try {
+      const want = archiveDay ? `/archive/${archiveDay}` : '/';
+      if (window.location.pathname !== want) {
+        history.replaceState(null, '', want + window.location.search + window.location.hash);
+      }
+    } catch (e) {}
+
     // Whenever archiveDay changes, re-load ARTICLES from the matching bundle
     // (today's local files, or a past day's Supabase prefix).
     if (typeof window.loadArchive === 'function') {

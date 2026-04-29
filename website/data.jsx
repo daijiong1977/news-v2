@@ -109,11 +109,16 @@ const MOCK_USER = {
 };
 
 // Rewrite /article_images/xxx.webp → full Supabase URL when we're loading an
-// archived day. For today's content (archiveDate = null), leave as-is.
+// archived day. For today's content (archiveDate = null), normalize to
+// an absolute path with a leading slash. Without the slash, navigating
+// to /archive/<date> (Vercel rewrite serves index.html, URL stays at
+// /archive/<date>) caused image fetches to resolve against /archive/...
+// and 404. Normalizing ensures the browser always hits the site root.
 function resolveImageUrl(rawUrl, archiveDate) {
-  if (!archiveDate || !rawUrl) return rawUrl || "";
+  if (!rawUrl) return "";
   if (rawUrl.startsWith('http')) return rawUrl;
-  const rel = rawUrl.replace(/^\//, '');   // strip leading slash
+  const rel = rawUrl.replace(/^\//, '');   // drop any existing leading slash
+  if (!archiveDate) return '/' + rel;       // today: absolute root
   return `${ARCHIVE_BASE}/${archiveDate}/${rel}`;
 }
 
@@ -150,8 +155,14 @@ function listingToArticle(entry, cat, lvl, archiveDate) {
 }
 
 function listingBaseFor(archiveDate) {
+  // For "today" (archiveDate=null), use an ABSOLUTE path. The site
+  // also serves under /archive/<date> via a Vercel rewrite that
+  // returns index.html unchanged. With a relative `payloads`, the
+  // browser resolves it against the URL path → /archive/payloads/...
+  // → 404 → "Return to today" loaded nothing → page kept showing the
+  // archive content.
   return archiveDate ? `${ARCHIVE_BASE}/${archiveDate}/payloads`
-                     : 'payloads';
+                     : '/payloads';
 }
 
 async function loadPayloads(archiveDate = null) {

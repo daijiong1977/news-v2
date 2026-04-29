@@ -89,9 +89,14 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
     const payloadLevel = baseArticle.level === 'Sprout' ? 'easy' : 'middle';
     // Archive mode (baseArticle.archiveDate set) fetches from Supabase dated
     // prefix; today's content stays local.
+    // Today's article_payloads must resolve from the site root, not
+    // relative to the current URL — when the page lives under
+    // /archive/<date> (Vercel rewrite serves index.html unchanged),
+    // a bare 'article_payloads' resolves to /archive/article_payloads
+    // → 404. Absolute path '/article_payloads' avoids that.
     const detailBase = baseArticle.archiveDate
       ? `${window.ARCHIVE_BASE}/${baseArticle.archiveDate}/article_payloads`
-      : 'article_payloads';
+      : '/article_payloads';
     const url = `${detailBase}/payload_${baseArticle.storyId}/${payloadLevel}.json`;
     fetch(url)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
