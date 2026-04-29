@@ -686,8 +686,8 @@ def promote_spare_and_rewrite(cat: str, spares: list[dict]) -> tuple[dict | None
         ok, _ = verify_article_content(art)
         if not ok:
             continue
-        # Rewrite (single article)
-        rewrite_res = tri_variant_rewrite([(0, art)])
+        # Rewrite (single article) — pass category so style block applies
+        rewrite_res = tri_variant_rewrite([(0, art)], category=cat)
         kept, _ = filter_safe_rewrites(rewrite_res)
         if not kept:
             log.warning("  [%s] spare rank %s passed body-verify but failed Stage 3 vet",
@@ -741,14 +741,15 @@ def process_images(stories: list[dict], today: str, website_dir: Path) -> None:
 # 3) Rewrite (tri-variant) — batched per category
 # -------------------------------------------------------------------
 
-def rewrite_for_category(stories: list[dict]) -> tuple[dict[int, dict], dict]:
+def rewrite_for_category(stories: list[dict],
+                          category: str | None = None) -> tuple[dict[int, dict], dict]:
     """Tri-variant rewrite, then detail enrichment. Returns
     (variants_by_src_id, details_by_slot). Raises if either step ultimately
     fails — callers decide whether that's fatal for the whole run."""
     if not stories:
         return {}, {}
     articles_for_rewrite = [(i, s["winner"]) for i, s in enumerate(stories)]
-    rewrite_res = tri_variant_rewrite(articles_for_rewrite)
+    rewrite_res = tri_variant_rewrite(articles_for_rewrite, category=category)
     variants = {a.get("source_id"): a for a in rewrite_res.get("articles") or []}
     if len(variants) < len(stories):
         raise RuntimeError(
@@ -1091,7 +1092,7 @@ def main() -> None:
     failures: list[str] = []
     for cat, ws in stories_by_cat.items():
         try:
-            v, d = rewrite_for_category(ws)
+            v, d = rewrite_for_category(ws, category=cat)
             variants_by_cat[cat] = v
             details_by_cat[cat] = d
             log.info("  [%s] rewrite: %d variants · detail slots: %d",
@@ -1411,7 +1412,10 @@ def main_mega() -> None:
                 continue
             articles = [(i, w["winner"]) for i, w in enumerate(verified)]
             try:
-                rewrite_res = tri_variant_rewrite(articles)
+                # Pass category so the rewriter prompt picks up the
+                # category-specific style block (News=factual, Science=
+                # analogies, Fun=playful).
+                rewrite_res = tri_variant_rewrite(articles, category=cat)
             except Exception as e:  # noqa: BLE001
                 log.error("  [%s] rewrite failed: %s", cat, e)
                 rewrite_res = {"articles": []}

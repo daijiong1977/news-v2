@@ -640,8 +640,13 @@ You will receive N source articles. For EACH, produce THREE variants:
      punctuation. Stay under 50 words — the kid is scanning, not reading.
 
 2. middle_en — English. READER IS A MIDDLE SCHOOLER (grade 7-8, age 12-14).
-   · body: 320-350 words (STRICT — if under 320, add MORE vivid details,
-     specific names or numbers, or a direct quote from the source; never invent)
+   · body: target 320-380 words; HARD MAXIMUM 400 words.
+     STRICT — count silently before returning.
+     Under 320 → add more vivid details, specific names, or a direct
+     quote from the source. NEVER invent.
+     Over 380 → trim padding (redundant phrasing, less-essential
+     paragraph). Over 400 is unacceptable; cut something rather than
+     ship it long. Do NOT cut mid-thought.
    · Richer vocabulary ("crucial", "unprecedented", "diplomat", "negotiation",
      "escalate", "sanction", "controversial", "coalition"); explain inline
      the first time you use a specialized term
@@ -700,11 +705,57 @@ OUTPUT — valid JSON only (no markdown fences):
 }"""
 
 
-def tri_variant_rewriter_input(articles_with_ids: list[tuple[int, dict]]) -> str:
+# Per-category style guides injected at the top of the rewriter user
+# message. Each category has different reading energy: News stays
+# factual + concrete; Science leans on analogies and the wow-moment;
+# Fun goes playful with more humor and pop-culture-aware framing.
+_REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
+    "News": (
+        "CATEGORY: News.\n"
+        "Voice: a curious kid reporter explaining a current event to friends.\n"
+        "Lead with the WHO + WHAT + WHY-IT-MATTERS in the first paragraph,\n"
+        "but use a concrete vivid detail to hook (a specific number, place,\n"
+        "or quote). Stay neutral — present what each side says without\n"
+        "editorializing. Include real names, dates, and places when they\n"
+        "appear in the source.\n"
+    ),
+    "Science": (
+        "CATEGORY: Science.\n"
+        "Voice: an excited explainer who just learned something cool and\n"
+        "wants the reader to GET IT. Lead with the wow-moment (a surprising\n"
+        "fact, a counter-intuitive finding). Convert technical terms into\n"
+        "everyday analogies — \"the size of a grain of rice\", \"like a\n"
+        "1000-piece jigsaw puzzle\". Explain the concept BEFORE introducing\n"
+        "the jargon. End with WHY it matters or WHAT comes next.\n"
+    ),
+    "Fun": (
+        "CATEGORY: Fun.\n"
+        "Voice: playful, warm, more humor allowed. Focus on the human or\n"
+        "animal moment — the surprise, the twist, the underdog. Use vivid\n"
+        "verbs and sensory detail (sights, sounds, textures) instead of\n"
+        "abstract description. It's OK to be a bit cheeky as long as it\n"
+        "stays kind.\n"
+    ),
+}
+
+
+def tri_variant_rewriter_input(
+    articles_with_ids: list[tuple[int, dict]],
+    category: str | None = None,
+) -> str:
     n = len(articles_with_ids)
-    lines = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.",
-             f"You will receive {n} source article{'s' if n != 1 else ''} below.",
-             ""]
+    lines = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}."]
+    if category and category in _REWRITE_STYLE_BY_CATEGORY:
+        lines.append("")
+        lines.append(_REWRITE_STYLE_BY_CATEGORY[category].rstrip())
+        lines.append("")
+    lines.append(
+        f"You will receive {n} source article{'s' if n != 1 else ''} "
+        f"below — all in the {category} category."
+        if category else
+        f"You will receive {n} source article{'s' if n != 1 else ''} below."
+    )
+    lines.append("")
     for src_id, art in articles_with_ids:
         host = urlparse(art.get("link") or "").netloc.replace("www.", "")
         body = art.get("body") or ""
@@ -722,10 +773,15 @@ def tri_variant_rewriter_input(articles_with_ids: list[tuple[int, dict]]) -> str
     return "\n".join(lines)
 
 
-def tri_variant_rewrite(articles_with_ids: list[tuple[int, dict]]) -> dict:
-    return deepseek_call(TRI_VARIANT_REWRITER_PROMPT,
-                         tri_variant_rewriter_input(articles_with_ids),
-                         max_tokens=8000, temperature=0.5)
+def tri_variant_rewrite(
+    articles_with_ids: list[tuple[int, dict]],
+    category: str | None = None,
+) -> dict:
+    return deepseek_call(
+        TRI_VARIANT_REWRITER_PROMPT,
+        tri_variant_rewriter_input(articles_with_ids, category=category),
+        max_tokens=8000, temperature=0.5,
+    )
 
 
 # Stage 3 of the mega pipeline: Python-only safety filter on the rewriter's
@@ -1060,31 +1116,87 @@ def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
     return "\n".join(lines)
 
 
+def _detail_enrich_input_per_category(
+    rewrite_result: dict, category: str, indices: list[int]
+) -> str:
+    """Build an input covering ONE category × BOTH levels (easy + middle).
+
+    Used by the 3-batch (per-category) refactor. `indices` are the
+    positions of this category's articles in rewrite_result["articles"]
+    (preserves the global slot numbering — the reasoner sees e.g.
+    `0_easy / 0_middle` for News slot 1, even when it's the first article).
+    Output covers every (idx, level) pair.
+    """
+    arts = rewrite_result.get("articles") or []
+    expected_keys: list[str] = []
+    for i in indices:
+        for lvl in ("easy", "middle"):
+            expected_keys.append(f"{i}_{lvl}")
+
+    lines = [
+        f"{len(indices)} article{'s' if len(indices) != 1 else ''} from "
+        f"category **{category}** below. Generate detail fields for "
+        f"BOTH easy AND middle levels of each article.",
+        f"REQUIRED output keys (produce ONLY these, in this exact spelling): "
+        f"{expected_keys}",
+        "",
+        "ALIGNMENT RULE: every field you generate for a given slot key MUST",
+        "come from the body shown under that exact slot key below.",
+        "Do NOT shift, swap, or reorder. Keywords ESPECIALLY: every term",
+        "in slot K_<level>'s `keywords` MUST appear (or as a common",
+        "inflection) in the body labeled K_<level>.",
+        "",
+    ]
+    for i in indices:
+        art = arts[i]
+        for lvl in ("easy", "middle"):
+            v = art.get(f"{lvl}_en") or {}
+            slot = f"{i}_{lvl}"
+            lines.append(
+                f"=== SLOT KEY: {slot}  (output key in your JSON: \"{slot}\") ==="
+            )
+            lines.append(f"Headline: {v.get('headline','')}")
+            lines.append(
+                f"Body for slot {slot} "
+                f"({len((v.get('body') or '').split())} words) ↓↓↓"
+            )
+            lines.append((v.get("body") or ""))
+            lines.append(f"↑↑↑ end of body for slot {slot}")
+            lines.append("")
+    lines.append("")
+    lines.append("FINAL CHECKLIST before you return — verify each:")
+    lines.append(f"  · output keys are EXACTLY {expected_keys}, no extras, no shifts")
+    lines.append("  · for each slot K_<level>, every `keywords[].term` appears (or in")
+    lines.append("    common inflected form) in the body labeled K_<level> above")
+    lines.append("  · `correct_answer` for each question matches one of `options` literally")
+    return "\n".join(lines)
+
+
 def detail_enrich(rewrite_result: dict) -> dict:
     """Detail enrichment via split 3-slot batches (easy-only + middle-only).
 
-    The combined 6-slot call kept hitting the reasoner's 16k cap on
-    realistic article batches, so we don't even attempt it — go straight
-    to the two split calls. Each call has a smaller payload AND a smaller
-    output, both of which improve well-formed-JSON odds. If one half
-    fails after retries we keep the other half's slots; the caller
-    (full_round) decides whether the partial set is acceptable.
+    NOTE: this function is already called PER CATEGORY by full_round.py —
+    each invocation receives 3 articles for one category. The internal
+    split below is per-LEVEL, so total reasoner calls per pipeline run
+    are 3 categories × 2 levels = 6 calls of 3 slots each.
+
+    The combined 6-slot single call kept hitting the reasoner's token
+    cap on realistic article batches, so we go straight to the two
+    split calls. If one half fails after retries we keep the other
+    half's slots; the caller decides whether the partial set is
+    acceptable.
 
     Post-filter hallucinated keywords + augment with Python-extracted
     keywords at the end."""
     details: dict = {}
     for level in ("easy", "middle"):
         try:
-            # V4 Pro thinking-mode CoT consumes more of the max_tokens
-            # budget than the previous reasoner. 2026-04-28 17:06 UTC
-            # scheduled run truncated middle-level News enrichment at
-            # 12k → 0 questions / 0 background_read / 0 Article_Structure
-            # → pack_and_upload refused → no bundle deployed. Same root
-            # cause as the curator fix in 25583aa.
+            # 3 slots per call (one level for one category). 12k is
+            # generous — enough for V4 Pro's CoT plus the slim output.
             res = deepseek_reasoner_call(
                 DETAIL_ENRICH_PROMPT,
                 _detail_enrich_input_single_level(rewrite_result, level),
-                max_tokens=20000,
+                max_tokens=12000,
             )
             for k, v in (res.get("details") or {}).items():
                 details[k] = v
