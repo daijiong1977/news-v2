@@ -522,7 +522,22 @@ function App() {
       {route.page === 'home' ? (
         <HomePage
           onOpen={onOpen}
-          onOpenArchive={(d)=>{ setArchiveDay(d); setCat('All'); window.scrollTo({top:0}); }}
+          onOpenArchive={async (d) => {
+            // PRE-load ARTICLES before flipping archiveDay state so the
+            // first re-render after the click already has the right
+            // payloads in window.ARTICLES. Without this await, the
+            // useMemo in HomePage that reads ARTICLES runs against the
+            // OLD bundle and renders today's content under an archive
+            // URL — clicks then open the wrong article.
+            try {
+              if (typeof window.loadArchive === 'function') {
+                await window.loadArchive(d || null);
+              }
+            } catch (e) { /* fall through; useEffect will retry */ }
+            setArchiveDay(d);
+            setCat('All');
+            window.scrollTo({ top: 0 });
+          }}
           onResume={async (item)=>{
             // Continue-reading: open an article from a past day. Swap to
             // the right archive bundle FIRST so window.ARTICLES has the
