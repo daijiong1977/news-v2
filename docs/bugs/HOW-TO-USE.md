@@ -88,16 +88,36 @@ Bug-Record: docs/bugs/<some-existing-record>.md
 
 ---
 
-## 五、Phase 3 — 自动 triage（下次 session 再做）
+## 五、Phase 3 — 自动 triage（已上线）
 
-下一步要做的（这次没建）：
+已经搭好了，**每天 04:00 UTC** 自动跑一次：
 
-- 每天 cron 跑一次 GitHub Action：读 `redesign_feedback` 里 `triaged_status='new'` 的行
-- LLM 分类成 bug / feature / noise；近似重复 dedupe
-- 给每条疑似 bug 自动开一份 record skeleton + GitHub issue + 把路径写进 `triaged_note`
-- 你审 issue → 改 status；不需要全部手动 click
+1. 读 `redesign_feedback.triaged_status='new'` 且过去 48 小时内的行
+2. DeepSeek V4 Flash 分类成 `bug` / `suggestion` / `content` / `noise` / `duplicate` + 抽 summary + 建议 slug + bug 的 severity
+3. **noise** → 自动 dismiss（写入 `triaged_note`）
+4. 其它三类 → 自动开一个 GitHub issue（带原文 + LLM 分析 + 下一步 checklist），URL 写回 `triaged_note` + `gh_issue_url`
+5. 状态保留 `'new'`，等你审 issue 后再用 admin 的 "→ Bug record" 转
 
-这个下次开 session 单独做（涉及 prompt 调优 + cost，分开比较干净）。
+**手动触发**（用于测试或紧急 triage）：
+
+```bash
+# Repo: github.com/daijiong1977/news-v2 → Actions → "Feedback triage" → Run workflow
+# 选项：
+#   - dry_run: true   不写 DB、不开 issue，只在日志里看分类结果
+#   - since_hours: 48  默认；想清旧库存可以拉到 168 / 720
+#   - max_rows: 50     成本上限，单跑最多分类多少条
+```
+
+**输出**：每跑一次会上传 `feedback-triage-<run-id>.json` artifact，30 天保留期，里面是完整分类结果（含 LLM rationale），方便你回看。
+
+**成本**：DeepSeek V4 Flash 约 $0.0005/feedback，100 条/天 = $0.05/天。
+
+**配置**：`pipeline/feedback_triage.py` + `.github/workflows/feedback-triage.yml`。新加的 DB 列：`triage_classification` / `triage_severity` / `triage_summary` / `triage_slug` / `gh_issue_url` / `gh_issue_number` / `triage_at`（admin Feedback tab 已经显示这些字段相关的 triaged_note）。
+
+**下一步要不要做的**：
+- 自动给 GitHub issue 加 milestone / project board
+- LLM 主动检测 dedup（现在只在 user 自己声明 duplicate 时才合并）
+- 把每天的 digest 邮件发到你邮箱，省得登 GitHub 看
 
 ---
 
