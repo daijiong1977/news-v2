@@ -163,6 +163,16 @@ jobs:
           RESUME_FROM: ${{ inputs.resume_from || '' }}
         run: python -m pipeline.full_round
 
+      - name: Refresh search index
+        if: steps.cron_check.outputs.proceed != 'false'
+        # The pipeline already wrote today's payloads to Supabase
+        # storage. Walk those + populate redesign_search_index so the
+        # archive-search edge function returns the new bundle within
+        # seconds of deploy. Idempotent (UNIQUE on story_id+level).
+        # Walks the last 2 days to be safe (catches overnight edge
+        # cases where the date rollover splits a single run).
+        run: python -m pipeline.search_index --days 2
+
       - name: Trigger kidsnews-v2 sync
         # Fires a repository_dispatch event so the deploy site syncs
         # IMMEDIATELY instead of waiting for its 2h cron. The schedule on

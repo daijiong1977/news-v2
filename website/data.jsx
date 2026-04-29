@@ -282,6 +282,26 @@ window.ARCHIVE_BASE = ARCHIVE_BASE;
 window.loadArchive = loadArchive;
 window.loadArchiveIndex = loadArchiveIndex;
 window.fetchAIFeedback = fetchAIFeedback;
+
+// Archive search — calls the archive-search edge function. Returns
+// { query, count, results: [{story_id, published_date, level, title,
+// snippet (HTML, with <b>...</b> highlights), image_url, source_name,
+// rank}, ...] } or { error }.
+async function archiveSearch(q, opts) {
+  const params = new URLSearchParams({ q, limit: String((opts && opts.limit) || 10) });
+  if (opts && opts.category) params.set("category", opts.category);
+  if (opts && opts.level) params.set("level", opts.level);
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/functions/v1/archive-search?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } },
+    );
+    return await r.json();
+  } catch (e) {
+    return { error: "Network error: " + (e.message || String(e)) };
+  }
+}
+window.archiveSearch = archiveSearch;
 window.getClientId = getClientId;
 window.__payloadsLoaded = loadPayloads().then(list => {
   window.ARTICLES = list;

@@ -1,0 +1,40 @@
+name: Retention cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (show what would be deleted, don't actually delete)"
+        type: boolean
+        default: false
+  schedule:
+    # Daily 03:00 UTC. Independent of the daily-pipeline cron so a
+    # pipeline failure can't block cleanup.
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retention-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run retention cleanup
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python -m pipeline.retention --dry-run
+          else
+            python -m pipeline.retention
+          fi

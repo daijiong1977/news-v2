@@ -1155,7 +1155,7 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
   return (
     <div style={{background: theme.bg, minHeight:'100vh'}}>
       {/* ——————————— HEADER ——————————— */}
-      <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} />
+      <Header level={level} setLevel={setLevel} theme={theme} tweaks={tweaks} onOpenUserPanel={onOpenUserPanel} progress={progress} recentOpen={recentOpen} setRecentOpen={setRecentOpen} onOpenArticle={onOpen} onOpenArchive={onOpenArchive} />
 
       {/* ——————————— ANONYMOUS-USER SIGN-IN NUDGE ———————————
           Slim dismissible banner above the daily ritual. Only renders
@@ -1504,9 +1504,10 @@ function DatePopover({ onPick, onClose }) {
 }
 
 // ——————————— HEADER ———————————
-function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, recentOpen, setRecentOpen, onOpenArticle }) {
+function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, recentOpen, setRecentOpen, onOpenArticle, onOpenArchive }) {
   theme = theme || { bg:'#fff9ef', chip:'#f0e8d8' };
   tweaks = tweaks || {};
+  const [searchOpen, setSearchOpen] = useStateH(false);
   return (
     <header style={{
       background: theme.bg,
@@ -1518,6 +1519,35 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
         <KidsNewsLockup size={66}/>
 
         <div style={{flex:1}}/>
+
+        {/* Search button — opens search popover. Searches all archived articles. */}
+        <div style={{position:'relative'}}>
+          <button onClick={() => setSearchOpen(v => !v)} style={{
+            background:'#1b1230', color:'#fff', border:'none',
+            width:42, height:42, borderRadius:21, cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:18,
+          }} title="Search archives">🔍</button>
+          {searchOpen && window.SearchPopover && (
+            <window.SearchPopover
+              onClose={() => setSearchOpen(false)}
+              onOpenResult={(r) => {
+                setSearchOpen(false);
+                if (typeof onOpenArchive === 'function' && r.published_date) {
+                  onOpenArchive(r.published_date);
+                  // Open the article after archive loads. Use storyId-level
+                  // mapping so onOpen() finds the right entry in ARTICLES.
+                  setTimeout(() => {
+                    if (typeof onOpenArticle === 'function') {
+                      const lvlSuffix = r.level === 'zh' ? 'cn' : r.level;
+                      onOpenArticle(`${r.story_id}-${lvlSuffix}`);
+                    }
+                  }, 50);
+                }
+              }}
+            />
+          )}
+        </div>
 
         {/* Streak pill → opens recent reads popover */}
         <div style={{position:'relative'}}>
@@ -1591,6 +1621,126 @@ function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, rec
 function _HeaderOldContentRemoved() { return null; }
 
 // ——————————— RECENT READS POPOVER ———————————
+// ——————————— SEARCH POPOVER ———————————
+// Full-text search across all archived articles. Hits the
+// archive-search edge function which queries redesign_search_index
+// (tsvector + GIN). Results are date-DESC + ts_rank-DESC.
+function SearchPopover({ onClose, onOpenResult }) {
+  const [q, setQ] = useStateH("");
+  const [results, setResults] = useStateH([]);
+  const [loading, setLoading] = useStateH(false);
+  const [hasSearched, setHasSearched] = useStateH(false);
+
+  // Debounced search — 300ms idle, no submit button needed.
+  useEffectH(() => {
+    const term = q.trim();
+    if (!term) { setResults([]); setHasSearched(false); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      const r = await window.archiveSearch(term, { limit: 10 });
+      if (cancelled) return;
+      setLoading(false);
+      setHasSearched(true);
+      setResults((r && Array.isArray(r.results)) ? r.results : []);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [q]);
+
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position:'fixed', top:0, left:0, right:0, bottom:0,
+        zIndex:60, background:'rgba(0,0,0,0.18)',
+      }}/>
+      <div style={{
+        position:'absolute', top:48, right:0, width: 'min(420px, 90vw)',
+        zIndex:61, background:'#fff', borderRadius:14,
+        boxShadow:'0 10px 32px rgba(0,0,0,0.22)', padding:14,
+        maxHeight:'calc(100vh - 80px)', display:'flex', flexDirection:'column',
+      }}>
+        <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:10}}>
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search past articles…"
+            style={{
+              flex:1, padding:'10px 12px', border:'1.5px solid #ddd',
+              borderRadius:10, fontSize:15, outline:'none',
+              fontFamily:'Nunito, sans-serif',
+            }}
+          />
+          <button onClick={onClose} style={{
+            background:'transparent', border:'1px solid #ddd', borderRadius:8,
+            padding:'8px 12px', cursor:'pointer', fontSize:13, color:'#444',
+          }}>Close</button>
+        </div>
+
+        {loading && <div style={{padding:'10px 4px', fontSize:13, color:'#777'}}>Searching…</div>}
+
+        {!loading && hasSearched && results.length === 0 && (
+          <div style={{padding:'10px 4px', fontSize:13, color:'#777'}}>
+            No matches. Try fewer words, or a synonym.
+          </div>
+        )}
+
+        <div style={{overflowY:'auto', flex:1, marginTop:4}}>
+          {results.map(r => (
+            <button
+              key={`${r.story_id}-${r.level}`}
+              onClick={() => onOpenResult(r)}
+              style={{
+                display:'flex', gap:10, padding:'10px', width:'100%',
+                background:'#fafafa', border:'none', borderRadius:10,
+                marginBottom:6, cursor:'pointer', textAlign:'left',
+                alignItems:'flex-start',
+              }}
+            >
+              {r.image_url ? (
+                <img src={r.image_url.startsWith('http') ? r.image_url : ('/' + r.image_url.replace(/^\//, ''))}
+                     alt="" loading="lazy" style={{
+                  width:64, height:48, objectFit:'cover', borderRadius:6,
+                  background:'#ddd', flexShrink:0,
+                }}/>
+              ) : (
+                <div style={{
+                  width:64, height:48, borderRadius:6, background:'#ddd',
+                  flexShrink:0, display:'flex', alignItems:'center',
+                  justifyContent:'center', color:'#888', fontSize:11,
+                }}>—</div>
+              )}
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{fontWeight:700, fontSize:14, lineHeight:1.3,
+                              marginBottom:3, color:'#1b1230'}}>
+                  {r.title}
+                </div>
+                <div style={{fontSize:11, color:'#888', marginBottom:4}}>
+                  {r.published_date} · {r.category} · {r.level}
+                </div>
+                <div
+                  style={{fontSize:12, color:'#555', lineHeight:1.4,
+                          overflow:'hidden', display:'-webkit-box',
+                          WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}
+                  dangerouslySetInnerHTML={{ __html: r.snippet || '' }}
+                />
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {!hasSearched && !loading && (
+          <div style={{padding:'8px 4px', fontSize:12, color:'#aaa', marginTop:6}}>
+            Tip: use double quotes for exact phrase, e.g. <code>"climate change"</code>.
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+window.SearchPopover = SearchPopover;
+
+
 function RecentReadsPopover({ onClose, onOpenArticle, onResumeItem, readIds, inProgress, articleProgress }) {
   // Take most recent 15 articles the user has read (from readIds, in order).
   // Source order:

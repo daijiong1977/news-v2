@@ -1455,6 +1455,60 @@ function PipelineTab({ flash }) {
       </div>
 
       <ManualRunCard cfg={cfg} flash={flash}/>
+      <RetentionCard flash={flash}/>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RETENTION CARD — pipeline-content cleanup window
+// ─────────────────────────────────────────────────────────────────────
+function RetentionCard({ flash }) {
+  const [days, setDays] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const { data, error } = await sb.from('engine_config')
+      .select('value').eq('key', 'retention.days').maybeSingle();
+    if (error) { flash('err', error.message); return; }
+    setDays(data ? Number(data.value) : 30);
+  };
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (!Number.isFinite(days) || days < 7 || days > 365) {
+      flash('err', 'Retention must be between 7 and 365 days');
+      return;
+    }
+    setBusy(true);
+    const { error } = await sb.from('engine_config')
+      .upsert({ key: 'retention.days', value: days,
+                description: 'Days to retain pipeline-generated content' },
+              { onConflict: 'key' });
+    setBusy(false);
+    if (error) flash('err', error.message);
+    else flash('ok', `Retention set to ${days} days. Daily 03:00 UTC cron applies it.`);
+  };
+  if (days === null) return null;
+  return (
+    <div className="card" style={{marginTop:18}}>
+      <h3 style={{margin:'0 0 10px'}}>🗑️ Retention</h3>
+      <p style={{margin:'0 0 12px', fontSize:13, color:'#555'}}>
+        Pipeline-generated content (stories, runs, search index, daily
+        storage) is auto-deleted after this many days. User data
+        (reactions, responses, kid profiles) is never auto-cleaned.
+      </p>
+      <div className="row" style={{gap:10, alignItems:'center'}}>
+        <input type="number" min="7" max="365" value={days}
+               onChange={e => setDays(parseInt(e.target.value, 10))}
+               style={{width:90, padding:'6px 10px', border:'1px solid #ddd',
+                       borderRadius:6, fontSize:14}}/>
+        <span style={{color:'#777', fontSize:13}}>days</span>
+        <button className="btn" onClick={save} disabled={busy}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <span style={{color:'#999', fontSize:12, marginLeft:'auto'}}>
+          Cron: daily 03:00 UTC · workflow: retention-cleanup.yml
+        </span>
+      </div>
     </div>
   );
 }
