@@ -669,39 +669,83 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     return out
 
 
-def promote_spare_and_rewrite(cat: str, spares: list[dict]) -> tuple[dict | None, dict | None]:
+def promote_spare_and_rewrite(
+    cat: str,
+    spares: list[dict],
+    used_source_names: set[str] | None = None,
+) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
     on success or (None, None) if no spare survives verify+rewrite+vet.
+
+    `used_source_names` is the set of source.name strings already in
+    the surviving top 3. The function tries spares from a NEW source
+    first; if none of the new-source spares pass verify+vet, it falls
+    back to spares whose source repeats. This preserves source
+    diversity through Stage 3 promotion while still letting the bundle
+    fill its 3 slots when alternatives are exhausted.
     """
     from .news_rss_core import _fetch_and_enrich, verify_article_content
 
-    while spares:
-        spare = spares.pop(0)
+    used = set(used_source_names or ())
+
+    def _try_one(spare: dict):
         if not spare.get("_unverified_spare"):
-            continue
+            return None, None
         brief = spare.get("_winner_brief") or {}
         cached = brief.get("_probe_art") if isinstance(brief, dict) else None
         art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
         ok, _ = verify_article_content(art)
         if not ok:
-            continue
-        # Rewrite (single article) — pass category so style block applies
+            return None, None
         rewrite_res = tri_variant_rewrite([(0, art)], category=cat)
         kept, _ = filter_safe_rewrites(rewrite_res)
         if not kept:
-            log.warning("  [%s] spare rank %s passed body-verify but failed Stage 3 vet",
-                        cat, spare.get("_rank"))
+            log.warning(
+                "  [%s] spare rank %s passed body-verify but failed Stage 3 vet",
+                cat, spare.get("_rank"),
+            )
+            return None, None
+        log.info(
+            "  [%s] spare rank %s promoted (%s)",
+            cat, spare.get("_rank"), spare["source"].name,
+        )
+        return (
+            {
+                "source": spare["source"],
+                "winner": art,
+                "winner_slot": f"rank_{spare.get('_rank')}",
+                "_rank": spare.get("_rank"),
+                "_curator_id": spare.get("_curator_id"),
+            },
+            kept[0],
+        )
+
+    # Two passes. Pass 1: skip spares whose source is already in `used`.
+    # Pass 2: fall back to all spares (degrade gracefully when there's
+    # nothing else to ship). We only consume spares that succeed; failed
+    # ones stay popped so we don't retry them.
+    deferred: list[dict] = []
+    while spares:
+        spare = spares.pop(0)
+        src_name = (spare.get("source") and spare["source"].name) or ""
+        if src_name in used:
+            deferred.append(spare)
             continue
-        log.info("  [%s] spare rank %s promoted (%s)",
-                 cat, spare.get("_rank"), spare["source"].name)
-        return ({
-            "source": spare["source"],
-            "winner": art,
-            "winner_slot": f"rank_{spare.get('_rank')}",
-            "_rank": spare.get("_rank"),
-            "_curator_id": spare.get("_curator_id"),
-        }, kept[0])
+        story, art = _try_one(spare)
+        if story is not None:
+            return story, art
+        # _try_one consumed this spare — move on (don't defer back).
+    # Pass 2: try the deferred (duplicate-source) spares.
+    for spare in deferred:
+        story, art = _try_one(spare)
+        if story is not None:
+            log.info(
+                "  [%s] diversity-fallback: no new-source spare survived; "
+                "promoting %s (already in top 3)",
+                cat, (spare.get("source") and spare["source"].name) or "?",
+            )
+            return story, art
     return None, None
 
 
@@ -1446,7 +1490,17 @@ def main_mega() -> None:
                           if s.get("_unverified_spare")]
             promotions = 0
             while len(survived_winners) < 3 and spare_pool:
-                promoted_winner, promoted_article = promote_spare_and_rewrite(cat, spare_pool)
+                # Diversity-aware spare promotion: prefer a source NOT
+                # already in the surviving top 3. Falls back to any
+                # remaining spare if all new-source candidates fail
+                # verify/vet.
+                used_names = {
+                    w["source"].name for w in survived_winners
+                    if w.get("source")
+                }
+                promoted_winner, promoted_article = promote_spare_and_rewrite(
+                    cat, spare_pool, used_source_names=used_names,
+                )
                 if not promoted_winner:
                     break
                 survived_winners.append(promoted_winner)
