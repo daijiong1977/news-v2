@@ -165,24 +165,46 @@ function listingBaseFor(archiveDate) {
                      : '/payloads';
 }
 
+// Cache per archiveDate (null = today). Lets a user revisit a recent
+// archive day without re-fetching all 9 payloads. Cleared on page
+// reload, so a fresh build always pulls latest.
+const _archiveCache = new Map();
+
 async function loadPayloads(archiveDate = null) {
+  const cacheKey = archiveDate || '__today__';
+  if (_archiveCache.has(cacheKey)) {
+    return _archiveCache.get(cacheKey);
+  }
   const cats = ["news", "science", "fun"];
   const levels = ["easy", "middle", "cn"];
   const base = listingBaseFor(archiveDate);
-  const all = [];
+  const ts = Date.now();
+  // 9 fetches in parallel. Sequential awaits used to take ~5s on the
+  // archive code path (Supabase round-trips) — Promise.all drops it
+  // to one round-trip's worth.
+  const fetchOne = async (cat, lvl) => {
+    try {
+      const r = await fetch(`${base}/articles_${cat}_${lvl}.json?t=${ts}`);
+      if (!r.ok) {
+        console.warn(`[data] missing: ${base}/articles_${cat}_${lvl}.json`);
+        return [];
+      }
+      const { articles } = await r.json();
+      return (articles || []).slice(0, 3).map(a => listingToArticle(a, cat, lvl, archiveDate));
+    } catch (e) {
+      console.warn(`[data] fetch failed: ${base}/articles_${cat}_${lvl}.json`, e);
+      return [];
+    }
+  };
+  const tasks = [];
   for (const cat of cats) {
     for (const lvl of levels) {
-      try {
-        const r = await fetch(`${base}/articles_${cat}_${lvl}.json?t=${Date.now()}`);
-        if (!r.ok) { console.warn(`[data] missing: ${base}/articles_${cat}_${lvl}.json`); continue; }
-        const { articles } = await r.json();
-        const top3 = (articles || []).slice(0, 3);
-        for (const a of top3) all.push(listingToArticle(a, cat, lvl, archiveDate));
-      } catch (e) {
-        console.warn(`[data] fetch failed: ${base}/articles_${cat}_${lvl}.json`, e);
-      }
+      tasks.push(fetchOne(cat, lvl));
     }
   }
+  const results = await Promise.all(tasks);
+  const all = results.flat();
+  _archiveCache.set(cacheKey, all);
   return all;
 }
 
