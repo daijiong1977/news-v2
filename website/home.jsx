@@ -1020,6 +1020,10 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
     return (s && s.dayKey && Array.isArray(s.ids)) ? s : { dayKey: null, ids: [] };
   });
   useEffectH(() => { window.safeStorage?.setJSON('ohye_picks_lock_v1', picksLock); }, [picksLock]);
+  // pickFlowOpen drives the opt-in PickFlow ritual (kid clicks "Choose
+  // your own 3" → flips this to true → gate below renders the flow).
+  // No longer auto-firing on every visit — defaultPicks is the new default.
+  const [pickFlowOpen, setPickFlowOpen] = useStateH(false);
   const todayKeyLocal = (new Date()).toDateString();
   // Lock the kid's pick for the local calendar day. The slot-positional
   // IDs (`2026-04-26-news-2`) plus the dayKey + "all ids still in pool"
@@ -1116,21 +1120,22 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
   }
 
   // ── Pick-3 gate ────────────────────────────────────────────────────
-  // Today, not archive, picks not yet locked → render pick screen and
-  // bypass the rest of home. Archive mode keeps the standard browse.
-  // MUST come after every hook call above to satisfy Rules of Hooks.
-  // Chinese mode is summary-only (no detail-page reading flow), so the
-  // pick-3 ritual + click-into-article behavior are both skipped — the
-  // kid (or parent auditing) just browses the cards.
-  if (!isArchive && !picksLocked && displayPool.length >= 3 && !isZh) {
+  // OPT-IN ONLY. Previously this gate fired on every refresh whenever
+  // picks weren't locked, forcing the kid through a 3-of-9 selection
+  // ritual every visit — confusing for daily users. New behavior:
+  // home renders straight away with the curator's defaultPicks (one
+  // from each category). The kid can swap individual picks via the
+  // existing per-card swap button, or trigger the full 3-of-9 flow by
+  // clicking "Choose your own 3" (which calls resetPicks() + sets
+  // pickFlowOpen so this gate fires on the next render).
+  if (pickFlowOpen && !isArchive && displayPool.length >= 3 && !isZh) {
     const dateLabel = new Date().toLocaleDateString('en-US',
       { weekday:'long', month:'short', day:'numeric' });
-    // Pool of up to 9 candidates for the kid to choose from.
     const pickPool = displayPool.slice(0, 9);
     return (
       <PickFlow
         pool={pickPool}
-        onLock={lockPicks}
+        onLock={(ids) => { lockPicks(ids); setPickFlowOpen(false); }}
         theme={theme}
         tweaks={tweaks}
         dateLabel={dateLabel}
@@ -1236,14 +1241,14 @@ function HomePage({ onOpen, onOpenArchive, onResume, level, setLevel, cat, setCa
               Today's <span style={{background: theme.accent, padding:'0 12px', borderRadius:12, display:'inline-block', transform:'rotate(-2deg)'}}>Top 3 Pick</span>
             </h1>
             <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
-              {picksLocked && (
-                <button onClick={resetPicks} style={{
-                  background:'transparent', border:'1.5px solid #f0e8d8',
-                  borderRadius:999, padding:'7px 14px', cursor:'pointer',
-                  fontSize:12, fontWeight:800, color:'#1b1230',
-                  fontFamily:'Nunito, sans-serif', letterSpacing:'.02em',
-                }} title="Re-open the pick screen for today">🔄 Pick again</button>
-              )}
+              {/* "Choose your own 3" is always available, locked or not.
+                  When clicked, clears any current lock and opens PickFlow. */}
+              <button onClick={() => { resetPicks(); setPickFlowOpen(true); }} style={{
+                background:'transparent', border:'1.5px solid #f0e8d8',
+                borderRadius:999, padding:'7px 14px', cursor:'pointer',
+                fontSize:12, fontWeight:800, color:'#1b1230',
+                fontFamily:'Nunito, sans-serif', letterSpacing:'.02em',
+              }} title="Open the 3-of-9 picker">🎯 Choose your own 3</button>
               <div style={{fontSize:12, color:'#6b5c80', fontWeight:700}}>Tap ⇆ to swap</div>
             </div>
           </div>
