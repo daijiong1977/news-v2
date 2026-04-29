@@ -197,21 +197,22 @@ def validate_bundle(today: str) -> None:
              len(needed_images))
 
 
-# Suffix-aware keyword match — same pattern the UI uses to decide which
-# tokens to highlight, so we only ship keywords the highlight pass will
-# actually find. Without this, an LLM glitch (off-by-one across articles,
-# hallucinated terms, level-mismatch) ships highlight-targets that don't
-# exist in the body — which is what readers see as "all the keywords are
-# not in the article."
-_KEYWORD_SUFFIX_RE = r"(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers|ion|ions)?"
+# Use the same matcher as filter_keywords (news_rss_core) so a keyword
+# rescued upstream by stem-aware matching does not get re-dropped at
+# pack-time by an outdated suffix-only regex. Centralizing also means
+# any future tweak (e.g. new morphological rule, denylist) propagates
+# to both call sites automatically. (Copilot review 2026-04-29.)
+from .news_rss_core import (
+    _body_word_stem_index as _kw_body_stem_index,
+    _keyword_in_body_with_index as _kw_match_with_index,
+)
 
 
 def _keyword_in_body(term: str, body: str) -> bool:
+    """Stem-aware keyword match — shared with the upstream filter."""
     if not term or not body:
         return False
-    import re
-    pattern = rf"\b{re.escape(term)}{_KEYWORD_SUFFIX_RE}\b"
-    return bool(re.search(pattern, body, flags=re.IGNORECASE))
+    return _kw_match_with_index(term, body.lower(), _kw_body_stem_index(body))
 
 
 def _scrub_detail_payload_bytes(b: bytes) -> bytes:
@@ -234,13 +235,17 @@ def _scrub_detail_payload_bytes(b: bytes) -> bytes:
     kws = d.get("keywords") or []
     if not isinstance(kws, list):
         return b
+    # Build the stem index once per article so each keyword check is
+    # an O(stem-set-size) lookup instead of re-tokenising the body.
+    body_lc = body.lower()
+    body_stems = _kw_body_stem_index(body) if body else set()
     kept, dropped_no_match, dropped_no_def = [], [], []
     for k in kws:
         if not isinstance(k, dict):
             continue
         term = (k.get("term") or "").strip()
         defn = (k.get("explanation") or "").strip()
-        if not _keyword_in_body(term, body):
+        if not _kw_match_with_index(term, body_lc, body_stems):
             dropped_no_match.append(term)
             continue
         if not defn:

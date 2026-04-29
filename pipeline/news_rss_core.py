@@ -963,21 +963,141 @@ Return ONLY valid JSON (no markdown fences):
 }"""
 
 
+import re as _re
+
 KEYWORD_SUFFIX_RE = r"(?:s|es|ed|d|ing|ning|ned|ting|ted|er|ers|ion|ions|ensions|ensión|ly)?"
 
+# Suffix rewrite rules: (suffix_to_strip, replacement). For each word we
+# generate a candidate stem per matching rule and take the union. Two
+# words are considered the "same" when their stem sets intersect.
+#
+# Why rewrite (not just strip): pure stripping cannot collapse pairs
+# like `negotiation` and `negotiating`. Stripping `ation` from one and
+# `ing` from the other yields `negoti` vs `negotiat` — no match. The
+# rule `("ation", "at")` rewrites `negotiation` -> `negotiat`, which
+# matches `negotiating` (`ing` -> empty -> `negotiat`).
+#
+# Order does not matter for correctness (we union all candidates) but
+# rules are kept rough longest-first for readability.
+_STEM_RULES = (
+    # tion-family — collapse to verb-stem
+    ("ation", "at"), ("ations", "at"),
+    ("ization", "iz"), ("izations", "iz"),
+    ("tion", ""), ("tions", ""),
+    ("sion", ""), ("sions", ""),
+    # acy / atic family — diplomacy / diplomatic -> diplom
+    ("acy", ""), ("atic", ""),
+    # ical / ic / ively / ive
+    ("ically", ""), ("ical", ""),
+    ("ively", ""), ("ive", ""),
+    ("ic", ""),
+    # noun forms
+    ("ities", ""), ("ity", ""),
+    ("ness", ""),
+    ("ments", ""), ("ment", ""),
+    ("ship", ""),
+    ("ism", ""), ("ists", ""), ("ist", ""),
+    # adjective forms
+    ("ous", ""), ("ful", ""), ("less", ""),
+    ("able", ""), ("ible", ""),
+    # comparative / superlative / adverb
+    ("iest", "y"), ("ier", "y"),
+    ("est", ""), ("ly", ""),
+    # plural / verb forms
+    ("ies", "y"), ("ied", "y"), ("ying", "y"),
+    ("ing", ""), ("ed", ""),
+    ("ers", ""), ("er", ""),
+    ("ors", ""), ("or", ""),
+    ("es", ""), ("s", ""),
+    # bare 'e'-drop — turns "negotiate" into "negotiat" so it lines up
+    # with "negotiating" (-> "ing" strip -> "negotiat").
+    ("e", ""),
+)
 
-def keyword_in_body(term: str, body: str) -> bool:
-    """Same suffix-aware match the UI uses — term or inflected form present?"""
-    import re
+
+def _stem_candidates(word):
+    """All plausible stems for one word. Lowercase + apply each rule
+    once, accumulating candidates. Rejects candidates shorter than 3
+    chars to avoid noise."""
+    w = word.lower()
+    out = {w}
+    if len(w) < 4:
+        return out
+    for suf, rep in _STEM_RULES:
+        if w.endswith(suf):
+            base = w[: -len(suf)] + rep
+            if len(base) >= 3:
+                out.add(base)
+    return out
+
+
+def _body_word_stem_index(body):
+    """All stem candidates across every alpha word in body."""
+    out = set()
+    for tok in _re.findall(r"[A-Za-z][A-Za-z'-]+", body):
+        out |= _stem_candidates(tok)
+    return out
+
+
+# Word-boundary chars used to avoid embedded-substring false positives
+# (so "gas" does not match inside "Vegas").
+_NOT_LETTER = r"(?<![A-Za-z])"
+_NOT_LETTER_AFTER = r"(?![A-Za-z])"
+
+
+def _keyword_in_body_with_index(term, body_lc, body_stems):
+    """Match using a precomputed lowercased body + stem index. Use this
+    when checking many keywords against the same body — saves rebuilding
+    the stem index per keyword."""
+    if not term or not body_lc:
+        return False
+    term = term.strip()
+    if not term:
+        return False
+    term_lc = term.lower()
+
+    # Tier 1: boundary-aware exact match.
+    if " " in term_lc:
+        if term_lc in body_lc:  # phrases imply natural word boundaries
+            return True
+    else:
+        pat = _NOT_LETTER + _re.escape(term_lc) + _NOT_LETTER_AFTER
+        if _re.search(pat, body_lc):
+            return True
+
+    # Tier 2: legacy suffix regex — catches simple "policy"/"policies"
+    # without involving the stem index.
+    escaped = _re.escape(term)
+    pattern = rf"\b{escaped}{KEYWORD_SUFFIX_RE}\b"
+    if _re.search(pattern, body_lc, flags=_re.IGNORECASE):
+        return True
+
+    # Tier 3: every term word must share at least one stem candidate
+    # with the body's word-stem index.
+    term_words = _re.findall(r"[A-Za-z][A-Za-z'-]+", term)
+    if not term_words:
+        return False
+    return all(bool(_stem_candidates(w) & body_stems) for w in term_words)
+
+
+def keyword_in_body(term, body):
+    """One-shot matcher. For batched calls (filter_keywords),
+    use `_body_word_stem_index` once and `_keyword_in_body_with_index`
+    per keyword instead."""
     if not term or not body:
         return False
-    escaped = re.escape(term)
-    pattern = rf"\b{escaped}{KEYWORD_SUFFIX_RE}\b"
-    return bool(re.search(pattern, body, flags=re.IGNORECASE))
+    return _keyword_in_body_with_index(
+        term, body.lower(), _body_word_stem_index(body)
+    )
 
 
 def filter_keywords(details: dict, rewrite_result: dict) -> dict:
-    """Drop keywords that don't appear in the corresponding body. Logs drops."""
+    """Drop keywords that don't appear in the corresponding body. Logs drops.
+
+    Computes the lowercased body and stem index ONCE per slot then
+    reuses them across all keywords for that slot — avoids the N-per-
+    keyword recomputation Copilot flagged in the 2026-04-29 review.
+    """
     articles_by_id = {a["source_id"]: a for a in rewrite_result.get("articles") or []}
     for slot_key, det in details.items():
         kws = det.get("keywords") or []
@@ -991,10 +1111,12 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
         art = articles_by_id.get(aid, {})
         variant = art.get(f"{lvl}_en" if lvl in ("easy", "middle") else lvl) or {}
         body = variant.get("body") or ""
+        body_lc = body.lower()
+        body_stems = _body_word_stem_index(body)
         kept = []
         dropped = []
         for k in kws:
-            if keyword_in_body(k.get("term", ""), body):
+            if _keyword_in_body_with_index(k.get("term", ""), body_lc, body_stems):
                 kept.append(k)
             else:
                 dropped.append(k.get("term"))
