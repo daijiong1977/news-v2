@@ -914,7 +914,10 @@ function StoriesTab({ flash, categories }) {
 }
 
 // ── FEEDBACK TAB ─────────────────────────────────────────────────────
-function FeedbackTab({ flash }) {
+// ── DISCUSSIONS TAB — kid responses to article discussion prompts ─
+// (was originally called "Feedback" before user-submitted feedback
+// got its own table; renamed for clarity.)
+function DiscussionsTab({ flash }) {
   const [rows, setRows] = useState(null);
   const load = async () => {
     const { data, error } = await sb.from('redesign_user_responses').select('*').order('created_at', { ascending: false }).limit(200);
@@ -941,10 +944,174 @@ function FeedbackTab({ flash }) {
               <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
             </tr>
           ))}
-          {rows && rows.length === 0 && <tr><td colSpan="5" className="empty">No feedback yet.</td></tr>}
+          {rows && rows.length === 0 && <tr><td colSpan="5" className="empty">No discussion responses yet.</td></tr>}
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ── FEEDBACK TAB — user-submitted bug/suggestion/content feedback ─
+// Source: redesign_feedback (the floating 💬 button posts here via
+// the submit-feedback edge function). Each row has triaged_status:
+// new | converted | resolved | dismissed. The triage workflow:
+//   · "Convert to bug" — copy docs/bugs/_template.md to docs/bugs/
+//     <YYYY-MM-DD>-<slug>.md, fill it in, paste the path here, mark
+//     converted. Future commits referencing that record satisfy the
+//     commit-msg hook.
+//   · "Resolve" — fixed without a record needed (config tweak,
+//     content change). Optional note.
+//   · "Dismiss" — duplicate / spam / not actionable.
+function FeedbackTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState('new');   // new | all
+
+  const load = async () => {
+    let q = sb.from('redesign_feedback').select('*').order('created_at', { ascending: false }).limit(200);
+    if (filter === 'new') q = q.eq('triaged_status', 'new');
+    const { data, error } = await q;
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, [filter]);
+
+  const updateStatus = async (id, status, note, bug_record) => {
+    const patch = { triaged_status: status, triaged_at: new Date().toISOString() };
+    if (note !== undefined)       patch.triaged_note = note;
+    if (bug_record !== undefined) patch.bug_record   = bug_record;
+    const { error } = await sb.from('redesign_feedback').update(patch).eq('id', id);
+    if (error) { flash('err', error.message); return false; }
+    flash('ok', `Marked ${status}`);
+    load();
+    return true;
+  };
+
+  const convert = async (row) => {
+    const path = window.prompt(
+      'Bug-Record path (e.g. docs/bugs/2026-04-30-my-slug.md):\n' +
+      '— copy docs/bugs/_template.md, fill it in, add a row to INDEX.md, then paste the path here.',
+      `docs/bugs/${new Date().toISOString().slice(0,10)}-`
+    );
+    if (!path || !path.trim()) return;
+    const note = window.prompt('Optional triage note:', '') || '';
+    await updateStatus(row.id, 'converted', note, path.trim());
+  };
+
+  const resolve = async (row) => {
+    const note = window.prompt('Resolve note (what fixed it):', '');
+    if (note === null) return;
+    await updateStatus(row.id, 'resolved', note, null);
+  };
+
+  const dismiss = async (row) => {
+    const note = window.prompt('Dismiss reason (duplicate / spam / not actionable):', '');
+    if (note === null) return;
+    await updateStatus(row.id, 'dismissed', note, null);
+  };
+
+  const reopen = async (row) => {
+    if (!window.confirm('Re-open as new?')) return;
+    await updateStatus(row.id, 'new', null, null);
+  };
+
+  const catBadge = (c) => ({
+    bug: { color:'#a02b2b', bg:'#fff1f1', label:'🐞 bug' },
+    suggestion: { color:'#1d6dbb', bg:'#eef6ff', label:'💡 suggestion' },
+    content: { color:'#7a4d18', bg:'#fff5e8', label:'📰 content' },
+    other: { color:'#555', bg:'#f3f3f3', label:'💬 other' },
+  }[c] || { color:'#555', bg:'#f3f3f3', label:c });
+
+  const statusBadge = (s) => ({
+    new:       { color:'#7a4d18', bg:'#fff5e8' },
+    converted: { color:'#1d6dbb', bg:'#eef6ff' },
+    resolved:  { color:'#197a3b', bg:'#ecfaf0' },
+    dismissed: { color:'#666',    bg:'#f3f3f3' },
+  }[s] || { color:'#555', bg:'#f3f3f3' });
+
+  return (
+    <>
+      <div className="card" style={{padding:'14px 18px', marginBottom:14}}>
+        <div className="row" style={{alignItems:'center', gap:14, flexWrap:'wrap'}}>
+          <strong>Filter:</strong>
+          <button className={'btn btn-sm ' + (filter==='new' ? 'btn-primary' : '')}
+                  onClick={()=>setFilter('new')}>New only</button>
+          <button className={'btn btn-sm ' + (filter==='all' ? 'btn-primary' : '')}
+                  onClick={()=>setFilter('all')}>All</button>
+          <span style={{marginLeft:'auto', fontSize:12, color:'#666'}}>
+            {rows ? `${rows.length} rows` : 'loading…'}
+          </span>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr>
+            <th style={{width:140}}>When</th>
+            <th style={{width:110}}>Type</th>
+            <th>Message</th>
+            <th style={{width:170}}>Context</th>
+            <th style={{width:120}}>Status</th>
+            <th style={{width:200}}>Action</th>
+          </tr></thead>
+          <tbody>
+            {rows?.map(r => {
+              const cat = catBadge(r.category);
+              const st  = statusBadge(r.triaged_status);
+              return (
+                <tr key={r.id}>
+                  <td style={{whiteSpace:'nowrap'}}>{fmt(r.created_at)}</td>
+                  <td>
+                    <span style={{
+                      display:'inline-block', padding:'2px 8px', borderRadius:10,
+                      fontSize:11, fontWeight:700,
+                      color: cat.color, background: cat.bg,
+                    }}>{cat.label}</span>
+                  </td>
+                  <td style={{maxWidth:480, whiteSpace:'pre-wrap'}}>
+                    {r.message}
+                    {r.triaged_note && (
+                      <div style={{marginTop:6, paddingTop:6, borderTop:'1px dashed #eee', fontSize:11, color:'#666'}}>
+                        <strong>Triage note:</strong> {r.triaged_note}
+                        {r.bug_record && <div style={{marginTop:3}}>
+                          <strong>Bug record:</strong> <span className="pre">{r.bug_record}</span>
+                        </div>}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{fontSize:11, color:'#555'}}>
+                    {r.user_level && <div>Level: <strong>{r.user_level}</strong></div>}
+                    {r.user_language && <div>Lang: <strong>{r.user_language}</strong></div>}
+                    {r.page_url && <div style={{wordBreak:'break-all'}}>URL: <a href={r.page_url} target="_blank" rel="noreferrer">{r.page_url.slice(0,40)}…</a></div>}
+                    {r.client_id && <div className="pre">cid: {r.client_id.slice(0,8)}</div>}
+                  </td>
+                  <td>
+                    <span style={{
+                      display:'inline-block', padding:'2px 8px', borderRadius:10,
+                      fontSize:11, fontWeight:700,
+                      color: st.color, background: st.bg,
+                    }}>{r.triaged_status}</span>
+                  </td>
+                  <td>
+                    {r.triaged_status === 'new' && (
+                      <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                        <button className="btn btn-sm btn-primary" onClick={()=>convert(r)}>→ Bug record</button>
+                        <button className="btn btn-sm" onClick={()=>resolve(r)}>Resolved</button>
+                        <button className="btn btn-sm" onClick={()=>dismiss(r)}>Dismiss</button>
+                      </div>
+                    )}
+                    {r.triaged_status !== 'new' && (
+                      <button className="btn btn-sm" onClick={()=>reopen(r)}>Reopen</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {rows && rows.length === 0 && (
+              <tr><td colSpan="6" className="empty">No feedback {filter === 'new' ? 'pending' : 'yet'}.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -1762,6 +1929,7 @@ function AdminUI({ session, onSignOut, onSignIn }) {
     ['providers',  '🤖 AI Providers'],
     ['admins',     '👥 Admins'],
     ['stories',    '📰 Stories'],
+    ['discussions','💭 Discussions'],
     ['feedback',   '💬 Feedback'],
     ['runs',       '🏃 Runs'],
     ['pipeline',   '🔧 Pipeline'],
@@ -1786,6 +1954,7 @@ function AdminUI({ session, onSignOut, onSignIn }) {
       {tab === 'providers'  && <AIProvidersTab flash={flash}/>}
       {tab === 'admins'     && <AdminUsersTab flash={flash} session={session}/>}
       {tab === 'stories'    && <StoriesTab flash={flash} categories={categories}/>}
+      {tab === 'discussions'&& <DiscussionsTab flash={flash}/>}
       {tab === 'feedback'   && <FeedbackTab flash={flash}/>}
       {tab === 'runs'       && <RunsTab flash={flash}/>}
       {tab === 'pipeline'   && <PipelineTab flash={flash}/>}

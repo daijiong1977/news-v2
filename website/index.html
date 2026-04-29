@@ -633,6 +633,13 @@ function App() {
           onClose={()=>setUserPanelOpen(false)}
         />
       )}
+
+      {/* Floating feedback button — always visible, opens FeedbackModal.
+          Hidden during onboarding (no userName) since the kid hasn't
+          set up yet and the button would crowd the welcome screen. */}
+      {(tweaks?.userName || '').trim() && window.FeedbackButton && (
+        <window.FeedbackButton/>
+      )}
     </div>
   );
 }

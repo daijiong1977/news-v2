@@ -354,6 +354,43 @@ async function archiveSearch(q, opts) {
   }
 }
 window.archiveSearch = archiveSearch;
+
+// Submit a feedback row. Anonymous; rate-limited server-side
+// (5/IP/min). Returns { ok: true, id } or { error }.
+async function submitFeedback({ category, message, screenshot_url }) {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/functions/v1/submit-feedback`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          category,
+          message,
+          screenshot_url: screenshot_url || null,
+          page_url: window.location.href,
+          client_id: getClientId(),
+          user_level: safeStorage.get('ohye_level') || null,
+          user_language: (() => {
+            try {
+              const t = JSON.parse(safeStorage.get('ohye_tweaks') || '{}');
+              return t.language || 'en';
+            } catch { return 'en'; }
+          })(),
+        }),
+      },
+    );
+    const body = await r.json();
+    if (!r.ok) return { error: body.error || `HTTP ${r.status}`, status: r.status };
+    return body;
+  } catch (e) {
+    return { error: 'Network error: ' + (e.message || String(e)) };
+  }
+}
+window.submitFeedback = submitFeedback;
 window.getClientId = getClientId;
 window.__payloadsLoaded = loadPayloads().then(list => {
   window.ARTICLES = list;

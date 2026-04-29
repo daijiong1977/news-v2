@@ -1779,6 +1779,166 @@ function SearchPage({ onBack, onOpenResult, level, language }) {
 window.SearchPage = SearchPage;
 
 
+// ——————————— FEEDBACK BUTTON + MODAL ———————————
+// Floating bottom-right 💬 button that opens a modal where the user
+// can submit a bug / suggestion / content note. Posts to the
+// submit-feedback edge function via window.submitFeedback().
+// Always rendered above route content (zIndex high). Hidden during
+// onboarding via the wrapper in App.
+function FeedbackButton() {
+  const [open, setOpen] = useStateH(false);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        title="Send feedback"
+        aria-label="Send feedback"
+        style={{
+          position:'fixed', right:18, bottom:18, zIndex:90,
+          width:54, height:54, borderRadius:27,
+          background:'#1b1230', color:'#fff', border:'none',
+          fontSize:22, cursor:'pointer',
+          boxShadow:'0 4px 16px rgba(0,0,0,0.25)',
+        }}
+      >💬</button>
+      {open && <FeedbackModal onClose={() => setOpen(false)}/>}
+    </>
+  );
+}
+window.FeedbackButton = FeedbackButton;
+
+function FeedbackModal({ onClose }) {
+  const [category, setCategory] = useStateH('bug');
+  const [message, setMessage] = useStateH('');
+  const [sending, setSending] = useStateH(false);
+  const [result, setResult] = useStateH(null);   // null | 'ok' | error string
+
+  const send = async () => {
+    if (sending) return;
+    if (message.trim().length < 5) {
+      setResult('请至少写 5 个字让我们能看明白~');
+      return;
+    }
+    setSending(true);
+    setResult(null);
+    const r = await window.submitFeedback({ category, message: message.trim() });
+    setSending(false);
+    if (r && r.ok) {
+      setResult('ok');
+      setTimeout(onClose, 1200);
+    } else {
+      setResult((r && r.error) || 'Something went wrong — please try again.');
+    }
+  };
+
+  const cats = [
+    { v:'bug',        label:'🐞 Bug — 哪里坏了' },
+    { v:'suggestion', label:'💡 Suggestion — 想加什么' },
+    { v:'content',    label:'📰 Content — 文章/选题反馈' },
+    { v:'other',      label:'💬 Other — 其它' },
+  ];
+
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position:'fixed', inset:0, zIndex:120, background:'rgba(0,0,0,0.32)',
+      }}/>
+      <div role="dialog" aria-label="Send feedback" style={{
+        position:'fixed', zIndex:121,
+        left:'50%', top:'50%', transform:'translate(-50%,-50%)',
+        width:'min(460px, 92vw)', background:'#fff', borderRadius:16,
+        padding:20, boxShadow:'0 20px 60px rgba(0,0,0,0.30)',
+        fontFamily:'Nunito, sans-serif',
+      }}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+          <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20, color:'#1b1230'}}>
+            💬 Send us feedback
+          </div>
+          <button onClick={onClose} style={{
+            background:'transparent', border:'none', fontSize:22, cursor:'pointer', color:'#888',
+          }} aria-label="Close">×</button>
+        </div>
+
+        <div style={{fontSize:13, color:'#555', marginBottom:14, lineHeight:1.45}}>
+          Your message goes straight to the team. Anonymous — no sign-in needed.
+        </div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11, fontWeight:800, color:'#6b5c80', letterSpacing:'.06em', textTransform:'uppercase', marginBottom:6}}>Type</div>
+          <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+            {cats.map(c => (
+              <button
+                key={c.v}
+                onClick={() => setCategory(c.v)}
+                style={{
+                  padding:'8px 12px', border: category===c.v ? '2px solid #1b1230' : '1.5px solid #ddd',
+                  borderRadius:18, background: category===c.v ? '#fff9ef' : '#fff',
+                  fontSize:12, fontWeight:700, cursor:'pointer', color:'#1b1230',
+                }}
+              >{c.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11, fontWeight:800, color:'#6b5c80', letterSpacing:'.06em', textTransform:'uppercase', marginBottom:6}}>Message</div>
+          <textarea
+            autoFocus
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={4000}
+            placeholder={category === 'bug'
+              ? "What happened? What did you expect? Steps to reproduce help a lot."
+              : "Tell us what's on your mind…"}
+            style={{
+              width:'100%', minHeight:120, padding:'10px 12px',
+              border:'1.5px solid #ddd', borderRadius:10, fontSize:14,
+              outline:'none', resize:'vertical', fontFamily:'inherit',
+              boxSizing:'border-box', color:'#1b1230', background:'#fafafa',
+            }}
+          />
+          <div style={{fontSize:11, color:'#aaa', marginTop:4}}>
+            {message.length} / 4000
+          </div>
+        </div>
+
+        {result && result !== 'ok' && (
+          <div style={{padding:'8px 10px', background:'#fff1f1', color:'#a02b2b',
+                        border:'1px solid #f5c6c6', borderRadius:8, fontSize:12,
+                        marginBottom:10}}>
+            {result}
+          </div>
+        )}
+        {result === 'ok' && (
+          <div style={{padding:'8px 10px', background:'#ecfaf0', color:'#197a3b',
+                        border:'1px solid #b6e3c5', borderRadius:8, fontSize:13,
+                        marginBottom:10}}>
+            ✓ Sent! Thank you 🙏
+          </div>
+        )}
+
+        <div style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+          <button onClick={onClose} style={{
+            background:'transparent', border:'1px solid #ddd', borderRadius:8,
+            padding:'9px 16px', cursor:'pointer', fontSize:13, color:'#444',
+          }}>Cancel</button>
+          <button
+            onClick={send}
+            disabled={sending}
+            style={{
+              background: sending ? '#888' : '#1b1230', color:'#fff',
+              border:'none', borderRadius:8, padding:'9px 18px',
+              cursor: sending ? 'wait' : 'pointer', fontSize:13, fontWeight:800,
+            }}
+          >{sending ? 'Sending…' : 'Send'}</button>
+        </div>
+      </div>
+    </>
+  );
+}
+window.FeedbackModal = FeedbackModal;
+
+
 function RecentReadsPopover({ onClose, onOpenArticle, onResumeItem, readIds, inProgress, articleProgress }) {
   // Take most recent 15 articles the user has read (from readIds, in order).
   // Source order:

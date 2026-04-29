@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# commit-msg hook — enforce a Bug-Record: trailer on bug-fix commits.
+#
+# Triggers when the commit subject is a Conventional-Commits `fix(`
+# or `fix:`, OR contains the word `bug:` somewhere in the message.
+# When triggered, the commit MUST have a `Bug-Record: docs/bugs/...md`
+# trailer pointing at an existing file.
+#
+# Why: future Claude sessions don't have this conversation. The bug
+# record is what lets them fix a regression six months from now
+# without re-deriving the root cause from scratch.
+#
+# Skip with `--no-verify` (don't — that defeats the point).
+#
+# Activate once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+
+MSG_FILE="$1"
+SUBJECT=$(head -n 1 "$MSG_FILE")
+BODY=$(cat "$MSG_FILE")
+
+# Ignore merges / reverts / fixup / squash — those don't introduce
+# new fixes and would pollute records.
+case "$SUBJECT" in
+    "Merge "*|"Revert "*|"fixup!"*|"squash!"*|"amend!"*) exit 0;;
+esac
+
+# Heuristic: is this a bug-fix commit?
+is_fix=0
+echo "$SUBJECT" | grep -Eq '^fix(\(|:)' && is_fix=1
+echo "$BODY"    | grep -Eqi '(^|[^A-Za-z])bug:' && is_fix=1
+
+[ "$is_fix" -eq 0 ] && exit 0
+
+# Find a `Bug-Record:` trailer.
+trailer=$(echo "$BODY" | grep -Ei '^Bug-Record:[[:space:]]+' | head -n 1 | sed -E 's/^[Bb]ug-[Rr]ecord:[[:space:]]+//' | tr -d '[:space:]')
+
+if [ -z "$trailer" ]; then
+    cat >&2 <<'EOF'
+
+✗ Commit rejected: bug-fix commit must include a Bug-Record trailer.
+
+Append a line to your commit message like:
+
+    Bug-Record: docs/bugs/2026-04-29-my-bug-slug.md
+
+The path must point at an existing record under docs/bugs/. Copy
+docs/bugs/_template.md to start a new one, then add a row to
+docs/bugs/INDEX.md.
+
+If this is genuinely not a bug fix (typo, doc-only, refactor),
+change the commit prefix from `fix(...)` to something else
+(e.g. `chore(...)`, `docs(...)`, `refactor(...)`).
+EOF
+    exit 1
+fi
+
+# Path must exist relative to repo root.
+repo_root=$(git rev-parse --show-toplevel)
+if [ ! -f "$repo_root/$trailer" ]; then
+    cat >&2 <<EOF
+
+✗ Commit rejected: Bug-Record path does not exist:
+    $trailer
+
+Either:
+  - Create $trailer (copy docs/bugs/_template.md to start)
+  - Or fix the trailer typo and re-commit.
+EOF
+    exit 1
+fi
+
+# Path must live under docs/bugs/.
+case "$trailer" in
+    docs/bugs/*) ;;
+    *)
+        cat >&2 <<EOF
+
+✗ Commit rejected: Bug-Record path must live under docs/bugs/.
+    Got: $trailer
+EOF
+        exit 1;;
+esac
+
+# Path must be referenced from INDEX.md so future grep finds it.
+# Match the bare filename (with .md) to avoid false matches in
+# prose ("copy _template.md" should not accept _template as a record).
+if ! grep -qF "($(basename "$trailer"))" "$repo_root/docs/bugs/INDEX.md"; then
+    cat >&2 <<EOF
+
+✗ Commit rejected: Bug-Record not listed in docs/bugs/INDEX.md.
+    Add a row for $trailer before committing.
+EOF
+    exit 1
+fi
+
+exit 0
