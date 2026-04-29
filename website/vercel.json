@@ -1,0 +1,15 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/archive/:path*", "destination": "/" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*\\.(?:jsx|json|webp|png|jpg|svg|css|js|html))",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+      ]
+    }
+  ]
+}
