@@ -1,0 +1,82 @@
+name: PR rollback
+
+# Triggered by the autofix-action edge fn when the admin clicks
+# "Rollback" on a recently-merged PR in the daily digest email.
+#
+# Does the simplest thing that works: `git revert <merge-sha> --no-edit`
+# on main, push. Vercel sees the new commit and redeploys, rolling
+# back the change in production.
+#
+# No second approval — the rollback button click IS the approval.
+# The workflow is gated behind the digest-email HMAC signature.
+
+on:
+  workflow_dispatch:
+    inputs:
+      merge_sha:
+        description: "The merge commit SHA to revert (squash-merge SHA from PR #N)"
+        required: true
+        type: string
+      pr_number:
+        description: "PR # being rolled back (for commit message + audit)"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # required to push the revert commit to main
+
+concurrency:
+  group: pr-rollback
+  cancel-in-progress: false
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # need full history so revert can find the SHA
+          ref: main
+
+      - name: Configure git
+        run: |
+          git config user.name  "kidsnews-rollback-bot"
+          git config user.email "bot@kidsnews.local"
+
+      - name: Verify SHA exists
+        run: |
+          if ! git cat-file -e "${{ inputs.merge_sha }}^{commit}" 2>/dev/null; then
+              echo "::error::SHA ${{ inputs.merge_sha }} not found on main"
+              exit 1
+          fi
+          echo "✓ SHA exists: $(git log -1 --oneline ${{ inputs.merge_sha }})"
+
+      - name: Revert merge commit
+        # -m 1 needed for merge commits (parent #1 is the side we keep).
+        # For squash merges this is a non-merge commit — the -m flag
+        # gets ignored gracefully by git.
+        run: |
+          set -e
+          if git rev-parse --verify "${{ inputs.merge_sha }}^2" 2>/dev/null; then
+              # True merge commit — pass -m 1
+              git revert --no-edit -m 1 "${{ inputs.merge_sha }}"
+          else
+              # Squash merge or single-parent commit — plain revert
+              git revert --no-edit "${{ inputs.merge_sha }}"
+          fi
+          git log -1 --pretty=format:'%h %s'
+
+      - name: Append audit trailer to revert commit
+        # Re-amend the just-created revert commit to include a clear
+        # trailer the user can grep for.
+        run: |
+          git commit --amend -m "$(git log -1 --format=%s)" \
+            -m "Rollback dispatched by autofix-action edge fn from daily digest." \
+            -m "Original PR: #${{ inputs.pr_number }}" \
+            -m "Reverted SHA: ${{ inputs.merge_sha }}"
+
+      - name: Push revert to main
+        run: |
+          git push origin main
+          echo "✓ pushed revert; Vercel will redeploy within ~60s"

@@ -208,6 +208,16 @@ def process(row: dict, dry_run: bool) -> dict:
     }
     if new_status == "resolved":
         final_patch["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        # If claude opened a PR, extract the number so the daily
+        # digest can render review buttons for it. Pattern matches
+        # any github.com/.../pull/<N> URL anywhere in the output.
+        import re as _re
+        pr_match = _re.search(
+            r"github\.com/[\w.-]+/[\w.-]+/pull/(\d+)", output,
+        )
+        if pr_match:
+            final_patch["pr_number"] = int(pr_match.group(1))
+            final_patch["pr_state"]  = "open"
     patch(row["id"], final_patch)
     log.info("item %s → %s", row["id"], new_status)
     return {"id": row["id"], "status": new_status, "log_path": str(item_log)}

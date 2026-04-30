@@ -526,6 +526,202 @@ def render_escalated_panel(rows: list[dict]) -> str:
     )
 
 
+# ── PR review panel + rollback panel ──────────────────────────────
+# Surfaces claude-opened PRs that need human approval, plus recently
+# merged PRs the admin can roll back if they don't like the result.
+
+PR_VISIBLE = 3                # cap per section to stay under Gmail's
+                              # multi-link drop heuristic
+ROLLBACK_WINDOW_DAYS = 7      # how long after merge to keep offering rollback
+
+
+def _pr_action_url(pr_num: int, action: str) -> str:
+    if not AUTOFIX_BUTTON_SECRET:
+        return ""
+    sig = _hmac.new(
+        AUTOFIX_BUTTON_SECRET.encode(),
+        f"pr|{pr_num}|{action}".encode(),
+        _hashlib.sha256,
+    ).hexdigest()[:16]
+    return f"{ACTION_FN_URL}?pr={pr_num}&action={action}&sig={sig}"
+
+
+def fetch_open_prs() -> list[dict]:
+    """Queue rows that opened a PR which is still OPEN waiting for
+    admin Merge/Close. pr_state='open' is set by the consumer when
+    claude opens a PR; the edge fn flips it to 'merged' or 'closed'
+    when the admin clicks a button."""
+    try:
+        from urllib.parse import urlencode
+        url = (f"{SUPABASE_URL}/rest/v1/redesign_autofix_queue?"
+               + urlencode({
+                   "select": "id,pr_number,github_issue_number,problem_type,agent_log,resolved_at",
+                   "pr_state": "eq.open",
+                   "order": "resolved_at.desc.nullslast",
+                   "limit": "20",
+               }))
+        req = request.Request(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        })
+        with request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        log.warning("open PRs fetch failed: %s", e)
+        return []
+
+
+def fetch_rollbackable_prs() -> list[dict]:
+    """Recently merged PRs (within ROLLBACK_WINDOW_DAYS) that haven't
+    been confirmed-kept yet. These get [Rollback] [Looks good] buttons
+    so the admin can undo a regrettable change after seeing it live."""
+    try:
+        from urllib.parse import urlencode
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=ROLLBACK_WINDOW_DAYS)).isoformat()
+        url = (f"{SUPABASE_URL}/rest/v1/redesign_autofix_queue?"
+               + urlencode({
+                   "select": "id,pr_number,github_issue_number,agent_log,pr_merged_at,problem_detail",
+                   "pr_state": "eq.merged",
+                   "pr_merged_at": f"gte.{cutoff}",
+                   "order": "pr_merged_at.desc",
+                   "limit": "10",
+               }))
+        req = request.Request(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        })
+        with request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        log.warning("rollbackable PRs fetch failed: %s", e)
+        return []
+
+
+def _pr_summary_line(row: dict) -> str:
+    """Shorten claude's RESOLVED log into a one-liner for the email."""
+    log_str = row.get("agent_log") or ""
+    for line in log_str.splitlines():
+        line = line.strip()
+        if line.startswith("RESOLVED:"):
+            return line[len("RESOLVED:"):].strip()[:200]
+    issue = row.get("github_issue_number")
+    return (f"PR resolves issue #{issue}" if issue else "PR opened by autofix")[:200]
+
+
+def render_pr_review_panel(rows: list[dict]) -> str:
+    if not rows or not AUTOFIX_BUTTON_SECRET:
+        return ""
+    visible = rows[:PR_VISIBLE]
+    overflow = max(0, len(rows) - PR_VISIBLE)
+
+    blocks: list[str] = []
+    for r in visible:
+        prn = r["pr_number"]
+        issue = r.get("github_issue_number")
+        title = _pr_summary_line(r)
+        u_merge = _pr_action_url(prn, "merge")
+        u_close = _pr_action_url(prn, "close")
+        u_leave = _pr_action_url(prn, "leave")
+        gh_url  = f"https://github.com/daijiong1977/news-v2/pull/{prn}"
+        issue_chip = (
+            f' · <a href="https://github.com/daijiong1977/news-v2/issues/{issue}" '
+            f'style="color:#888;">closes #{issue}</a>'
+        ) if issue else ''
+        blocks.append(
+            '<div style="border:1px solid #d6e6f3;border-radius:8px;'
+            'padding:12px 14px;margin-bottom:10px;background:#f0f7fb;">'
+            f'<div style="font-size:13px;color:#1b1230;font-weight:600;">'
+            f'<a href="{gh_url}" style="color:#1b1230;">PR #{prn}</a>{issue_chip}'
+            f'</div>'
+            f'<div style="font-size:12px;color:#555;margin:4px 0 10px;">{title}</div>'
+            f'<a href="{u_merge}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#197a3b;color:#fff;text-decoration:none;'
+            'border-radius:6px;font-weight:700;font-size:12px;">Merge</a>'
+            f'<a href="{u_close}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#fff;color:#a02b2b;border:1px solid #f5c6c6;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Close</a>'
+            f'<a href="{u_leave}" '
+            'style="display:inline-block;padding:7px 14px;'
+            'background:#fff;color:#666;border:1px solid #ddd;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Leave for review</a>'
+            '</div>'
+        )
+    overflow_note = (
+        f'<div style="font-size:12px;color:#1b5285;margin-top:6px;">'
+        f'… and {overflow} more PRs open. Tomorrow\'s digest will surface them again.</div>'
+        if overflow else ''
+    )
+    n = len(rows)
+    return (
+        '<div style="margin-bottom:18px;padding:18px 20px;'
+        'background:#f0f7fb;border:1px solid #c0d8eb;border-radius:10px;color:#1b5285;">'
+        f'<div style="font-weight:700;font-size:15px;margin-bottom:10px;">'
+        f'🔧 {n} PR{"s" if n != 1 else ""} ready for review</div>'
+        '<div style="font-size:12px;color:#1b5285;margin-bottom:12px;">'
+        'claude opened these. <strong>Merge</strong> squashes into main + Vercel redeploys; '
+        '<strong>Close</strong> drops the change; <strong>Leave</strong> shows again tomorrow.'
+        '</div>'
+        + ''.join(blocks) + overflow_note + '</div>'
+    )
+
+
+def render_rollback_panel(rows: list[dict]) -> str:
+    if not rows or not AUTOFIX_BUTTON_SECRET:
+        return ""
+    visible = rows[:PR_VISIBLE]
+    overflow = max(0, len(rows) - PR_VISIBLE)
+
+    blocks: list[str] = []
+    for r in visible:
+        prn = r["pr_number"]
+        issue = r.get("github_issue_number")
+        title = _pr_summary_line(r)
+        merged_at = (r.get("pr_merged_at") or "")[:10]   # YYYY-MM-DD
+        u_rollback = _pr_action_url(prn, "rollback")
+        u_keep     = _pr_action_url(prn, "keep")
+        gh_url  = f"https://github.com/daijiong1977/news-v2/pull/{prn}"
+        issue_chip = (
+            f' · #{issue}' if issue else ''
+        )
+        blocks.append(
+            '<div style="border:1px solid #e6e6e6;border-radius:8px;'
+            'padding:12px 14px;margin-bottom:10px;background:#fafafa;">'
+            f'<div style="font-size:13px;color:#1b1230;font-weight:600;">'
+            f'<a href="{gh_url}" style="color:#1b1230;">PR #{prn}</a>{issue_chip} '
+            f'<span style="font-weight:400;color:#888;font-size:12px;">merged {merged_at}</span>'
+            f'</div>'
+            f'<div style="font-size:12px;color:#555;margin:4px 0 10px;">{title}</div>'
+            f'<a href="{u_rollback}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#fff;color:#a02b2b;border:1px solid #f5c6c6;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Rollback</a>'
+            f'<a href="{u_keep}" '
+            'style="display:inline-block;padding:7px 14px;'
+            'background:#fff;color:#197a3b;border:1px solid #b6e3c5;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Looks good</a>'
+            '</div>'
+        )
+    overflow_note = (
+        f'<div style="font-size:12px;color:#666;margin-top:6px;">'
+        f'… and {overflow} more in the {ROLLBACK_WINDOW_DAYS}-day rollback window.</div>'
+        if overflow else ''
+    )
+    n = len(rows)
+    return (
+        '<div style="margin-bottom:18px;padding:18px 20px;'
+        'background:#fafafa;border:1px solid #e6e6e6;border-radius:10px;color:#444;">'
+        f'<div style="font-weight:700;font-size:15px;margin-bottom:10px;">'
+        f'↺ {n} merge{"s" if n != 1 else ""} from the last {ROLLBACK_WINDOW_DAYS} days</div>'
+        '<div style="font-size:12px;color:#666;margin-bottom:12px;">'
+        '<strong>Rollback</strong> reverts the merge on main (Vercel redeploys); '
+        '<strong>Looks good</strong> dismisses from this list.'
+        '</div>'
+        + ''.join(blocks) + overflow_note + '</div>'
+    )
+
+
 # ── Queue summary panel (still queued, never tried) ────────────────
 
 
@@ -638,7 +834,13 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     now_et = datetime.now(ET)
     lines.append(f'<div style="font-size:12px;color:#888;margin-bottom:18px;">Generated {now_et.strftime("%Y-%m-%d %H:%M %Z")} · last {len(days)} days</div>')
 
-    # Escalated rows — surface FIRST so the user sees decisions to make.
+    # PRs ready for review — at the very top because deciding on them
+    # is the most time-sensitive thing the admin can do today.
+    open_prs = fetch_open_prs()
+    if open_prs:
+        lines.append(render_pr_review_panel(open_prs))
+
+    # Escalated rows — auto-fix gave up, admin must pick an action.
     escalated_rows = fetch_escalated_rows()
     if escalated_rows:
         lines.append(render_escalated_panel(escalated_rows))
@@ -649,9 +851,17 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     if queue is not None:
         lines.append(render_pending_fixes_panel(queue))
 
+    # Recently merged — rollback window. Lower priority because these
+    # are post-decision; surface AFTER the items needing decisions.
+    rollback_rows = fetch_rollbackable_prs()
+    if rollback_rows:
+        lines.append(render_rollback_panel(rollback_rows))
+
     total_variants, bad_variants = _count_pass_fail(days)
     queue_count = (queue or {}).get("count", 0)
     escalated_count = len(escalated_rows)
+    open_pr_count = len(open_prs)
+    rollback_count = len(rollback_rows)
 
     # Pull recent pipeline runs for the tuning panel.
     pipeline_runs = fetch_pipeline_runs(len(days))
@@ -661,7 +871,8 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     # don't bother with the per-day tables. Just confirm "today is good"
     # without listing every checked date — user only wants to see dates
     # that have something wrong.
-    if bad_variants == 0 and queue_count == 0 and escalated_count == 0:
+    if (bad_variants == 0 and queue_count == 0 and escalated_count == 0
+            and open_pr_count == 0 and rollback_count == 0):
         today_label = days[0]["date"] if days else datetime.now(ET).date().isoformat()
         missing = [d["date"] for d in days if d.get("missing_day")]
         lines.append(

@@ -109,6 +109,7 @@ function html(status: number, body: string): Response {
 //             for 7 days. (Triage script filters on label age.)
 
 const ISSUE_ACTIONS = new Set(["fix", "close", "snooze"]);
+const PR_ACTIONS    = new Set(["merge", "close", "leave", "rollback", "keep"]);
 const GH_ISSUE_TOKEN = Deno.env.get("GH_ISSUE_TOKEN") || "";
 const GH_REPO = Deno.env.get("GH_REPO") || "daijiong1977/news-v2";
 
@@ -213,18 +214,151 @@ async function handleIssueAction(issueNum: number, action: string): Promise<Resp
   }));
 }
 
+async function handlePrAction(prNum: number, action: string): Promise<Response> {
+  if (!GH_ISSUE_TOKEN) {
+    return html(500, htmlPage({
+      title: "Misconfigured",
+      message: "GH_ISSUE_TOKEN not set in this environment.",
+    }));
+  }
+
+  // For merge/close, hit GH API directly. For rollback, dispatch a
+  // workflow that does git revert + push (edge fn can't run git).
+  // 'leave' and 'keep' are no-op confirmations — UI feedback only,
+  // no DB or GH change.
+
+  if (action === "merge") {
+    const r = await githubApi(`pulls/${prNum}/merge`, "PUT",
+      { merge_method: "squash" });
+    if (r.status >= 300) {
+      return html(r.status, htmlPage({
+        title: "Merge failed",
+        message: `GitHub API: ${r.body.slice(0, 200)}`,
+      }));
+    }
+    const merged: any = (() => { try { return JSON.parse(r.body); } catch { return {}; } })();
+    // Mark the queue row as merged + record sha so rollback can find it.
+    await sb.from("redesign_autofix_queue").update({
+      pr_state:     "merged",
+      pr_merged_at: new Date().toISOString(),
+      problem_detail: { merged_sha: merged.sha, ...(merged.message ? { merge_msg: merged.message } : {}) },
+    }).eq("pr_number", prNum);
+    return html(200, htmlPage({
+      title: "Merged",
+      message: `PR #${prNum} squashed into main.`,
+      detail: `Merge commit ${(merged.sha || "").slice(0, 7)} — Vercel will redeploy in ~1 min.`,
+      color: COLOR.resolve,
+    }));
+  }
+
+  if (action === "close") {
+    const r = await githubApi(`pulls/${prNum}`, "PATCH", { state: "closed" });
+    if (r.status >= 300) {
+      return html(r.status, htmlPage({
+        title: "Close failed",
+        message: `GitHub API: ${r.body.slice(0, 200)}`,
+      }));
+    }
+    await sb.from("redesign_autofix_queue")
+      .update({ pr_state: "closed" }).eq("pr_number", prNum);
+    return html(200, htmlPage({
+      title: "PR closed",
+      message: `PR #${prNum} closed without merge.`,
+      detail: "The original GitHub issue stays open — claude can take another shot if you re-Fix it from a future digest.",
+      color: COLOR.dismiss,
+    }));
+  }
+
+  if (action === "leave") {
+    return html(200, htmlPage({
+      title: "Left for review",
+      message: `PR #${prNum} left as-is. Tomorrow's digest will surface it again.`,
+      color: "#666",
+    }));
+  }
+
+  if (action === "rollback") {
+    // Fetch the merge commit SHA from the queue row.
+    const { data: row } = await sb.from("redesign_autofix_queue")
+      .select("problem_detail, pr_state").eq("pr_number", prNum).maybeSingle();
+    const sha = row?.problem_detail?.merged_sha;
+    if (!sha) {
+      return html(400, htmlPage({
+        title: "Can't rollback",
+        message: `No merge commit recorded for PR #${prNum}.`,
+        detail: "This usually means the PR was merged outside this system, or merged before pr_state tracking landed.",
+      }));
+    }
+    // Dispatch the rollback workflow with the SHA.
+    const dispatch = await githubApi("actions/workflows/pr-rollback.yml/dispatches", "POST",
+      { ref: "main", inputs: { merge_sha: sha, pr_number: String(prNum) } });
+    if (dispatch.status >= 300) {
+      return html(dispatch.status, htmlPage({
+        title: "Rollback dispatch failed",
+        message: `GitHub API: ${dispatch.body.slice(0, 200)}`,
+      }));
+    }
+    await sb.from("redesign_autofix_queue")
+      .update({ pr_state: "closed" }).eq("pr_number", prNum);
+    return html(200, htmlPage({
+      title: "Rollback queued",
+      message: `Reverting merge ${sha.slice(0, 7)} of PR #${prNum} on main.`,
+      detail: "GitHub Actions workflow pr-rollback.yml fires now (~30s). Vercel redeploys ~1 min after.",
+      color: "#a02b2b",
+    }));
+  }
+
+  if (action === "keep") {
+    return html(200, htmlPage({
+      title: "Looks good",
+      message: `PR #${prNum} confirmed kept.`,
+      detail: "Won't be offered for rollback again.",
+      color: COLOR.resolve,
+    }));
+  }
+
+  return html(400, htmlPage({
+    title: "Bad request", message: `Unknown PR action ${action}.`,
+  }));
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
   const action = (url.searchParams.get("action") ?? "").toLowerCase();
   const sig    = (url.searchParams.get("sig") ?? "").toLowerCase();
   const idStr    = url.searchParams.get("id") ?? "";
   const issueStr = url.searchParams.get("issue") ?? "";
+  const prStr    = url.searchParams.get("pr") ?? "";
 
   if (!BUTTON_SECRET) {
     return html(500, htmlPage({
       title: "Misconfigured",
       message: "AUTOFIX_BUTTON_SECRET not set in this environment.",
     }));
+  }
+
+  // PR branch — own HMAC namespace ("pr|N|action")
+  if (prStr) {
+    const prNum = parseInt(prStr, 10);
+    if (!Number.isFinite(prNum) || prNum <= 0) {
+      return html(400, htmlPage({
+        title: "Bad request", message: "Missing or invalid `pr` parameter.",
+      }));
+    }
+    if (!PR_ACTIONS.has(action)) {
+      return html(400, htmlPage({
+        title: "Bad request",
+        message: `Unknown PR action ${action}. Expected: merge / close / leave / rollback / keep.`,
+      }));
+    }
+    const expectedSig = await hmac16(`pr|${prNum}|${action}`, BUTTON_SECRET);
+    if (!constantTimeEqual(sig, expectedSig)) {
+      return html(403, htmlPage({
+        title: "Invalid signature",
+        message: "The button URL signature didn't validate.",
+      }));
+    }
+    return await handlePrAction(prNum, action);
   }
 
   // Branch on which target was specified. issue= takes precedence —
