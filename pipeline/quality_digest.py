@@ -39,8 +39,45 @@ log = logging.getLogger(__name__)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-DEFAULT_TO   = os.environ.get("QUALITY_DIGEST_TO", "self@daijiong.com")
+# Recipient resolution: --to CLI flag overrides everything; otherwise
+# fan out to every email in redesign_admin_users. Admins manage that
+# table from the existing /admin.html UI — no separate config row.
+DEFAULT_TO_FALLBACK = "self@daijiong.com"
 DEFAULT_DAYS = int(os.environ.get("QUALITY_DIGEST_DAYS", "3"))
+
+
+def _admin_emails() -> list[str]:
+    """Pull every email from redesign_admin_users. Empty list on
+    failure (caller falls back to hard-coded default)."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return []
+    url = f"{SUPABASE_URL}/rest/v1/redesign_admin_users?select=email&order=email"
+    req = request.Request(url, headers={
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    })
+    try:
+        with request.urlopen(req, timeout=10) as r:
+            rows = json.loads(r.read())
+        emails = [str(r["email"]).strip() for r in rows if r.get("email")]
+        return [e for e in emails if "@" in e]
+    except Exception as e:
+        log.warning("could not read admin emails: %s", e)
+        return []
+
+
+def resolve_recipients(cli_arg: str | None) -> list[str]:
+    """Pick the list of recipients. CLI override → admin table → fallback."""
+    if cli_arg:
+        return [cli_arg.strip()]
+    env_val = os.environ.get("QUALITY_DIGEST_TO")
+    if env_val:
+        return [e.strip() for e in env_val.split(",") if e.strip()]
+    admins = _admin_emails()
+    if admins:
+        return admins
+    log.warning("no admin emails found; falling back to %s", DEFAULT_TO_FALLBACK)
+    return [DEFAULT_TO_FALLBACK]
 
 STORAGE_BASE = f"{SUPABASE_URL}/storage/v1/object/public/redesign-daily-content"
 SEND_EMAIL_URL = f"{SUPABASE_URL}/functions/v1/send-email-v2"
@@ -534,7 +571,7 @@ def send_email(to: str, subject: str, html: str) -> bool:
         return False
 
 
-def run(days: int, to: str, dry_run: bool) -> dict:
+def run(days: int, recipients: list[str], dry_run: bool) -> dict:
     # "Today" anchors on the user's wall clock (ET) — without this,
     # an evening run at 23:30 ET on Apr 29 (= 03:30 UTC Apr 30)
     # would label its digest "Apr 30" and confuse the reader.
@@ -555,9 +592,23 @@ def run(days: int, to: str, dry_run: bool) -> dict:
     subject = f"Kids News quality - {today.isoformat()} ET (last {days}d){pend_suffix}"
     if dry_run:
         sys.stdout.write(html)
-        return {"dry_run": True, "subject": subject, "bytes": len(html)}
-    ok = send_email(to, subject, html)
-    return {"dry_run": False, "to": to, "subject": subject, "sent": ok}
+        return {"dry_run": True, "subject": subject, "bytes": len(html), "recipients": recipients}
+
+    # Send one email per recipient. send-email-v2's `to` field accepts
+    # a single address; iterating keeps each delivery independently
+    # logged/retried at the SMTP layer rather than risking one bad
+    # address torpedoing the rest.
+    results = []
+    for to in recipients:
+        ok = send_email(to, subject, html)
+        results.append({"to": to, "sent": ok})
+        if not ok:
+            log.warning("send failed for %s", to)
+    any_sent = any(r["sent"] for r in results)
+    return {
+        "dry_run": False, "subject": subject,
+        "recipients": recipients, "results": results, "sent": any_sent,
+    }
 
 
 if __name__ == "__main__":
@@ -565,10 +616,15 @@ if __name__ == "__main__":
                          format="%(asctime)s %(levelname)s %(message)s")
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--days", type=int, default=DEFAULT_DAYS)
-    p.add_argument("--to", default=DEFAULT_TO)
+    p.add_argument("--to", default=None,
+                   help="Override recipient. Default = every email in "
+                        "redesign_admin_users (or env QUALITY_DIGEST_TO, "
+                        "or " + DEFAULT_TO_FALLBACK + " as last resort).")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
-    out = run(days=args.days, to=args.to, dry_run=args.dry_run)
+    recipients = resolve_recipients(args.to)
+    log.info("recipients resolved to: %s", recipients)
+    out = run(days=args.days, recipients=recipients, dry_run=args.dry_run)
     if not args.dry_run:
         print(json.dumps(out, indent=2))
         sys.exit(0 if out.get("sent") else 1)
