@@ -94,13 +94,167 @@ function html(status: number, body: string): Response {
   });
 }
 
+// ── GitHub issue actions ───────────────────────────────────────────
+// Same email-button pattern, but routing to GH actions instead of
+// queue rows. Buttons in the feedback-triage email use:
+//   ?issue=<N>&action=<fix|close|snooze>&sig=<hmac16("issue|N|action")>
+// where:
+//   fix     → insert a queue row with problem_type='github_issue',
+//             status='fix-requested'. Mac claude -p picks it up at the
+//             next 04:00 ET tick, reads the issue body via gh CLI,
+//             scopes edits to the page in the issue context block,
+//             opens a PR with Closes #N.
+//   close   → call GH API to close the issue with reason=not_planned.
+//   snooze  → add 'todo:later' label so the next triage email skips it
+//             for 7 days. (Triage script filters on label age.)
+
+const ISSUE_ACTIONS = new Set(["fix", "close", "snooze"]);
+const GH_ISSUE_TOKEN = Deno.env.get("GH_ISSUE_TOKEN") || "";
+const GH_REPO = Deno.env.get("GH_REPO") || "daijiong1977/news-v2";
+
+async function githubApi(path: string, method: string, body?: unknown): Promise<{ status: number; body: string }> {
+  const r = await fetch(`https://api.github.com/repos/${GH_REPO}/${path}`, {
+    method,
+    headers: {
+      "Authorization": `Bearer ${GH_ISSUE_TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: r.status, body: await r.text() };
+}
+
+async function handleIssueAction(issueNum: number, action: string): Promise<Response> {
+  if (!GH_ISSUE_TOKEN) {
+    return html(500, htmlPage({
+      title: "Misconfigured",
+      message: "GH_ISSUE_TOKEN not set in this environment.",
+    }));
+  }
+
+  if (action === "fix") {
+    // Insert a queue row pointing at this GH issue.
+    // Idempotent: if a fix-requested row already exists for this
+    // issue, don't double-queue.
+    const { data: existing } = await sb
+      .from("redesign_autofix_queue")
+      .select("id,status")
+      .eq("github_issue_number", issueNum)
+      .in("status", ["queued", "fix-requested", "running"])
+      .maybeSingle();
+    if (existing) {
+      return html(200, htmlPage({
+        title: "Already queued",
+        message: `Issue #${issueNum} is already in the autofix queue (row ${existing.id}, status ${existing.status}).`,
+      }));
+    }
+    const { error: insErr } = await sb
+      .from("redesign_autofix_queue").insert({
+        github_issue_number: issueNum,
+        problem_type:        "github_issue",
+        status:              "fix-requested",
+        problem_detail:      { issue_url: `https://github.com/${GH_REPO}/issues/${issueNum}` },
+      });
+    if (insErr) {
+      return html(500, htmlPage({
+        title: "Insert failed", message: insErr.message,
+      }));
+    }
+    return html(200, htmlPage({
+      title: "Queued for Claude",
+      message: `Issue #${issueNum} → fix-requested.`,
+      detail: "Mac listener will pick it up at the next 04:00 ET tick. claude -p will load the kidsnews-bugfix skill, read the issue, and open a PR with Closes #" + issueNum + ".",
+      color: COLOR.fix,
+    }));
+  }
+
+  if (action === "close") {
+    const r = await githubApi(`issues/${issueNum}`, "PATCH",
+      { state: "closed", state_reason: "not_planned" });
+    if (r.status >= 300) {
+      return html(r.status, htmlPage({
+        title: "GitHub API error",
+        message: `Couldn't close issue #${issueNum}: ${r.body.slice(0, 200)}`,
+      }));
+    }
+    return html(200, htmlPage({
+      title: "Closed",
+      message: `Issue #${issueNum} → closed (reason: not planned).`,
+      color: COLOR.dismiss,
+    }));
+  }
+
+  if (action === "snooze") {
+    // Ensure 'todo:later' label exists, then attach it to the issue.
+    // Idempotent: GitHub silently no-ops re-adding an existing label.
+    await githubApi("labels", "POST",
+      { name: "todo:later", color: "ededed",
+        description: "Snoozed by admin via digest-email button — triage skips for 7 days" });
+    const r = await githubApi(`issues/${issueNum}/labels`, "POST",
+      { labels: ["todo:later"] });
+    if (r.status >= 300) {
+      return html(r.status, htmlPage({
+        title: "GitHub API error",
+        message: `Couldn't snooze issue #${issueNum}: ${r.body.slice(0, 200)}`,
+      }));
+    }
+    return html(200, htmlPage({
+      title: "Snoozed 7d",
+      message: `Issue #${issueNum} → labeled 'todo:later'.`,
+      detail: "Next 7 days of triage emails will skip this issue. After that, it'll surface again unless you remove the label.",
+      color: "#7a4d18",
+    }));
+  }
+
+  return html(400, htmlPage({
+    title: "Bad request", message: `Unknown issue action ${action}.`,
+  }));
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
-  const idStr  = url.searchParams.get("id") ?? "";
   const action = (url.searchParams.get("action") ?? "").toLowerCase();
   const sig    = (url.searchParams.get("sig") ?? "").toLowerCase();
-  const id = parseInt(idStr, 10);
+  const idStr    = url.searchParams.get("id") ?? "";
+  const issueStr = url.searchParams.get("issue") ?? "";
 
+  if (!BUTTON_SECRET) {
+    return html(500, htmlPage({
+      title: "Misconfigured",
+      message: "AUTOFIX_BUTTON_SECRET not set in this environment.",
+    }));
+  }
+
+  // Branch on which target was specified. issue= takes precedence —
+  // gh issue actions live in their own HMAC namespace ("issue|N|action")
+  // so a leaked queue-row sig can't be replayed against an issue.
+  if (issueStr) {
+    const issueNum = parseInt(issueStr, 10);
+    if (!Number.isFinite(issueNum) || issueNum <= 0) {
+      return html(400, htmlPage({
+        title: "Bad request", message: "Missing or invalid `issue` parameter.",
+      }));
+    }
+    if (!ISSUE_ACTIONS.has(action)) {
+      return html(400, htmlPage({
+        title: "Bad request",
+        message: `Unknown issue action ${action}. Expected: fix / close / snooze.`,
+      }));
+    }
+    const expectedSig = await hmac16(`issue|${issueNum}|${action}`, BUTTON_SECRET);
+    if (!constantTimeEqual(sig, expectedSig)) {
+      return html(403, htmlPage({
+        title: "Invalid signature",
+        message: "The button URL signature didn't validate.",
+      }));
+    }
+    return await handleIssueAction(issueNum, action);
+  }
+
+  // ── Queue-row action path (existing) ────────────────────────────
+  const id = parseInt(idStr, 10);
   if (!Number.isFinite(id) || id <= 0) {
     return html(400, htmlPage({
       title: "Bad request", message: "Missing or invalid `id` parameter.",
@@ -110,12 +264,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return html(400, htmlPage({
       title: "Bad request",
       message: `Unknown action ${action}. Expected: fix / dismiss / resolve.`,
-    }));
-  }
-  if (!BUTTON_SECRET) {
-    return html(500, htmlPage({
-      title: "Misconfigured",
-      message: "AUTOFIX_BUTTON_SECRET not set in this environment.",
     }));
   }
   const expectedSig = await hmac16(`${id}|${action}`, BUTTON_SECRET);
@@ -137,9 +285,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }));
   }
 
-  // Idempotency: only act on non-terminal rows. fix-requested → fix is
-  // a no-op (already queued). Anything terminal (resolved/dismissed)
-  // is treated as already-handled.
+  // Idempotency: only act on non-terminal rows.
   const TERMINAL = new Set(["resolved", "dismissed"]);
   if (TERMINAL.has(row.status)) {
     return html(200, htmlPage({

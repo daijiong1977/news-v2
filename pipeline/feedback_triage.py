@@ -405,10 +405,18 @@ def run(since_hours: int = 48, max_rows: int = 50, dry_run: bool = False) -> dic
 
 
 def _email_admins_about_new_issues(results: list[dict]) -> None:
-    """Send a short HTML digest listing new issues so the admin can
-    decide which to fix today. Reuses the digest's send_email + admin
-    list helpers so we don't duplicate config."""
-    from pipeline.quality_digest import send_email, _admin_emails
+    """Send a short HTML digest listing new issues + three signed-URL
+    buttons per issue (🤖 Fix with Claude / Close / Snooze 7d). Same
+    HMAC pattern as the queue's escalated panel — see autofix-action
+    edge fn for verification logic. The button URLs each carry sig =
+    hmac16("issue|N|action", AUTOFIX_BUTTON_SECRET) so they can't be
+    minted by an attacker who hasn't seen the email."""
+    from pipeline.quality_digest import (
+        send_email, _admin_emails, _sign_action, ACTION_FN_URL,
+        AUTOFIX_BUTTON_SECRET,
+    )
+    import hashlib as _hashlib
+    import hmac as _hmac
 
     new_issues = [r for r in results if r.get("issue_url")]
     if not new_issues:
@@ -417,24 +425,80 @@ def _email_admins_about_new_issues(results: list[dict]) -> None:
     if not admins:
         log.warning("no admin emails configured; skipping new-issues email")
         return
+    if not AUTOFIX_BUTTON_SECRET:
+        log.warning("AUTOFIX_BUTTON_SECRET not set — sending plain-link email")
 
-    rows_html = "".join(
-        f'<li style="margin:8px 0">'
-        f'<a href="{r["issue_url"]}">{r.get("classification","?").upper()}: {r.get("summary","(untitled)")}</a> '
-        f'<span style="color:#888;font-size:12px">— severity {r.get("severity") or "—"}, slug <code>{r.get("slug","?")}</code></span>'
-        f'</li>'
-        for r in new_issues
-    )
+    def _issue_action_url(issue_num: int, action: str) -> str:
+        if not AUTOFIX_BUTTON_SECRET:
+            return ""
+        sig = _hmac.new(
+            AUTOFIX_BUTTON_SECRET.encode(),
+            f"issue|{issue_num}|{action}".encode(),
+            _hashlib.sha256,
+        ).hexdigest()[:16]
+        return f"{ACTION_FN_URL}?issue={issue_num}&action={action}&sig={sig}"
+
+    blocks: list[str] = []
+    for r in new_issues:
+        url = r["issue_url"]
+        # Pull the issue number from the URL tail, e.g.
+        # https://github.com/.../issues/6 → 6
+        try:
+            issue_num = int(url.rstrip("/").rsplit("/", 1)[-1])
+        except Exception:
+            issue_num = 0
+
+        title  = r.get("summary") or "(untitled)"
+        cls    = r.get("classification", "?").upper()
+        sev    = r.get("severity") or "—"
+        slug   = r.get("slug", "?")
+        u_fix  = _issue_action_url(issue_num, "fix")    if issue_num else ""
+        u_cls  = _issue_action_url(issue_num, "close")  if issue_num else ""
+        u_snz  = _issue_action_url(issue_num, "snooze") if issue_num else ""
+        btns_html = ""
+        if u_fix:
+            btns_html = (
+                f'<div style="margin-top:8px;">'
+                f'<a href="{u_fix}" '
+                'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+                'background:#1b1230;color:#fff;text-decoration:none;'
+                'border-radius:6px;font-weight:700;font-size:12px;">🤖 Fix with Claude</a>'
+                f'<a href="{u_cls}" '
+                'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+                'background:#fff;color:#666;border:1px solid #ddd;'
+                'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Close</a>'
+                f'<a href="{u_snz}" '
+                'style="display:inline-block;padding:7px 14px;'
+                'background:#fff;color:#7a4d18;border:1px solid #f0d8a8;'
+                'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Snooze 7d</a>'
+                '</div>'
+            )
+        blocks.append(
+            '<div style="border:1px solid #e6e6f3;border-radius:8px;'
+            'padding:12px 14px;margin-bottom:12px;background:#fafaff;">'
+            f'<div style="font-size:13px;color:#1b1230;font-weight:600;">'
+            f'<a href="{url}" style="color:#1b1230;">{cls}: {title}</a>'
+            f'</div>'
+            f'<div style="font-size:12px;color:#888;margin-top:3px;">'
+            f'#{issue_num} · severity {sev} · slug <code>{slug}</code>'
+            f'</div>'
+            + btns_html +
+            '</div>'
+        )
+
     html = (
         '<html><body style="font-family:-apple-system,sans-serif;background:#fafaff;padding:20px;color:#1b1230;">'
         '<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e6f3;border-radius:10px;padding:24px;">'
         f'<h1 style="margin:0 0 8px;font-size:20px;">New feedback triaged ({len(new_issues)})</h1>'
-        '<p style="font-size:13px;color:#555;">Reply / open the issue link to decide if it goes in today.</p>'
-        f'<ul style="padding-left:18px">{rows_html}</ul>'
+        '<p style="font-size:13px;color:#555;margin-bottom:14px;">'
+        'Pick an action per issue. <strong>🤖 Fix with Claude</strong> queues the issue for the local Mac listener — '
+        '<code>claude -p</code> reads the issue, scopes edits to the page in the issue context, and opens a PR.'
+        '</p>'
+        + ''.join(blocks) +
         '<hr style="border:none;border-top:1px solid #eee;margin:16px 0;">'
         '<p style="font-size:12px;color:#888;">Sent by <code>pipeline.feedback_triage</code>. '
-        'Each issue body includes the story / page the user was viewing. '
-        'Auto-fix only acts on body word-count, keyword, and image issues — everything else lands here for you to decide.</p>'
+        'Auto-fix only acts on body word-count / keyword / image issues; '
+        'feedback-driven bugs land here for your decision.</p>'
         '</div></body></html>'
     )
     subject = f"Kids News feedback - {len(new_issues)} new issue(s) to triage"
