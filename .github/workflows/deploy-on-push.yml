@@ -1,0 +1,107 @@
+name: Deploy website on push
+
+# Republishes the website source (HTML/JSX/CSS in website/) to
+# news.6ray.com / kidsnews.21mins.com whenever a commit lands on main
+# that touched the deployed-frontend files.
+#
+# Path filter: only fires when website/** changes. Pipeline-only
+# (pipeline/**) or edge-fn-only (supabase/functions/**) or docs-only
+# changes are skipped — those don't affect what's served at the
+# domain.
+#
+# Flow:
+#   1. PACK_REPUBLISH_ONLY=1 pack_and_upload — pulls today's article
+#      content out of the live latest.zip on Supabase, repacks with
+#      the fresh website/ source, uploads new latest.zip.
+#   2. repository_dispatch → kidsnews-v2's sync workflow downloads
+#      latest.zip, replaces site/, commits, pushes.
+#   3. Vercel watches kidsnews-v2/main and auto-deploys.
+#
+# Total wallclock from push to live: ~90-120s.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-on-push.yml'   # so changes here also self-test
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-on-push
+  cancel-in-progress: false   # don't drop the second push if two land in a row
+
+jobs:
+  republish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Republish latest.zip with new website/ source
+        env:
+          PACK_REPUBLISH_ONLY: "1"
+        run: |
+          set -e
+          python -m pipeline.pack_and_upload
+
+      - name: Trigger kidsnews-v2 sync (so Vercel rebuilds)
+        id: dispatch
+        if: env.KIDSNEWS_DISPATCH_TOKEN != ''
+        env:
+          KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+        run: |
+          DISPATCH_AT=$(date -u +%s)
+          echo "dispatch_at=${DISPATCH_AT}" >> "$GITHUB_OUTPUT"
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${KIDSNEWS_DISPATCH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/daijiong1977/kidsnews-v2/dispatches \
+            -d '{"event_type":"news-v2-uploaded"}'
+          echo "✓ kidsnews-v2 sync dispatched at $(date -u -d @${DISPATCH_AT} +%FT%TZ)"
+
+      - name: Verify kidsnews-v2 sync produced a fresh commit
+        # Same pattern as daily-pipeline.yml: poll for a sync-bot
+        # commit timestamped after our dispatch. Up to 90s.
+        if: steps.dispatch.outputs.dispatch_at != ''
+        env:
+          KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+          DISPATCH_AT: ${{ steps.dispatch.outputs.dispatch_at }}
+        run: |
+          set -e
+          for i in $(seq 1 18); do
+            sleep 5
+            COMMIT=$(curl -fsS \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${KIDSNEWS_DISPATCH_TOKEN}" \
+              "https://api.github.com/repos/daijiong1977/kidsnews-v2/commits?per_page=1")
+            COMMIT_ISO=$(echo "$COMMIT" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d[0]['commit']['author']['date'])")
+            COMMIT_AUTHOR=$(echo "$COMMIT" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d[0]['commit']['author']['name'])")
+            COMMIT_AT=$(date -u -d "$COMMIT_ISO" +%s)
+            if [ "$COMMIT_AT" -ge "$DISPATCH_AT" ] && [ "$COMMIT_AUTHOR" = "kidsnews-v2 sync bot" ]; then
+              echo "✓ kidsnews-v2 has a fresh sync commit at $COMMIT_ISO (attempt $i, $((i*5))s after dispatch)"
+              echo "✓ Vercel will deploy from that commit within ~30-60s"
+              exit 0
+            fi
+            echo "  attempt $i/18: latest is $COMMIT_ISO by $COMMIT_AUTHOR — waiting…"
+          done
+          echo "::warning::Sync did not produce a fresh kidsnews-v2 commit within 90s."
+          echo "Possible causes: KIDSNEWS_DISPATCH_TOKEN scope, kidsnews-v2 'no content changes' guard, or sync workflow error."
+          # Don't fail the workflow — the deploy attempt was made; admin can investigate via kidsnews-v2 Actions tab.
