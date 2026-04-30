@@ -28,16 +28,17 @@ fi
 
 echo "$(date -u +%FT%TZ) ── tick start ──" >> "$LOG"
 
-# Process exactly ONE item per tick. Reason: each `claude -p` spawn
-# competes with the user's interactive Claude IDE session for token
-# quota / concurrent slots — running 3 back-to-back at 21:00 once
-# locked the user's IDE for ~2 min until cooldown. With 8h ticks +
-# --once, the daemon spends ~3 min on Claude per 8h window (≈0.6%
-# duty cycle) which won't interfere with interactive sessions.
+# DRAIN every fix-requested row in one pass. Owner picked a single
+# 04:00 ET tick (in com.daedal.kidsnews-autofix.plist) so this fires
+# while they're asleep — back-to-back `claude -p` spawns can't lock
+# their IDE because the IDE isn't open. By morning, every escalation
+# the admin clicked "🤖 Fix with Claude" on the day before is either
+# resolved or re-escalated with a clear reason.
 #
-# Tradeoff: a queue of N items takes 8*N hours to fully drain. For
-# our workload (a few quality issues per day max) that's still fine.
-python3 -m pipeline.autofix_consumer --once 2>&1 \
+# Note: pipeline.autofix_consumer drains until fetch_one() returns
+# empty, with a per-row MAX_ATTEMPTS guard against infinite loops on
+# a stuck row.
+python3 -m pipeline.autofix_consumer 2>&1 \
     | tee -a "$LOG" \
     || echo "$(date -u +%FT%TZ) consumer exited non-zero" >> "$LOG"
 

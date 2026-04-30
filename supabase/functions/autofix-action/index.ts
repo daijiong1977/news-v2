@@ -168,7 +168,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const detailMsg = action === "fix"
-    ? "The Mac listener will pick this up at its next 4-hourly tick (06/10/14/18 local)."
+    ? "The Mac listener will drain queued fixes at its next 04:00 ET tick."
     : undefined;
   return html(200, htmlPage({
     title: VERB[action],
