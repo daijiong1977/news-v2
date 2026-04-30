@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-04-29 | medium | infra | [autofix-token-starvation](2026-04-29-autofix-token-starvation.md) | Autofix daemon's back-to-back claude -p calls starved the user's IDE of API quota for ~2 min | claude, headless, daemon, rate-limit, concurrency, autofix |
 | 2026-04-29 | high | website | [search-click-wrong-article](2026-04-29-search-click-wrong-article.md) | Clicking a search hit always opened today's first article instead of the searched one | search, archive, ARTICLES.find, listing-overwrite, synthetic-merge |
 | 2026-04-28 | high | website | [archive-route-404](2026-04-28-archive-route-404.md) | `/archive/<date>` returned 404 across every date after a Vercel rewrite tweak | vercel, cleanUrls, rewrite, SPA, routing |
 | 2026-04-28 | high | website | [archive-click-race](2026-04-28-archive-click-race.md) | Clicking an archive date opened the wrong article (today's, not the past day's) | useEffect, race, archiveDay, ARTICLES, async |

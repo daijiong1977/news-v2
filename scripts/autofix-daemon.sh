@@ -28,8 +28,16 @@ fi
 
 echo "$(date -u +%FT%TZ) ── tick start ──" >> "$LOG"
 
-# Drain the queue. autofix_consumer prints JSON; tee it into the log.
-python3 -m pipeline.autofix_consumer 2>&1 \
+# Process exactly ONE item per tick. Reason: each `claude -p` spawn
+# competes with the user's interactive Claude IDE session for token
+# quota / concurrent slots — running 3 back-to-back at 21:00 once
+# locked the user's IDE for ~2 min until cooldown. With 8h ticks +
+# --once, the daemon spends ~3 min on Claude per 8h window (≈0.6%
+# duty cycle) which won't interfere with interactive sessions.
+#
+# Tradeoff: a queue of N items takes 8*N hours to fully drain. For
+# our workload (a few quality issues per day max) that's still fine.
+python3 -m pipeline.autofix_consumer --once 2>&1 \
     | tee -a "$LOG" \
     || echo "$(date -u +%FT%TZ) consumer exited non-zero" >> "$LOG"
 
