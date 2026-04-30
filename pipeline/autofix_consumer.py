@@ -97,22 +97,15 @@ def patch(row_id: int, patch_obj: dict) -> bool:
 
 
 PROMPT_TMPL = """\
-You are an autonomous fix-bot for the kidsnews-v2 daily-content pipeline.
+First action: invoke `Skill: kidsnews-bugfix` via the Skill tool.
+That loads the repo map, reproduce-by-bug-class playbook, page-scoped
+edit rules, bug-record discipline, and the RESOLVED/ESCALATE/PROMOTABLE
+output protocol. Read it BEFORE doing anything else — it tells you
+exactly how to handle this row.
 
 This is an ESCALATION. The CI auto-fixer (pipeline.autofix_apply)
-already tried the routine path and failed — see the row's `agent_log`
-field for the failure reason. The admin then clicked
-"🤖 Fix with Claude" in a digest email, which flipped the row's
-status to fix-requested. So you're the second-line responder.
-
-Don't repeat exactly what autofix_apply did. Investigate WHY it
-failed, then either:
-  · pick a different angle (different prompt, different DeepSeek
-    model, different image-search source), OR
-  · open a PR that touches the codebase if the issue is structural
-    (e.g. the image-grabber misses Reuters images — improve the
-    regex), OR
-  · ESCALATE again with a clear root cause if you genuinely can't fix.
+already tried the routine path and failed — read the row's
+`agent_log` to see what + why. Don't repeat exactly that.
 
   storage prefix:  {pdate}
   story id:        {sid}
@@ -120,55 +113,13 @@ failed, then either:
   problem type:    {ptype}
   problem detail:  {detail}
 
-The article payload lives at:
-  https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/redesign-daily-content/{pdate}/article_payloads/payload_{sid}/{level}.json
+Working dir: ~/myprojects/news-v2
 
-IMPORTANT field-naming gotcha (read carefully):
-- payload.summary IS the article BODY (~340 words for middle, ~250 for easy).
-  The misnamed field is intentional in this codebase — do not "fix" it.
-- payload.why_it_matters is a separate short paragraph.
-- payload.keywords is a list of dicts with .term — every term must be
-  findable in the body either via case-insensitive substring OR via
-  the stem rules in pipeline/news_rss_core.py:keyword_in_body().
-
-Retry policy (STRICT — do not exceed):
-
-- body_too_short / body_too_long:
-    Make ONE DeepSeek regen call to rewrite payload.summary into the
-    target range (easy 200-320, middle 300-410, ±15% slack on either
-    side). Preserve every keyword. Re-upload via Storage PUT with
-    `x-upsert: true`. Do NOT retry the LLM if the result is still
-    outside the slack — accept the new text, log the final word
-    count, and finish with RESOLVED. The user's policy: one shot, then
-    let it go.
-
-- keyword_miss:
-    ONE DeepSeek regen call. Either weave the missing keyword(s) into
-    the body OR drop them from payload.keywords if they're LLM
-    artifacts (e.g. "A final"). Use judgment. Re-upload. One shot.
-
-- image_missing:
-    Try TWICE to re-grab the image — first via the original article
-    URL (payload.source_url), second via a fresh search (look at
-    pipeline/news_rss_core.py for the image-finding helper). If both
-    fail, finish with RESOLVED noting "image still missing — gave up
-    after 2 tries" so the queue row closes.
-
-- ANY OTHER problem_type, OR a tool/network failure that blocks the
-  one-shot above: ESCALATE. The daemon will email the admin so they
-  can decide. Do NOT improvise a different fix path.
-
-After your one-shot fix:
-1. Run: python -m pipeline.quality_digest --dry-run --days 1 2>/dev/null | grep -A1 "{sid}"
-   to log the post-fix metric (purely informational — even if still
-   off, that's accepted).
-2. Print one of these last lines (the daemon parses for them):
-     RESOLVED: <one-sentence what you did + final word count if applicable>
-     ESCALATE: <one-sentence why you couldn't make the one-shot attempt>
-
-Do NOT touch git. Storage upload is the only persistence. Your
-working dir is the news-v2 repo; pipeline/ has helpers you can
-import.
+Everything else (repo map, reproduce-by-bug-class steps, payload
+schema gotchas, page-scoped edit rules, hand-off discipline,
+RESOLVED/ESCALATE/PROMOTABLE output format) lives in the
+kidsnews-bugfix skill. Do not improvise — the skill is the source
+of truth.
 """
 
 
