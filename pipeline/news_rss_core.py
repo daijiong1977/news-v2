@@ -501,35 +501,49 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
                   max_attempts: int = 3, json_mode: bool = True) -> dict:
     """Call the active chat provider (resolved from `redesign_ai_providers`,
     falling back to env-var DeepSeek). JSON mode (response_format) on by
-    default. Per-model retries with backoff, then **falls back to
-    deepseek-v4-flash** if the primary model is non-Flash and exhausts
-    its attempts.
+    default.
 
-    Why the fallback: V4 Pro discount tier is observed to occasionally
-    emit non-parseable JSON despite `response_format: json_object`,
-    especially on long prompts. Flash is more deterministic for json
-    mode and almost always succeeds on the same prompt. Cost increase
-    is negligible (only fires on Pro failure). See bug record
-    references in `docs/LESSONS-LEARNED.md` if this fires often."""
+    Aggressive fallback strategy: try the primary model ONCE; if that
+    fails (any reason — JSON parse OR network), immediately fall
+    through to deepseek-v4-flash with the full max_attempts retry
+    budget. Don't waste retries on the primary model — content-shape
+    failures from V4 Pro discount on a given prompt tend to be sticky
+    (same prompt → same flakiness), so re-retrying same model is
+    cargo-cult. Network errors are usually transient enough that
+    Flash's first try will catch them too.
+
+    Net behavior:
+      - Primary model (Pro): 1 attempt
+      - Flash fallback: max_attempts attempts (default 3)
+
+    If the primary IS already Flash, just use full max_attempts on it
+    (no fallback-to-self loop)."""
     api_key, endpoint, model = _resolve_chat_provider()
     CALL_STATS["chat_calls"] += 1
-    try:
+    fallback = "deepseek-v4-flash"
+    primary_is_flash = "flash" in model.lower()
+
+    if primary_is_flash:
         return _deepseek_call_with_model(model, system, user, max_tokens,
                                            temperature, max_attempts,
                                            json_mode, api_key, endpoint)
+
+    # Primary is non-Flash → ONE attempt, then bail to Flash.
+    try:
+        return _deepseek_call_with_model(model, system, user, max_tokens,
+                                           temperature, max_attempts=1,
+                                           json_mode=json_mode,
+                                           api_key=api_key, endpoint=endpoint)
     except RuntimeError as primary_err:
-        # Primary model exhausted. If we weren't already on Flash, try Flash.
-        fallback = "deepseek-v4-flash"
-        if fallback in model.lower() or "flash" in model.lower():
-            raise
-        log.warning("primary model %s exhausted; falling back to %s", model, fallback)
+        log.warning("primary model %s failed once; switching to %s with %d retries",
+                    model, fallback, max_attempts)
         try:
             return _deepseek_call_with_model(fallback, system, user, max_tokens,
                                                temperature, max_attempts,
                                                json_mode, api_key, endpoint)
         except RuntimeError as fallback_err:
             raise RuntimeError(
-                f"both primary ({model}) and fallback ({fallback}) exhausted"
+                f"primary ({model}, 1 try) and fallback ({fallback}, {max_attempts} tries) both failed"
             ) from fallback_err
 
 
