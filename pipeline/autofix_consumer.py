@@ -133,8 +133,17 @@ def build_prompt(row: dict) -> str:
     )
 
 
-def spawn_claude(prompt: str, log_path: Path, timeout_sec: int = 600) -> tuple[bool, str]:
-    """Run `claude -p <prompt>` headless. Returns (ok, captured_output)."""
+def spawn_claude(prompt: str, log_path: Path, timeout_sec: int = 1800) -> tuple[bool, str]:
+    """Run `claude -p <prompt>` headless. Streams stdout to log_path
+    line-by-line so we can read partial progress mid-run (and so a
+    timeout doesn't lose everything claude already did). Returns
+    (ok, captured_output).
+
+    Default timeout = 30 min: visual-verification fixes need vercel
+    deploy preview (~2 min) + chrome MCP screenshots (~1 min) + diff
+    + PR on top of regular code work. Owner approved generous budget
+    so a slow Vercel build or chrome MCP retry doesn't kill the
+    whole attempt."""
     if not shutil.which("claude"):
         return (False, "claude CLI not on PATH")
     cmd = [
@@ -142,18 +151,26 @@ def spawn_claude(prompt: str, log_path: Path, timeout_sec: int = 600) -> tuple[b
         "--dangerously-skip-permissions",
         "--output-format", "text",
     ]
+    captured: list[str] = []
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True,
-            timeout=timeout_sec, check=False,
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
         )
-        out = (proc.stdout or "") + ("\n[STDERR]\n" + proc.stderr if proc.stderr else "")
-        log_path.write_text(out)
-        return (proc.returncode == 0, out)
-    except subprocess.TimeoutExpired as e:
-        msg = f"claude timed out after {timeout_sec}s"
-        log_path.write_text(msg)
-        return (False, msg)
+        # Stream every line into the log file as it arrives.
+        with log_path.open("w") as logf:
+            try:
+                for line in proc.stdout:
+                    logf.write(line); logf.flush()
+                    captured.append(line)
+                proc.wait(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                tail = f"\n[KILLED] claude timed out after {timeout_sec}s\n"
+                logf.write(tail); captured.append(tail)
+                return (False, "".join(captured))
+        return (proc.returncode == 0, "".join(captured))
     except Exception as e:
         msg = f"claude spawn failed: {e}"
         log_path.write_text(msg)
