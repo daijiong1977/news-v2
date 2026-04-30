@@ -1183,31 +1183,22 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
     return details
 
 
-def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
-                           max_transport_attempts: int = 4,
-                           max_content_attempts: int = 2) -> dict:
-    """Call deepseek-reasoner (thinking mode).
-
-    Tiered retry policy:
-      · Transport failures (429 / 5xx / network): up to max_transport_attempts
-        full retries — these are idempotent, retrying helps.
-      · Content failures (JSON parse after repair): only max_content_attempts
-        full rerolls. Reasoner content failures are usually shape problems
-        that won't fix with another expensive thinking pass; better to
-        bubble up so the caller can shrink the payload (split-batch).
-      · Truncation (finish_reason='length'): immediate raise, never reroll —
-        the same prompt will hit the same length cap.
-    """
-    api_key, endpoint, model = _resolve_reasoner_provider()
+def _reasoner_call_with_model(model: str, system: str, user: str,
+                                max_tokens: int,
+                                max_transport_attempts: int,
+                                max_content_attempts: int,
+                                api_key: str, endpoint: str) -> dict:
+    """Inner reasoner retry loop against ONE model. Transport failures
+    (network / 429 / 5xx) retry full max_transport_attempts; content
+    failures (JSON parse) retry only max_content_attempts. Truncation
+    raises immediately so the caller can split-batch."""
     payload = {
         "model": model,
-        # thinking is default on V4 — explicit so the intent is clear
         "thinking": {"type": "enabled"},
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
         "max_tokens": max_tokens,
     }
-    CALL_STATS["reasoner_calls"] += 1
     transport_attempts = 0
     content_attempts = 0
     last_err: Exception | None = None
@@ -1217,8 +1208,8 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
             if res.parsed is not None:
                 if res.repair_kind:
                     CALL_STATS["reasoner_repaired"] += 1
-                    log.info("reasoner: parse OK after repair (%s, finish=%s)",
-                             res.repair_kind, res.finish_reason)
+                    log.info("reasoner: parse OK after repair on %s (%s, finish=%s)",
+                             model, res.repair_kind, res.finish_reason)
                 return res.parsed
             if res.finish_reason == "length":
                 CALL_STATS["reasoner_truncated"] += 1
@@ -1229,12 +1220,20 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
             content_attempts += 1
             CALL_STATS["reasoner_content_retries"] += 1
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
-            log.warning("reasoner content attempt %d/%d: JSON parse failed (finish=%s)",
-                        content_attempts, max_content_attempts, res.finish_reason)
+            # Log raw content snippet so we can see WHY the JSON parse
+            # failed — same instrumentation as chat-call path.
+            raw = res.raw_content or ""
+            head = raw[:300].replace("\n", "\\n")
+            tail = raw[-200:].replace("\n", "\\n") if len(raw) > 500 else ""
+            log.warning("reasoner content attempt %d/%d on %s: JSON parse failed (finish=%s, len=%d)",
+                        content_attempts, max_content_attempts, model,
+                        res.finish_reason, len(raw))
+            log.warning("  raw[:300] = %r", head)
+            if tail:
+                log.warning("  raw[-200:] = %r", tail)
             if content_attempts >= max_content_attempts:
                 raise RuntimeError(
-                    f"reasoner: {max_content_attempts} content attempts failed — "
-                    "caller should split-batch"
+                    f"reasoner on {model}: {max_content_attempts} content attempts failed"
                 ) from last_err
             time.sleep(_retry_sleep_for(last_err, content_attempts))
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
@@ -1242,14 +1241,66 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
             CALL_STATS["reasoner_transport_retries"] += 1
             last_err = e
             wait = _retry_sleep_for(e, transport_attempts)
-            log.warning("reasoner transport attempt %d/%d failed (%s): waiting %.1fs",
-                        transport_attempts, max_transport_attempts,
+            log.warning("reasoner transport attempt %d/%d on %s failed (%s): waiting %.1fs",
+                        transport_attempts, max_transport_attempts, model,
                         type(e).__name__, wait)
             if transport_attempts >= max_transport_attempts:
                 raise RuntimeError(
-                    f"reasoner: {max_transport_attempts} transport attempts failed"
+                    f"reasoner on {model}: {max_transport_attempts} transport attempts failed"
                 ) from last_err
             time.sleep(wait)
+
+
+def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
+                           max_transport_attempts: int = 4,
+                           max_content_attempts: int = 2) -> dict:
+    """Call the active reasoner (thinking mode) provider.
+
+    Same fast-fail fallback as `deepseek_call`: try primary (Pro)
+    with content_attempts=1; on JSON parse failure, switch to
+    deepseek-v4-flash with the full max_content_attempts retry
+    budget. Transport failures retry full max_transport_attempts on
+    primary (network is transient).
+
+    Truncation always raises immediately — caller's split-batch
+    shrinks the payload."""
+    api_key, endpoint, model = _resolve_reasoner_provider()
+    CALL_STATS["reasoner_calls"] += 1
+    fallback = "deepseek-v4-flash"
+    primary_is_flash = "flash" in model.lower()
+
+    if primary_is_flash:
+        return _reasoner_call_with_model(model, system, user, max_tokens,
+                                            max_transport_attempts,
+                                            max_content_attempts,
+                                            api_key, endpoint)
+
+    # Primary non-Flash → 1 content attempt, then bail to Flash on
+    # content failure. Transport retries still apply on primary
+    # (transient network errors aren't model-specific).
+    try:
+        return _reasoner_call_with_model(model, system, user, max_tokens,
+                                            max_transport_attempts,
+                                            max_content_attempts=1,
+                                            api_key=api_key, endpoint=endpoint)
+    except RuntimeError as primary_err:
+        # Distinguish content-failure (we want to fall back) from
+        # truncation (split-batch is the right answer, not Flash).
+        msg = str(primary_err)
+        if "truncated" in msg or "split-batch" in msg:
+            raise
+        log.warning("reasoner primary %s failed once; switching to %s with %d content retries",
+                    model, fallback, max_content_attempts)
+        try:
+            return _reasoner_call_with_model(fallback, system, user, max_tokens,
+                                                max_transport_attempts,
+                                                max_content_attempts,
+                                                api_key, endpoint)
+        except RuntimeError as fallback_err:
+            raise RuntimeError(
+                f"reasoner: primary ({model}, 1 content try) and "
+                f"fallback ({fallback}, {max_content_attempts} content tries) both failed"
+            ) from fallback_err
 
 
 def _detail_enrich_input_single_level(rewrite_result: dict, level: str) -> str:
