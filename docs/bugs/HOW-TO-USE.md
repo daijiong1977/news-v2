@@ -121,7 +121,7 @@ Bug-Record: docs/bugs/<some-existing-record>.md
 
 ---
 
-## 六、Quality Digest 邮件 + 一键修复（macOS Shortcut）
+## 六、Quality Digest 邮件 + 一键修复（KidsnewsAutofix.app）
 
 每天 pipeline 跑完 1 小时后，`self@daijiong.com` 会收到一封 quality digest 邮件，主题形如：
 
@@ -129,63 +129,66 @@ Bug-Record: docs/bugs/<some-existing-record>.md
 
 如果有 pending item，邮件顶部会有一块橙色面板：
 - 列出每条问题（story id + level + 类型 + 之前尝试次数）
-- 一个 **🛠️ Drain queue now** 按钮（紫色大按钮）
-- 一段 fallback 命令，复制到 Terminal 也能跑
+- 一个 **🛠️ Drain queue now** 紫色大按钮
+- 一段 fallback Terminal 命令
 
-按钮的链接是 `shortcuts://run-shortcut?name=Drain%20Kidsnews%20Queue` —— 这需要你在 Mac 上**装一次**对应的 macOS Shortcut。下面是完整的安装步骤。
+按钮的链接是 `kidsnews-autofix://drain` —— 这是一个**自定义 URL scheme**，由本地的 `~/Applications/KidsnewsAutofix.app` 处理。点按钮 → macOS LaunchServices 路由到这个 app → app 跑 drain 脚本。
 
-### 6.1 一次性安装 Shortcut（5 分钟）
+> **历史**：本来想用 macOS Shortcuts.app，按钮 URL 是 `shortcuts://run-shortcut?name=...`。但 macOS 26 (Tahoe) 把 Shortcuts.app 的 trust gate 收紧了，未签名的 .shortcut 文件不能自动 import。改用这个 AppleScript-app 方案干净绕开 Shortcuts。
 
-1. 打开 macOS **Shortcuts.app**（Spotlight 搜 "Shortcuts"）
-2. 点左上角的 `+` 按钮新建一个 Shortcut
-3. 给它起名字 **`Drain Kidsnews Queue`**（**必须**完全是这个名字，包括空格——邮件里的 URL 写死了）
-4. 在右侧 actions 搜索栏搜 **"Run Shell Script"**，把它拖到主区
-5. 在那个 action 里粘贴这段（注意把 `Shell` 设为 `bash`，`Pass Input` 设为 `to stdin` 或 `as arguments`，都行）：
+### 6.1 一次性安装 KidsnewsAutofix.app
 
-   ```bash
-   bash $HOME/myprojects/news-v2/scripts/drain-autofix-queue.sh
-   ```
-
-6. 在右侧 inspector 里勾上：
-   - **"Use as Quick Action"**（让它能从 URL 启动）
-   - 关闭 **"Show in Share Sheet"**（不需要）
-7. ⌘S 保存
-
-测试：
 ```bash
-# 在 Terminal 运行（应该弹出 Shortcuts 跑这个 shortcut）：
-open "shortcuts://run-shortcut?name=Drain%20Kidsnews%20Queue"
+~/myprojects/news-v2/scripts/build-autofix-app.sh
 ```
 
-或者点邮件里的"🛠️ Drain queue now"按钮（如果你已经收到过 digest）。
+这个脚本：
+1. `osacompile` 出一个最小 AppleScript app，handler 只调一行 shell
+2. 改 Info.plist 加 `CFBundleURLTypes` 注册 `kidsnews-autofix://` URL scheme
+3. `codesign` ad-hoc 重签（改 plist 后原签名失效）
+4. `lsregister -f` 注册到 LaunchServices
 
-### 6.2 Shortcut 跑起来会发生什么
+跑完测试：
+```bash
+open kidsnews-autofix://drain
+# → 应该静默跑 drain-autofix-queue.sh
+# → 队列空就立刻退出 + 弹 macOS 通知 "Autofix drain complete"
+```
 
-1. Shortcuts 调 `~/myprojects/news-v2/scripts/drain-autofix-queue.sh`
-2. 脚本 source 你的 `.env`（取 SUPABASE_URL / KEY / DEEPSEEK_API_KEY）
-3. 脚本调 `python3 -m pipeline.autofix_consumer`（**不带 --once**，把整个队列 drain 完）
-4. 每个 queued item → spawn 一个 `claude -p` agent，2-3 分钟一个
-5. 跑完弹一个 macOS notification "Autofix drain complete"
-6. 日志 in `~/Library/Logs/kidsnews-autofix/$(date -u +%Y-%m-%d).log`
-7. 单条 agent log in 同一目录的 `item-<N>.log`
+### 6.2 按钮按下去会发生什么
+
+1. macOS 看到 `kidsnews-autofix://drain` → 路由给 `KidsnewsAutofix.app`
+2. AppleScript 的 `on open location` handler 跑 `bash drain-autofix-queue.sh &`（后台 & 让 app 立刻退）
+3. 脚本 source `.env`（SUPABASE_URL / KEY / DEEPSEEK_API_KEY）
+4. 脚本调 `python3 -m pipeline.autofix_consumer`（drain 整个队列）
+5. 每个 queued item → spawn 一个 `claude -p` agent，2-3 分钟一个
+6. 跑完弹 macOS 通知 "Autofix drain complete"
+7. 日志在 `~/Library/Logs/kidsnews-autofix/$(date -u +%Y-%m-%d).log`，每个 agent 单独 `item-<N>.log`
 
 ### 6.3 重要提醒
 
-⚠️ **drain 期间不要用 Claude IDE**——每个 `claude -p` 用你 Pro 账号 token，会跟你的 IDE 抢配额。所以建议：
+⚠️ **drain 期间不要用 Claude IDE**——每个 `claude -p` 用你 Pro 账号 token，会跟你的 IDE 抢配额。建议：
 - 早上看 digest 邮件，但**别立刻按按钮**
 - 等到午饭、出门、下班前再按
-- drain 一次大概是 N items × 3 分钟（队列里 3 个就 9 分钟）
-- 跑的过程中你 IDE 会偶尔卡，不要重启 daemon，等 notification 弹出再用
+- drain 一次大概是 N items × 3 分钟（队列里 3 个 ≈ 9 分钟）
+- 跑的过程中你 IDE 会偶尔卡，等 notification 弹出再用
 
-如果你想完全在云端跑（你账号不参与）：本来还有个**选项 C**（GitHub Actions + 单独 Anthropic API key），需要再申请一个 API key 单独计费。要切到那个再告诉我。
+如果想完全在云端跑（你账号不参与）：还有**选项 C**（GitHub Actions + 单独 Anthropic API key），需要再申请一个 API key 单独计费。
 
 ### 6.4 自动 daemon 已经卸载
 
-之前我们装的 launchd 自动每 8h tick 已经卸了（`launchctl bootout gui/$UID/com.daedal.kidsnews-autofix`）。现在**所有 autofix 都靠你按按钮**，主动权全在你这边。
+launchd 自动每 8h tick 卸了（`launchctl bootout gui/$UID/com.daedal.kidsnews-autofix`）。现在**所有 autofix 靠你按按钮**触发，主动权完全在你这边。
 
-要恢复自动 daemon（不推荐，会再次和 IDE 抢 token）：
+要恢复自动 daemon（不推荐，会和 IDE 抢 token）：
 ```bash
 ~/myprojects/news-v2/scripts/install-autofix-daemon.sh
+```
+
+### 6.5 卸载 KidsnewsAutofix.app
+
+```bash
+rm -rf ~/Applications/KidsnewsAutofix.app
+# LaunchServices 会在重启或下次 lsregister 全扫时自动清理 binding
 ```
 
 ---

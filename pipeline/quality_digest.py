@@ -325,11 +325,14 @@ def render_pending_fixes_panel(queue: dict) -> str:
         parts.append(f'<li>… and {n - 20} more</li>')
     parts.append('</ul>')
 
-    # The button. shortcuts:// URL — works on macOS Mail.app and iOS
-    # Mail when the user has set up the matching Shortcut.
-    # Name MUST match scripts/install-shortcut-instructions in
-    # docs/bugs/HOW-TO-USE.md exactly: "Drain Kidsnews Queue"
-    shortcut_url = "shortcuts://run-shortcut?name=Drain%20Kidsnews%20Queue"
+    # Custom URL scheme registered by ~/Applications/KidsnewsAutofix.app.
+    # Originally tried shortcuts://, but macOS 26 (Tahoe) tightened the
+    # Shortcuts trust gate and removed the "Allow Untrusted Shortcuts"
+    # toggle, making auto-install of unsigned .shortcut files impossible
+    # without manual GUI work. The AppleScript-app + URL-scheme approach
+    # sidesteps Shortcuts.app entirely. See HOW-TO-USE.md §6 for
+    # rebuild instructions.
+    shortcut_url = "kidsnews-autofix://drain"
 
     parts.append(
         '<div style="margin-top:8px;">'
@@ -339,7 +342,7 @@ def render_pending_fixes_panel(queue: dict) -> str:
         'font-weight:700;font-size:13px;">'
         '🛠️ Drain queue now</a>'
         '<span style="margin-left:12px;font-size:11px;color:#7a4d18;">'
-        'opens the macOS Shortcut on your Mac (set up once — see HOW-TO-USE.md §6)'
+        'opens KidsnewsAutofix.app on your Mac (registered URL scheme — see HOW-TO-USE.md §6)'
         '</span>'
         '</div>'
     )
