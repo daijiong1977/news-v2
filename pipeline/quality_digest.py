@@ -295,64 +295,95 @@ def fetch_queue_summary() -> dict:
         return {"count": 0, "items": []}
 
 
+def _action_button(label: str, item_id: int, action: str, color: str, bg: str) -> str:
+    """Render a single per-item action button. URLs hit the
+    autofix-action edge function (https — Gmail-compatible), which
+    updates the queue row and (for action=fix) redirects to the
+    kidsnews-autofix:// custom scheme so the local app fires."""
+    url = f"{SUPABASE_URL}/functions/v1/autofix-action?id={item_id}&action={action}"
+    return (
+        f'<a href="{url}" '
+        f'style="display:inline-block;padding:5px 10px;margin:0 4px 0 0;'
+        f'background:{bg};color:{color};border:1px solid {color};'
+        f'border-radius:6px;text-decoration:none;font-size:11px;'
+        f'font-weight:700;">{label}</a>'
+    )
+
+
 def render_pending_fixes_panel(queue: dict) -> str:
-    """The 'X items pending fix' panel + drain button. Rendered at the
-    top of the email so the user sees it before the report tables."""
+    """The 'X items pending fix' panel + per-item action buttons.
+    Rendered at the top of the email so the user sees it before
+    the report tables. Buttons are https URLs to autofix-action
+    edge function (Gmail-clickable)."""
     n = queue.get("count", 0)
     if n == 0:
         return ('<div style="margin-bottom:18px;padding:12px 16px;'
                 'background:#ecfaf0;border-radius:8px;font-size:13px;color:#197a3b;">'
-                '✓ Autofix queue empty — nothing pending.'
+                '✓ Autofix queue empty — nothing pending. (Daily report still sent so you '
+                'know the pipeline ran.)'
                 '</div>')
 
-    # Group items by story+level for compact display.
     parts: list[str] = []
     parts.append('<div style="margin-bottom:18px;padding:14px 16px;'
                   'background:#fff5e8;border:1px solid #ffd9a0;'
                   'border-radius:8px;font-size:13px;color:#7a4d18;">')
-    parts.append(f'<div style="font-weight:700;font-size:14px;margin-bottom:8px;">'
-                  f'⚠ {n} pending autofix item{"s" if n != 1 else ""}</div>')
+    parts.append(f'<div style="font-weight:700;font-size:14px;margin-bottom:10px;">'
+                  f'⚠ {n} pending autofix item{"s" if n != 1 else ""} — '
+                  f'pick an action per item:</div>')
 
-    parts.append('<ul style="margin:0 0 12px;padding-left:18px;line-height:1.6;">')
-    for item in queue["items"][:20]:  # cap for email size
+    parts.append('<table style="width:100%;border-collapse:collapse;font-size:12px;">')
+    parts.append(
+        '<thead><tr style="color:#7a4d18;text-align:left;">'
+        '<th style="padding:4px 6px;font-weight:700;">Item</th>'
+        '<th style="padding:4px 6px;font-weight:700;width:280px;">Action</th>'
+        '</tr></thead><tbody>'
+    )
+    for item in queue["items"][:20]:
+        item_id = item.get("id")
         sid = item.get("story_id", "")
         level = item.get("level", "")
         ptype = item.get("problem_type", "")
         attempts = item.get("attempts", 0)
-        attempt_note = f' <span style="color:#a02b2b">(attempted {attempts}x)</span>' if attempts > 0 else ""
-        parts.append(f'<li><code>{sid}</code> · {level} · <strong>{ptype}</strong>{attempt_note}</li>')
+        attempt_note = (f' <span style="color:#a02b2b;font-size:10px;">'
+                         f'(attempted {attempts}x)</span>') if attempts > 0 else ""
+        # Item description cell
+        parts.append(
+            f'<tr style="border-top:1px dashed #f0d9b0;">'
+            f'<td style="padding:7px 6px;color:#1b1230;">'
+            f'<code style="font-size:11px;">{sid}</code> · '
+            f'{level} · <strong>{ptype}</strong>{attempt_note}'
+            f'</td>'
+        )
+        # Three action buttons
+        fix_btn  = _action_button("🛠️ Fix",     item_id, "fix",     "#fff",     "#1b1230")
+        diss_btn = _action_button("🚫 Dismiss", item_id, "dismiss", "#666",     "#fff")
+        res_btn  = _action_button("✓ Resolved", item_id, "resolve", "#197a3b",  "#fff")
+        parts.append(
+            f'<td style="padding:7px 0;">{fix_btn}{diss_btn}{res_btn}</td>'
+            f'</tr>'
+        )
     if n > 20:
-        parts.append(f'<li>… and {n - 20} more</li>')
-    parts.append('</ul>')
+        parts.append(f'<tr><td colspan="2" style="padding:7px 6px;color:#888;">'
+                      f'… and {n - 20} more (in admin Feedback tab)</td></tr>')
+    parts.append('</tbody></table>')
 
-    # Custom URL scheme registered by ~/Applications/KidsnewsAutofix.app.
-    # Originally tried shortcuts://, but macOS 26 (Tahoe) tightened the
-    # Shortcuts trust gate and removed the "Allow Untrusted Shortcuts"
-    # toggle, making auto-install of unsigned .shortcut files impossible
-    # without manual GUI work. The AppleScript-app + URL-scheme approach
-    # sidesteps Shortcuts.app entirely. See HOW-TO-USE.md §6 for
-    # rebuild instructions.
-    shortcut_url = "kidsnews-autofix://drain"
-
+    # Bulk option: drain everything via the local Mac app.
     parts.append(
-        '<div style="margin-top:8px;">'
-        f'<a href="{shortcut_url}" '
-        'style="display:inline-block;background:#1b1230;color:#fff;'
-        'padding:10px 18px;border-radius:8px;text-decoration:none;'
-        'font-weight:700;font-size:13px;">'
-        '🛠️ Drain queue now</a>'
-        '<span style="margin-left:12px;font-size:11px;color:#7a4d18;">'
-        'opens KidsnewsAutofix.app on your Mac (registered URL scheme — see HOW-TO-USE.md §6)'
-        '</span>'
+        '<div style="margin-top:14px;padding-top:10px;border-top:1px dashed #f0d9b0;'
+        'font-size:11px;color:#7a4d18;">'
+        '<strong>Bulk:</strong> '
+        '<a href="kidsnews-autofix://drain" '
+        'style="color:#1b1230;font-weight:700;">🛠️ Drain everything</a> '
+        '(opens KidsnewsAutofix.app on your Mac — runs all queued items in one go). '
+        'Or in Terminal: <code>~/myprojects/news-v2/scripts/drain-autofix-queue.sh</code>'
         '</div>'
     )
     parts.append(
-        '<div style="margin-top:10px;font-size:11px;color:#7a4d18;">'
-        'Or paste in Terminal (when not actively using Claude IDE — agent uses your account token):'
-        '<pre style="background:#fff;padding:8px 10px;border-radius:6px;'
-        'border:1px solid #f0d9b0;margin:6px 0 0;font-size:11px;'
-        'overflow-x:auto;color:#1b1230;">'
-        '~/myprojects/news-v2/scripts/drain-autofix-queue.sh</pre>'
+        '<div style="margin-top:6px;font-size:11px;color:#7a4d18;">'
+        '<strong>Action meanings:</strong> '
+        '🛠️ Fix → marks for the local agent to regen via Claude Code · '
+        '🚫 Dismiss → ignore (won\'t retry) · '
+        '✓ Resolved → already-fine, mark closed without running.'
         '</div>'
     )
     parts.append('</div>')

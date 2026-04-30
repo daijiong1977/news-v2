@@ -63,11 +63,17 @@ def _http(method: str, path: str, body: dict | list | None = None,
 
 
 def fetch_one() -> dict | None:
-    """Pull the oldest queued item. None if empty."""
+    """Pull the oldest actionable item. None if empty.
+
+    Actionable = status is 'queued' OR 'fix-requested'. The latter
+    is set by the autofix-action edge function when the user clicks
+    the 🛠️ Fix button in a digest email — it marks user explicit
+    consent so the local daemon should run that item even if it
+    wouldn't normally drain on its own."""
     code, body = _http(
         "GET",
         "/rest/v1/redesign_autofix_queue"
-        f"?status=eq.queued&attempts=lt.{MAX_ATTEMPTS}"
+        f"?status=in.(queued,fix-requested)&attempts=lt.{MAX_ATTEMPTS}"
         "&order=created_at.asc&limit=1",
     )
     if code != 200:
