@@ -65,15 +65,48 @@ jobs:
       QUALITY_DIGEST_TO: ${{ inputs.to || 'self@daijiong.com' }}
       QUALITY_DIGEST_DAYS: ${{ inputs.days || '3' }}
     steps:
+      - name: Skip if upstream pipeline was a cron-window no-op
+        # daily-pipeline polls every 30 min via `*/30 * * * *`. When
+        # the admin-configured cron window doesn't match, all real
+        # work steps SKIP but the workflow still concludes 'success'.
+        # The workflow_run trigger fires for every such no-op,
+        # spamming the user with hourly digest emails. Guard: check
+        # the upstream's `Run full_round` step status; if not 'success'
+        # (i.e. skipped or failed before getting there), abort the
+        # whole digest. Schedule path + workflow_dispatch always
+        # proceed.
+        id: guard
+        if: ${{ github.event_name == 'workflow_run' }}
+        env:
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          STATUS=$(gh api "repos/${{ github.repository }}/actions/runs/${UPSTREAM_RUN_ID}/jobs" \
+            --jq '.jobs[].steps[] | select(.name == "Run full_round") | .conclusion // .status' \
+            | head -1)
+          echo "Upstream Run full_round status: $STATUS"
+          if [ "$STATUS" != "success" ]; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::skipping digest — upstream pipeline didn't run real work (cron window no-op)"
+          else
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: ${{ steps.guard.outputs.should_run != 'false' }}
       - uses: actions/setup-python@v5
+        if: ${{ steps.guard.outputs.should_run != 'false' }}
         with:
           python-version: "3.11"
           cache: "pip"
       - name: Install deps
+        if: ${{ steps.guard.outputs.should_run != 'false' }}
         # autofix + digest only need stdlib.
         run: python -m pip install -U pip
 
+      # All subsequent work steps are also gated on the guard so we
+      # don't sleep / call APIs / send email when the upstream was a
+      # cron-poll no-op.
       - name: Wait until 92 min after pipeline TRIGGER time
         # Pipeline timeout is 90 min; 92 min anchor gives 2 min
         # buffer for the pipeline to wrap up post-completion (search
@@ -89,7 +122,7 @@ jobs:
         #
         # Skipped on dispatch when skip_sleep=true. Schedule path uses
         # github.run_started_at (this digest run's start) as fallback.
-        if: ${{ inputs.skip_sleep != true }}
+        if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_sleep != true }}
         env:
           TRIGGER_TIME: ${{ github.event.workflow_run.run_started_at || github.event.schedule || '' }}
         run: |
@@ -117,7 +150,7 @@ jobs:
           sleep "$REMAINING"
 
       - name: Run mechanical autofix
-        if: ${{ inputs.skip_autofix != true }}
+        if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_autofix != true }}
         # Trims body / why / summary that overshot. Queues complex
         # issues (body too short, keyword miss, image missing) for
         # the local Mac daemon. Tolerates failure: digest still runs.
@@ -126,6 +159,7 @@ jobs:
           python -m pipeline.quality_autofix --days 1 | tee autofix.json
 
       - name: Send digest
+        if: ${{ steps.guard.outputs.should_run != 'false' }}
         run: |
           python -m pipeline.quality_digest \
             --days "${QUALITY_DIGEST_DAYS}" \
