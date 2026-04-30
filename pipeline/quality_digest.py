@@ -269,13 +269,104 @@ def _row_for_level(metrics: dict, level: str) -> str:
     return "<tr>" + "".join(cells) + "</tr>"
 
 
-def render_html(days: list[dict]) -> str:
+def fetch_queue_summary() -> dict:
+    """Pull current redesign_autofix_queue state for the pending-fixes
+    panel. Returns {count, items} where items is a list of brief
+    descriptors. Falls back to empty on any error — the digest must
+    still render even if Supabase is flaky."""
+    try:
+        from urllib.parse import urlencode
+        url = (f"{SUPABASE_URL}/rest/v1/redesign_autofix_queue?"
+               + urlencode({
+                   "select":   "id,published_date,story_id,level,problem_type,attempts,created_at",
+                   "status":   "eq.queued",
+                   "order":    "created_at.asc",
+                   "limit":    "50",
+               }))
+        req = request.Request(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        })
+        with request.urlopen(req, timeout=15) as r:
+            rows = json.loads(r.read())
+        return {"count": len(rows), "items": rows}
+    except Exception as e:
+        log.warning("queue fetch failed: %s", e)
+        return {"count": 0, "items": []}
+
+
+def render_pending_fixes_panel(queue: dict) -> str:
+    """The 'X items pending fix' panel + drain button. Rendered at the
+    top of the email so the user sees it before the report tables."""
+    n = queue.get("count", 0)
+    if n == 0:
+        return ('<div style="margin-bottom:18px;padding:12px 16px;'
+                'background:#ecfaf0;border-radius:8px;font-size:13px;color:#197a3b;">'
+                '✓ Autofix queue empty — nothing pending.'
+                '</div>')
+
+    # Group items by story+level for compact display.
+    parts: list[str] = []
+    parts.append('<div style="margin-bottom:18px;padding:14px 16px;'
+                  'background:#fff5e8;border:1px solid #ffd9a0;'
+                  'border-radius:8px;font-size:13px;color:#7a4d18;">')
+    parts.append(f'<div style="font-weight:700;font-size:14px;margin-bottom:8px;">'
+                  f'⚠ {n} pending autofix item{"s" if n != 1 else ""}</div>')
+
+    parts.append('<ul style="margin:0 0 12px;padding-left:18px;line-height:1.6;">')
+    for item in queue["items"][:20]:  # cap for email size
+        sid = item.get("story_id", "")
+        level = item.get("level", "")
+        ptype = item.get("problem_type", "")
+        attempts = item.get("attempts", 0)
+        attempt_note = f' <span style="color:#a02b2b">(attempted {attempts}x)</span>' if attempts > 0 else ""
+        parts.append(f'<li><code>{sid}</code> · {level} · <strong>{ptype}</strong>{attempt_note}</li>')
+    if n > 20:
+        parts.append(f'<li>… and {n - 20} more</li>')
+    parts.append('</ul>')
+
+    # The button. shortcuts:// URL — works on macOS Mail.app and iOS
+    # Mail when the user has set up the matching Shortcut.
+    # Name MUST match scripts/install-shortcut-instructions in
+    # docs/bugs/HOW-TO-USE.md exactly: "Drain Kidsnews Queue"
+    shortcut_url = "shortcuts://run-shortcut?name=Drain%20Kidsnews%20Queue"
+
+    parts.append(
+        '<div style="margin-top:8px;">'
+        f'<a href="{shortcut_url}" '
+        'style="display:inline-block;background:#1b1230;color:#fff;'
+        'padding:10px 18px;border-radius:8px;text-decoration:none;'
+        'font-weight:700;font-size:13px;">'
+        '🛠️ Drain queue now</a>'
+        '<span style="margin-left:12px;font-size:11px;color:#7a4d18;">'
+        'opens the macOS Shortcut on your Mac (set up once — see HOW-TO-USE.md §6)'
+        '</span>'
+        '</div>'
+    )
+    parts.append(
+        '<div style="margin-top:10px;font-size:11px;color:#7a4d18;">'
+        'Or paste in Terminal (when not actively using Claude IDE — agent uses your account token):'
+        '<pre style="background:#fff;padding:8px 10px;border-radius:6px;'
+        'border:1px solid #f0d9b0;margin:6px 0 0;font-size:11px;'
+        'overflow-x:auto;color:#1b1230;">'
+        '~/myprojects/news-v2/scripts/drain-autofix-queue.sh</pre>'
+        '</div>'
+    )
+    parts.append('</div>')
+    return "".join(parts)
+
+
+def render_html(days: list[dict], queue: dict | None = None) -> str:
     lines: list[str] = []
     lines.append("<!doctype html><html><body style=\"font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;background:#f7f5f0;padding:18px;\">")
     lines.append('<div style="max-width:880px;margin:0 auto;background:#fff;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">')
     lines.append('<h1 style="margin:0 0 4px;font-size:22px;color:#1b1230;">📊 Kids News — Quality Digest</h1>')
     now_et = datetime.now(ET)
     lines.append(f'<div style="font-size:12px;color:#888;margin-bottom:18px;">Generated {now_et.strftime("%Y-%m-%d %H:%M %Z")} · last {len(days)} days</div>')
+
+    # Pending-fixes panel — at the top so the user sees it first.
+    if queue is not None:
+        lines.append(render_pending_fixes_panel(queue))
 
     for day in days:
         date = day["date"]
@@ -371,8 +462,11 @@ def run(days: int, to: str, dry_run: bool) -> dict:
     targets = [(today - timedelta(days=i)).isoformat() for i in range(days)]
     log.info("gathering %d days (ET-anchored): %s", days, targets)
     day_blocks = [gather_day(d) for d in targets]
-    html = render_html(day_blocks)
-    subject = f"📊 Kids News quality — {today.isoformat()} ET (last {days}d)"
+    queue = fetch_queue_summary()
+    log.info("autofix queue: %d items pending", queue.get("count", 0))
+    html = render_html(day_blocks, queue=queue)
+    pend_suffix = f" · {queue['count']} pending fix{'es' if queue['count'] != 1 else ''}" if queue["count"] else ""
+    subject = f"📊 Kids News quality — {today.isoformat()} ET (last {days}d){pend_suffix}"
     if dry_run:
         sys.stdout.write(html)
         return {"dry_run": True, "subject": subject, "bytes": len(html)}

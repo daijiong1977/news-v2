@@ -43,7 +43,7 @@ done
 
 # If already loaded, unload first (idempotent reinstall).
 if launchctl list | grep -q "$LABEL"; then
-    echo "→ Unloading existing $LABEL…"
+    echo "→ Unloading existing ${LABEL}…"
     launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
 fi
 
@@ -53,7 +53,7 @@ sed "s|{{HOME}}|$HOME|g" "$SRC" > "$DST"
 chmod 644 "$DST"
 
 # Bootstrap (modern way; replaces deprecated `load`).
-echo "→ Bootstrapping $LABEL…"
+echo "→ Bootstrapping ${LABEL}…"
 launchctl bootstrap "gui/$UID" "$DST"
 launchctl enable "gui/$UID/$LABEL"
 launchctl kickstart -k "gui/$UID/$LABEL"

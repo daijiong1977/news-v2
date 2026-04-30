@@ -121,7 +121,76 @@ Bug-Record: docs/bugs/<some-existing-record>.md
 
 ---
 
-## 六、文件位置参考
+## 六、Quality Digest 邮件 + 一键修复（macOS Shortcut）
+
+每天 pipeline 跑完 1 小时后，`self@daijiong.com` 会收到一封 quality digest 邮件，主题形如：
+
+> 📊 Kids News quality — 2026-04-29 ET (last 3d) · 3 pending fixes
+
+如果有 pending item，邮件顶部会有一块橙色面板：
+- 列出每条问题（story id + level + 类型 + 之前尝试次数）
+- 一个 **🛠️ Drain queue now** 按钮（紫色大按钮）
+- 一段 fallback 命令，复制到 Terminal 也能跑
+
+按钮的链接是 `shortcuts://run-shortcut?name=Drain%20Kidsnews%20Queue` —— 这需要你在 Mac 上**装一次**对应的 macOS Shortcut。下面是完整的安装步骤。
+
+### 6.1 一次性安装 Shortcut（5 分钟）
+
+1. 打开 macOS **Shortcuts.app**（Spotlight 搜 "Shortcuts"）
+2. 点左上角的 `+` 按钮新建一个 Shortcut
+3. 给它起名字 **`Drain Kidsnews Queue`**（**必须**完全是这个名字，包括空格——邮件里的 URL 写死了）
+4. 在右侧 actions 搜索栏搜 **"Run Shell Script"**，把它拖到主区
+5. 在那个 action 里粘贴这段（注意把 `Shell` 设为 `bash`，`Pass Input` 设为 `to stdin` 或 `as arguments`，都行）：
+
+   ```bash
+   bash $HOME/myprojects/news-v2/scripts/drain-autofix-queue.sh
+   ```
+
+6. 在右侧 inspector 里勾上：
+   - **"Use as Quick Action"**（让它能从 URL 启动）
+   - 关闭 **"Show in Share Sheet"**（不需要）
+7. ⌘S 保存
+
+测试：
+```bash
+# 在 Terminal 运行（应该弹出 Shortcuts 跑这个 shortcut）：
+open "shortcuts://run-shortcut?name=Drain%20Kidsnews%20Queue"
+```
+
+或者点邮件里的"🛠️ Drain queue now"按钮（如果你已经收到过 digest）。
+
+### 6.2 Shortcut 跑起来会发生什么
+
+1. Shortcuts 调 `~/myprojects/news-v2/scripts/drain-autofix-queue.sh`
+2. 脚本 source 你的 `.env`（取 SUPABASE_URL / KEY / DEEPSEEK_API_KEY）
+3. 脚本调 `python3 -m pipeline.autofix_consumer`（**不带 --once**，把整个队列 drain 完）
+4. 每个 queued item → spawn 一个 `claude -p` agent，2-3 分钟一个
+5. 跑完弹一个 macOS notification "Autofix drain complete"
+6. 日志 in `~/Library/Logs/kidsnews-autofix/$(date -u +%Y-%m-%d).log`
+7. 单条 agent log in 同一目录的 `item-<N>.log`
+
+### 6.3 重要提醒
+
+⚠️ **drain 期间不要用 Claude IDE**——每个 `claude -p` 用你 Pro 账号 token，会跟你的 IDE 抢配额。所以建议：
+- 早上看 digest 邮件，但**别立刻按按钮**
+- 等到午饭、出门、下班前再按
+- drain 一次大概是 N items × 3 分钟（队列里 3 个就 9 分钟）
+- 跑的过程中你 IDE 会偶尔卡，不要重启 daemon，等 notification 弹出再用
+
+如果你想完全在云端跑（你账号不参与）：本来还有个**选项 C**（GitHub Actions + 单独 Anthropic API key），需要再申请一个 API key 单独计费。要切到那个再告诉我。
+
+### 6.4 自动 daemon 已经卸载
+
+之前我们装的 launchd 自动每 8h tick 已经卸了（`launchctl bootout gui/$UID/com.daedal.kidsnews-autofix`）。现在**所有 autofix 都靠你按按钮**，主动权全在你这边。
+
+要恢复自动 daemon（不推荐，会再次和 IDE 抢 token）：
+```bash
+~/myprojects/news-v2/scripts/install-autofix-daemon.sh
+```
+
+---
+
+## 七、文件位置参考
 
 | 文件 | 作用 |
 |---|---|
@@ -134,6 +203,12 @@ Bug-Record: docs/bugs/<some-existing-record>.md
 | `website/home.jsx` (FeedbackButton, FeedbackModal) | 前端入口 |
 | `website/admin.html` (FeedbackTab) | 后台 triage |
 | Supabase table `redesign_feedback` | 反馈存储 |
+| `pipeline/quality_digest.py` | 每天 quality 邮件渲染 + 发送 |
+| `pipeline/quality_autofix.py` | 机械修复（trim）+ 队列入库 |
+| `pipeline/autofix_consumer.py` | 队列消费者，spawn `claude -p` |
+| `scripts/drain-autofix-queue.sh` | Shortcut 调用的 drain 脚本 |
+| `scripts/install-autofix-daemon.sh` | 装 launchd 自动 tick（默认不装） |
+| Supabase table `redesign_autofix_queue` | 复杂修复任务队列 |
 
 ---
 
