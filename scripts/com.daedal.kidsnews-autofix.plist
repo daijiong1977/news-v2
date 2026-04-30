@@ -12,12 +12,14 @@
         <string>{{HOME}}/myprojects/news-v2/scripts/autofix-daemon.sh</string>
     </array>
 
-    <!-- Run every 30 minutes. StartInterval is wall-clock-cumulative,
-         not gated on the previous run finishing — and our daemon
-         exits within seconds when the queue is empty, so 30 min is
-         a generous floor that won't pile up. -->
+    <!-- Run every 8 hours (3 ticks per day). Owner picked this
+         cadence — autofix isn't time-sensitive (pipeline runs once
+         a day, fixes can settle within hours), and 8h keeps the
+         daemon nearly silent in logs while still draining the queue
+         within 24h of a problem appearing. The daemon exits within
+         seconds when the queue is empty. -->
     <key>StartInterval</key>
-    <integer>1800</integer>
+    <integer>28800</integer>
 
     <!-- Run a single tick immediately at load time so the user can
          verify it's working without waiting for the next half-hour. -->
