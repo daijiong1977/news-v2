@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-04-30 | medium | website | [mobile-responsive-grid-collapse](2026-04-30-mobile-responsive-grid-collapse.md) | Read & Words tab kept its desktop 1.6fr/1fr grid on mobile, cramming Story + Word Treasure into two narrow columns on a 390px phone (issue #6, after PRs #8/#9 failed) | article, layout, responsive, mobile, grid, matchmedia, useIsNarrow |
 | 2026-04-30 | medium | infra | [supabase-edge-fn-html-blocked](2026-04-30-supabase-edge-fn-html-blocked.md) | Supabase Edge Functions silently override Content-Type to text/plain + add sandbox CSP, breaking HTML rendering in browsers | supabase, edge-function, content-type, csp, sandbox, html |
 | 2026-04-29 | medium | infra | [autofix-token-starvation](2026-04-29-autofix-token-starvation.md) | Autofix daemon's back-to-back claude -p calls starved the user's IDE of API quota for ~2 min | claude, headless, daemon, rate-limit, concurrency, autofix |
 | 2026-04-29 | high | website | [search-click-wrong-article](2026-04-29-search-click-wrong-article.md) | Clicking a search hit always opened today's first article instead of the searched one | search, archive, ARTICLES.find, listing-overwrite, synthetic-merge |
