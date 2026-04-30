@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kids News — Autofix Review</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f7f5f0; color: #222;
+    margin: 0; padding: 24px;
+  }
+  .panel {
+    max-width: 780px; margin: 0 auto;
+    background: #fff; border-radius: 12px;
+    padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; color: #1b1230; }
+  .meta { font-size: 12px; color: #888; margin-bottom: 18px; }
+  .empty {
+    padding: 28px 16px; background: #ecfaf0; border-radius: 8px;
+    font-size: 15px; color: #197a3b; text-align: center;
+  }
+  .summary { margin-bottom: 14px; font-size: 14px; color: #7a4d18; }
+  .item {
+    border: 1px solid #f0d9b0; background: #fff5e8;
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+  }
+  .item-head { font-weight: 700; font-size: 14px; color: #1b1230; }
+  .item-sub { font-size: 11px; color: #888; margin-top: 2px; }
+  .item-detail {
+    font-size: 11px; color: #666;
+    font-family: Menlo, monospace; margin-top: 4px;
+  }
+  .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; margin-left: 8px;
+  }
+  .badge.fix-req { background: #fff5e8; color: #7a4d18; }
+  .badge.running { background: #fff1f1; color: #a02b2b; }
+  .attempt { color: #a02b2b; font-size: 11px; margin-left: 8px; }
+  .actions { margin-top: 10px; }
+  button.act {
+    display: inline-block; padding: 7px 14px; margin-right: 6px;
+    background: #fff; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 700;
+    border: 1.5px solid #ddd;
+    font-family: inherit;
+  }
+  button.act:hover { transform: translateY(-1px); }
+  button.act:disabled { opacity: 0.4; cursor: wait; }
+  button.fix { color: #1b1230; border-color: #1b1230; }
+  button.dismiss { color: #666; border-color: #666; }
+  button.resolve { color: #197a3b; border-color: #197a3b; }
+  .legend {
+    margin-top: 18px; padding: 12px 14px;
+    background: #fafafa; border-radius: 8px;
+    font-size: 11px; color: #666; line-height: 1.5;
+  }
+  table.recent {
+    width: 100%; border-collapse: collapse;
+    font-size: 11px; color: #666;
+  }
+  table.recent th { padding: 5px 6px; text-align: left; color: #888; }
+  table.recent td { padding: 5px 6px; border-top: 1px solid #f5f5f5; }
+  .footer { margin-top: 24px; font-size: 11px; color: #aaa; }
+  .toast {
+    position: fixed; top: 18px; right: 18px;
+    padding: 10px 16px; background: #1b1230; color: #fff;
+    border-radius: 8px; font-size: 13px; font-weight: 700;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .toast.ok { background: #197a3b; }
+  .toast.err { background: #a02b2b; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div class="panel">
+  <h1>🛠️ Autofix Review</h1>
+  <div class="meta" id="meta">Loading queue…</div>
+  <div id="content"></div>
+  <h2 style="font-size:15px;color:#1b1230;margin-top:28px;border-top:1px solid #eee;padding-top:18px;">Recently handled</h2>
+  <div id="recent"></div>
+  <div class="footer">
+    Bookmark this page — always reflects current queue.
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://lfknsvavhiqrsasdfyrs.supabase.co';
+// The site already embeds this anon key in data.jsx; reusing it.
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxma25zdmF2aGlxcnNhc2RmeXJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3MzMwMjcsImV4cCI6MjA3ODMwOTAyN30.2YPvOkZOWi4hDjtwZYkVt9a-RwYSnfotjV6Raj24ZjE';
+
+const HEADERS = {
+  apikey: ANON_KEY,
+  Authorization: 'Bearer ' + ANON_KEY,
+  'Content-Type': 'application/json',
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function showToast(msg, kind='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + kind;
+  setTimeout(() => { el.className = 'toast ' + kind; }, 2500);
+}
+
+async function loadQueue() {
+  document.getElementById('meta').textContent =
+    'Queue control panel · last refreshed ' + new Date().toLocaleString();
+
+  // Active items (queued / fix-requested / running)
+  const r = await fetch(
+    SUPABASE_URL + '/rest/v1/redesign_autofix_queue' +
+    '?select=id,published_date,story_id,level,problem_type,problem_detail,attempts,status,created_at' +
+    '&status=in.(queued,fix-requested,running)' +
+    '&order=created_at.asc' +
+    '&limit=100',
+    { headers: HEADERS }
+  );
+  const items = await r.json();
+
+  // Recently handled (last 10)
+  const r2 = await fetch(
+    SUPABASE_URL + '/rest/v1/redesign_autofix_queue' +
+    '?select=id,story_id,level,problem_type,status,resolved_at,updated_at' +
+    '&status=in.(resolved,dismissed,failed)' +
+    '&order=updated_at.desc' +
+    '&limit=10',
+    { headers: HEADERS }
+  );
+  const recent = await r2.json();
+
+  renderItems(items);
+  renderRecent(recent);
+}
+
+function renderItems(items) {
+  const container = document.getElementById('content');
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div class="empty">✓ Nothing pending. Queue is clean.</div>' +
+      '<div class="legend"><strong>Action meanings (when items appear):</strong><br>' +
+      '<strong>🛠️ Fix</strong> — marks for the local Claude Code agent on your Mac to regen.<br>' +
+      '<strong>🚫 Dismiss</strong> — ignore (won\'t retry).<br>' +
+      '<strong>✓ Resolved</strong> — already-fine, mark closed.</div>';
+    return;
+  }
+
+  let html = '<div class="summary"><strong>' + items.length + ' item' +
+    (items.length === 1 ? '' : 's') + '</strong> waiting for your action.</div>';
+
+  for (const r of items) {
+    const detail = r.problem_detail
+      ? '<div class="item-detail">' + escapeHtml(JSON.stringify(r.problem_detail)) + '</div>'
+      : '';
+    const attempt = r.attempts > 0
+      ? '<span class="attempt">attempted ' + r.attempts + 'x</span>' : '';
+    const badge = r.status === 'fix-requested'
+      ? '<span class="badge fix-req">FIX QUEUED — drain on Mac</span>'
+      : r.status === 'running'
+      ? '<span class="badge running">RUNNING</span>' : '';
+
+    html += '<div class="item">' +
+      '<div class="item-head"><code>' + escapeHtml(r.story_id) + '</code> · ' +
+      escapeHtml(r.level) + ' · ' + escapeHtml(r.problem_type) + attempt + badge + '</div>' +
+      '<div class="item-sub">Submitted ' + escapeHtml(r.created_at) + ' · Item #' + r.id + '</div>' +
+      detail +
+      '<div class="actions">' +
+      '<button class="act fix" onclick="doAction(' + r.id + ',\'fix\')">🛠️ Fix</button>' +
+      '<button class="act dismiss" onclick="doAction(' + r.id + ',\'dismiss\')">🚫 Dismiss</button>' +
+      '<button class="act resolve" onclick="doAction(' + r.id + ',\'resolve\')">✓ Resolved</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  html += '<div class="legend">' +
+    '<strong>Action meanings:</strong><br>' +
+    '<strong>🛠️ Fix</strong> — marks for the local Claude Code agent on your Mac to regen this article. The page will redirect to <code>kidsnews-autofix://drain</code>; on Mac that fires KidsnewsAutofix.app and runs the fix. On iPhone the redirect harmlessly fails — the row is still queued for the next time you\'re on Mac.<br>' +
+    '<strong>🚫 Dismiss</strong> — ignore (won\'t retry).<br>' +
+    '<strong>✓ Resolved</strong> — already-fine, mark closed without running.</div>';
+
+  container.innerHTML = html;
+}
+
+function renderRecent(recent) {
+  const container = document.getElementById('recent');
+  if (!recent || recent.length === 0) {
+    container.innerHTML = '<div style="color:#aaa;font-size:11px;padding:8px 0;">No recent actions yet.</div>';
+    return;
+  }
+  let html = '<table class="recent"><thead><tr>' +
+    '<th>When</th><th>Item</th><th>Status</th></tr></thead><tbody>';
+  for (const r of recent) {
+    const when = (r.resolved_at || r.updated_at || '').slice(0, 19).replace('T', ' ');
+    html += '<tr>' +
+      '<td style="font-family:Menlo,monospace;">' + escapeHtml(when) + '</td>' +
+      '<td><code>' + escapeHtml(r.story_id) + '</code> · ' + escapeHtml(r.level) +
+      ' · ' + escapeHtml(r.problem_type) + '</td>' +
+      '<td>' + escapeHtml(r.status) + '</td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+const STATUS_BY_ACTION = {
+  fix: 'fix-requested',
+  dismiss: 'dismissed',
+  resolve: 'resolved',
+};
+
+async function doAction(id, action) {
+  // Disable all buttons for this item while in flight.
+  const btns = document.querySelectorAll(`button[onclick*="doAction(${id}"]`);
+  btns.forEach(b => b.disabled = true);
+
+  const newStatus = STATUS_BY_ACTION[action];
+  const patch = { status: newStatus };
+  if (newStatus === 'resolved') {
+    patch.resolved_at = new Date().toISOString();
+  }
+
+  try {
+    const r = await fetch(
+      SUPABASE_URL + '/rest/v1/redesign_autofix_queue?id=eq.' + id,
+      {
+        method: 'PATCH',
+        headers: { ...HEADERS, Prefer: 'return=minimal' },
+        body: JSON.stringify(patch),
+      }
+    );
+    if (!r.ok) {
+      const text = await r.text();
+      throw new Error(r.status + ' ' + text.slice(0, 200));
+    }
+    showToast({
+      fix:     'Fix queued — opening local app…',
+      dismiss: 'Dismissed.',
+      resolve: 'Marked resolved.',
+    }[action], 'ok');
+
+    if (action === 'fix') {
+      // Trigger the local Mac app via custom URL scheme. The browser
+      // shows a "Open KidsnewsAutofix?" prompt the first time. On
+      // iPhone the scheme silently fails — the row is already
+      // marked fix-requested so the next Mac drain picks it up.
+      setTimeout(() => {
+        window.location.href = 'kidsnews-autofix://drain?id=' + id;
+      }, 600);
+      // Reload queue after the redirect prompt clears.
+      setTimeout(loadQueue, 4000);
+    } else {
+      // Just reload queue.
+      setTimeout(loadQueue, 600);
+    }
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'err');
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
+loadQueue();
+</script>
+</body>
+</html>

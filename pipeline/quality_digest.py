@@ -303,7 +303,13 @@ def render_pending_fixes_panel(queue: dict) -> str:
     just gone). The control panel itself has all the per-item action
     buttons; the email is just the doorbell."""
     n = queue.get("count", 0)
-    review_url = f"{SUPABASE_URL}/functions/v1/autofix-review"
+    # Static HTML page on news.6ray.com (cleanUrls-stripped path).
+    # Originally tried Supabase Edge Functions for this, but Supabase
+    # forces all edge-function HTML responses to text/plain + sandbox
+    # CSP + nosniff (anti-phishing default), which made the page
+    # render as plain HTML markup text in browsers. The Vercel-hosted
+    # static page bypasses that.
+    review_url = "https://news.6ray.com/autofix"
 
     if n == 0:
         return ('<div style="margin-bottom:18px;padding:12px 16px;'

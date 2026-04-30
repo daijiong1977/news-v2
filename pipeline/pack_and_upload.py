@@ -48,7 +48,7 @@ RETENTION_DAYS = 30  # dated archives older than this get deleted
 SHELL_FILES = {"index.html", "article.jsx", "home.jsx", "components.jsx",
                "data.jsx", "user-panel.jsx", "admin.html",
                "parent.html", "parent.jsx", "kidsync.js",
-               "tokens.css", "fonts.css"}
+               "tokens.css", "fonts.css", "autofix.html"}
 SHELL_DIRS = {"assets", "components"}
 CONTENT_DIRS = {"payloads", "article_payloads", "article_images", "article_pdfs"}
 
