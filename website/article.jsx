@@ -239,6 +239,24 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
   const [quizShow, setQuizShow] = useStateA(false);
   const [confetti, setConfetti] = useStateA(false);
 
+  // Publish feedback context so the floating 💬 button knows which
+  // story / tab / level the user was reviewing when they opened the
+  // modal. Triage uses this to put a "Reported while reading: X" line
+  // in the GitHub issue body.
+  useEffectA(() => {
+    window.__feedbackContext = {
+      view: 'article',
+      article_id: articleId,
+      story_id: baseArticle && baseArticle.storyId,
+      title: baseArticle && baseArticle.title,
+      level: baseArticle && baseArticle.level,
+      category: baseArticle && baseArticle.category,
+      tab,
+      archive_date: (baseArticle && baseArticle.archiveDate) || null,
+    };
+    return () => { window.__feedbackContext = null; };
+  }, [articleId, tab, baseArticle]);
+
   // Per-article time tracking. Accumulates ms while the article is "active"
   // (page mounted + tab visible). Flushes on unmount and on visibilitychange.
   const _activeStartRef = useRefA(Date.now());

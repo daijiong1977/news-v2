@@ -101,6 +101,14 @@ SUMMARY_MAX = 80
 # Why-it-matters cap (per-story payload `why_it_matters`).
 WHY_MAX = 80
 
+# Slack on word-count gates: articles within ±15% of target still
+# pass quality. The rewrite prompts target the core range, but
+# DeepSeek routinely lands a few words over/under — penalising those
+# would generate noisy "off"/"long" flags for content that's plenty
+# good for kids. Trim/regenerate handlers in quality_autofix use the
+# SAME slack so we don't churn on borderline cases.
+WC_SLACK = 0.15
+
 
 def _http_get(url: str, timeout: int = 30) -> tuple[int, bytes]:
     try:
@@ -190,9 +198,10 @@ def score_article(payload: dict, level: str, listing_summary: str = "") -> dict:
     why_wc  = _word_count(why)
 
     lo, hi = BODY_TARGETS.get(level, (0, 9999))
-    body_ok = lo <= body_wc <= hi
-    summ_ok = summ_wc <= SUMMARY_MAX
-    why_ok  = why_wc  <= WHY_MAX
+    # ±15% slack on all word-count gates — see WC_SLACK definition.
+    body_ok = (lo * (1 - WC_SLACK)) <= body_wc <= (hi * (1 + WC_SLACK))
+    summ_ok = summ_wc <= SUMMARY_MAX * (1 + WC_SLACK)
+    why_ok  = why_wc  <= WHY_MAX     * (1 + WC_SLACK)
 
     kw_hits = sum(1 for k in keyword_terms if _keyword_in_body(k, body))
     kw_total = len(keyword_terms)
@@ -204,11 +213,11 @@ def score_article(payload: dict, level: str, listing_summary: str = "") -> dict:
 
     return {
         "body_wc":  body_wc,  "body_ok":  body_ok,
-        "body_target": f"{lo}-{hi}",
+        "body_target": f"{lo}-{hi} (±15%)",
         "summary_wc": summ_wc, "summary_ok": summ_ok,
-        "summary_target": f"≤{SUMMARY_MAX}",
+        "summary_target": f"≤{SUMMARY_MAX} (+15%)",
         "why_wc":   why_wc,    "why_ok":   why_ok,
-        "why_target": f"≤{WHY_MAX}",
+        "why_target": f"≤{WHY_MAX} (+15%)",
         "kw_total": kw_total, "kw_hits": kw_hits, "kw_ok": kw_ok,
         "kw_misses": kw_misses[:5],
         "image_ok": image_ok, "source_ok": source_ok,
@@ -400,6 +409,126 @@ def render_pipeline_runs_panel(runs: list[dict]) -> str:
     )
 
 
+# ── Escalated-rows panel ───────────────────────────────────────────
+# When pipeline.autofix_apply can't fix a queued issue (LLM failure,
+# unknown problem_type, etc.) it flips status to 'escalated'. The
+# digest surfaces these with per-row buttons so the admin can decide:
+# Dismiss / Resolve / 🤖 Fix-with-Claude (queues the local Mac listener).
+# Each button URL is HMAC-signed against AUTOFIX_BUTTON_SECRET so an
+# attacker can't mint links for rows they didn't see in the email.
+
+import hashlib as _hashlib
+import hmac as _hmac
+
+AUTOFIX_BUTTON_SECRET = os.environ.get("AUTOFIX_BUTTON_SECRET", "")
+ACTION_FN_URL = f"{SUPABASE_URL}/functions/v1/autofix-action"
+# Cap visible rows to keep total link count manageable — Gmail
+# silently drops emails with too many same-domain URLs.
+ESCALATED_VISIBLE = 5
+
+
+def _sign_action(row_id: int, action: str) -> str:
+    msg = f"{row_id}|{action}".encode()
+    return _hmac.new(
+        AUTOFIX_BUTTON_SECRET.encode(), msg, _hashlib.sha256,
+    ).hexdigest()[:16]
+
+
+def _action_url(row_id: int, action: str) -> str:
+    sig = _sign_action(row_id, action)
+    return f"{ACTION_FN_URL}?id={row_id}&action={action}&sig={sig}"
+
+
+def fetch_escalated_rows() -> list[dict]:
+    try:
+        from urllib.parse import urlencode
+        url = (f"{SUPABASE_URL}/rest/v1/redesign_autofix_queue?"
+               + urlencode({
+                   "select":   "id,published_date,story_id,level,problem_type,"
+                               "attempts,agent_log,last_attempt_at",
+                   "status":   "eq.escalated",
+                   "order":    "last_attempt_at.desc.nullslast",
+                   "limit":    "20",
+               }))
+        req = request.Request(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        })
+        with request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        log.warning("escalated rows fetch failed: %s", e)
+        return []
+
+
+def render_escalated_panel(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    if not AUTOFIX_BUTTON_SECRET:
+        log.warning("AUTOFIX_BUTTON_SECRET not set — skipping escalated panel")
+        return ""
+
+    visible = rows[:ESCALATED_VISIBLE]
+    overflow = max(0, len(rows) - ESCALATED_VISIBLE)
+    n = len(rows)
+
+    item_blocks: list[str] = []
+    for r in visible:
+        rid = r["id"]
+        msg = ""
+        try:
+            log_obj = json.loads(r.get("agent_log") or "{}")
+            msg = log_obj.get("escalated_msg") or log_obj.get("resolved_msg") or ""
+        except Exception:
+            msg = (r.get("agent_log") or "")[:140]
+        url_dismiss = _action_url(rid, "dismiss")
+        url_resolve = _action_url(rid, "resolve")
+        url_fix     = _action_url(rid, "fix")
+        item_blocks.append(
+            '<div style="border:1px solid #f0e5d0;border-radius:8px;'
+            'padding:12px 14px;margin-bottom:10px;background:#fffaf0;">'
+            f'<div style="font-size:13px;color:#1b1230;font-weight:600;">'
+            f'{r["story_id"]} · {r["level"]} · '
+            f'<code style="font-size:12px;color:#a25c10;">{r["problem_type"]}</code>'
+            f'</div>'
+            f'<div style="font-size:12px;color:#555;margin:4px 0 10px;">{msg}</div>'
+            f'<a href="{url_fix}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#1b1230;color:#fff;text-decoration:none;'
+            'border-radius:6px;font-weight:700;font-size:12px;">🤖 Fix with Claude</a>'
+            f'<a href="{url_resolve}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#fff;color:#197a3b;border:1px solid #b6e3c5;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Resolve</a>'
+            f'<a href="{url_dismiss}" '
+            'style="display:inline-block;padding:7px 14px;'
+            'background:#fff;color:#666;border:1px solid #ddd;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">Dismiss</a>'
+            '</div>'
+        )
+    overflow_note = (
+        f'<div style="font-size:12px;color:#7a4d18;margin-top:6px;">'
+        f'… and {overflow} more escalated. Re-queued at next pipeline run if still failing.</div>'
+        if overflow else ''
+    )
+    return (
+        '<div style="margin-bottom:18px;padding:18px 20px;'
+        'background:#fff5e8;border:1px solid #ffd9a0;border-radius:10px;'
+        'color:#7a4d18;">'
+        f'<div style="font-weight:700;font-size:15px;margin-bottom:10px;">'
+        f'⚠ {n} item{"s" if n != 1 else ""} escalated — your call'
+        f'</div>'
+        '<div style="font-size:12px;color:#7a4d18;margin-bottom:12px;">'
+        'Routine auto-fix gave up on these. Pick an action per row:'
+        '</div>'
+        + ''.join(item_blocks) + overflow_note +
+        '</div>'
+    )
+
+
+# ── Queue summary panel (still queued, never tried) ────────────────
+
+
 def fetch_queue_summary() -> dict:
     """Pull current redesign_autofix_queue state for the pending-fixes
     panel. Returns {count, items} where items is a list of brief
@@ -509,12 +638,20 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     now_et = datetime.now(ET)
     lines.append(f'<div style="font-size:12px;color:#888;margin-bottom:18px;">Generated {now_et.strftime("%Y-%m-%d %H:%M %Z")} · last {len(days)} days</div>')
 
-    # Pending-fixes panel — at the top so the user sees it first.
+    # Escalated rows — surface FIRST so the user sees decisions to make.
+    escalated_rows = fetch_escalated_rows()
+    if escalated_rows:
+        lines.append(render_escalated_panel(escalated_rows))
+
+    # Pending-fixes panel — items still queued (auto-fix hasn't run yet
+    # for some reason, or admin's earlier dismissed items got re-queued
+    # by tomorrow's scan).
     if queue is not None:
         lines.append(render_pending_fixes_panel(queue))
 
     total_variants, bad_variants = _count_pass_fail(days)
     queue_count = (queue or {}).get("count", 0)
+    escalated_count = len(escalated_rows)
 
     # Pull recent pipeline runs for the tuning panel.
     pipeline_runs = fetch_pipeline_runs(len(days))
@@ -524,7 +661,7 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     # don't bother with the per-day tables. Just confirm "today is good"
     # without listing every checked date — user only wants to see dates
     # that have something wrong.
-    if bad_variants == 0 and queue_count == 0:
+    if bad_variants == 0 and queue_count == 0 and escalated_count == 0:
         today_label = days[0]["date"] if days else datetime.now(ET).date().isoformat()
         missing = [d["date"] for d in days if d.get("missing_day")]
         lines.append(
@@ -596,10 +733,10 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
                         issues.append(f'body {m["body_wc"]} words (target {m["body_target"]})')
                         fixes.append('🛠️ Fix on the panel will re-rewrite body to fit')
                     if not m.get("summary_ok"):
-                        issues.append(f'summary {m["summary_wc"]} words (target ≤{SUMMARY_MAX})')
+                        issues.append(f'summary {m["summary_wc"]} words (target {m["summary_target"]})')
                         fixes.append('listing-summary trim runs automatically next pipeline')
                     if not m.get("why_ok"):
-                        issues.append(f'why_it_matters {m["why_wc"]} words (target ≤{WHY_MAX})')
+                        issues.append(f'why_it_matters {m["why_wc"]} words (target {m["why_target"]})')
                         fixes.append('🛠️ Fix → trim + re-prompt')
                     if not m.get("kw_ok"):
                         miss = m.get("kw_misses") or []

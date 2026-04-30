@@ -359,6 +359,12 @@ window.archiveSearch = archiveSearch;
 // (5/IP/min). Returns { ok: true, id } or { error }.
 async function submitFeedback({ category, message, screenshot_url }) {
   try {
+    // Views that want to attach "what the user was looking at"
+    // (story id/title, current tab, archive date, etc.) write a
+    // small object to window.__feedbackContext while mounted. Bare
+    // page_url is just the SPA root; this lets the issue triage tell
+    // which story the feedback was about.
+    const viewContext = (typeof window !== 'undefined' && window.__feedbackContext) || null;
     const r = await fetch(
       `${SUPABASE_URL}/functions/v1/submit-feedback`,
       {
@@ -380,6 +386,7 @@ async function submitFeedback({ category, message, screenshot_url }) {
               return t.language || 'en';
             } catch { return 'en'; }
           })(),
+          context: viewContext,
         }),
       },
     );

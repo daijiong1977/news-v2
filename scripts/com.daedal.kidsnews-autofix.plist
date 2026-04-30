@@ -12,17 +12,41 @@
         <string>{{HOME}}/myprojects/news-v2/scripts/autofix-daemon.sh</string>
     </array>
 
-    <!-- Run every 8 hours (3 ticks per day). Owner picked this
-         cadence — autofix isn't time-sensitive (pipeline runs once
-         a day, fixes can settle within hours), and 8h keeps the
-         daemon nearly silent in logs while still draining the queue
-         within 24h of a problem appearing. The daemon exits within
-         seconds when the queue is empty. -->
-    <key>StartInterval</key>
-    <integer>28800</integer>
+    <!-- Fire 4×/day at fixed local times (06:00, 10:00, 14:00, 18:00).
+         Calendar-based scheduling beats StartInterval because modern
+         macOS suspends launchd jobs during sleep, so a "every 4h"
+         interval drifts unpredictably overnight. With explicit
+         HH:MM, missed ticks (lid closed at the fire time) reschedule
+         to the next listed time, never silently disappear.
+
+         Routine quality fixes run in CI now (autofix_apply.py); this
+         daemon ONLY drains rows the admin explicitly clicked
+         "🤖 Fix with Claude" on in a digest email — i.e.
+         status='fix-requested'. Most days the queue is empty and
+         the daemon exits within seconds. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>10</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>14</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>18</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
 
     <!-- Run a single tick immediately at load time so the user can
-         verify it's working without waiting for the next half-hour. -->
+         verify it's working without waiting for the next 4-hour
+         window. -->
     <key>RunAtLoad</key>
     <true/>
 

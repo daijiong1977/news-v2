@@ -3,7 +3,12 @@
 // POST /functions/v1/submit-feedback
 //
 // Body: { category, message, page_url?, client_id?, user_level?,
-//         user_language?, screenshot_url? }
+//         user_language?, screenshot_url?,
+//         context?: { view, story_id, title, level, category, tab, ... } }
+//
+// `context` is opaque JSONB — whatever the calling view writes to
+// window.__feedbackContext. Triage formats it into the issue body
+// so the maintainer knows which page/story the report is about.
 //
 // - Anonymous (verify_jwt=false). The site sends the anon key as
 //   Bearer just like the other public edge functions.
@@ -93,6 +98,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // --- Insert ---
   const ua = (req.headers.get("user-agent") || "").slice(0, 500);
+  // context is opaque JSONB — accept any object up to ~4KB serialised
+  // to avoid abuse, otherwise drop it.
+  let ctx: any = null;
+  if (body.context && typeof body.context === "object") {
+    try {
+      const s = JSON.stringify(body.context);
+      if (s.length <= 4000) ctx = body.context;
+    } catch {
+      // unserialisable — drop
+    }
+  }
   const row = {
     client_id:      body.client_id      ? String(body.client_id).slice(0, 100)   : null,
     page_url:       body.page_url       ? String(body.page_url).slice(0, 1000)   : null,
@@ -103,6 +119,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     screenshot_url: body.screenshot_url ? String(body.screenshot_url).slice(0, 1000) : null,
     user_agent:     ua,
     ip_hash:        ipHash,
+    context:        ctx,
   };
 
   const { data, error } = await sb

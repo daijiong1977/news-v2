@@ -63,18 +63,19 @@ def _http(method: str, path: str, body: dict | list | None = None,
 
 
 def fetch_one() -> dict | None:
-    """Pull the oldest actionable item. None if empty.
+    """Pull the oldest fix-requested item. None if empty.
 
-    Actionable = status is 'queued' OR 'fix-requested'. The latter
-    is set by the autofix-action edge function when the user clicks
-    the 🛠️ Fix button in a digest email — it marks user explicit
-    consent so the local daemon should run that item even if it
-    wouldn't normally drain on its own."""
+    Routine fixes run in CI via pipeline.autofix_apply (which sets
+    status=resolved or status=escalated). The Mac listener ONLY acts
+    on rows where the admin clicked '🤖 Fix with Claude' in a digest
+    email — those are flipped to status='fix-requested' by the
+    autofix-action edge function. Anything else is invisible to
+    this daemon."""
     code, body = _http(
         "GET",
         "/rest/v1/redesign_autofix_queue"
-        f"?status=in.(queued,fix-requested)&attempts=lt.{MAX_ATTEMPTS}"
-        "&order=created_at.asc&limit=1",
+        f"?status=eq.fix-requested&attempts=lt.{MAX_ATTEMPTS}"
+        "&order=last_attempt_at.asc.nullsfirst&limit=1",
     )
     if code != 200:
         log.error("queue fetch failed: %s %s", code, body[:200])
@@ -98,7 +99,20 @@ def patch(row_id: int, patch_obj: dict) -> bool:
 PROMPT_TMPL = """\
 You are an autonomous fix-bot for the kidsnews-v2 daily-content pipeline.
 
-The daily quality check found this issue. Fix it, then exit.
+This is an ESCALATION. The CI auto-fixer (pipeline.autofix_apply)
+already tried the routine path and failed — see the row's `agent_log`
+field for the failure reason. The admin then clicked
+"🤖 Fix with Claude" in a digest email, which flipped the row's
+status to fix-requested. So you're the second-line responder.
+
+Don't repeat exactly what autofix_apply did. Investigate WHY it
+failed, then either:
+  · pick a different angle (different prompt, different DeepSeek
+    model, different image-search source), OR
+  · open a PR that touches the codebase if the issue is structural
+    (e.g. the image-grabber misses Reuters images — improve the
+    regex), OR
+  · ESCALATE again with a clear root cause if you genuinely can't fix.
 
   storage prefix:  {pdate}
   story id:        {sid}
@@ -117,32 +131,40 @@ IMPORTANT field-naming gotcha (read carefully):
   findable in the body either via case-insensitive substring OR via
   the stem rules in pipeline/news_rss_core.py:keyword_in_body().
 
-Per problem_type:
+Retry policy (STRICT — do not exceed):
 
-- body_too_short:  re-write payload.summary to land in target range
-  (easy 200-320, middle 300-410). Preserve every keyword. Use the
-  inline DeepSeek pattern from pipeline/feedback_triage.py
-  (_deepseek_call) — DEEPSEEK_API_KEY is in env. Re-upload via
-  Storage PUT to the same path with header `x-upsert: true`.
+- body_too_short / body_too_long:
+    Make ONE DeepSeek regen call to rewrite payload.summary into the
+    target range (easy 200-320, middle 300-410, ±15% slack on either
+    side). Preserve every keyword. Re-upload via Storage PUT with
+    `x-upsert: true`. Do NOT retry the LLM if the result is still
+    outside the slack — accept the new text, log the final word
+    count, and finish with RESOLVED. The user's policy: one shot, then
+    let it go.
 
-- body_too_long:  similar but trim/condense. Preserve keywords.
+- keyword_miss:
+    ONE DeepSeek regen call. Either weave the missing keyword(s) into
+    the body OR drop them from payload.keywords if they're LLM
+    artifacts (e.g. "A final"). Use judgment. Re-upload. One shot.
 
-- keyword_miss:   listed keyword(s) aren't in the body. Either weave
-  them in (rewrite small section of body) OR if the keyword is a
-  bogus LLM artifact (e.g. "A final"), edit payload.keywords to
-  remove it. Use judgment. Re-upload payload.
+- image_missing:
+    Try TWICE to re-grab the image — first via the original article
+    URL (payload.source_url), second via a fresh search (look at
+    pipeline/news_rss_core.py for the image-finding helper). If both
+    fail, finish with RESOLVED noting "image still missing — gave up
+    after 2 tries" so the queue row closes.
 
-- image_missing:  payload.image_url is empty. Skip — leave a clear
-  comment in agent_log; image regen needs the pipeline image stage.
+- ANY OTHER problem_type, OR a tool/network failure that blocks the
+  one-shot above: ESCALATE. The daemon will email the admin so they
+  can decide. Do NOT improvise a different fix path.
 
-- source_diversity: cross-article concern; ESCALATE.
-
-After fixing:
+After your one-shot fix:
 1. Run: python -m pipeline.quality_digest --dry-run --days 1 2>/dev/null | grep -A1 "{sid}"
-   to confirm the metric for this article is now ok.
+   to log the post-fix metric (purely informational — even if still
+   off, that's accepted).
 2. Print one of these last lines (the daemon parses for them):
-     RESOLVED: <one-sentence what you did>
-     ESCALATE: <one-sentence why you can't safely fix>
+     RESOLVED: <one-sentence what you did + final word count if applicable>
+     ESCALATE: <one-sentence why you couldn't make the one-shot attempt>
 
 Do NOT touch git. Storage upload is the only persistence. Your
 working dir is the news-v2 repo; pipeline/ has helpers you can

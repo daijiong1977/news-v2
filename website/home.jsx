@@ -997,6 +997,20 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
   const [calendarOpen, setCalendarOpen] = useStateH(false);
   const [recentOpen, setRecentOpen] = useStateH(false);
 
+  // Publish feedback context — same pattern as ArticlePage. Tells the
+  // 💬 modal which view + filters the user is on so the GH issue is
+  // page-scoped.
+  useEffectH(() => {
+    window.__feedbackContext = {
+      view: 'home',
+      level,
+      category: cat || 'All',
+      language: (tweaks && tweaks.language) || 'en',
+      archive_date: typeof archiveDay === 'string' ? archiveDay : null,
+    };
+    return () => { window.__feedbackContext = null; };
+  }, [level, cat, archiveDay, tweaks && tweaks.language]);
+
   // Per-category displayable pool — only the first 3 stories of each category (what's shown on pages)
   const displayPool = useMemoH(() => {
     const out = [];
@@ -1630,6 +1644,17 @@ function SearchPage({ onBack, onOpenResult, level, language }) {
   const [results, setResults] = useStateH([]);
   const [loading, setLoading] = useStateH(false);
   const [hasSearched, setHasSearched] = useStateH(false);
+
+  useEffectH(() => {
+    window.__feedbackContext = {
+      view: 'search',
+      query: q,
+      level,
+      language: language || 'en',
+      result_count: results.length,
+    };
+    return () => { window.__feedbackContext = null; };
+  }, [q, level, language, results.length]);
 
   // Map the user's current preference into the search-index level
   // value. Search ONLY returns rows for the user's chosen mode —

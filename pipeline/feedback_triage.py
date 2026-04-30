@@ -236,6 +236,29 @@ def open_github_issue(row: dict, triage: dict) -> tuple[int | None, str | None]:
                     "content": "📰 CONT", "duplicate": "🔁 DUP"}[cls]
     title = f"{title_prefix}: {triage['summary']}"[:200]
 
+    # Reading context — what the user was looking at when they
+    # opened the feedback modal (story id/title, current tab, level).
+    # Set client-side via window.__feedbackContext.
+    ctx = row.get("context") or {}
+    ctx_lines: list[str] = []
+    if isinstance(ctx, dict) and ctx:
+        view = ctx.get("view") or "—"
+        if ctx.get("title"):
+            ctx_lines.append(f"- **Reported while reading:** {ctx.get('title')}")
+        if ctx.get("story_id"):
+            ctx_lines.append(f"- **Story ID:** `{ctx.get('story_id')}`")
+        if ctx.get("level"):
+            ctx_lines.append(f"- **Level:** {ctx.get('level')}")
+        if ctx.get("category"):
+            ctx_lines.append(f"- **Category:** {ctx.get('category')}")
+        if ctx.get("tab"):
+            ctx_lines.append(f"- **Tab:** {ctx.get('tab')}")
+        if ctx.get("archive_date"):
+            ctx_lines.append(f"- **Archive date:** {ctx.get('archive_date')}")
+        ctx_lines.append(f"- **View:** `{view}`")
+    if not ctx_lines:
+        ctx_lines.append("- _No specific story context — feedback was sent from a non-article view._")
+
     body_parts = [
         "_Auto-triaged from `redesign_feedback`._",
         "",
@@ -249,6 +272,10 @@ def open_github_issue(row: dict, triage: dict) -> tuple[int | None, str | None]:
         "## Original message",
         "",
         f"> {row.get('message','').replace(chr(10), chr(10) + '> ')}",
+        "",
+        "## What the user was viewing",
+        "",
+        *ctx_lines,
         "",
         "## Context",
         "",
@@ -365,7 +392,55 @@ def run(since_hours: int = 48, max_rows: int = 50, dry_run: bool = False) -> dic
         "results":     results,
     }
     log.info("triage summary: %s", {k:v for k,v in summary.items() if k != "results"})
+
+    # Email admins when there's something they need to triage by hand —
+    # i.e. new GitHub issues just opened. No new issues → no email.
+    if not dry_run and summary["issues_opened"] > 0:
+        try:
+            _email_admins_about_new_issues(results)
+        except Exception as e:
+            log.exception("admin email failed (issues already opened): %s", e)
+
     return summary
+
+
+def _email_admins_about_new_issues(results: list[dict]) -> None:
+    """Send a short HTML digest listing new issues so the admin can
+    decide which to fix today. Reuses the digest's send_email + admin
+    list helpers so we don't duplicate config."""
+    from pipeline.quality_digest import send_email, _admin_emails
+
+    new_issues = [r for r in results if r.get("issue_url")]
+    if not new_issues:
+        return
+    admins = _admin_emails()
+    if not admins:
+        log.warning("no admin emails configured; skipping new-issues email")
+        return
+
+    rows_html = "".join(
+        f'<li style="margin:8px 0">'
+        f'<a href="{r["issue_url"]}">{r.get("classification","?").upper()}: {r.get("summary","(untitled)")}</a> '
+        f'<span style="color:#888;font-size:12px">— severity {r.get("severity") or "—"}, slug <code>{r.get("slug","?")}</code></span>'
+        f'</li>'
+        for r in new_issues
+    )
+    html = (
+        '<html><body style="font-family:-apple-system,sans-serif;background:#fafaff;padding:20px;color:#1b1230;">'
+        '<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e6f3;border-radius:10px;padding:24px;">'
+        f'<h1 style="margin:0 0 8px;font-size:20px;">New feedback triaged ({len(new_issues)})</h1>'
+        '<p style="font-size:13px;color:#555;">Reply / open the issue link to decide if it goes in today.</p>'
+        f'<ul style="padding-left:18px">{rows_html}</ul>'
+        '<hr style="border:none;border-top:1px solid #eee;margin:16px 0;">'
+        '<p style="font-size:12px;color:#888;">Sent by <code>pipeline.feedback_triage</code>. '
+        'Each issue body includes the story / page the user was viewing. '
+        'Auto-fix only acts on body word-count, keyword, and image issues — everything else lands here for you to decide.</p>'
+        '</div></body></html>'
+    )
+    subject = f"Kids News feedback - {len(new_issues)} new issue(s) to triage"
+    for to in admins:
+        log.info("emailing %s about %d new issues", to, len(new_issues))
+        send_email(to, subject, html)
 
 
 if __name__ == "__main__":

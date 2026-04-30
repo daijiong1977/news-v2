@@ -211,7 +211,30 @@ If you remember nothing else, internalize these:
 
 ---
 
-## 16. References
+## 16. Promote agent fixes to scripts once the recipe is known
+
+When `claude -p` (or any agent) fixes a class of bug ≥ 2 times, the
+recipe should be ported to `pipeline/autofix_apply.py` (deterministic
+Python + DeepSeek). Agent reasoning is for novel multi-step work;
+text-shape transforms (rewrite to N words, weave/drop keyword,
+re-grab og:image) are scripted. See universal pattern #14 in
+`~/myprojects/lessons/universal-patterns.md`.
+
+**Project-specific operationalisation:**
+- `pipeline/autofix_apply.py` runs in CI between `quality_autofix`
+  (scan/enqueue) and `quality_digest` (report).
+- The local Mac listener (`autofix_consumer.py` + a 4×/day launchd
+  plist) only fires when there's a `status='fix-requested'` row — i.e.
+  an admin clicked **🤖 Fix with Claude** on a digest-email
+  escalation. Most days it does nothing.
+- Each agent run writes its `agent_log` with a `PROMOTABLE:` tag if
+  the fix was mechanical. Audit monthly: any pattern ≥ 2 → port a
+  handler into `autofix_apply.py`, delete that branch from the
+  agent's prompt.
+
+---
+
+## 17. References
 
 - `docs/PROJECT-OVERVIEW.md` — full architecture + ops manual
 - `docs/bugs/INDEX.md` — every bug record (8 entries as of 2026-04-29)

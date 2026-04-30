@@ -62,6 +62,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      AUTOFIX_BUTTON_SECRET: ${{ secrets.AUTOFIX_BUTTON_SECRET }}
       QUALITY_DIGEST_TO: ${{ inputs.to || 'self@daijiong.com' }}
       QUALITY_DIGEST_DAYS: ${{ inputs.days || '3' }}
     steps:
@@ -149,14 +150,25 @@ jobs:
           echo "Sleeping ${REMAINING}s (= $((REMAINING/60)) min) to reach trigger+90min anchor"
           sleep "$REMAINING"
 
-      - name: Run mechanical autofix
+      - name: Run autofix scan (queue issues)
         if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_autofix != true }}
-        # Trims body / why / summary that overshot. Queues complex
-        # issues (body too short, keyword miss, image missing) for
-        # the local Mac daemon. Tolerates failure: digest still runs.
+        # Scans yesterday's articles, enqueues word-count / keyword /
+        # image misses into redesign_autofix_queue. No mechanical edits.
         continue-on-error: true
         run: |
           python -m pipeline.quality_autofix --days 1 | tee autofix.json
+
+      - name: Apply queued autofixes (DeepSeek + image regrab)
+        if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_autofix != true }}
+        # Drains the queue in-process: one DeepSeek regen for body /
+        # keyword issues, two og:image attempts for image_missing,
+        # ESCALATE for anything else. Replaces the old `claude -p`
+        # consumer for routine fixes — runs in CI, no Mac dependency.
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        continue-on-error: true
+        run: |
+          python -m pipeline.autofix_apply --max 30 | tee autofix-apply.json
 
       - name: Send digest
         if: ${{ steps.guard.outputs.should_run != 'false' }}
@@ -239,6 +251,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: autofix-${{ github.run_id }}
-          path: autofix.json
+          path: |
+            autofix.json
+            autofix-apply.json
           retention-days: 30
           if-no-files-found: ignore
