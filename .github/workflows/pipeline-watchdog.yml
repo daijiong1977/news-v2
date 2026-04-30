@@ -1,0 +1,103 @@
+name: Pipeline watchdog
+
+# Fires when daily-pipeline completes. If it failed (and the failed run
+# was NOT itself a retry), email the admin and re-dispatch daily-pipeline
+# once with `is_retry=true` so we get a second chance without looping.
+#
+# If the failed run was already a retry (is_retry=true input), give up
+# and just email the admin — don't infinite-loop.
+#
+# Why a separate workflow: workflow_run can read the upstream run's
+# inputs and conclusion, dispatch new runs, and call edge functions —
+# all without polluting daily-pipeline.yml's logic.
+
+on:
+  workflow_run:
+    workflows: ["Daily pipeline"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write    # required so we can re-dispatch daily-pipeline
+
+concurrency:
+  group: pipeline-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    # Only act when the upstream run failed.
+    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out' || github.event.workflow_run.conclusion == 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
+      UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      UPSTREAM_HTML_URL: ${{ github.event.workflow_run.html_url }}
+      UPSTREAM_NAME: ${{ github.event.workflow_run.name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide whether to retry
+        id: decide
+        # Pull the upstream run's inputs to see if it was already a
+        # retry. If is_retry input was true, this is the retry attempt
+        # itself — don't loop, just email and stop.
+        run: |
+          set -e
+          INPUTS_JSON=$(gh api \
+            "repos/${{ github.repository }}/actions/runs/${UPSTREAM_RUN_ID}" \
+            --jq '.inputs // {}')
+          IS_RETRY=$(echo "$INPUTS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('is_retry','false')).lower())")
+          echo "upstream is_retry input: $IS_RETRY"
+          echo "should_retry=$([ "$IS_RETRY" = "true" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+
+      - name: Email admins about the failure
+        # Always send, regardless of whether we're going to retry.
+        run: |
+          set -e
+          # Resolve admin emails the same way quality_digest does.
+          ADMINS=$(curl -fsS \
+            -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            "$SUPABASE_URL/rest/v1/redesign_admin_users?select=email" \
+            | python3 -c "import sys,json; print(','.join(r['email'] for r in json.load(sys.stdin) if r.get('email')))")
+          echo "recipients: $ADMINS"
+
+          if [ -z "$ADMINS" ]; then
+              echo "::warning::no admin emails found — skipping email"
+              exit 0
+          fi
+
+          ACTION_LINE="${{ steps.decide.outputs.should_retry == 'true' && '🔁 Auto-retrying once.' || '⛔ This was already the retry attempt — not retrying further. Manual investigation needed.' }}"
+          SUBJECT="Kids News pipeline FAILED - ${UPSTREAM_CONCLUSION}"
+          HTML="<html><body style=\"font-family:-apple-system,sans-serif;background:#fff1f1;padding:20px;color:#1b1230;\">"
+          HTML="${HTML}<div style=\"max-width:560px;margin:0 auto;background:#fff;border:1px solid #f5c6c6;border-radius:10px;padding:24px;\">"
+          HTML="${HTML}<h1 style=\"margin:0 0 8px;font-size:20px;color:#a02b2b;\">⚠ Pipeline run failed</h1>"
+          HTML="${HTML}<p>The daily-pipeline workflow ended with conclusion <strong>${UPSTREAM_CONCLUSION}</strong>.</p>"
+          HTML="${HTML}<p style=\"font-size:13px;\"><strong>Run:</strong> <a href=\"${UPSTREAM_HTML_URL}\">${UPSTREAM_HTML_URL}</a></p>"
+          HTML="${HTML}<p style=\"font-size:13px;\"><strong>Watchdog action:</strong> ${ACTION_LINE}</p>"
+          HTML="${HTML}<hr style=\"border:none;border-top:1px solid #eee;margin:16px 0;\">"
+          HTML="${HTML}<p style=\"font-size:12px;color:#666;\">Common failure causes: 60→90min timeout, DeepSeek API outage, Supabase Storage 5xx, kidsnews-v2 sync auth drift. Open the run link to inspect step-level errors.</p>"
+          HTML="${HTML}</div></body></html>"
+
+          # Send to each admin (separate email per recipient — same pattern as quality_digest).
+          for to in $(echo "$ADMINS" | tr ',' ' '); do
+              echo "→ sending to $to"
+              curl -fsS -X POST "$SUPABASE_URL/functions/v1/send-email-v2" \
+                -H "Content-Type: application/json" \
+                -d "$(python3 -c "import json,sys,os; print(json.dumps({'to_email': '$to', 'subject': '$SUBJECT', 'html': '''$HTML''', 'from_name': 'Kids News Pipeline'}))")" \
+                || echo "::warning::email to $to failed"
+          done
+
+      - name: Re-dispatch daily-pipeline (one-shot)
+        if: steps.decide.outputs.should_retry == 'true'
+        run: |
+          gh workflow run daily-pipeline.yml \
+            -R ${{ github.repository }} \
+            -f pipeline_variant=current \
+            -f is_retry=true
+          echo "✓ re-dispatched daily-pipeline with is_retry=true"

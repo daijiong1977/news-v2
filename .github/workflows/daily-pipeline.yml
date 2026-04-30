@@ -13,6 +13,10 @@ on:
         type: choice
         options: ['', stage2_picks, verify, rewrite, stage3_safety, enrich, persist]
         default: ''
+      is_retry:
+        description: "Internal — set by pipeline-watchdog to prevent retry-of-retry loop"
+        type: boolean
+        default: false
   schedule:
     # Polls every 30 minutes. The first job step reads
     # `redesign_cron_config` and exits early when "now" isn't within
@@ -33,9 +37,11 @@ jobs:
   run:
     runs-on: ubuntu-latest
     # mega rewrite + enrich routinely uses 15-25 min on DeepSeek V4 Pro
-    # and can spike higher when pool counts are large. 60 min is a safe
-    # ceiling; the gate step early-exits in seconds when not in window.
-    timeout-minutes: 60
+    # and can spike to 50+ min when Pro is flaky and the chat/reasoner
+    # fast-fail-to-Flash fallback fires. 90 min is the safe ceiling
+    # WITH the fallback retries factored in. The gate step early-exits
+    # in seconds when not in cron window so cost is the same.
+    timeout-minutes: 90
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

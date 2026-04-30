@@ -306,6 +306,100 @@ def _row_for_level(metrics: dict, level: str) -> str:
     return "<tr>" + "".join(cells) + "</tr>"
 
 
+def fetch_pipeline_runs(days: int) -> list[dict]:
+    """Pull recent redesign_runs entries with telemetry. Returns one
+    row per run within the lookback window (which may be more than
+    `days` rows if multiple runs per day). Falls back to [] on error."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return []
+    since = (datetime.now(ET).date() - timedelta(days=days)).isoformat()
+    try:
+        from urllib.parse import urlencode
+        url = (f"{SUPABASE_URL}/rest/v1/redesign_runs?"
+               + urlencode({
+                   "select":   "run_date,status,started_at,finished_at,telemetry",
+                   "run_date": f"gte.{since}",
+                   "order":    "finished_at.desc",
+                   "limit":    "30",
+               }))
+        req = request.Request(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        })
+        with request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        log.warning("could not read redesign_runs: %s", e)
+        return []
+
+
+def render_pipeline_runs_panel(runs: list[dict]) -> str:
+    """For-tuning panel: per-run telemetry highlighting retries,
+    truncations, fallbacks, warnings. Skip rows with nothing notable
+    so the panel only fires when there's something to look at."""
+    if not runs:
+        return ''
+
+    notable: list[str] = []
+    for r in runs:
+        tel = r.get("telemetry") or {}
+        llm = tel.get("llm_calls") or {}
+        warnings = tel.get("warnings") or []
+        phases = tel.get("phases") or {}
+        flags: list[str] = []
+
+        ch_ret = llm.get("chat_retries", 0)
+        ch_rep = llm.get("chat_repaired", 0)
+        rs_cr  = llm.get("reasoner_content_retries", 0)
+        rs_tr  = llm.get("reasoner_transport_retries", 0)
+        rs_rep = llm.get("reasoner_repaired", 0)
+        rs_trn = llm.get("reasoner_truncated", 0)
+
+        if ch_ret:  flags.append(f'chat retries={ch_ret}')
+        if ch_rep:  flags.append(f'chat JSON repaired={ch_rep}')
+        if rs_cr:   flags.append(f'reasoner content retries={rs_cr}')
+        if rs_tr:   flags.append(f'reasoner transport retries={rs_tr}')
+        if rs_rep:  flags.append(f'reasoner JSON repaired={rs_rep}')
+        if rs_trn:  flags.append(f'reasoner truncated={rs_trn}')
+
+        # per-category exhausted sources
+        for cat, cat_data in (tel.get("per_category") or {}).items():
+            ex = cat_data.get("sources_exhausted") or []
+            if ex:
+                flags.append(f'{cat} exhausted: {", ".join(ex)}')
+
+        if warnings:
+            flags.append(f'{len(warnings)} warning(s): {"; ".join(warnings[:3])[:120]}')
+
+        if not flags and r.get("status") == "completed":
+            continue   # nothing to surface for this run
+
+        # Wallclock seconds — sum of phases or computed from started/finished
+        seconds = sum((phases.get(p) or {}).get("seconds", 0) for p in phases)
+        mm = int(seconds // 60)
+
+        line = f'<li><strong>{r["run_date"]}</strong>: {r["status"]} · {mm}m wallclock'
+        if flags:
+            line += ' · ' + ' · '.join(flags)
+        line += '</li>'
+        notable.append(line)
+
+    if not notable:
+        return ''   # everything clean — nothing to print
+
+    return (
+        '<div style="margin-top:14px;padding:14px 18px;background:#fafafa;'
+        'border:1px solid #e5e5e5;border-radius:10px;font-size:12px;color:#444;">'
+        '<div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#1b1230;">'
+        '🔧 Pipeline runs (notable telemetry only — for tuning)'
+        '</div>'
+        '<ul style="margin:0;padding-left:20px;line-height:1.55;">'
+        + "".join(notable) +
+        '</ul>'
+        '</div>'
+    )
+
+
 def fetch_queue_summary() -> dict:
     """Pull current redesign_autofix_queue state for the pending-fixes
     panel. Returns {count, items} where items is a list of brief
@@ -422,25 +516,26 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     total_variants, bad_variants = _count_pass_fail(days)
     queue_count = (queue or {}).get("count", 0)
 
+    # Pull recent pipeline runs for the tuning panel.
+    pipeline_runs = fetch_pipeline_runs(len(days))
+    pipeline_panel = render_pipeline_runs_panel(pipeline_runs)
+
     # Clean-day shortcut: if every article passed AND nothing pending,
-    # don't bother with the per-day tables. The user just wants
-    # confirmation the pipeline ran and nothing's broken.
+    # don't bother with the per-day tables. Just confirm "today is good"
+    # without listing every checked date — user only wants to see dates
+    # that have something wrong.
     if bad_variants == 0 and queue_count == 0:
-        # Per-day mini-summary so they know which days were checked.
-        day_list = ", ".join(d["date"] for d in days if not d.get("missing_day"))
+        today_label = days[0]["date"] if days else datetime.now(ET).date().isoformat()
         missing = [d["date"] for d in days if d.get("missing_day")]
         lines.append(
             '<div style="margin-top:20px;padding:36px 20px;background:#ecfaf0;'
             'border-radius:10px;text-align:center;color:#197a3b;">'
             '<div style="font-size:54px;margin-bottom:10px;">🎉</div>'
             '<div style="font-size:22px;font-weight:700;margin-bottom:6px;">'
-            'Today everything is good!'
+            f'{today_label} — everything is good!'
             '</div>'
-            f'<div style="font-size:14px;color:#222;margin-bottom:4px;">'
+            f'<div style="font-size:14px;color:#222;">'
             f'All {total_variants} article variants passed all checks. No items pending.'
-            '</div>'
-            f'<div style="font-size:12px;color:#666;">'
-            f'Days checked: {day_list}'
             '</div>'
             '</div>'
         )
@@ -452,6 +547,8 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
                 'Possibly the pipeline cron didn\'t fire — check daily-pipeline workflow.'
                 '</div>'
             )
+        if pipeline_panel:
+            lines.append(pipeline_panel)
         lines.append('<div style="font-size:11px;color:#aaa;margin-top:16px;">'
                       'Source: <code>redesign-daily-content</code> storage. '
                       'Detailed report skipped because nothing needs your attention. '
@@ -538,6 +635,8 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
 
     lines.append(f'<div style="margin-top:18px;padding:10px 14px;background:#fafafa;border-radius:8px;font-size:12px;color:#666;">'
                   f'{total_variants - bad_variants} / {total_variants} article variants passed all checks.</div>')
+    if pipeline_panel:
+        lines.append(pipeline_panel)
     lines.append('<div style="font-size:11px;color:#aaa;margin-top:14px;">Source: <code>redesign-daily-content</code> storage. '
                   'Generated by <code>pipeline.quality_digest</code>.</div>')
     lines.append("</div></body></html>")
