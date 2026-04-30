@@ -1,6 +1,31 @@
 // Article detail page — News Oh,Ye!
 const { useState: useStateA, useMemo: useMemoA, useEffect: useEffectA, useRef: useRefA } = React;
 
+// Reactive viewport-narrow detector. Returns true while the viewport
+// is at or below `maxWidth` px so a layout can collapse a multi-column
+// grid into a single column on phones. The codebase has no other
+// matchMedia callers — keep this hook here scoped to article.jsx
+// rather than a shared helper until a second caller appears.
+function useIsNarrow(maxWidth) {
+  const query = `(max-width: ${maxWidth}px)`;
+  const [narrow, setNarrow] = useStateA(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia(query).matches;
+  });
+  useEffectA(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mql = window.matchMedia(query);
+    const handler = (e) => setNarrow(e.matches);
+    if (mql.addEventListener) {
+      mql.addEventListener('change', handler);
+      return () => mql.removeEventListener('change', handler);
+    }
+    mql.addListener(handler);
+    return () => mql.removeListener(handler);
+  }, [query]);
+  return narrow;
+}
+
 // Format an ISO-8601 timestamp as "Apr 24, 2026". Returns "" on bad input
 // so callers can safely conditionally render.
 function formatDate(iso) {
@@ -526,8 +551,14 @@ function pdfUrlForArticle(article) {
 function ReadAndWordsTab({ article, paragraphs, expanded, setExpanded, onFinish }) {
   const catColor = getCatColor(article.category);
   const [gameOpen, setGameOpen] = useStateA(false);
+  // Below ~768px a 1.6fr/1fr grid forces the body to ~225px and the
+  // aside to ~140px on a typical phone — both columns become cramped
+  // and the user reports the body looks "too long" relative to the
+  // short aside. Stack into a single column on narrow viewports so
+  // the body uses full width and the aside flows below at full width.
+  const isNarrow = useIsNarrow(768);
   return (
-    <div style={{display:'grid', gridTemplateColumns:'1.6fr 1fr', gap:24}}>
+    <div style={{display:'grid', gridTemplateColumns: isNarrow ? '1fr' : '1.6fr 1fr', gap:24}}>
       <div style={{background:'#fff', borderRadius:22, padding:'30px 34px', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:18, paddingBottom:14, borderBottom:'2px dashed #f0e8d8'}}>
           <div style={{fontSize:26}}>📖</div>
