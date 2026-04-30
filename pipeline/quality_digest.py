@@ -352,6 +352,24 @@ def render_pending_fixes_panel(queue: dict) -> str:
     )
 
 
+def _count_pass_fail(days: list[dict]) -> tuple[int, int]:
+    """Return (total_variants, bad_variants) across all days."""
+    total = 0
+    bad = 0
+    for d in days:
+        if d.get("missing_day"):
+            continue
+        for cat in d.get("categories", {}).values():
+            for s in cat["stories"]:
+                for lvl_metrics in s["levels"].values():
+                    total += 1
+                    if lvl_metrics.get("missing"):
+                        bad += 1
+                    elif not lvl_metrics.get("all_ok"):
+                        bad += 1
+    return total, bad
+
+
 def render_html(days: list[dict], queue: dict | None = None) -> str:
     lines: list[str] = []
     lines.append("<!doctype html><html><body style=\"font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;background:#f7f5f0;padding:18px;\">")
@@ -364,61 +382,127 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     if queue is not None:
         lines.append(render_pending_fixes_panel(queue))
 
-    for day in days:
-        date = day["date"]
-        lines.append(f'<h2 style="font-size:18px;color:#1b1230;border-bottom:2px solid #ffc83d;padding-bottom:6px;margin-top:22px;">{date}</h2>')
-        if day.get("missing_day"):
-            lines.append('<div style="color:#a02b2b;font-size:14px;">⚠ no listings published this day (storage prefix empty)</div>')
-            continue
-        for cat, block in day["categories"].items():
-            div_text = f'{block["distinct_source_count"]}/3 distinct sources'
-            div_badge = _badge(block["diversity_ok"], div_text)
-            lines.append(f'<h3 style="font-size:15px;margin-top:14px;color:#1b1230;">{cat.upper()} &nbsp; {div_badge}</h3>')
-            for story in block["stories"]:
-                first_title = ""
-                for level in LEVELS:
-                    m = story["levels"].get(level) or {}
-                    if not m.get("missing") and m.get("title"):
-                        first_title = m["title"]
-                        break
-                lines.append(f'<div style="font-weight:700;font-size:13px;margin:10px 0 4px;">{story["id"]} — {first_title[:90]}</div>')
-                lines.append('<table style="width:100%;border-collapse:collapse;font-size:12px;">')
-                lines.append(
-                    "<thead><tr style='background:#fafafa;color:#666;text-align:left;'>"
-                    "<th style='padding:4px 6px;width:60px;'>level</th>"
-                    "<th style='padding:4px 6px;'>body</th>"
-                    "<th style='padding:4px 6px;'>summary</th>"
-                    "<th style='padding:4px 6px;'>why</th>"
-                    "<th style='padding:4px 6px;'>keywords</th>"
-                    "<th style='padding:4px 6px;'>img</th>"
-                    "<th style='padding:4px 6px;'>src</th>"
-                    "</tr></thead><tbody>"
-                )
-                for level in LEVELS:
-                    m = story["levels"].get(level)
-                    if m is None:
-                        m = {"missing": True}
-                    lines.append(_row_for_level(m, level))
-                lines.append("</tbody></table>")
-    # Summary footer
-    total_articles = 0
-    bad_articles = 0
+    total_variants, bad_variants = _count_pass_fail(days)
+    queue_count = (queue or {}).get("count", 0)
+
+    # Clean-day shortcut: if every article passed AND nothing pending,
+    # don't bother with the per-day tables. The user just wants
+    # confirmation the pipeline ran and nothing's broken.
+    if bad_variants == 0 and queue_count == 0:
+        # Per-day mini-summary so they know which days were checked.
+        day_list = ", ".join(d["date"] for d in days if not d.get("missing_day"))
+        missing = [d["date"] for d in days if d.get("missing_day")]
+        lines.append(
+            '<div style="margin-top:20px;padding:36px 20px;background:#ecfaf0;'
+            'border-radius:10px;text-align:center;color:#197a3b;">'
+            '<div style="font-size:54px;margin-bottom:10px;">🎉</div>'
+            '<div style="font-size:22px;font-weight:700;margin-bottom:6px;">'
+            'Today everything is good!'
+            '</div>'
+            f'<div style="font-size:14px;color:#222;margin-bottom:4px;">'
+            f'All {total_variants} article variants passed all checks. No items pending.'
+            '</div>'
+            f'<div style="font-size:12px;color:#666;">'
+            f'Days checked: {day_list}'
+            '</div>'
+            '</div>'
+        )
+        if missing:
+            lines.append(
+                '<div style="margin-top:14px;padding:10px 14px;background:#fff5e8;'
+                'border-radius:8px;font-size:12px;color:#7a4d18;">'
+                f'⚠ No listings published on: {", ".join(missing)}. '
+                'Possibly the pipeline cron didn\'t fire — check daily-pipeline workflow.'
+                '</div>'
+            )
+        lines.append('<div style="font-size:11px;color:#aaa;margin-top:16px;">'
+                      'Source: <code>redesign-daily-content</code> storage. '
+                      'Detailed report skipped because nothing needs your attention. '
+                      'Generated by <code>pipeline.quality_digest</code>.</div>')
+        lines.append("</div></body></html>")
+        return "".join(lines)
+
+    # There's at least one issue. List failing articles tersely with
+    # the specific failed metric — NO full per-day tables. The
+    # pending-fixes panel above already gives the action buttons; this
+    # block just clarifies anything detected at storage scan time
+    # that didn't make it into the queue (mostly edge cases).
+    issue_lines: list[str] = []
     for d in days:
-        for cat in d.get("categories", {}).values():
-            for s in cat["stories"]:
-                for lvl_metrics in s["levels"].values():
-                    if lvl_metrics.get("missing"):
-                        bad_articles += 1
-                        total_articles += 1
+        if d.get("missing_day"):
+            issue_lines.append(
+                f'<li><strong>{d["date"]}</strong>: '
+                'no listings published — pipeline cron may not have fired. '
+                '<em>Fix:</em> check daily-pipeline workflow runs in GitHub Actions.</li>'
+            )
+            continue
+        for cat, block in d.get("categories", {}).items():
+            if not block["diversity_ok"]:
+                issue_lines.append(
+                    f'<li><strong>{d["date"]} · {cat.upper()}</strong>: '
+                    f'only {block["distinct_source_count"]}/3 distinct sources. '
+                    '<em>Fix:</em> add more sources to this category in admin → Sources, or rerun pipeline.</li>'
+                )
+            for story in block["stories"]:
+                for level in LEVELS:
+                    m = story["levels"].get(level) or {"missing": True}
+                    if m.get("missing"):
+                        issue_lines.append(
+                            f'<li><strong>{story["id"]} · {level}</strong>: '
+                            'payload file missing. '
+                            '<em>Fix:</em> rerun pipeline rewrite + persist for this story.</li>'
+                        )
                         continue
-                    total_articles += 1
-                    if not lvl_metrics.get("all_ok"):
-                        bad_articles += 1
-    lines.append(f'<div style="margin-top:24px;padding:12px;background:#fafafa;border-radius:8px;font-size:13px;">'
-                  f'<strong>Overall:</strong> {total_articles - bad_articles} / {total_articles} article variants passed all checks. '
-                  f'{ "🎉" if bad_articles == 0 else "🔍 review reds above" }</div>')
-    lines.append('<div style="font-size:11px;color:#aaa;margin-top:16px;">Source: <code>redesign-daily-content</code> storage. '
-                  'Generated by <code>pipeline.quality_digest</code> · feedback#10 / issue#5.</div>')
+                    if m.get("all_ok"):
+                        continue
+                    # Compose the specific issues for this article.
+                    issues: list[str] = []
+                    fixes: list[str] = []
+                    if not m.get("body_ok"):
+                        issues.append(f'body {m["body_wc"]} words (target {m["body_target"]})')
+                        fixes.append('🛠️ Fix on the panel will re-rewrite body to fit')
+                    if not m.get("summary_ok"):
+                        issues.append(f'summary {m["summary_wc"]} words (target ≤{SUMMARY_MAX})')
+                        fixes.append('listing-summary trim runs automatically next pipeline')
+                    if not m.get("why_ok"):
+                        issues.append(f'why_it_matters {m["why_wc"]} words (target ≤{WHY_MAX})')
+                        fixes.append('🛠️ Fix → trim + re-prompt')
+                    if not m.get("kw_ok"):
+                        miss = m.get("kw_misses") or []
+                        miss_str = ", ".join(f'"{k}"' for k in miss[:3])
+                        issues.append(f'keyword miss: {miss_str}')
+                        fixes.append('🛠️ Fix → agent decides to weave in or remove bogus keyword')
+                    if not m.get("image_ok"):
+                        issues.append('image missing')
+                        fixes.append('🛠️ Fix → re-trigger image generator')
+                    if not m.get("source_ok"):
+                        issues.append('source attribution missing')
+                        fixes.append('manual: edit listing JSON in admin')
+                    issue_text = "; ".join(issues)
+                    fix_text = " · ".join(set(fixes))   # de-dup
+                    issue_lines.append(
+                        f'<li><strong>{story["id"]} · {level}</strong>: '
+                        f'{issue_text}. '
+                        f'<em>Fix:</em> {fix_text}.</li>'
+                    )
+
+    if issue_lines:
+        lines.append(
+            '<div style="margin-top:14px;padding:14px 18px;background:#fff1f1;'
+            'border:1px solid #f5c6c6;border-radius:10px;color:#1b1230;">'
+            '<div style="font-weight:700;font-size:14px;color:#a02b2b;margin-bottom:8px;">'
+            f'⚠ {len(issue_lines)} quality issue{"s" if len(issue_lines) != 1 else ""} detected'
+            '</div>'
+            '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.55;">'
+            + "".join(issue_lines) +
+            '</ul>'
+            '</div>'
+        )
+
+    lines.append(f'<div style="margin-top:18px;padding:10px 14px;background:#fafafa;border-radius:8px;font-size:12px;color:#666;">'
+                  f'{total_variants - bad_variants} / {total_variants} article variants passed all checks.</div>')
+    lines.append('<div style="font-size:11px;color:#aaa;margin-top:14px;">Source: <code>redesign-daily-content</code> storage. '
+                  'Generated by <code>pipeline.quality_digest</code>.</div>')
     lines.append("</div></body></html>")
     return "".join(lines)
 
@@ -461,8 +545,14 @@ def run(days: int, to: str, dry_run: bool) -> dict:
     queue = fetch_queue_summary()
     log.info("autofix queue: %d items pending", queue.get("count", 0))
     html = render_html(day_blocks, queue=queue)
-    pend_suffix = f" · {queue['count']} pending fix{'es' if queue['count'] != 1 else ''}" if queue["count"] else ""
-    subject = f"📊 Kids News quality — {today.isoformat()} ET (last {days}d){pend_suffix}"
+    # Subject is ASCII-only by design. RFC 2047 encoded-words (used to
+    # carry emoji / em-dash / middle-dot) get displayed as raw
+    # =?utf-8?Q?...?= text in some email clients that don't decode
+    # multi-chunk encoded-words correctly. ASCII subjects bypass that
+    # entirely, render anywhere, and Gmail spam filters like them
+    # better too.
+    pend_suffix = f" - {queue['count']} pending fix{'es' if queue['count'] != 1 else ''}" if queue["count"] else ""
+    subject = f"Kids News quality - {today.isoformat()} ET (last {days}d){pend_suffix}"
     if dry_run:
         sys.stdout.write(html)
         return {"dry_run": True, "subject": subject, "bytes": len(html)}

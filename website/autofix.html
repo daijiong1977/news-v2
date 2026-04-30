@@ -148,8 +148,17 @@ async function loadQueue() {
 function renderItems(items) {
   const container = document.getElementById('content');
   if (!items || items.length === 0) {
-    container.innerHTML = '<div class="empty">✓ Nothing pending. Queue is clean.</div>' +
-      '<div class="legend"><strong>Action meanings (when items appear):</strong><br>' +
+    container.innerHTML =
+      '<div class="empty" style="padding:36px 16px;">' +
+        '<div style="font-size:54px;line-height:1;margin-bottom:10px;">🎉</div>' +
+        '<div style="font-size:20px;font-weight:700;color:#197a3b;margin-bottom:6px;">' +
+          'Today everything is good!' +
+        '</div>' +
+        '<div style="font-size:13px;color:#444;">' +
+          'No issues need your attention. The pipeline ran cleanly.' +
+        '</div>' +
+      '</div>' +
+      '<div class="legend"><strong>Action meanings (for when items appear):</strong><br>' +
       '<strong>🛠️ Fix</strong> — marks for the local Claude Code agent on your Mac to regen.<br>' +
       '<strong>🚫 Dismiss</strong> — ignore (won\'t retry).<br>' +
       '<strong>✓ Resolved</strong> — already-fine, mark closed.</div>';
