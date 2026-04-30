@@ -439,17 +439,14 @@ def _deepseek_post(payload: dict, timeout: int,
         return DeepSeekResult(None, raw, finish_reason, e, None, usage)
 
 
-def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2,
-                  max_attempts: int = 3, json_mode: bool = True) -> dict:
-    """Call the active chat provider (resolved from `redesign_ai_providers`,
-    falling back to env-var DeepSeek). JSON mode (response_format) on by
-    default — eliminates the malformed-JSON failure class for most calls.
-    Retries with per-class backoff."""
-    api_key, endpoint, model = _resolve_chat_provider()
+def _deepseek_call_with_model(model: str, system: str, user: str,
+                                max_tokens: int, temperature: float,
+                                max_attempts: int, json_mode: bool,
+                                api_key: str, endpoint: str) -> dict:
+    """Inner loop: max_attempts retries against ONE model. On exhaust
+    raises so the caller can fall through to a different model."""
     payload = {
         "model": model,
-        # Disable thinking — V4 default is on; chat/rewrite is faithful
-        # restatement, doesn't need reasoning tokens.
         "thinking": {"type": "disabled"},
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": user}],
@@ -459,7 +456,6 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
-    CALL_STATS["chat_calls"] += 1
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
@@ -475,19 +471,66 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
                 )
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
             CALL_STATS["chat_retries"] += 1
-            log.warning("chat attempt %d/%d: JSON parse failed (finish=%s)",
-                        attempt, max_attempts, res.finish_reason)
+            # Log the raw content snippet so we can see what the model
+            # actually emitted. Without this, "JSON parse failed" is
+            # an opaque signal — we can't tell if the model returned
+            # markdown-wrapped JSON, prose-then-JSON, Python literals,
+            # truncated mid-string, etc.
+            raw = res.raw_content or ""
+            head = raw[:300].replace("\n", "\\n")
+            tail = raw[-200:].replace("\n", "\\n") if len(raw) > 500 else ""
+            log.warning("chat attempt %d/%d on %s: JSON parse failed (finish=%s, len=%d)",
+                        attempt, max_attempts, model, res.finish_reason, len(raw))
+            log.warning("  raw[:300] = %r", head)
+            if tail:
+                log.warning("  raw[-200:] = %r", tail)
             if attempt < max_attempts:
                 time.sleep(_retry_sleep_for(last_err, attempt))
         except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
             last_err = e
             CALL_STATS["chat_retries"] += 1
             wait = _retry_sleep_for(e, attempt)
-            log.warning("chat attempt %d/%d failed (%s): waiting %.1fs",
-                        attempt, max_attempts, type(e).__name__, wait)
+            log.warning("chat attempt %d/%d on %s failed (%s): waiting %.1fs",
+                        attempt, max_attempts, model, type(e).__name__, wait)
             if attempt < max_attempts:
                 time.sleep(wait)
-    raise RuntimeError(f"deepseek_call exhausted {max_attempts} attempts") from last_err
+    raise RuntimeError(f"deepseek_call exhausted {max_attempts} attempts on {model}") from last_err
+
+
+def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 0.2,
+                  max_attempts: int = 3, json_mode: bool = True) -> dict:
+    """Call the active chat provider (resolved from `redesign_ai_providers`,
+    falling back to env-var DeepSeek). JSON mode (response_format) on by
+    default. Per-model retries with backoff, then **falls back to
+    deepseek-v4-flash** if the primary model is non-Flash and exhausts
+    its attempts.
+
+    Why the fallback: V4 Pro discount tier is observed to occasionally
+    emit non-parseable JSON despite `response_format: json_object`,
+    especially on long prompts. Flash is more deterministic for json
+    mode and almost always succeeds on the same prompt. Cost increase
+    is negligible (only fires on Pro failure). See bug record
+    references in `docs/LESSONS-LEARNED.md` if this fires often."""
+    api_key, endpoint, model = _resolve_chat_provider()
+    CALL_STATS["chat_calls"] += 1
+    try:
+        return _deepseek_call_with_model(model, system, user, max_tokens,
+                                           temperature, max_attempts,
+                                           json_mode, api_key, endpoint)
+    except RuntimeError as primary_err:
+        # Primary model exhausted. If we weren't already on Flash, try Flash.
+        fallback = "deepseek-v4-flash"
+        if fallback in model.lower() or "flash" in model.lower():
+            raise
+        log.warning("primary model %s exhausted; falling back to %s", model, fallback)
+        try:
+            return _deepseek_call_with_model(fallback, system, user, max_tokens,
+                                               temperature, max_attempts,
+                                               json_mode, api_key, endpoint)
+        except RuntimeError as fallback_err:
+            raise RuntimeError(
+                f"both primary ({model}) and fallback ({fallback}) exhausted"
+            ) from fallback_err
 
 
 def vet_curator_input(briefs: list[dict], pick_count: int) -> str:
