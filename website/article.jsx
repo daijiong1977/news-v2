@@ -558,7 +558,7 @@ function ReadAndWordsTab({ article, paragraphs, expanded, setExpanded, onFinish 
         </div>
       </div>
 
-      <aside style={{display:'flex', flexDirection:'column', gap:14}}>
+      <aside style={{display:'flex', flexDirection:'column', gap:14, position:'sticky', top:90, alignSelf:'start', maxHeight:'calc(100vh - 110px)', overflow:'auto'}}>
         <div style={{background:'#fff', border:'2px solid #f0e8d8', borderRadius:18, padding:18}}>
           <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
             <div style={{fontSize:22}}>🔑</div>
