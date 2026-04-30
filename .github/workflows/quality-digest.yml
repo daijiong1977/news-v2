@@ -47,7 +47,7 @@ on:
         default: "self@daijiong.com"
 
 permissions:
-  contents: read
+  contents: write    # required for the auto-sync step to commit YAML cron updates
 
 concurrency:
   group: quality-digest
@@ -164,6 +164,75 @@ jobs:
           python -m pipeline.quality_digest \
             --days "${QUALITY_DIGEST_DAYS}" \
             --to "${QUALITY_DIGEST_TO}"
+
+      - name: Sync admin cron config to YAML for next run
+        # The daily-pipeline YAML hardcodes its cron schedule (no
+        # more 30-min polling). Admin can edit the cron in the
+        # website admin panel — that updates `redesign_cron_config`
+        # in Supabase. Here, AFTER each run's digest, we compare
+        # the DB cron to the YAML cron. If admin changed it, edit
+        # the YAML + commit + push so the NEXT day's GitHub cron
+        # uses the new value. Doesn't take effect today (already
+        # ran), takes effect from the next scheduled fire.
+        #
+        # The push happens with the default GITHUB_TOKEN; the
+        # `permissions.contents: write` block above is what makes
+        # this allowed.
+        if: ${{ steps.guard.outputs.should_run != 'false' && github.event_name == 'workflow_run' }}
+        env:
+          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -e
+          python3 -m pip install --quiet croniter
+
+          # Pull DB cron + enabled
+          DB_DATA=$(curl -fsS \
+            -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            "$SUPABASE_URL/rest/v1/redesign_cron_config?name=eq.daily-pipeline&select=cron_expression,enabled")
+          DB_CRON=$(echo "$DB_DATA" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['cron_expression'] if d else '')")
+          DB_ENABLED=$(echo "$DB_DATA" | python3 -c "import sys,json; d=json.load(sys.stdin); print(str(d[0].get('enabled', True)).lower() if d else 'true')")
+
+          if [ -z "$DB_CRON" ]; then
+              echo "no DB cron config; skipping sync"
+              exit 0
+          fi
+
+          # Validate the DB cron — refuse to write a broken expression
+          if ! python3 -c "from croniter import croniter; from datetime import datetime; croniter('$DB_CRON', datetime.utcnow())" 2>/dev/null; then
+              echo "::error::DB cron expression '$DB_CRON' is invalid; skipping sync"
+              exit 0
+          fi
+
+          # Read current YAML cron (the line under daily-pipeline.yml's schedule:)
+          YAML_FILE=".github/workflows/daily-pipeline.yml"
+          YAML_CRON=$(grep -E '^\s+- cron: ".*"$' "$YAML_FILE" | head -1 | sed -E 's/.*cron: "(.*)".*/\1/')
+
+          if [ "$DB_CRON" = "$YAML_CRON" ]; then
+              echo "DB and YAML cron match ($DB_CRON) — no sync needed"
+              exit 0
+          fi
+
+          echo "Syncing daily-pipeline cron: '$YAML_CRON' → '$DB_CRON' (DB enabled=$DB_ENABLED)"
+
+          # Edit in place using python (sed escaping crons is fragile)
+          python3 - <<PY
+          import re, pathlib
+          p = pathlib.Path("$YAML_FILE")
+          src = p.read_text()
+          new = re.sub(r'(\s+- cron: ")[^"]*(")', r'\g<1>$DB_CRON\g<2>', src, count=1)
+          p.write_text(new)
+          PY
+
+          git config user.name  "kidsnews-cron-bot"
+          git config user.email "bot@kidsnews.local"
+          git add "$YAML_FILE"
+          git commit -m "chore(cron): sync daily-pipeline schedule from admin DB ($DB_CRON)" \
+                     -m "Auto-committed by quality-digest workflow. Admin changed cron in website panel; takes effect from the next scheduled run." \
+                     -m "Bot identity: kidsnews-cron-bot"
+          git push
+          echo "✓ pushed; tomorrow's GH cron will use $DB_CRON"
 
       - name: Upload autofix log
         if: always()

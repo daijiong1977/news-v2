@@ -18,11 +18,13 @@ on:
         type: boolean
         default: false
   schedule:
-    # Polls every 30 minutes. The first job step reads
-    # `redesign_cron_config` and exits early when "now" isn't within
-    # ±15 min of the admin-configured fire time, so the actual run
-    # time is admin-controlled — not pinned to this YAML.
-    - cron: "*/30 * * * *"
+    # Hardcoded admin-configured fire time. Synced FROM
+    # `redesign_cron_config` table by the quality-digest workflow at
+    # the end of each successful run (post-92-min digest send) — if
+    # admin edits the cron in the website's admin panel, that change
+    # appears here as a `chore(cron): sync ...` commit and takes
+    # effect from the NEXT day's run. No more 30-min polling.
+    - cron: "20 17 * * *"
 
 permissions:
   contents: read
@@ -53,16 +55,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check admin-configured cron schedule
-        # Polls every 30m. Reads `redesign_cron_config` and decides
-        # whether THIS poll should proceed. workflow_dispatch always
-        # proceeds (skipping this step entirely). Schedule firings:
-        #   · enabled=false           → SKIP
-        #   · invalid cron expression → SKIP (logged)
-        #   · now NOT within ±15 min  → SKIP
-        # Sets steps.cron_check.outputs.proceed=true only when the poll
-        # should actually run the pipeline. We exit 0 in all paths so
-        # GitHub Actions doesn't show the run as failed.
+      - name: Check admin enabled flag + read variant
+        # YAML cron fires at the admin's configured time (synced by
+        # quality-digest at end of each run). Here we only check the
+        # `enabled` flag + read the `pipeline_variant` — no window
+        # gating. If admin disabled the cron in the website admin
+        # panel, we exit early (still success, no work done). On
+        # workflow_dispatch this step is skipped — manual runs always
+        # proceed.
         id: cron_check
         if: github.event_name == 'schedule'
         env:
@@ -70,12 +70,12 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet requests croniter
+          # Use stdlib only — no croniter needed since we don't gate
+          # on time window any more.
           python3 - <<'PY'
-          import os, sys, datetime as dt
-          import requests
+          import os, sys, json
+          from urllib import request, error
 
-          # Default outputs: skip + variant=current.
           out_path = os.environ['GITHUB_OUTPUT']
           def emit(proceed, variant='current'):
               with open(out_path, 'a') as f:
@@ -84,46 +84,28 @@ jobs:
 
           url = os.environ['SUPABASE_URL']
           key = os.environ['SUPABASE_SERVICE_KEY']
+          req = request.Request(
+              f"{url}/rest/v1/redesign_cron_config?name=eq.daily-pipeline&select=*",
+              headers={'apikey': key, 'Authorization': f'Bearer {key}'},
+          )
           try:
-              r = requests.get(
-                  f"{url}/rest/v1/redesign_cron_config?name=eq.daily-pipeline&select=*",
-                  headers={'apikey': key, 'Authorization': f'Bearer {key}'},
-                  timeout=10,
-              )
-              r.raise_for_status()
-              rows = r.json()
+              with request.urlopen(req, timeout=10) as r:
+                  rows = json.loads(r.read())
           except Exception as e:
-              print(f"::warning::cron_config fetch failed: {e}; skipping run", flush=True)
-              emit(False); sys.exit(0)
+              # If we can't reach the DB, assume enabled with default
+              # variant so we don't accidentally skip a real day.
+              print(f"::warning::cron_config fetch failed: {e}; defaulting to enabled+current", flush=True)
+              emit(True, 'current'); sys.exit(0)
 
           if not rows:
-              print("::warning::no redesign_cron_config row; skipping run", flush=True)
-              emit(False); sys.exit(0)
+              print("::warning::no redesign_cron_config row; defaulting to enabled+current", flush=True)
+              emit(True, 'current'); sys.exit(0)
           cfg = rows[0]
           if not cfg.get('enabled'):
-              print(f"cron disabled in config; skipping (id={cfg.get('id')})", flush=True)
+              print(f"cron disabled in admin config; skipping run", flush=True)
               emit(False); sys.exit(0)
-
-          expr = cfg.get('cron_expression') or ''
           variant = cfg.get('pipeline_variant') or 'current'
-          try:
-              from croniter import croniter
-              now = dt.datetime.now(dt.timezone.utc)
-              itr = croniter(expr, now)
-              prev_fire = itr.get_prev(dt.datetime)
-              next_fire = itr.get_next(dt.datetime)
-              delta = min(abs((now - prev_fire).total_seconds()),
-                          abs((next_fire - now).total_seconds()))
-          except Exception as e:
-              # Invalid cron expression — log and skip rather than fail
-              # every poll until someone fixes the row.
-              print(f"::error::invalid cron expression '{expr}': {e}; skipping run", flush=True)
-              emit(False); sys.exit(0)
-
-          if delta > 15 * 60:
-              print(f"now={now.isoformat()} not within 15m of cron '{expr}'; skipping", flush=True)
-              emit(False); sys.exit(0)
-          print(f"cron match: now within {delta:.0f}s of '{expr}' (variant={variant}) → proceed", flush=True)
+          print(f"admin: enabled, variant={variant} → proceed", flush=True)
           emit(True, variant)
           PY
 
