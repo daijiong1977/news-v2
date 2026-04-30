@@ -159,7 +159,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
 });
 
 function html(status: number, body: string): Response {
-  return new Response(body, {
+  // Explicit UTF-8 byte encoding — Deno's default Response(string)
+  // mis-rendered emoji and middle-dots in Gmail-launched browser
+  // contexts. See sibling autofix-review fn for the same pattern.
+  return new Response(new TextEncoder().encode(body), {
     status,
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });

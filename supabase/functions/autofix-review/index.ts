@@ -159,7 +159,11 @@ Deno.serve(async (_req: Request): Promise<Response> => {
   </div>
 </body></html>`;
 
-  return new Response(body, {
+  // Explicitly emit UTF-8 bytes — Deno's default Response(string)
+  // encoding has been observed to mis-render emoji in Gmail-launched
+  // browser contexts (the page rendered as `ðŸ› ï¸` instead of 🛠️
+  // even with <meta charset="utf-8"> + the Content-Type header).
+  return new Response(new TextEncoder().encode(body), {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
