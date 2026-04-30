@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.daedal.kidsnews-autofix</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <!-- {{HOME}} placeholder is replaced by install-autofix-daemon.sh -->
+        <string>{{HOME}}/myprojects/news-v2/scripts/autofix-daemon.sh</string>
+    </array>
+
+    <!-- Run every 30 minutes. StartInterval is wall-clock-cumulative,
+         not gated on the previous run finishing — and our daemon
+         exits within seconds when the queue is empty, so 30 min is
+         a generous floor that won't pile up. -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <!-- Run a single tick immediately at load time so the user can
+         verify it's working without waiting for the next half-hour. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Don't auto-restart on success exit. -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- launchd consolidates these to ~/Library/Logs/launchd_*. The
+         daemon writes its own structured log under
+         ~/Library/Logs/kidsnews-autofix/ — these two files are just
+         for catastrophic launchd-level failures. -->
+    <key>StandardOutPath</key>
+    <string>{{HOME}}/Library/Logs/kidsnews-autofix-out.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{HOME}}/Library/Logs/kidsnews-autofix-err.log</string>
+
+    <!-- Inherit user's $PATH so node, python, claude, etc. resolve. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{{HOME}}/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

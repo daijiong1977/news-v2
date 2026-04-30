@@ -26,6 +26,14 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 from urllib import error, parse, request
+from zoneinfo import ZoneInfo
+
+# All human-readable timestamps in the digest are rendered in ET so
+# they match the project owner's wall clock — saves "is Apr 30
+# correct? UTC says yes but I'm reading this on Apr 29 evening"
+# confusion. Storage prefix dates (which the pipeline writes as
+# wall-clock dates anyway) are left as-is.
+ET = ZoneInfo("America/New_York")
 
 log = logging.getLogger(__name__)
 
@@ -266,7 +274,8 @@ def render_html(days: list[dict]) -> str:
     lines.append("<!doctype html><html><body style=\"font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;background:#f7f5f0;padding:18px;\">")
     lines.append('<div style="max-width:880px;margin:0 auto;background:#fff;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">')
     lines.append('<h1 style="margin:0 0 4px;font-size:22px;color:#1b1230;">📊 Kids News — Quality Digest</h1>')
-    lines.append(f'<div style="font-size:12px;color:#888;margin-bottom:18px;">Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} · last {len(days)} days</div>')
+    now_et = datetime.now(ET)
+    lines.append(f'<div style="font-size:12px;color:#888;margin-bottom:18px;">Generated {now_et.strftime("%Y-%m-%d %H:%M %Z")} · last {len(days)} days</div>')
 
     for day in days:
         date = day["date"]
@@ -355,12 +364,15 @@ def send_email(to: str, subject: str, html: str) -> bool:
 
 
 def run(days: int, to: str, dry_run: bool) -> dict:
-    today = datetime.now(timezone.utc).date()
+    # "Today" anchors on the user's wall clock (ET) — without this,
+    # an evening run at 23:30 ET on Apr 29 (= 03:30 UTC Apr 30)
+    # would label its digest "Apr 30" and confuse the reader.
+    today = datetime.now(ET).date()
     targets = [(today - timedelta(days=i)).isoformat() for i in range(days)]
-    log.info("gathering %d days: %s", days, targets)
+    log.info("gathering %d days (ET-anchored): %s", days, targets)
     day_blocks = [gather_day(d) for d in targets]
     html = render_html(day_blocks)
-    subject = f"📊 Kids News quality — {today.isoformat()} (last {days}d)"
+    subject = f"📊 Kids News quality — {today.isoformat()} ET (last {days}d)"
     if dry_run:
         sys.stdout.write(html)
         return {"dry_run": True, "subject": subject, "bytes": len(html)}

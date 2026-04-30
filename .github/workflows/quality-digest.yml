@@ -1,37 +1,44 @@
 name: Quality digest email
 
-# After daily-pipeline completes (success OR failure), email a
-# 3-day quality summary to the project owner. Implements feedback
-# request #10 / GH issue #5 — see
-# docs/superpowers/specs/2026-04-29-quality-digest-email.md.
+# Plan C autofix loop. Runs ~1 hour after daily-pipeline completes.
 #
-# Three triggers:
-#   1. workflow_run on daily-pipeline — primary: fires automatically
-#      whenever a pipeline run finishes. `if: always()`-equivalent
-#      via the conclusions filter so a failed pipeline still produces
-#      a digest (which will visibly show no fresh content).
-#   2. schedule — backup cron at 04:30 UTC, in case a pipeline
-#      run never fired (e.g. cron disabled, dispatch missed).
-#   3. workflow_dispatch — manual button for testing.
+# Sequence:
+#   1. Sleep 1h (the user wants the pipeline to fully settle —
+#      kidsnews-v2 sync, Vercel deploy, etc. — before we read).
+#   2. Run pipeline.quality_autofix → mechanically trims body / why /
+#      summary that overshot targets, and queues complex issues
+#      (body too short, keyword miss, image missing) into
+#      redesign_autofix_queue for the local Mac daemon to handle.
+#   3. Run pipeline.quality_digest → emails self@daijiong.com a
+#      3-day summary that reflects post-fix reality.
 #
-# Required secrets (already set for this repo):
-#   - SUPABASE_URL
-#   - SUPABASE_SERVICE_KEY
+# Triggers:
+#   - workflow_run on Daily pipeline (primary; fires when pipeline
+#     finishes whether success or failure).
+#   - schedule (backup cron 05:30 UTC daily).
+#   - workflow_dispatch with optional skip_sleep flag for fast tests.
 #
-# The script reads payloads directly from Supabase Storage, so the
-# digest reflects what users actually see, not what the pipeline
-# thinks it published.
+# Required secrets (all already set):
+#   - SUPABASE_URL, SUPABASE_SERVICE_KEY
 
 on:
   workflow_run:
     workflows: ["Daily pipeline"]
     types: [completed]
   schedule:
-    - cron: "30 4 * * *"
+    - cron: "30 5 * * *"
   workflow_dispatch:
     inputs:
+      skip_sleep:
+        description: "Skip the 1h post-pipeline sleep (for testing)"
+        type: boolean
+        default: false
+      skip_autofix:
+        description: "Skip mechanical autofix (digest only)"
+        type: boolean
+        default: false
       days:
-        description: "Lookback window (days)"
+        description: "Digest lookback window (days)"
         type: string
         default: "3"
       to:
@@ -47,9 +54,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  send:
+  fix-and-digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 1h sleep + a few minutes of work; ubuntu-latest default timeout
+    # is 360 min, so 75 here is conservative.
+    timeout-minutes: 75
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -62,11 +71,38 @@ jobs:
           python-version: "3.11"
           cache: "pip"
       - name: Install deps
-        # quality_digest is dependency-light (stdlib only); skipping
-        # full requirements.txt to keep the runner fast.
+        # autofix + digest only need stdlib.
         run: python -m pip install -U pip
+
+      - name: Wait 1 hour after pipeline
+        # Skipped on dispatch when skip_sleep=true. The schedule and
+        # workflow_run paths always sleep; without it the digest reads
+        # storage before kidsnews-v2 sync + Vercel deploy settle.
+        if: ${{ inputs.skip_sleep != true }}
+        run: |
+          echo "Sleeping 60 min so pipeline → kidsnews-v2 sync → Vercel can settle…"
+          sleep 3600
+
+      - name: Run mechanical autofix
+        if: ${{ inputs.skip_autofix != true }}
+        # Trims body / why / summary that overshot. Queues complex
+        # issues (body too short, keyword miss, image missing) for
+        # the local Mac daemon. Tolerates failure: digest still runs.
+        continue-on-error: true
+        run: |
+          python -m pipeline.quality_autofix --days 1 | tee autofix.json
+
       - name: Send digest
         run: |
           python -m pipeline.quality_digest \
             --days "${QUALITY_DIGEST_DAYS}" \
             --to "${QUALITY_DIGEST_TO}"
+
+      - name: Upload autofix log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-${{ github.run_id }}
+          path: autofix.json
+          retention-days: 30
+          if-no-files-found: ignore
