@@ -1,0 +1,72 @@
+name: Quality digest email
+
+# After daily-pipeline completes (success OR failure), email a
+# 3-day quality summary to the project owner. Implements feedback
+# request #10 / GH issue #5 — see
+# docs/superpowers/specs/2026-04-29-quality-digest-email.md.
+#
+# Three triggers:
+#   1. workflow_run on daily-pipeline — primary: fires automatically
+#      whenever a pipeline run finishes. `if: always()`-equivalent
+#      via the conclusions filter so a failed pipeline still produces
+#      a digest (which will visibly show no fresh content).
+#   2. schedule — backup cron at 04:30 UTC, in case a pipeline
+#      run never fired (e.g. cron disabled, dispatch missed).
+#   3. workflow_dispatch — manual button for testing.
+#
+# Required secrets (already set for this repo):
+#   - SUPABASE_URL
+#   - SUPABASE_SERVICE_KEY
+#
+# The script reads payloads directly from Supabase Storage, so the
+# digest reflects what users actually see, not what the pipeline
+# thinks it published.
+
+on:
+  workflow_run:
+    workflows: ["Daily pipeline"]
+    types: [completed]
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Lookback window (days)"
+        type: string
+        default: "3"
+      to:
+        description: "Recipient email (override)"
+        type: string
+        default: "self@daijiong.com"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-digest
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      QUALITY_DIGEST_TO: ${{ inputs.to || 'self@daijiong.com' }}
+      QUALITY_DIGEST_DAYS: ${{ inputs.days || '3' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install deps
+        # quality_digest is dependency-light (stdlib only); skipping
+        # full requirements.txt to keep the runner fast.
+        run: python -m pip install -U pip
+      - name: Send digest
+        run: |
+          python -m pipeline.quality_digest \
+            --days "${QUALITY_DIGEST_DAYS}" \
+            --to "${QUALITY_DIGEST_TO}"
