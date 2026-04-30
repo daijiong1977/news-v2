@@ -295,27 +295,16 @@ def fetch_queue_summary() -> dict:
         return {"count": 0, "items": []}
 
 
-def _action_button(label: str, item_id: int, action: str, color: str, bg: str) -> str:
-    """Render a single per-item action button. URLs hit the
-    autofix-action edge function (https — Gmail-compatible), which
-    updates the queue row and (for action=fix) redirects to the
-    kidsnews-autofix:// custom scheme so the local app fires."""
-    url = f"{SUPABASE_URL}/functions/v1/autofix-action?id={item_id}&action={action}"
-    return (
-        f'<a href="{url}" '
-        f'style="display:inline-block;padding:5px 10px;margin:0 4px 0 0;'
-        f'background:{bg};color:{color};border:1px solid {color};'
-        f'border-radius:6px;text-decoration:none;font-size:11px;'
-        f'font-weight:700;">{label}</a>'
-    )
-
-
 def render_pending_fixes_panel(queue: dict) -> str:
-    """The 'X items pending fix' panel + per-item action buttons.
-    Rendered at the top of the email so the user sees it before
-    the report tables. Buttons are https URLs to autofix-action
-    edge function (Gmail-clickable)."""
+    """Single-CTA panel that links to the autofix-review browser
+    control panel. This deliberately keeps the email body to ONE
+    https link — multi-link emails to supabase.co URLs were getting
+    silently dropped by Gmail's bulk-mail filter (not even spam'd,
+    just gone). The control panel itself has all the per-item action
+    buttons; the email is just the doorbell."""
     n = queue.get("count", 0)
+    review_url = f"{SUPABASE_URL}/functions/v1/autofix-review"
+
     if n == 0:
         return ('<div style="margin-bottom:18px;padding:12px 16px;'
                 'background:#ecfaf0;border-radius:8px;font-size:13px;color:#197a3b;">'
@@ -323,71 +312,38 @@ def render_pending_fixes_panel(queue: dict) -> str:
                 'know the pipeline ran.)'
                 '</div>')
 
-    parts: list[str] = []
-    parts.append('<div style="margin-bottom:18px;padding:14px 16px;'
-                  'background:#fff5e8;border:1px solid #ffd9a0;'
-                  'border-radius:8px;font-size:13px;color:#7a4d18;">')
-    parts.append(f'<div style="font-weight:700;font-size:14px;margin-bottom:10px;">'
-                  f'⚠ {n} pending autofix item{"s" if n != 1 else ""} — '
-                  f'pick an action per item:</div>')
-
-    parts.append('<table style="width:100%;border-collapse:collapse;font-size:12px;">')
-    parts.append(
-        '<thead><tr style="color:#7a4d18;text-align:left;">'
-        '<th style="padding:4px 6px;font-weight:700;">Item</th>'
-        '<th style="padding:4px 6px;font-weight:700;width:280px;">Action</th>'
-        '</tr></thead><tbody>'
-    )
-    for item in queue["items"][:20]:
-        item_id = item.get("id")
+    # Brief item summary (text only — no per-item links). The full
+    # control panel is one click away.
+    item_lines: list[str] = []
+    for item in queue["items"][:5]:
         sid = item.get("story_id", "")
         level = item.get("level", "")
         ptype = item.get("problem_type", "")
-        attempts = item.get("attempts", 0)
-        attempt_note = (f' <span style="color:#a02b2b;font-size:10px;">'
-                         f'(attempted {attempts}x)</span>') if attempts > 0 else ""
-        # Item description cell
-        parts.append(
-            f'<tr style="border-top:1px dashed #f0d9b0;">'
-            f'<td style="padding:7px 6px;color:#1b1230;">'
-            f'<code style="font-size:11px;">{sid}</code> · '
-            f'{level} · <strong>{ptype}</strong>{attempt_note}'
-            f'</td>'
-        )
-        # Three action buttons
-        fix_btn  = _action_button("🛠️ Fix",     item_id, "fix",     "#fff",     "#1b1230")
-        diss_btn = _action_button("🚫 Dismiss", item_id, "dismiss", "#666",     "#fff")
-        res_btn  = _action_button("✓ Resolved", item_id, "resolve", "#197a3b",  "#fff")
-        parts.append(
-            f'<td style="padding:7px 0;">{fix_btn}{diss_btn}{res_btn}</td>'
-            f'</tr>'
-        )
-    if n > 20:
-        parts.append(f'<tr><td colspan="2" style="padding:7px 6px;color:#888;">'
-                      f'… and {n - 20} more (in admin Feedback tab)</td></tr>')
-    parts.append('</tbody></table>')
+        item_lines.append(f'<li><code style="font-size:11px;">{sid}</code> · {level} · {ptype}</li>')
+    if n > 5:
+        item_lines.append(f'<li style="color:#888;">… and {n - 5} more</li>')
 
-    # Bulk option: drain everything via the local Mac app.
-    parts.append(
-        '<div style="margin-top:14px;padding-top:10px;border-top:1px dashed #f0d9b0;'
-        'font-size:11px;color:#7a4d18;">'
-        '<strong>Bulk:</strong> '
-        '<a href="kidsnews-autofix://drain" '
-        'style="color:#1b1230;font-weight:700;">🛠️ Drain everything</a> '
-        '(opens KidsnewsAutofix.app on your Mac — runs all queued items in one go). '
-        'Or in Terminal: <code>~/myprojects/news-v2/scripts/drain-autofix-queue.sh</code>'
+    return (
+        '<div style="margin-bottom:18px;padding:18px 20px;'
+        'background:#fff5e8;border:1px solid #ffd9a0;border-radius:10px;'
+        'color:#7a4d18;">'
+        f'<div style="font-weight:700;font-size:15px;margin-bottom:8px;">'
+        f'⚠ {n} pending autofix item{"s" if n != 1 else ""}'
+        f'</div>'
+        '<ul style="margin:0 0 14px;padding-left:20px;font-size:13px;line-height:1.6;color:#1b1230;">'
+        + "".join(item_lines) +
+        '</ul>'
+        f'<a href="{review_url}" '
+        'style="display:inline-block;padding:11px 22px;'
+        'background:#1b1230;color:#fff;text-decoration:none;'
+        'border-radius:8px;font-weight:700;font-size:14px;">'
+        '🛠️ Review pending fixes →</a>'
+        '<div style="margin-top:10px;font-size:11px;color:#7a4d18;">'
+        'Opens a control panel in your browser with Fix / Dismiss / Resolved '
+        'buttons per item. Bookmark the URL — it\'s always live.'
+        '</div>'
         '</div>'
     )
-    parts.append(
-        '<div style="margin-top:6px;font-size:11px;color:#7a4d18;">'
-        '<strong>Action meanings:</strong> '
-        '🛠️ Fix → marks for the local agent to regen via Claude Code · '
-        '🚫 Dismiss → ignore (won\'t retry) · '
-        '✓ Resolved → already-fine, mark closed without running.'
-        '</div>'
-    )
-    parts.append('</div>')
-    return "".join(parts)
 
 
 def render_html(days: list[dict], queue: dict | None = None) -> str:
