@@ -177,16 +177,80 @@ def apply_vet_thresholds(safety: dict) -> str:
 # Step 1+2: RSS + HTML scrape + filter
 # ---------------------------------------------------------------------------
 
-def fetch_rss_entries(url: str, max_entries: int = MAX_RSS_DEFAULT) -> list[dict]:
+MAX_RSS_AGE_DAYS_DEFAULT = 5   # drop entries published > 5 days ago at the
+                               # source. Some RSS feeds (especially "trending"
+                               # / "popular" lists) silently include weeks-old
+                               # articles in their latest feed; without this
+                               # filter, stale stories end up in today's
+                               # bundle. 5 days (admin choice) trades a small
+                               # amount of staleness tolerance for safety
+                               # against running out of fresh content from
+                               # weekly-publishing sources. See bug record
+                               # 2026-05-01-rss-freshness-no-filter.
+
+
+def _entry_age_days(entry) -> float | None:
+    """Return entry age in days from now (UTC). None if no parseable date.
+
+    Tries `published_parsed` (feedparser pre-parsed UTC struct_time) first;
+    falls back to RFC 822 parsing of the `published` / `updated` strings.
+    Returns None if neither yields a usable datetime — caller MUST treat
+    None as 'unknown' (do NOT drop on missing date — that would silently
+    eat any feed without proper publish dates)."""
+    import calendar
+    import time as _time
+    parsed = (getattr(entry, "published_parsed", None)
+              or getattr(entry, "updated_parsed", None))
+    if parsed:
+        try:
+            ts = calendar.timegm(parsed)   # struct_time → UTC epoch
+            return (_time.time() - ts) / 86400.0
+        except Exception:
+            pass
+    pub_str = getattr(entry, "published", "") or getattr(entry, "updated", "")
+    if pub_str:
+        try:
+            from email.utils import parsedate_to_datetime
+            dt = parsedate_to_datetime(pub_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0
+        except Exception:
+            pass
+    return None
+
+
+def fetch_rss_entries(url: str, max_entries: int = MAX_RSS_DEFAULT,
+                     max_age_days: float = MAX_RSS_AGE_DAYS_DEFAULT) -> list[dict]:
+    """Pull recent entries from an RSS feed, dropping any older than
+    `max_age_days` from their source publish date.
+
+    Walks the feed in order (most feeds are date-DESC, but we don't rely
+    on it). Stops once we've collected `max_entries` fresh entries.
+    Entries with no parseable date are KEPT (safer to err on inclusion
+    when the source feed doesn't provide dates)."""
     feed = feedparser.parse(url)
-    out = []
-    for entry in feed.entries[:max_entries]:
+    out: list[dict] = []
+    dropped_old = 0
+    no_date_kept = 0
+    for entry in feed.entries:
+        if len(out) >= max_entries:
+            break
+        age = _entry_age_days(entry)
+        if age is not None and age > max_age_days:
+            dropped_old += 1
+            continue
         out.append({
             "title": getattr(entry, "title", ""),
             "link": getattr(entry, "link", ""),
             "published": getattr(entry, "published", "") or getattr(entry, "updated", ""),
             "summary": getattr(entry, "summary", ""),
         })
+        if age is None:
+            no_date_kept += 1
+    if dropped_old or no_date_kept:
+        log.info("rss freshness [%s]: kept=%d (max_age=%sd), dropped_old=%d, no_date_kept=%d",
+                 url[:80], len(out), max_age_days, dropped_old, no_date_kept)
     return out
 
 
