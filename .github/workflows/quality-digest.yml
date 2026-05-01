@@ -121,11 +121,18 @@ jobs:
         # If pipeline ran the full 90 min, we sleep ~2 min and run.
         # If pipeline somehow ran past 92 min, we run immediately.
         #
-        # Skipped on dispatch when skip_sleep=true. Schedule path uses
-        # github.run_started_at (this digest run's start) as fallback.
-        if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_sleep != true }}
+        # Schedule path (backup cron 05:30 UTC) is excluded — for
+        # the schedule event, `github.event.schedule` is the cron
+        # STRING (e.g. "30 5 * * *"), not a timestamp, so the
+        # fromisoformat parse below would crash. The schedule path
+        # is the backup that fires regardless of the upstream
+        # pipeline state, so it should run the digest immediately
+        # (no anchor wait). This was the root cause of the
+        # 2026-05-01 06:28 UTC failure (bug record:
+        # docs/bugs/2026-05-01-quality-digest-schedule-wait-crash.md).
+        if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_sleep != true && github.event_name == 'workflow_run' }}
         env:
-          TRIGGER_TIME: ${{ github.event.workflow_run.run_started_at || github.event.schedule || '' }}
+          TRIGGER_TIME: ${{ github.event.workflow_run.run_started_at }}
         run: |
           set -e
           if [ -z "$TRIGGER_TIME" ] || [ "$TRIGGER_TIME" = "" ]; then
