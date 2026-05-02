@@ -1485,12 +1485,18 @@ def detail_enrich(rewrite_result: dict) -> dict:
     details: dict = {}
     for level in ("easy", "middle"):
         try:
-            # 3 slots per call (one level for one category). 12k is
-            # generous — enough for V4 Pro's CoT plus the slim output.
+            # 3 slots per call (one level for one category).
+            #
+            # 2026-05-02: bumped 12000 → 16000 (matches reasoner's
+            # default) after News middle 3 stories truncated thinking-
+            # mode CoT + structured output at 12000. Bug record:
+            # 2026-05-02-pipeline-enrich-truncation. The previous "12k
+            # is generous" comment underestimated long-form News
+            # articles + V4 Pro's CoT consumption.
             res = deepseek_reasoner_call(
                 DETAIL_ENRICH_PROMPT,
                 _detail_enrich_input_single_level(rewrite_result, level),
-                max_tokens=12000,
+                max_tokens=16000,
             )
             for k, v in (res.get("details") or {}).items():
                 details[k] = v
