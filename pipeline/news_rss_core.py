@@ -1656,9 +1656,15 @@ def run_source_phase_a(source, html_tag_stripper=None) -> dict | None:
             return None
 
     log.info("[%s]  vetter input: %d briefs (reasoner)", source.name, len(briefs))
+    # max_tokens 2026-05-02: 8000 → 12000 (admin call, mirrors the
+    # detail_enrich bump to 20k earlier today). PBS NewsHour
+    # 6-briefs vet hit 8000 in run 25259782432; 12k gives 50% margin.
+    # Note: this call has no split-batch fallback — truncation here
+    # propagates as a RuntimeError. If 12k starts truncating too,
+    # add a per-brief fallback similar to detail_enrich's pattern.
     batch_vet = deepseek_reasoner_call(build_vet_prompt(2),
                                         vet_curator_input(briefs, 2),
-                                        max_tokens=8000)
+                                        max_tokens=12000)
 
     # Re-apply strict thresholds authoritatively
     for v in batch_vet.get("vet") or []:
