@@ -71,21 +71,37 @@
   }
 
   // Fire-and-forget RPC. Never throws. Logs warn on failure for debugging.
+  // Returns the Promise so callers that want to AWAIT a write (e.g.
+  // upsertKidProfile before sending a cross-device magic link) can.
+  // Callers that don't care just ignore the return value — same as before.
   function rpc(name, args) {
-    var cid = clientId(); if (!cid) return;
-    ensureSupabase().then(function (sb) {
-      if (!sb) return;
-      sb.rpc(name, args).then(function (res) {
-        if (res && res.error) console.warn('[kidsync]', name, 'failed:', res.error.message);
-      }).catch(function (e) { console.warn('[kidsync]', name, 'threw:', e); });
+    var cid = clientId(); if (!cid) return Promise.resolve(null);
+    return ensureSupabase().then(function (sb) {
+      if (!sb) return null;
+      return sb.rpc(name, args).then(function (res) {
+        if (res && res.error) {
+          console.warn('[kidsync]', name, 'failed:', res.error.message);
+          return { ok: false, error: res.error.message };
+        }
+        return { ok: true, data: res && res.data };
+      }).catch(function (e) {
+        console.warn('[kidsync]', name, 'threw:', e);
+        return { ok: false, error: String(e) };
+      });
     });
   }
 
   window.kidsync = {
-    // Called from index.html whenever tweaks change.
+    // Called from index.html whenever tweaks change. Returns a Promise
+    // that resolves once the upsert lands (or rejects on transport error)
+    // so callers like saveAndSendMagic can await it before sending a
+    // cross-device magic link — without that await, Device B can click
+    // the link before Device A's profile upload has reached cloud, and
+    // ends up rendering a blank OnboardingScreen.
     upsertKidProfile: function (tweaks) {
-      var cid = clientId(); if (!cid || !tweaks) return;
-      rpc('upsert_kid_profile', {
+      var cid = clientId();
+      if (!cid || !tweaks) return Promise.resolve(null);
+      return rpc('upsert_kid_profile', {
         p_client_id: cid,
         p_display_name: tweaks.userName || null,
         p_avatar: tweaks.avatar || null,

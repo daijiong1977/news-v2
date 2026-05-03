@@ -187,6 +187,20 @@ function App() {
   });
   const [userPanelOpen, setUserPanelOpen] = useState(false);
 
+  // True from initial render until the magic-link RPC has settled (resolved
+  // OR rejected). HomePage uses this to suppress OnboardingScreen during
+  // the consumeMagicLink window — without this gate, users click the email
+  // link and briefly see the OnboardingScreen showing a "send magic link"
+  // form, which makes them think the link didn't work and they re-submit.
+  // See docs/bugs/2026-05-03-magic-link-onboarding-flash.md.
+  const [magicConsuming, setMagicConsuming] = useState(() => {
+    try { return /[?&]magic=/.test(window.location.search || ''); }
+    catch (e) { return false; }
+  });
+  // If the RPC rejects the token, surface the reason so OnboardingScreen
+  // can show a hint banner instead of silently asking the user to retry.
+  const [magicLinkError, setMagicLinkError] = useState(null);
+
   useEffect(() => { ss.setJSON('ohye_route', route); }, [route]);
   useEffect(() => { ss.set('ohye_level', level); }, [level]);
   useEffect(() => { ss.set('ohye_cat', cat); }, [cat]);
@@ -270,19 +284,45 @@ function App() {
       try {
         if (magicMatch && window.kidsync && typeof window.kidsync.consumeMagicLink === 'function') {
           const token = decodeURIComponent(magicMatch[1]);
-          const r = await window.kidsync.consumeMagicLink(token);
-          // Strip the param either way — invalid tokens shouldn't keep retrying.
+          let r = null;
           try {
-            const clean = window.location.pathname + window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
-            history.replaceState(null, '', clean.endsWith('?') ? clean.slice(0, -1) : clean);
-          } catch (e) {}
+            r = await window.kidsync.consumeMagicLink(token);
+          } finally {
+            // Drop the magic= URL param even if the token was bad — we don't
+            // want refreshes to re-attempt consumption. The magicConsuming
+            // gate intentionally stays UP here; we wait until fetchProfile
+            // (further down) populates the kid's profile before lifting the
+            // spinner. Keeping the spinner up bridges the cross-device
+            // window where Device B has consumed the token but hasn't yet
+            // pulled Alice's name/avatar from cloud.
+            try {
+              const clean = window.location.pathname + window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
+              history.replaceState(null, '', clean.endsWith('?') ? clean.slice(0, -1) : clean);
+            } catch (e) {}
+          }
           if (r && r.ok) {
             console.log('[boot] magic link consumed');
           } else if (r && r.error) {
             console.warn('[boot] magic link rejected:', r.error);
+            setMagicLinkError(r.error);
+            // Bad token — there's no profile to wait for; lift the
+            // spinner now so the user sees the error banner promptly.
+            setMagicConsuming(false);
+          } else {
+            // r is null/undefined — RPC unreachable or supabase-js missing.
+            setMagicLinkError('Sign-in service unreachable. Try again in a moment.');
+            setMagicConsuming(false);
           }
+        } else if (magicMatch) {
+          // Token in URL but kidsync isn't ready (loaded out of order /
+          // private-mode storage error). Don't leave the spinner up.
+          setMagicConsuming(false);
         }
-      } catch (e) { console.warn('[boot] consumeMagicLink failed', e); }
+      } catch (e) {
+        console.warn('[boot] consumeMagicLink failed', e);
+        setMagicConsuming(false);
+        setMagicLinkError('Could not complete sign-in. Please try again.');
+      }
       // ALWAYS try to link — covers two cases:
       //   (a) OAuth bounce-back: URL has ?code=, exchange happens, we
       //       create the email_link via RPC.
@@ -351,6 +391,13 @@ function App() {
           }
         }
       } catch (e) { console.warn('[boot] fetchProfile failed', e); }
+      // Lift the magic-link spinner now that the profile pull has settled
+      // (resolved or rejected). If the URL had ?magic=, the user has been
+      // staring at SigningInScreen until this point — flipping
+      // magicConsuming=false here lets HomePage render either home (when
+      // tweaks.userName came back) or OnboardingScreen with the magicLinkError
+      // banner (when fetchProfile genuinely had nothing for this kid).
+      setMagicConsuming(false);
       // Cloud pull (or skip) is done. Future tweaks changes can now
       // upload to cloud through the gated useEffect.
       cloudPullDoneRef.current = true;
@@ -611,6 +658,8 @@ function App() {
           tweaks={tweaks}
           updateTweak={updateTweak}
           onOpenUserPanel={()=>setUserPanelOpen(true)}
+          magicConsuming={magicConsuming}
+          magicLinkError={magicLinkError}
         />
       ) : (
         <ArticlePage
