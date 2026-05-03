@@ -29,14 +29,20 @@ cadence so weekly sources are vetted weekly, not daily.
 
 - Source selection reads from `redesign_source_configs` for ALL three
   categories (News / Science / Fun). Hardcoded `*_sources.py` modules
-  are deleted.
+  are deleted in the same PR.
 - Each source carries a `cadence_days` integer separate from
   `priority`. The two columns express orthogonal axes:
   - `priority`: when ties happen, which source wins (importance/order).
   - `cadence_days`: how many days to "rest" between picks.
 - Day-D selection picks the most-overdue eligible sources first;
-  fills any shortfall with the closest-to-eligible sources. Same
-  algorithm for all 3 categories.
+  exhausts the closest-to-eligible pool until N sources are picked
+  OR the category's enabled pool is empty. Same algorithm for all
+  3 categories.
+- The `is_backup` distinction is **dropped**. Former backup sources
+  (NASA News, Popular Science) are folded into the primary pool
+  with conservative cadence values. The legacy
+  `aggregate_category(label, primary, backup, runner)` API loses
+  its `backup` argument; primaries and backups merge into one list.
 - Initial cadence values are seeded from already-known/observed
   values (sourcefinder has been recording publish-date gaps for
   weeks). Manual override is supported for sources we want to pin.
@@ -50,12 +56,11 @@ cadence so weekly sources are vetted weekly, not daily.
   with manual seed values from sourcefinder's observations; auto-tune
   is a weekly cron that updates `cadence_days` based on observed RSS
   gap medians, reserved for v1.1.
-- **Backup-source rotation.** Today's pipeline has a "primary fails →
-  swap in backup" path (`run_source_with_backups`). v1 keeps that
-  unchanged — backups live on the same table flagged `is_backup=true`,
-  and the dispatcher logic in `*_aggregate.py` is untouched.
 - **Cross-category source reuse.** Each source still belongs to
-  exactly one category. No multi-category rows.
+  exactly one category. No multi-category rows. (The legacy
+  cross-category Fun backups — Smithsonian Science-Nature and
+  NPR Music — are dropped during migration since they duplicate
+  existing primary entries.)
 
 ## Background — current code path
 
@@ -121,11 +126,10 @@ CREATE INDEX redesign_source_configs_pickup_eligible_idx
 Identical for News, Science, Fun. Run once per category.
 
 ```
-Step 1 — Build eligible pool
+Step 1 — Build eligible pool (today-ready)
   ELIGIBLE = sources WHERE
     category    = X
     AND enabled = true
-    AND is_backup = false
     AND state IN ('live', NULL)
     AND (next_pickup_at IS NULL OR next_pickup_at <= D)
 
@@ -138,22 +142,35 @@ Step 2 — Sort eligible
 Step 3 — Take top N
   picked = ELIGIBLE.take(N)             -- N=3 today, configurable per cat
 
-Step 4 — Fill shortfall with closest-to-eligible
+Step 4 — Exhaust the pool to fill shortfall
+  -- Keep dipping into not-yet-eligible sources, closest-to-ready first.
+  -- The intent: NEVER under-fill a category as long as there are enabled
+  -- sources left in it. A weekly source pulled out early is acceptable
+  -- (its cadence reschedules from the new use date — see Step 5).
   IF picked.length < N:
     REMAINING = sources WHERE
-      category = X AND enabled AND not is_backup
+      category = X AND enabled = true AND state IN ('live', NULL)
       AND next_pickup_at > D
-      ORDER BY next_pickup_at ASC, priority ASC
+      ORDER BY next_pickup_at ASC, priority ASC, last_used_at ASC NULLS FIRST
     picked += REMAINING.take(N - picked.length)
 
-Step 5 — Stamp at end-of-run
+  -- After Step 4, picked.length is min(N, total_enabled_in_category).
+  -- If the category has fewer than N enabled sources total, we accept
+  -- the shortfall and emit a telemetry warning ("category X: only K/N
+  -- sources available"). Pipeline still runs through downstream stages
+  -- with whatever it got.
+
+Step 5 — Stamp on winning contribution (idempotent)
+  -- Only sources whose article actually shipped in today's bundle get
+  -- their cadence rolled forward. Sources that were picked but whose
+  -- candidates were rejected by vet/curator stay at their original
+  -- next_pickup_at — they're still "due" tomorrow.
   for src in picked:
     if src contributed a winning article in today's bundle:
       src.last_used_at   = D
       src.next_pickup_at = D + INTERVAL src.cadence_days
     else:
-      # not stamped — stays eligible for tomorrow
-      pass
+      pass  -- no stamp; eligibility unchanged
 ```
 
 ### Why "winning article" for the stamp, not "picked"
@@ -224,8 +241,8 @@ Source: sourcefinder's `daily-verify-*.json` outputs from the past 3 weeks.
 | Science | ScienceDaily Top Environment | 3 | 1 | Daily (was Fri-only) |
 | Science | IEEE Spectrum | 3 | 5 | ~5-day median (was Sat-only) |
 | Science | Smithsonian Science-Nature | 3 | 7 | Weekly (was Sun-only) |
-| Science | NASA News | 4 | 3 | Currently backup; see open question 7 below |
-| Science | Popular Science | 5 | 3 | Currently backup; see open question 7 below |
+| Science | NASA News | 4 | 3 | Folded from backup → primary (Q1 decision: b) |
+| Science | Popular Science | 5 | 3 | Folded from backup → primary |
 | Fun | DOGOnews | 1 | 1 | Daily kids news (new from sourcefinder) |
 | Fun | NG Kids — Space | 2 | 7 | Weekly (new from sourcefinder) |
 | Fun | NG Kids — Geography | 3 | 7 | Weekly (new from sourcefinder) |
@@ -273,15 +290,23 @@ the DB, the pipeline picks zero sources and fails.
    counts (News=7, Science=11, Fun=21 — total ≥ 39).
 4. **Modify `db_config.load_sources(category)`** — implement
    the 5-step algorithm. Returns a list of `NewsSource` instances
-   ordered by Step 2.
-5. **Modify `db_config.load_backup_sources(category)`** — pull
-   `is_backup=true` rows for the category. Same shape.
+   ordered by Step 2 (then Step 4 fill). `is_backup` is ignored
+   in the WHERE clause; former backups participate normally.
+5. **Drop `aggregate_category`'s `backup` argument** — rename
+   `run_source_with_backups` → `run_source` in
+   `news_aggregate.py` / `science_aggregate.py` / `fun_aggregate.py`,
+   remove the backup-swap branch. Callers in `full_round.main()`
+   change accordingly.
 6. **Modify `full_round.main()`** lines 1083-1085 — replace
    `news_sources()` / `science_sources()` / `fun_sources()` with
-   `db_config.load_sources("News" / "Science" / "Fun")`. Same for
-   backup helpers.
+   `db_config.load_sources("News" / "Science" / "Fun")`. Drop
+   the `news_backups()` / `sci_backups()` / `fun_backups()` calls
+   entirely.
 7. **Modify `full_round.main()` line 1004-1023** — extend the
-   per-source `last_used_at` stamp to also set `next_pickup_at`.
+   per-source `last_used_at` stamp to also set
+   `next_pickup_at = run_date + cadence_days`. Stamp only on
+   sources whose article shipped (not all picked sources — see
+   Step 5 of the algorithm).
 8. **One pipeline dry-run** — confirm 3-per-category picks work,
    no hardcoded sources referenced. Verify telemetry shows the
    expected source mix.
@@ -300,8 +325,9 @@ Reverting both is a clean rollback.
 |---|---|---:|
 | `supabase/migrations/20260504_cadence_aware_sources.sql` | new | ~30 |
 | `supabase/seeds/2026-05-04-cadence-seed.sql` | new (39 ON CONFLICT INSERTs) | ~130 |
-| `pipeline/db_config.py` | rewrite `load_sources` (5-step), add `load_backup_sources` | ~80 |
-| `pipeline/full_round.py` | replace 3 source-loader calls + extend stamp loop | ~20 |
+| `pipeline/db_config.py` | rewrite `load_sources` (5-step). drop `load_backup_sources` (no callers after Q1=b) | ~80 |
+| `pipeline/full_round.py` | replace 3 source-loader calls + extend stamp loop + drop backup-swap arg | ~20 |
+| `pipeline/{news,science,fun}_aggregate.py` | drop `backups` arg from `run_source_with_backups` (rename → `run_source`) | ~30 |
 | `pipeline/news_sources.py` | empty (keep `NewsSource` only) | -90 |
 | `pipeline/science_sources.py` | empty (keep dataclass) | -100 |
 | `pipeline/fun_sources.py` | empty (keep dataclass) | -150 |
@@ -341,16 +367,17 @@ content is the seed SQL + the algorithm + tests.
    loop runs twice. Setting `next_pickup_at = run_date +
    cadence_days` is idempotent (same input → same output)
    regardless of how many times it runs. ✓
-7. **Backup-vs-primary status of NASA News / Popular Science
-   / Smithsonian backups** — these were `is_backup=true`. Under
-   cadence-aware scheduling, "primary sleeps" replaces the old
-   "primary fails" trigger for backup activation. Two paths:
-   (a) Keep them as backups, only used when Step 4 fill returns
-       fewer than N. The aggregate_category backup-swap stays.
-   (b) Promote to primaries with conservative cadence (3-7 days),
-       drop backups concept entirely.
-   v1 default: **(a)** — preserve current backup behavior, less
-   blast radius. Discuss before moving to (b).
+7. **Backup pool merged into primaries (Q1 decision: b).** The
+   `is_backup` column stays on the table for backwards compat
+   but `load_sources` ignores it. NASA News + Popular Science
+   become Science primaries with cadence 3 / 3. The two
+   cross-category Fun backups (Smithsonian Science-Nature → already
+   in Science; NPR Music backup → duplicates the Mon Fun primary)
+   are dropped. `aggregate_category(label, primary, backup, runner)`
+   loses its `backup` argument; the dispatcher in `*_aggregate.py`
+   simplifies to one source list per category. Under-filled
+   categories (< N eligible after Step 4) emit a warning and the
+   pipeline runs with what it got — no fallback chain.
 
 ## Out of scope (future specs)
 
@@ -385,6 +412,12 @@ content is the seed SQL + the algorithm + tests.
       `next_pickup_at = run_date + cadence_days` in the DB.
 - [ ] Subsequent dry-run picks DIFFERENT sources (cadence
       kicked in) and again 3 stories per category.
+- [ ] No reference to `news_backups()` / `sci_backups()` /
+      `fun_backups()` / `is_backup` in the active code path
+      (grep clean).
+- [ ] An under-filled category test: with all but 2 Fun
+      sources disabled, the run completes with 2 stories in Fun
+      and a warning in `redesign_runs.telemetry.warnings`.
 
 ## References
 
