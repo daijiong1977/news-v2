@@ -97,6 +97,9 @@ def _row_to_source(row: dict) -> NewsSource:
         notes=row.get("notes") or "",
         feed_kind=row.get("feed_kind") or "rss",
         feed_config=row.get("feed_config"),
+        cadence_days=int(row.get("cadence_days") or 1),
+        last_used_at=row.get("last_used_at"),
+        next_pickup_at=row.get("next_pickup_at"),
     )
 
 
@@ -115,57 +118,64 @@ def _ensure_src_cache() -> dict[str, list[dict]]:
     return by_cat
 
 
-def load_sources(category_name: str, *, today_weekday: int | None = None) -> list[NewsSource]:
-    """Enabled non-backup sources for `category_name`, ordered for LRU rotation.
+def load_sources(category_name: str, *,
+                 today: "date | None" = None,
+                 n: int = 3) -> list[NewsSource]:
+    """Cadence-aware source selection per category.
 
-    Selection rules (in order):
-      1. enabled = true
-      2. is_backup = false
-      3. ORDER BY last_used_at NULLS FIRST, priority ASC
-         → least-recently-used sources surface first, breaking ties by
-         the manual priority column. Pipeline downstream usually picks
-         the top N from this list (max_per_source × N), so rotation
-         emerges naturally — never picks the same source two days in a
-         row when there are alternates available.
+    See docs/superpowers/specs/2026-05-03-cadence-aware-source-selection-design.md
+    for the full algorithm. Returns up to `n` sources, ordered by:
+      next_pickup_at ASC NULLS FIRST, priority ASC, last_used_at ASC NULLS FIRST.
 
-    Note: `today_weekday` is kept for back-compat but no longer affects
-    selection. Earlier versions had a per-source `active_weekdays` pin
-    ("Sports only on weekends"); we removed it to cut maintenance —
-    every category is expected to keep ≥3 evergreen sources, and the
-    LRU sort is enough rotation by itself.
+    Eligible (next_pickup_at IS NULL OR <= today) come first; if fewer than
+    `n` are eligible, fill from closest-to-eligible (next_pickup_at > today,
+    soonest first). The pool is exhausted before under-fill is accepted.
+    `is_backup` is ignored — all enabled sources participate.
     """
-    global _src_cache
-    if _src_cache is None:
-        raw_by_cat = _ensure_src_cache()
-        out: dict[str, list[NewsSource]] = {}
-        for cat, rows in raw_by_cat.items():
-            kept: list[tuple[str, int, NewsSource]] = []  # (last_used_iso_or_blank, priority, src)
-            for r in rows:
-                if not r.get("enabled"): continue
-                if r.get("is_backup"):  continue
-                # Sourcefinder mining engine (separate repo) writes
-                # candidates with state='probation' to this table.
-                # Skip anything that isn't fully promoted to live.
-                # state column may be missing on older rows — treat
-                # NULL as 'live' for backwards compat.
-                state = r.get("state")
-                if state is not None and state != "live": continue
-                last_used = r.get("last_used_at") or ""   # NULL → "" sorts before any iso string
-                pri = int(r.get("priority") or 99)
-                kept.append((last_used, pri, _row_to_source(r)))
-            # Sort primarily by last_used_at (asc, NULL/blank first = least-recently-used);
-            # break ties by manual priority.
-            kept.sort(key=lambda t: (t[0], t[1]))
-            out[cat] = [s for _, _, s in kept]
-        _src_cache = out
-    return _src_cache.get(category_name, [])
+    from datetime import date as _date
+    if today is None:
+        today = _date.today()
 
-
-def load_backup_sources(category_name: str) -> list[NewsSource]:
     raw_by_cat = _ensure_src_cache()
-    rows = [r for r in raw_by_cat.get(category_name, []) if r.get("is_backup")]
-    rows.sort(key=lambda r: int(r.get("priority") or 99))
-    return [_row_to_source(r) for r in rows]
+    rows = raw_by_cat.get(category_name, [])
+
+    # Filter: enabled, state in (NULL, 'live'). is_backup ignored (Q1=b).
+    candidates = [r for r in rows
+                  if r.get("enabled")
+                  and (r.get("state") in (None, "live"))]
+
+    # Slice the first 10 chars (YYYY-MM-DD) so we compare dates, not
+    # timestamps. next_pickup_at is currently DATE (PostgREST returns
+    # 'YYYY-MM-DD'); last_used_at is stored as a full ISO timestamp via
+    # full_round's stamp loop. Slicing makes the sort/eligibility checks
+    # robust against either format AND against a future schema migration
+    # to TIMESTAMPTZ on next_pickup_at.
+    def _date_part(s):
+        return (s or "")[:10]
+
+    def _sort_key(r):
+        npa = _date_part(r.get("next_pickup_at"))   # NULL/"" sorts first
+        prio = int(r.get("priority") or 99)
+        lua = _date_part(r.get("last_used_at"))
+        return (npa, prio, lua)
+
+    today_iso = today.isoformat()
+    eligible = sorted(
+        [r for r in candidates
+         if not r.get("next_pickup_at") or _date_part(r["next_pickup_at"]) <= today_iso],
+        key=_sort_key,
+    )
+    sleeping = sorted(
+        [r for r in candidates
+         if r.get("next_pickup_at") and _date_part(r["next_pickup_at"]) > today_iso],
+        key=_sort_key,
+    )
+
+    picked = eligible[:n]
+    if len(picked) < n:
+        picked += sleeping[:n - len(picked)]
+
+    return [_row_to_source(r) for r in picked]
 
 
 # ─────────────────────────────────────────────────────────────────────────

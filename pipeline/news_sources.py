@@ -23,6 +23,9 @@ class NewsSource:
     notes: str = ""
     feed_kind: str = "rss"          # rss | sitemap | html_list
     feed_config: str | None = None  # JSON; None for feed_kind='rss'
+    cadence_days: int = 1                    # how many days between picks
+    last_used_at: str | None = None          # ISO date string or None
+    next_pickup_at: str | None = None        # ISO date string or None
 
     @property
     def is_light(self) -> bool:
