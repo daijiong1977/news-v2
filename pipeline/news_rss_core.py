@@ -254,6 +254,41 @@ def fetch_rss_entries(url: str, max_entries: int = MAX_RSS_DEFAULT,
     return out
 
 
+def fetch_source_entries(source, max_entries: int = MAX_RSS_DEFAULT,
+                         max_age_days: float = MAX_RSS_AGE_DAYS_DEFAULT) -> list[dict]:
+    """Discover recent article entries from a source, dispatching by
+    `source.feed_kind`. Returns the same dict shape as fetch_rss_entries
+    (`title`, `link`, `published`, `summary`) so downstream code is
+    feed-kind-blind.
+
+    - rss        → delegates to fetch_rss_entries (5-day freshness applied).
+    - sitemap    → uses scraper._from_sitemap; lastmod (if present) maps to
+                   `published`. No freshness filter (sitemaps are usually
+                   already date-ordered).
+    - html_list  → uses scraper._from_html_list. Listing pages don't carry
+                   per-item dates, so freshness relies on the page's own
+                   recency (publishers put recent articles at the top).
+    """
+    kind = (getattr(source, "feed_kind", None) or "rss").lower()
+    if kind == "rss":
+        return fetch_rss_entries(source.rss_url, max_entries, max_age_days)
+
+    from .scraper import discover_article_urls
+    items = discover_article_urls({
+        "rss_url": source.rss_url,
+        "feed_kind": kind,
+        "feed_config": source.feed_config,
+    }, top_n=max_entries)
+    log.info("%s discovery [%s]: %d items",
+             kind, source.rss_url[:80], len(items))
+    return [{
+        "title":     i.get("title") or "",
+        "link":      i["url"],
+        "published": i.get("lastmod") or "",
+        "summary":   i.get("description") or "",
+    } for i in items]
+
+
 def fetch_html(url: str) -> str | None:
     try:
         r = requests.get(url, timeout=HTML_FETCH_TIMEOUT, headers=HTML_FETCH_HEADERS,
@@ -1624,9 +1659,10 @@ def run_source_phase_a(source, html_tag_stripper=None) -> dict | None:
     from .cleaner import extract_article_from_html
     import re as _re
 
-    log.info("[%s] Phase A: flow=%s", source.name, source.flow)
-    rss_entries = fetch_rss_entries(source.rss_url, max_entries=25)
-    log.info("[%s]  RSS entries: %d", source.name, len(rss_entries))
+    log.info("[%s] Phase A: flow=%s feed_kind=%s",
+             source.name, source.flow, getattr(source, "feed_kind", "rss"))
+    rss_entries = fetch_source_entries(source, max_entries=25)
+    log.info("[%s]  entries: %d", source.name, len(rss_entries))
 
     if source.flow == "full":
         processed = [process_entry(e, min_words=source.min_body_words) for e in rss_entries]

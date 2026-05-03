@@ -95,6 +95,8 @@ def _row_to_source(row: dict) -> NewsSource:
         enabled=bool(row.get("enabled") if row.get("enabled") is not None else True),
         is_backup=bool(row.get("is_backup") or False),
         notes=row.get("notes") or "",
+        feed_kind=row.get("feed_kind") or "rss",
+        feed_config=row.get("feed_config"),
     )
 
 

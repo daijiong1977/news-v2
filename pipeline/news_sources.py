@@ -21,6 +21,8 @@ class NewsSource:
     enabled: bool
     is_backup: bool
     notes: str = ""
+    feed_kind: str = "rss"          # rss | sitemap | html_list
+    feed_config: str | None = None  # JSON; None for feed_kind='rss'
 
     @property
     def is_light(self) -> bool:
