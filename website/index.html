@@ -441,11 +441,31 @@ function App() {
             const fromCloud = {};
             for (const ev of events) {
               const id = ev.story_id + lvlSuffix;
-              const slot = fromCloud[id] || { steps: [], lastTab: 'read', lastTouchedAt: '' };
+              const dateMatch = ev.story_id && ev.story_id.match(/^(\d{4}-\d{2}-\d{2})/);
+              const slot = fromCloud[id] || {
+                steps: [], lastTab: 'read', lastTouchedAt: '',
+                // Snapshot fields populated from the event row when present.
+                // Older events written before the title/image_url columns
+                // existed will have NULLs; we keep "" so the popover's
+                // `snap.title` truthiness check drops them gracefully (the
+                // ARTICLES.find fallback will pick them up if today's
+                // bundle still has the story).
+                title: ev.title || '',
+                category: ev.category || '',
+                level: ev.level || '',
+                imageURL: ev.image_url || '',
+                archiveDate: dateMatch ? dateMatch[1] : null,
+              };
               if (!slot.steps.includes(ev.step)) slot.steps.push(ev.step);
               if ((ev.occurred_at || '') > (slot.lastTouchedAt || '')) {
                 slot.lastTouchedAt = ev.occurred_at;
                 slot.lastTab = ev.step;
+                // Only the latest event refreshes title/image_url —
+                // earlier writes may pre-date the schema migration.
+                if (ev.title)     slot.title    = ev.title;
+                if (ev.image_url) slot.imageURL = ev.image_url;
+                if (ev.category)  slot.category = ev.category;
+                if (ev.level)     slot.level    = ev.level;
               }
               fromCloud[id] = slot;
             }
@@ -453,15 +473,28 @@ function App() {
             for (const [id, cloudSlot] of Object.entries(fromCloud)) {
               const local = mergedAP[id];
               if (!local || typeof local !== 'object') {
+                // No local snapshot (cross-device first-touch). Cloud
+                // snapshot fields (title/category/imageURL) are now
+                // sufficient for the popover to render this entry.
                 mergedAP[id] = cloudSlot;
               } else {
                 // Union of steps (cloud may have more), latest lastTouchedAt
-                // wins for lastTab. Snapshot fields (title, category, etc.)
-                // come from local — cloud doesn't have them.
+                // wins for lastTab. Snapshot fields prefer LOCAL when set
+                // (it's authoritative on the device that read), but fall
+                // back to cloud values for fields the local entry lacks
+                // (e.g., a stale legacy entry without title).
                 const stepsSet = new Set([...(local.steps || []), ...(cloudSlot.steps || [])]);
                 const newer = (cloudSlot.lastTouchedAt || '') > (local.lastTouchedAt || '');
                 mergedAP[id] = {
+                  ...cloudSlot,
                   ...local,
+                  // Specific fields where we WANT cloud-fallback rather
+                  // than local-wins-empty:
+                  title:    local.title    || cloudSlot.title    || '',
+                  category: local.category || cloudSlot.category || '',
+                  level:    local.level    || cloudSlot.level    || '',
+                  imageURL: local.imageURL || cloudSlot.imageURL || '',
+                  archiveDate: local.archiveDate || cloudSlot.archiveDate || null,
                   steps: [...stepsSet],
                   lastTab: newer ? cloudSlot.lastTab : (local.lastTab || cloudSlot.lastTab),
                   lastTouchedAt: newer ? cloudSlot.lastTouchedAt : (local.lastTouchedAt || cloudSlot.lastTouchedAt),

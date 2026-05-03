@@ -124,7 +124,11 @@
       });
     },
     // Called from article.jsx bumpStep — one row per step transition. The
-    // append-only event log is what drives the parent's day-by-day chart.
+    // append-only event log is what drives the parent's day-by-day chart
+    // AND now (since 2026-05-04) carries title + image_url so the
+    // cross-device "Recently read" popover on Device B can render past
+    // reads done on Device A. Without these, fetchHistory returned ids
+    // with no rendering metadata and the popover silently dropped them.
     recordReadingEvent: function (storyId, step, opts) {
       var cid = clientId(); if (!cid || !storyId || !step) return;
       opts = opts || {};
@@ -138,6 +142,8 @@
         p_minutes_added: opts.minutesAdded || 0,
         p_duration_ms: opts.durationMs || null,
         p_day_key: opts.dayKey || todayKey(),
+        p_title: opts.title || null,
+        p_image_url: opts.imageURL || null,
       });
     },
     // Called from KidStats.logQuizAttempt. picks is the kid's array of
