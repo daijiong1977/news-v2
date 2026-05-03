@@ -95,24 +95,60 @@ def _maybe_optimize_image(url: str | None) -> tuple[str | None, dict | None]:
 # ─────────────────────────────────────────────────────────────────────
 # RSS parse → top N items
 # ─────────────────────────────────────────────────────────────────────
-def _verify_one(rss_url: str, n: int = N_LATEST) -> dict:
-    log.info("verify: %s", rss_url)
+def _discover_entries(rss_url: str, feed_kind: str, feed_config: str | None,
+                      n: int) -> tuple[list[dict], str | None, str]:
+    """Return (entries, error, feed_title) where entries is a list of
+    {title, link, published} dicts. Dispatches by feed_kind. RSS path
+    keeps the legacy feedparser shape (preserves bozo error reporting);
+    html_list/sitemap delegate to pipeline.scraper."""
+    if feed_kind == "rss":
+        try:
+            feed = feedparser.parse(rss_url)
+        except Exception as e:  # noqa: BLE001
+            return [], f"feedparser failed: {e}", ""
+        if feed.bozo and not getattr(feed, "entries", None):
+            return [], f"feed parse error: {feed.bozo_exception}", ""
+        out = []
+        for entry in feed.entries[:n]:
+            out.append({
+                "title": htmllib.unescape(getattr(entry, "title", "") or ""),
+                "link": (getattr(entry, "link", "") or "").strip(),
+                "published": (getattr(entry, "published", "")
+                              or getattr(entry, "updated", "") or ""),
+            })
+        return out, None, getattr(feed.feed, "title", "")
+
+    # html_list / sitemap
+    from .scraper import discover_article_urls
     try:
-        feed = feedparser.parse(rss_url)
+        items = discover_article_urls({
+            "rss_url": rss_url,
+            "feed_kind": feed_kind,
+            "feed_config": feed_config,
+        }, top_n=n)
     except Exception as e:  # noqa: BLE001
-        return {"rss_url": rss_url, "error": f"feedparser failed: {e}",
-                "items": []}
-    if feed.bozo and not getattr(feed, "entries", None):
-        return {"rss_url": rss_url,
-                "error": f"feed parse error: {feed.bozo_exception}",
-                "items": []}
+        return [], f"{feed_kind} discovery failed: {type(e).__name__}: {e}", ""
+    out = [{
+        "title": htmllib.unescape(i.get("title") or ""),
+        "link": i["url"].strip(),
+        "published": i.get("lastmod") or "",
+    } for i in items]
+    return out, None, ""  # listing pages have no canonical "feed title"
+
+
+def _verify_one(rss_url: str, n: int = N_LATEST,
+                feed_kind: str = "rss",
+                feed_config: str | None = None) -> dict:
+    log.info("verify: %s [%s]", rss_url, feed_kind)
+    entries, err, feed_title = _discover_entries(rss_url, feed_kind, feed_config, n)
+    if err:
+        return {"rss_url": rss_url, "feed_kind": feed_kind, "error": err, "items": []}
 
     items = []
-    for entry in feed.entries[:n]:
-        link = (getattr(entry, "link", "") or "").strip()
-        title = htmllib.unescape(getattr(entry, "title", "") or "")
-        published = (getattr(entry, "published", "")
-                     or getattr(entry, "updated", "") or "")
+    for entry in entries:
+        link = entry["link"]
+        title = entry["title"]
+        published = entry["published"]
         if not link:
             items.append({"title": title, "link": "", "published": published,
                           "error": "no link in feed item"})
@@ -132,7 +168,8 @@ def _verify_one(rss_url: str, n: int = N_LATEST) -> dict:
         })
     return {
         "rss_url": rss_url,
-        "feed_title": getattr(feed.feed, "title", ""),
+        "feed_kind": feed_kind,
+        "feed_title": feed_title,
         "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "items": items,
     }
@@ -277,6 +314,11 @@ def main():
     g.add_argument("--category", type=str)
     g.add_argument("--all", action="store_true")
     p.add_argument("--name", type=str, default="", help="display name when using --rss-url")
+    p.add_argument("--feed-kind", type=str, default="rss",
+                   choices=("rss", "sitemap", "html_list"),
+                   help="ad-hoc feed kind when using --rss-url (default: rss)")
+    p.add_argument("--feed-config", type=str, default=None,
+                   help="ad-hoc feed_config JSON when using --rss-url (e.g. '{\"article_selector\":\"...\"}')")
     p.add_argument("--out", type=Path, default=None, help="output directory (default: out/verify/<timestamp>/)")
     p.add_argument("--upload", action="store_true",
                    help="also upload to Supabase Storage at verify/<timestamp>/ (needs SUPABASE_*)")
@@ -286,10 +328,11 @@ def main():
     out_dir = args.out or Path("out") / "verify" / ts
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # (label, rss_url, source_id-or-None) per target.
-    targets_with_id: list[tuple[str, str, int | None]] = []
+    # (label, rss_url, source_id-or-None, feed_kind, feed_config) per target.
+    targets: list[tuple[str, str, int | None, str, str | None]] = []
     if args.rss_url:
-        targets_with_id.append((args.name or args.rss_url, args.rss_url, None))
+        targets.append((args.name or args.rss_url, args.rss_url, None,
+                        args.feed_kind, args.feed_config))
     else:
         rows = _load_sources(args.source_id, args.category, args.all)
         if not rows:
@@ -297,17 +340,18 @@ def main():
             sys.exit(2)
         for r in rows:
             label = f"{r.get('category','?')} · {r.get('name','?')}"
-            targets_with_id.append((label, r.get("rss_url") or "", r.get("id")))
+            targets.append((label, r.get("rss_url") or "", r.get("id"),
+                            r.get("feed_kind") or "rss", r.get("feed_config")))
 
-    log.info("verifying %d source(s) → %s", len(targets_with_id), out_dir)
+    log.info("verifying %d source(s) → %s", len(targets), out_dir)
     results: list[tuple[str, dict, Path]] = []
     successful_source_ids: list[int] = []  # rows whose verify produced usable extraction
 
-    for name, rss_url, src_id in targets_with_id:
+    for name, rss_url, src_id, feed_kind, feed_config in targets:
         if not rss_url:
             log.warning("skip (no rss_url): %s", name); continue
         t0 = time.monotonic()
-        res = _verify_one(rss_url)
+        res = _verify_one(rss_url, feed_kind=feed_kind, feed_config=feed_config)
         elapsed = time.monotonic() - t0
         log.info("  %s · %.1fs · %d items", name, elapsed, len(res.get("items") or []))
         html = _render_one(res, name)
