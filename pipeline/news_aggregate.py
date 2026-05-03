@@ -96,23 +96,10 @@ def try_next_pick_for_source(phase_a_result: dict, already_used_ids: set[int]) -
     return None
 
 
-def run_source_with_backups(source: NewsSource, backups: list[NewsSource]) -> dict | None:
-    """Try the source; if no winner, try backups in random order."""
-    res = run_source_phase_a(source)
-    if res:
-        return res
-    log.warning("[%s] no viable winner — rotating to backup", source.name)
-    shuffled = list(backups)
-    random.shuffle(shuffled)
-    for backup in shuffled:
-        log.info("[%s] trying backup %s", source.name, backup.name)
-        res = run_source_phase_a(backup)
-        if res:
-            res["primary_source_name"] = source.name
-            res["used_backup"] = True
-            return res
-    log.error("[%s] all backups exhausted", source.name)
-    return None
+def run_source(source: NewsSource) -> dict | None:
+    """Single-pass source run. No backup-swap fallback (Q1=b — backup
+    pool folded into primaries via cadence-aware scheduling)."""
+    return run_source_phase_a(source)
 
 
 def main() -> None:
@@ -126,8 +113,7 @@ def main() -> None:
     winners: list[dict] = []
     used_backup_names: set[str] = set()
     for source in enabled:
-        available_backups = [b for b in backups if b.name not in used_backup_names]
-        result = run_source_with_backups(source, available_backups)
+        result = run_source(source)
         if result:
             if result.get("used_backup"):
                 used_backup_names.add(result["source"].name)
