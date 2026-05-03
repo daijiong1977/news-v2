@@ -18,19 +18,11 @@ from urllib.parse import urlparse
 from .news_rss_core import (CALL_STATS, check_duplicates, detail_enrich,
                               filter_safe_rewrites, reset_call_stats,
                               run_source_phase_a, tri_variant_rewrite)
-from .fun_sources import todays_enabled_sources as fun_sources
-from .fun_sources import todays_topic as fun_topic
-from .science_sources import todays_enabled_sources as science_sources
-from .science_sources import todays_topic as science_topic
 from .image_optimize import fetch_and_optimize
 from .supabase_io import insert_run, insert_story, update_run, upload_image
-from .news_sources import enabled_sources as news_sources
-from .news_aggregate import run_source_with_backups as run_news
-from .science_aggregate import run_source_with_backups as run_sci
-from .fun_aggregate import run_source_with_backups as run_fun
-from .news_sources import backup_sources as news_backups
-from .science_sources import todays_backup_sources as sci_backups
-from .fun_sources import todays_backup_sources as fun_backups
+from .news_aggregate import run_source as run_news
+from .science_aggregate import run_source as run_sci
+from .fun_aggregate import run_source as run_fun
 
 # Phase 2: DB-driven config + checkpoints. Imported as a module so we can
 # refer to e.g. `db_config.load_sources` per-call without re-importing.
@@ -45,32 +37,23 @@ log = logging.getLogger("full-round")
 # 1) Aggregate 3 categories
 # -------------------------------------------------------------------
 
-def aggregate_category(label: str, enabled: list, backups: list, runner) -> dict[str, dict]:
-    """Run Phase A for each source; return `{source_name: {source, candidates}}`.
-    Each source contributes up to 4 ranked candidates (choice_1…). If the
-    primary source yields 0 candidates, rotates to a backup source (handled
-    inside `runner`)."""
+def aggregate_category(label: str, enabled: list, runner) -> dict[str, dict]:
+    """Run each source through `runner`. No backup-swap (Q1=b).
+
+    `runner` returns dict | None (None when RSS fetch failed or fewer
+    than 2 viable candidates). Skip None — downstream code iterates
+    `by_source.items()` expecting each value to be a dict with `source`
+    + `candidates` keys.
+    """
     log.info("[%s] aggregating from %d sources", label, len(enabled))
-    used_backups: set[str] = set()
-    by_source: dict[str, dict] = {}
-    for source in enabled:
-        avail = [b for b in backups if b.name not in used_backups]
-        res = runner(source, avail)
-        if not res:
+    out: dict[str, dict] = {}
+    for src_obj in enabled:
+        res = runner(src_obj)
+        if res is None:
+            log.info("  [%s] returned no candidates — skipping", src_obj.name)
             continue
-        # Supports both the new multi-candidate Phase A return shape and the
-        # legacy single-winner shape (some aggregator paths still produce
-        # the latter, e.g. after backup rotation).
-        cands = res.get("candidates")
-        if not cands and res.get("winner"):
-            cands = [{"winner": res["winner"], "slot": res.get("winner_slot") or "choice_1"}]
-        if not cands:
-            continue
-        src_obj = res["source"]
-        by_source[src_obj.name] = {"source": src_obj, "candidates": cands}
-        if res.get("used_backup"):
-            used_backups.add(src_obj.name)
-    return by_source
+        out[src_obj.name] = res
+    return out
 
 
 def _normalize_title(t: str) -> str:
@@ -1012,13 +995,26 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
     if used_source_names:
         try:
             from .supabase_io import client
+            from datetime import timedelta, date as _date
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            client().table("redesign_source_configs") \
-                .update({"last_used_at": now_iso}) \
+            today_d = _date.today()
+            # Stamp BOTH last_used_at AND next_pickup_at = today + cadence_days.
+            # Per-source PATCH because cadence_days varies. Source list is small
+            # (≤9 winners per run), so per-row is fine.
+            src_rows = client().table("redesign_source_configs") \
+                .select("name,cadence_days") \
                 .in_("name", list(used_source_names)) \
-                .execute()
-            log.info("  stamped last_used_at on %d source(s): %s",
-                     len(used_source_names), sorted(used_source_names))
+                .execute().data or []
+
+            for row in src_rows:
+                cd = int(row.get("cadence_days") or 1)
+                next_pickup = (today_d + timedelta(days=cd)).isoformat()
+                client().table("redesign_source_configs") \
+                    .update({"last_used_at": now_iso, "next_pickup_at": next_pickup}) \
+                    .eq("name", row["name"]) \
+                    .execute()
+            log.info("  stamped last_used_at + next_pickup_at on %d source(s)",
+                     len(src_rows))
         except Exception as e:  # noqa: BLE001
             log.warning("  last_used_at stamp failed: %s", e)
     return count
@@ -1080,9 +1076,11 @@ def main() -> None:
     # ---- AGGREGATE ----
     t = time.monotonic()
     log.info("=== AGGREGATE (up to 4 candidates per source) ===")
-    news_bs = aggregate_category("News", news_sources(), news_backups(), run_news)
-    science_bs = aggregate_category("Science", science_sources(), sci_backups(), run_sci)
-    fun_bs = aggregate_category("Fun", fun_sources(), fun_backups(), run_fun)
+    from datetime import date as _date
+    today_d = _date.today()
+    news_bs    = aggregate_category("News",    db_config.load_sources("News",    today=today_d, n=3), run_news)
+    science_bs = aggregate_category("Science", db_config.load_sources("Science", today=today_d, n=3), run_sci)
+    fun_bs     = aggregate_category("Fun",     db_config.load_sources("Fun",     today=today_d, n=3), run_fun)
     _set_phase("aggregate", t,
                candidate_counts={"News": sum(len(b["candidates"]) for b in news_bs.values()),
                                  "Science": sum(len(b["candidates"]) for b in science_bs.values()),
@@ -1298,7 +1296,6 @@ def main_mega() -> None:
     all_sources_for_lookup = []
     for cat_name in cat_names:
         all_sources_for_lookup.extend(db_config.load_sources(cat_name))
-        all_sources_for_lookup.extend(db_config.load_backup_sources(cat_name))
     source_lookup = ckpt.build_source_lookup(all_sources_for_lookup)
 
     resume_target = ckpt.resume_from()
