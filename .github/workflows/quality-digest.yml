@@ -169,8 +169,10 @@ jobs:
         if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_autofix != true }}
         # Drains the queue in-process: one DeepSeek regen for body /
         # keyword issues, two og:image attempts for image_missing,
-        # ESCALATE for anything else. Replaces the old `claude -p`
-        # consumer for routine fixes — runs in CI, no Mac dependency.
+        # ESCALATE for anything else. Anything escalated here gets
+        # picked up by the local Claude Code scheduled task on the
+        # owner's Mac at the next 3:03 AM / 10:03 AM EDT fire.
+        # See docs/AUTOFIX-SCHEDULED-TASK.md.
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         continue-on-error: true

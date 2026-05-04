@@ -1,0 +1,16 @@
+{
+  "//": "Pre-approved permissions for the news-v2-autofix scheduled task. Without these, the first fire stalls on the desktop's permission prompt, the session times out, and the queue stays stuck. See docs/AUTOFIX-SCHEDULED-TASK.md.",
+  "//2": "acceptEdits is the only mode that works for scheduled tasks per ~/myprojects/sourcefinder/docs/scheduled-tasks-howto.md (bypassPermissions is broken for scheduled tasks as of Claude Code 2.1.121).",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Agent"
+    ]
+  }
+}

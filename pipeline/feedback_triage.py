@@ -491,8 +491,8 @@ def _email_admins_about_new_issues(results: list[dict]) -> None:
         '<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6e6f3;border-radius:10px;padding:24px;">'
         f'<h1 style="margin:0 0 8px;font-size:20px;">New feedback triaged ({len(new_issues)})</h1>'
         '<p style="font-size:13px;color:#555;margin-bottom:14px;">'
-        'Pick an action per issue. <strong>🤖 Fix with Claude</strong> queues the issue for the local Mac listener — '
-        '<code>claude -p</code> reads the issue, scopes edits to the page in the issue context, and opens a PR.'
+        'Pick an action per issue. <strong>🤖 Fix with Claude</strong> queues the issue for the local Claude Code scheduled task — '
+        'the next 3am / 10am fire reads the issue, scopes edits to the page in the issue context, and opens a PR.'
         '</p>'
         + ''.join(blocks) +
         '<hr style="border:none;border-top:1px solid #eee;margin:16px 0;">'

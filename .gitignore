@@ -24,3 +24,9 @@ newdesign/uploads/
 
 # verify_source.py local output
 /out/verify/
+
+# .claude/settings.local.json typically holds user-specific preferences
+# (excluded by global gitignore). For news-v2 this file is required infra:
+# it pre-approves permissions for the news-v2-autofix scheduled task.
+# See docs/AUTOFIX-SCHEDULED-TASK.md.
+!.claude/settings.local.json

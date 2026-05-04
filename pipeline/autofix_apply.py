@@ -1,10 +1,8 @@
 """Apply auto-fixes to queued quality issues, in-process.
 
-Replaces the old `autofix_consumer.py` flow that spawned `claude -p`
-on the user's Mac. For routine word-count / keyword / image fixes we
-just call DeepSeek (text shape transforms) or the og:image extractor
-(image regrab) directly and write the result back to Storage. No agent
-needed.
+Routine word-count / keyword / image fixes are handled here directly:
+DeepSeek (text-shape transforms) or the og:image extractor (image
+regrab). No agent needed for the routine 80%.
 
 Per the project policy:
   body_too_long / body_too_short  → ONE DeepSeek regen attempt, accept
@@ -15,9 +13,11 @@ Per the project policy:
   image_missing                   → up to TWO image-regrab attempts via
                                     og:image (different fetch headers
                                     each try)
-  anything else / LLM fail        → mark row 'escalated'; the digest
-                                    will surface it for the admin to
-                                    Dismiss / Resolve / 🤖 Fix manually
+  anything else / LLM fail        → mark row 'escalated'; the local
+                                    Claude Code scheduled task picks it
+                                    up at the next 3am / 10am fire and
+                                    runs the kidsnews-bugfix skill.
+                                    See docs/AUTOFIX-SCHEDULED-TASK.md.
 
 Runs from .github/workflows/quality-digest.yml between
 `pipeline.quality_autofix` (which enqueues) and `pipeline.quality_digest`

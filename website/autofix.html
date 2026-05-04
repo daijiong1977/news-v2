@@ -194,7 +194,7 @@ function renderItems(items) {
 
   html += '<div class="legend">' +
     '<strong>Action meanings:</strong><br>' +
-    '<strong>🛠️ Fix</strong> — marks for the local Claude Code agent on your Mac to regen this article. The page will redirect to <code>kidsnews-autofix://drain</code>; on Mac that fires KidsnewsAutofix.app and runs the fix. On iPhone the redirect harmlessly fails — the row is still queued for the next time you\'re on Mac.<br>' +
+    '<strong>🛠️ Fix</strong> — marks the row <em>fix-requested</em>. The local Claude Code scheduled task on your Mac picks it up at the next 3am or 10am fire and runs the kidsnews-bugfix skill (reads the issue, scopes edits, opens a PR). No action needed beyond clicking — works the same from Mac or iPhone since the queue is the contract.<br>' +
     '<strong>🚫 Dismiss</strong> — ignore (won\'t retry).<br>' +
     '<strong>✓ Resolved</strong> — already-fine, mark closed without running.</div>';
 
@@ -253,25 +253,16 @@ async function doAction(id, action) {
       throw new Error(r.status + ' ' + text.slice(0, 200));
     }
     showToast({
-      fix:     'Fix queued — opening local app…',
+      fix:     'Fix queued — picked up at next 3am or 10am scheduled task fire.',
       dismiss: 'Dismissed.',
       resolve: 'Marked resolved.',
     }[action], 'ok');
 
-    if (action === 'fix') {
-      // Trigger the local Mac app via custom URL scheme. The browser
-      // shows a "Open KidsnewsAutofix?" prompt the first time. On
-      // iPhone the scheme silently fails — the row is already
-      // marked fix-requested so the next Mac drain picks it up.
-      setTimeout(() => {
-        window.location.href = 'kidsnews-autofix://drain?id=' + id;
-      }, 600);
-      // Reload queue after the redirect prompt clears.
-      setTimeout(loadQueue, 4000);
-    } else {
-      // Just reload queue.
-      setTimeout(loadQueue, 600);
-    }
+    // No URL-scheme redirect anymore — the local Claude Code scheduled
+    // task polls redesign_autofix_queue at 3am + 10am and processes
+    // fix-requested rows. The "Fix" click only changes queue state;
+    // the actual work is done autonomously next fire.
+    setTimeout(loadQueue, 600);
   } catch (e) {
     showToast('Failed: ' + e.message, 'err');
     btns.forEach(b => b.disabled = false);

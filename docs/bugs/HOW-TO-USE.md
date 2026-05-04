@@ -127,69 +127,44 @@ Bug-Record: docs/bugs/<some-existing-record>.md
 
 > 📊 Kids News quality — 2026-04-29 ET (last 3d) · 3 pending fixes
 
-如果有 pending item，邮件顶部会有一块橙色面板：
-- 列出每条问题（story id + level + 类型 + 之前尝试次数）
-- 一个 **🛠️ Drain queue now** 紫色大按钮
-- 一段 fallback Terminal 命令
+如果有 pending item，邮件顶部会有一块橙色面板列出每条问题（story id + level + 类型 + 之前尝试次数），还有一个跳转到 `news.6ray.com/autofix` 的链接。
 
-按钮的链接是 `kidsnews-autofix://drain` —— 这是一个**自定义 URL scheme**，由本地的 `~/Applications/KidsnewsAutofix.app` 处理。点按钮 → macOS LaunchServices 路由到这个 app → app 跑 drain 脚本。
+> **2026-05-04 起**: 不再用 `kidsnews-autofix://` URL scheme + KidsnewsAutofix.app + launchd daemon。
+> 现在用 **Claude Code Desktop scheduled tasks** — 每天 03:00 + 10:00 EDT 自动 fire。
+> 点 `news.6ray.com/autofix` 上的 🛠️ Fix 按钮只是把那一行标 fix-requested，真正的修复
+> 由下一次 scheduled task fire autonomously 跑。
+>
+> 详见 `docs/AUTOFIX-SCHEDULED-TASK.md`。
 
-> **历史**：本来想用 macOS Shortcuts.app，按钮 URL 是 `shortcuts://run-shortcut?name=...`。但 macOS 26 (Tahoe) 把 Shortcuts.app 的 trust gate 收紧了，未签名的 .shortcut 文件不能自动 import。改用这个 AppleScript-app 方案干净绕开 Shortcuts。
+### 6.1 一次性配置 scheduled task
 
-### 6.1 一次性安装 KidsnewsAutofix.app
+参考 `docs/AUTOFIX-SCHEDULED-TASK.md` 的 setup section。简略：
+1. 在 Claude Code Desktop 里调 `mcp__scheduled-tasks__create_scheduled_task`
+   两次 (3am + 10am)，prompt 指向 repo 里的 `docs/autofix-prompt.md`
+2. `.claude/settings.local.json` 已经在 repo 里 commit 了，所以
+   permissions 已经预批
+3. 可选 pre-flight: 在 task 上点 "Run now" 一次确认能跑
 
-```bash
-~/myprojects/news-v2/scripts/build-autofix-app.sh
-```
+### 6.2 按下 🛠️ Fix 按钮发生了什么
 
-这个脚本：
-1. `osacompile` 出一个最小 AppleScript app，handler 只调一行 shell
-2. 改 Info.plist 加 `CFBundleURLTypes` 注册 `kidsnews-autofix://` URL scheme
-3. `codesign` ad-hoc 重签（改 plist 后原签名失效）
-4. `lsregister -f` 注册到 LaunchServices
+1. JS PATCH `redesign_autofix_queue` 这一行 `status='fix-requested'`
+2. （什么都不再发生 — 没有 URL scheme 触发，也没有立即响应）
+3. 下一次 03:00 / 10:00 EDT，本地 Claude Code 的 scheduled task
+   fire，poll 这个 queue，找到 fix-requested 的行，调度
+   sub-agent 跑 `kidsnews-bugfix` skill，修代码 + open PR
+4. 跑完的 status='resolved' 写回；连续 2 次失败标 ABANDONED
 
-跑完测试：
-```bash
-open kidsnews-autofix://drain
-# → 应该静默跑 drain-autofix-queue.sh
-# → 队列空就立刻退出 + 弹 macOS 通知 "Autofix drain complete"
-```
+### 6.3 关键差别 (vs 老的 daemon 路径)
 
-### 6.2 按钮按下去会发生什么
+| | 老 daemon | Scheduled task |
+|---|---|---|
+| 触发 | 按按钮 → URL scheme → app → launchd | Cron (3am + 10am EDT) |
+| 并发 | 多个 `claude -p` 同时跑 (token 抢配额) | 一次一行, sub-agent dispatch |
+| Mac 关 | 跳过 | 下次 launch 补跑 |
+| 第一次 perm 卡 | n/a | `.claude/settings.local.json` 预批 |
+| Latency | 即时 | ≤ 12h (worst case) |
 
-1. macOS 看到 `kidsnews-autofix://drain` → 路由给 `KidsnewsAutofix.app`
-2. AppleScript 的 `on open location` handler 跑 `bash drain-autofix-queue.sh &`（后台 & 让 app 立刻退）
-3. 脚本 source `.env`（SUPABASE_URL / KEY / DEEPSEEK_API_KEY）
-4. 脚本调 `python3 -m pipeline.autofix_consumer`（drain 整个队列）
-5. 每个 queued item → spawn 一个 `claude -p` agent，2-3 分钟一个
-6. 跑完弹 macOS 通知 "Autofix drain complete"
-7. 日志在 `~/Library/Logs/kidsnews-autofix/$(date -u +%Y-%m-%d).log`，每个 agent 单独 `item-<N>.log`
-
-### 6.3 重要提醒
-
-⚠️ **drain 期间不要用 Claude IDE**——每个 `claude -p` 用你 Pro 账号 token，会跟你的 IDE 抢配额。建议：
-- 早上看 digest 邮件，但**别立刻按按钮**
-- 等到午饭、出门、下班前再按
-- drain 一次大概是 N items × 3 分钟（队列里 3 个 ≈ 9 分钟）
-- 跑的过程中你 IDE 会偶尔卡，等 notification 弹出再用
-
-如果想完全在云端跑（你账号不参与）：还有**选项 C**（GitHub Actions + 单独 Anthropic API key），需要再申请一个 API key 单独计费。
-
-### 6.4 自动 daemon 已经卸载
-
-launchd 自动每 8h tick 卸了（`launchctl bootout gui/$UID/com.daedal.kidsnews-autofix`）。现在**所有 autofix 靠你按按钮**触发，主动权完全在你这边。
-
-要恢复自动 daemon（不推荐，会和 IDE 抢 token）：
-```bash
-~/myprojects/news-v2/scripts/install-autofix-daemon.sh
-```
-
-### 6.5 卸载 KidsnewsAutofix.app
-
-```bash
-rm -rf ~/Applications/KidsnewsAutofix.app
-# LaunchServices 会在重启或下次 lsregister 全扫时自动清理 binding
-```
+如果立刻要处理: Claude Code Desktop sidebar → 找到 task → "Run now"。
 
 ---
 

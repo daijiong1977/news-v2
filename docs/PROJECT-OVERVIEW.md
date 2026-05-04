@@ -149,34 +149,39 @@ daily-pipeline 完成
                               ↓
                         每个 queue item 三个按钮：
                             🛠️ Fix    → JS PATCH status=fix-requested
-                                        → window.location='kidsnews-autofix://drain'
                                           ↓
-                                  你 Mac 上 KidsnewsAutofix.app 启动
+                                  本地 Claude Code scheduled task
+                                  (3am + 10am 触发, 用户 Mac 上)
                                           ↓
-                                  scripts/drain-autofix-queue.sh
+                                  读 redesign_autofix_queue 拿一行
                                           ↓
-                                  pipeline.autofix_consumer
+                                  Agent 调度 (kidsnews-bugfix skill)
+                                  读 issue + 定位代码 + 写 fix
                                           ↓
-                                  spawn `claude -p "fix this..."`
+                                  git commit + push + gh pr create
                                           ↓
-                                  Claude Code agent 读 payload + DeepSeek
-                                  改写 + 重新 PUT 到 storage
-                                          ↓
-                                  status='resolved' 写回
+                                  status='resolved' 写回 (or
+                                  ABANDONED after 2 retries)
                             🚫 Dismiss → JS PATCH status=dismissed
                             ✓ Resolved → JS PATCH status=resolved
 ```
 
 **文件**：
 - `pipeline/quality_digest.py` — 每天发邮件
-- `pipeline/quality_autofix.py` — 机械修复 + 入队
-- `pipeline/autofix_consumer.py` — 消费队列，spawn agent
-- `scripts/drain-autofix-queue.sh` — daemon 入口（Shortcut/手动）
-- `scripts/build-autofix-app.sh` — 一次性装本地 app
-- `~/Applications/KidsnewsAutofix.app` — 注册 `kidsnews-autofix://` URL scheme
+- `pipeline/quality_autofix.py` — 机械修复入队
+- `pipeline/autofix_apply.py` — pipeline-side 直接处理 (DeepSeek + image regrab)，处理不了的标 escalated
+- `~/.claude/scheduled-tasks/news-v2-autofix/SKILL.md` — 本地 scheduled task 的 prompt (用户 desktop 配置)
+- `.claude/settings.local.json` — pre-approved permissions for the scheduled task
+- `docs/AUTOFIX-SCHEDULED-TASK.md` — setup + ops guide
 - `website/autofix.html` — Vercel 静态控制面板
 - `.github/workflows/quality-digest.yml` — workflow_run trigger + sleep + 跑
 - DB 表：`redesign_autofix_queue`
+
+> **历史**: 2026-04-29 → 2026-05-04 用过基于 launchd + `claude -p` 的本地 daemon 路径
+> (autofix_consumer.py + scripts/autofix-daemon.sh + KidsnewsAutofix.app + URL scheme).
+> 2026-05-04 拆掉切换到 Claude Code scheduled tasks. 见
+> `docs/bugs/2026-05-04-autofix-scheduled-task-migration.md` 和
+> `docs/bugs/2026-04-29-autofix-token-starvation.md` (前一次的相关教训).
 
 ### 3.3 Bug 记录系统（Bug Records）
 
@@ -297,11 +302,9 @@ VALUES ('newadmin@example.com');
 
 ### 7.5 强制清空 autofix 队列
 
-```bash
-# 在你 Mac 上不开 IDE 时跑：
-~/myprojects/news-v2/scripts/drain-autofix-queue.sh
-```
-处理完弹 macOS 通知 "Autofix drain complete"。
+scheduled task 自动在 3am + 10am 跑。要立刻处理：在 Claude Code Desktop
+sidebar 找到 "news-v2-autofix" task，点 **Run now**。
+没装过的话先看 `docs/AUTOFIX-SCHEDULED-TASK.md`。
 
 ### 7.6 紧急重新部署网站（不重新 mining）
 
@@ -325,8 +328,7 @@ admin → Pipeline tab → Retention card。当天晚 03:00 UTC 生效。
 | 页面图加载失败 | `archive-click-race` / `search-click-wrong-article` bug records |
 | 邮件没收到 | 1) Gmail Spam folder 2) `daedal1977@gmail.com` 发件账号是否在 Vault |
 | 邮件里看到 raw HTML 源代码 | subject 里有 emoji/em-dash 触发 RFC 2047 编码冲突 → 用 ASCII subject |
-| 自定义 URL scheme `kidsnews-autofix://` 不工作 | `~/myprojects/news-v2/scripts/build-autofix-app.sh` 重装 |
-| autofix 队列卡 fix-requested 不动 | 你 Mac 没装 daemon，或 Claude Code 没 login |
+| autofix 队列卡 fix-requested 不动 | 1) Claude Code Desktop 关了 → 下次 launch 补跑 2) scheduled task 没创建 → 看 `docs/AUTOFIX-SCHEDULED-TASK.md` 3) `.claude/settings.local.json` 缺 → 第一次 fire 卡 permission |
 | 队列里的 item 反复失败 | `attempts >= 3` 后状态变 `escalated`，需手工排查 agent log |
 | Edge function 返回 HTML 但浏览器显示成 text | `supabase-edge-fn-html-blocked` bug record（Supabase 强制 sandbox） |
 | pipeline 跑不动一直 in_progress | 检查 60 min timeout；可能是 DeepSeek API quota |
