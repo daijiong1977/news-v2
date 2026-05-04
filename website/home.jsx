@@ -1542,6 +1542,11 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
           );
         })()}
         Made for curious kids · {window.SITE_CONFIG?.brand || '21 minutes every day'} 🎈
+        <div style={{marginTop: 10, fontSize: 11, color: '#b0a490'}}>
+          <a href="/terms-of-use.html" style={{color: '#9a8d7a', textDecoration: 'none', borderBottom: '1px dotted #c8b8d4'}}>Terms of use</a>
+          {' · '}
+          <a href="/robots.txt" style={{color: '#9a8d7a', textDecoration: 'none', borderBottom: '1px dotted #c8b8d4'}}>robots.txt</a>
+        </div>
       </footer>
     </div>
   );
