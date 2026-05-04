@@ -71,21 +71,37 @@
   }
 
   // Fire-and-forget RPC. Never throws. Logs warn on failure for debugging.
+  // Returns the Promise so callers that want to AWAIT a write (e.g.
+  // upsertKidProfile before sending a cross-device magic link) can.
+  // Callers that don't care just ignore the return value — same as before.
   function rpc(name, args) {
-    var cid = clientId(); if (!cid) return;
-    ensureSupabase().then(function (sb) {
-      if (!sb) return;
-      sb.rpc(name, args).then(function (res) {
-        if (res && res.error) console.warn('[kidsync]', name, 'failed:', res.error.message);
-      }).catch(function (e) { console.warn('[kidsync]', name, 'threw:', e); });
+    var cid = clientId(); if (!cid) return Promise.resolve(null);
+    return ensureSupabase().then(function (sb) {
+      if (!sb) return null;
+      return sb.rpc(name, args).then(function (res) {
+        if (res && res.error) {
+          console.warn('[kidsync]', name, 'failed:', res.error.message);
+          return { ok: false, error: res.error.message };
+        }
+        return { ok: true, data: res && res.data };
+      }).catch(function (e) {
+        console.warn('[kidsync]', name, 'threw:', e);
+        return { ok: false, error: String(e) };
+      });
     });
   }
 
   window.kidsync = {
-    // Called from index.html whenever tweaks change.
+    // Called from index.html whenever tweaks change. Returns a Promise
+    // that resolves once the upsert lands (or rejects on transport error)
+    // so callers like saveAndSendMagic can await it before sending a
+    // cross-device magic link — without that await, Device B can click
+    // the link before Device A's profile upload has reached cloud, and
+    // ends up rendering a blank OnboardingScreen.
     upsertKidProfile: function (tweaks) {
-      var cid = clientId(); if (!cid || !tweaks) return;
-      rpc('upsert_kid_profile', {
+      var cid = clientId();
+      if (!cid || !tweaks) return Promise.resolve(null);
+      return rpc('upsert_kid_profile', {
         p_client_id: cid,
         p_display_name: tweaks.userName || null,
         p_avatar: tweaks.avatar || null,
@@ -108,7 +124,11 @@
       });
     },
     // Called from article.jsx bumpStep — one row per step transition. The
-    // append-only event log is what drives the parent's day-by-day chart.
+    // append-only event log is what drives the parent's day-by-day chart
+    // AND now (since 2026-05-04) carries title + image_url so the
+    // cross-device "Recently read" popover on Device B can render past
+    // reads done on Device A. Without these, fetchHistory returned ids
+    // with no rendering metadata and the popover silently dropped them.
     recordReadingEvent: function (storyId, step, opts) {
       var cid = clientId(); if (!cid || !storyId || !step) return;
       opts = opts || {};
@@ -122,6 +142,8 @@
         p_minutes_added: opts.minutesAdded || 0,
         p_duration_ms: opts.durationMs || null,
         p_day_key: opts.dayKey || todayKey(),
+        p_title: opts.title || null,
+        p_image_url: opts.imageURL || null,
       });
     },
     // Called from KidStats.logQuizAttempt. picks is the kid's array of

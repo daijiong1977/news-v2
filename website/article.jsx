@@ -213,11 +213,22 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
     // Mirror to cloud (no-op if unavailable). Fire AFTER the state update
     // call returns — the ref-style guard inside setProgress handles
     // double-counts; here we only want one event per real step bump.
+    //
+    // Also send title + imageURL on every event so Device B's cross-device
+    // "Recently read" popover can render past reads from Device A. Without
+    // these the popover only had ids + category and silently dropped
+    // entries that weren't in the currently-loaded ARTICLES bundle. See
+    // docs/bugs/2026-05-03-recently-read-no-cross-device-sync.md.
     if (window.kidsync && typeof window.kidsync.recordReadingEvent === 'function') {
       const sid = article.storyId || article.id;
-      window.kidsync.recordReadingEvent(sid, stageId, {
+      const evtMeta = {
         category: article.category, level: baseArticle.level,
         language: baseArticle.language || 'en',
+        title: article.title || baseArticle.title || '',
+        imageURL: article.image || baseArticle.image || '',
+      };
+      window.kidsync.recordReadingEvent(sid, stageId, {
+        ...evtMeta,
         minutesAdded: STEP_WEIGHTS[stageId] || 1,
       });
       // Also fire a 'finish' event when the kid completes all four stages
@@ -226,10 +237,7 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
       const willHave = [...(cur.steps || []), stageId];
       const allDone = STEP_IDS.every(s => willHave.includes(s));
       if (allDone) {
-        window.kidsync.recordReadingEvent(sid, 'finish', {
-          category: article.category, level: baseArticle.level,
-          language: baseArticle.language || 'en',
-        });
+        window.kidsync.recordReadingEvent(sid, 'finish', evtMeta);
       }
     }
   };

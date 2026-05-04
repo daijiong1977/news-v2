@@ -124,7 +124,38 @@ function SignInNudge({ tweaks, onOpenUserPanel }) {
   );
 }
 
-function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone }) {
+// Shown briefly while a magic-link RPC is in-flight — see docs/bugs/
+// 2026-05-03-magic-link-onboarding-flash.md. Replaces what would
+// otherwise be a flash of OnboardingScreen with a "send magic link"
+// form, which made users think their link didn't work.
+function SigningInScreen({ theme }) {
+  return (
+    <div style={{
+      minHeight:'100vh', background: theme.bg,
+      fontFamily:'Nunito, sans-serif',
+      display:'flex', flexDirection:'column',
+      alignItems:'center', justifyContent:'center',
+      gap: 18, padding: 24, textAlign:'center',
+    }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        border: `4px solid ${theme.chip}`,
+        borderTopColor: '#1b1230',
+        animation: 'spin 0.9s linear infinite',
+      }}/>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        fontFamily: 'Fraunces, serif', fontWeight: 800,
+        fontSize: 20, color: '#1b1230',
+      }}>Signing you in…</div>
+      <div style={{ color: '#6b5c80', fontSize: 14 }}>
+        Linking your email to this device.
+      </div>
+    </div>
+  );
+}
+
+function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone, magicLinkError }) {
   const cfg = window.SITE_CONFIG || {};
   const [name, setName] = useStateH(tweaks?.userName || '');
   const [avatarId, setAvatarId] = useStateH(tweaks?.avatar || 'fox');
@@ -181,6 +212,15 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
   // link from their email and lands back on this URL, index.html's
   // boot consumes the magic token + binds email→client_id, and the
   // onboarding gate is already past (userName is set).
+  //
+  // Cross-device note: profile auto-upload via the [tweaks] useEffect
+  // is async/fire-and-forget. If the kid clicks the email link on a
+  // different device BEFORE Device A's auto-upload reaches cloud, the
+  // fetchProfile on Device B finds an empty row → OnboardingScreen
+  // re-fires. To close the race, we explicitly upload the form values
+  // (NOT React state — closures here are stale right after persistProfile)
+  // and await before sending the magic email. See
+  // docs/bugs/2026-05-03-magic-link-onboarding-flash.md.
   const saveAndSendMagic = async () => {
     if (!ready) return;
     const cleaned = (magicEmail || '').trim().toLowerCase();
@@ -193,6 +233,25 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
     try {
       if (!window.kidsync || !window.kidsync.requestMagicLink) {
         throw new Error('Email sign-in not available on this device.');
+      }
+      // Force-upload profile to cloud BEFORE sending the email, using the
+      // form values directly (the React tweaks state from `tweaks` is
+      // stale — persistProfile's setState hasn't flushed yet at this
+      // microtask). Best-effort: if the upload fails we still send the
+      // email so the kid isn't blocked, but we log the failure.
+      if (window.kidsync.upsertKidProfile) {
+        try {
+          await window.kidsync.upsertKidProfile({
+            userName: name.trim(),
+            avatar: avatarId,
+            theme: themeId,
+            language: lang,
+            level: pickedLevel,
+            dailyGoal: tweaks?.dailyGoal || 21,
+          });
+        } catch (e) {
+          console.warn('[saveAndSendMagic] profile pre-upload failed; cross-device click may need re-onboarding:', e);
+        }
       }
       await window.kidsync.requestMagicLink(cleaned);
       setMagicSentTo(cleaned);
@@ -366,6 +425,23 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone 
             <span style={{fontSize:18}}>🇬</span>
             {signingIn ? 'Redirecting…' : 'Sign in with Google · recommended'}
           </button>
+
+          {/* Banner shown when the user clicked a magic link but the
+              consume RPC rejected it (expired, already used, malformed).
+              Without this hint, the user just sees the same "send magic
+              link" UI and assumes the link silently failed. */}
+          {magicLinkError && !magicSentTo && (
+            <div style={{
+              marginTop: 10, padding: '10px 12px', borderRadius: 12,
+              background: '#fff0e8', border: '1.5px solid #f4c4ad',
+              color: '#c14e2a', fontSize: 13, fontWeight: 700,
+            }}>
+              ⚠ That magic link couldn't be used: {magicLinkError}
+              <div style={{ fontWeight: 500, marginTop: 4, color: '#7a3a18' }}>
+                Send a fresh one below — links expire after 10 minutes.
+              </div>
+            </div>
+          )}
 
           {/* Magic-link alternative for kids/parents without Google. Tap
               "or use email" to expand a small inline form. After "Send
@@ -971,7 +1047,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
   );
 }
 
-function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay }) {
+function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay, magicConsuming, magicLinkError }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
   const isZh = tweaks && tweaks.language === 'zh';
@@ -1115,6 +1191,16 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
     return m;
   }, []);
 
+  // ── Magic-link consumption gate ────────────────────────────────────
+  // When the URL carried ?magic=<token>, App's bootstrap useEffect is
+  // calling consumeMagicLink in the background. Without this gate, the
+  // OnboardingScreen below would briefly render a "send magic link" form
+  // while the RPC is in-flight — users see that, think the link didn't
+  // work, and re-submit. See docs/bugs/2026-05-03-magic-link-onboarding-flash.md.
+  if (magicConsuming) {
+    return <SigningInScreen theme={theme} />;
+  }
+
   // ── Onboarding gate (pre-pick-3) ───────────────────────────────────
   // First-launch — empty userName triggers the welcome screen. Saves
   // name + avatar + level + theme + lang into tweaks, then proceeds
@@ -1129,6 +1215,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
         level={level}
         setLevel={setLevel || (()=>{})}
         theme={theme}
+        magicLinkError={magicLinkError}
       />
     );
   }

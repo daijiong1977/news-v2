@@ -187,6 +187,20 @@ function App() {
   });
   const [userPanelOpen, setUserPanelOpen] = useState(false);
 
+  // True from initial render until the magic-link RPC has settled (resolved
+  // OR rejected). HomePage uses this to suppress OnboardingScreen during
+  // the consumeMagicLink window — without this gate, users click the email
+  // link and briefly see the OnboardingScreen showing a "send magic link"
+  // form, which makes them think the link didn't work and they re-submit.
+  // See docs/bugs/2026-05-03-magic-link-onboarding-flash.md.
+  const [magicConsuming, setMagicConsuming] = useState(() => {
+    try { return /[?&]magic=/.test(window.location.search || ''); }
+    catch (e) { return false; }
+  });
+  // If the RPC rejects the token, surface the reason so OnboardingScreen
+  // can show a hint banner instead of silently asking the user to retry.
+  const [magicLinkError, setMagicLinkError] = useState(null);
+
   useEffect(() => { ss.setJSON('ohye_route', route); }, [route]);
   useEffect(() => { ss.set('ohye_level', level); }, [level]);
   useEffect(() => { ss.set('ohye_cat', cat); }, [cat]);
@@ -270,19 +284,45 @@ function App() {
       try {
         if (magicMatch && window.kidsync && typeof window.kidsync.consumeMagicLink === 'function') {
           const token = decodeURIComponent(magicMatch[1]);
-          const r = await window.kidsync.consumeMagicLink(token);
-          // Strip the param either way — invalid tokens shouldn't keep retrying.
+          let r = null;
           try {
-            const clean = window.location.pathname + window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
-            history.replaceState(null, '', clean.endsWith('?') ? clean.slice(0, -1) : clean);
-          } catch (e) {}
+            r = await window.kidsync.consumeMagicLink(token);
+          } finally {
+            // Drop the magic= URL param even if the token was bad — we don't
+            // want refreshes to re-attempt consumption. The magicConsuming
+            // gate intentionally stays UP here; we wait until fetchProfile
+            // (further down) populates the kid's profile before lifting the
+            // spinner. Keeping the spinner up bridges the cross-device
+            // window where Device B has consumed the token but hasn't yet
+            // pulled Alice's name/avatar from cloud.
+            try {
+              const clean = window.location.pathname + window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
+              history.replaceState(null, '', clean.endsWith('?') ? clean.slice(0, -1) : clean);
+            } catch (e) {}
+          }
           if (r && r.ok) {
             console.log('[boot] magic link consumed');
           } else if (r && r.error) {
             console.warn('[boot] magic link rejected:', r.error);
+            setMagicLinkError(r.error);
+            // Bad token — there's no profile to wait for; lift the
+            // spinner now so the user sees the error banner promptly.
+            setMagicConsuming(false);
+          } else {
+            // r is null/undefined — RPC unreachable or supabase-js missing.
+            setMagicLinkError('Sign-in service unreachable. Try again in a moment.');
+            setMagicConsuming(false);
           }
+        } else if (magicMatch) {
+          // Token in URL but kidsync isn't ready (loaded out of order /
+          // private-mode storage error). Don't leave the spinner up.
+          setMagicConsuming(false);
         }
-      } catch (e) { console.warn('[boot] consumeMagicLink failed', e); }
+      } catch (e) {
+        console.warn('[boot] consumeMagicLink failed', e);
+        setMagicConsuming(false);
+        setMagicLinkError('Could not complete sign-in. Please try again.');
+      }
       // ALWAYS try to link — covers two cases:
       //   (a) OAuth bounce-back: URL has ?code=, exchange happens, we
       //       create the email_link via RPC.
@@ -351,6 +391,13 @@ function App() {
           }
         }
       } catch (e) { console.warn('[boot] fetchProfile failed', e); }
+      // Lift the magic-link spinner now that the profile pull has settled
+      // (resolved or rejected). If the URL had ?magic=, the user has been
+      // staring at SigningInScreen until this point — flipping
+      // magicConsuming=false here lets HomePage render either home (when
+      // tweaks.userName came back) or OnboardingScreen with the magicLinkError
+      // banner (when fetchProfile genuinely had nothing for this kid).
+      setMagicConsuming(false);
       // Cloud pull (or skip) is done. Future tweaks changes can now
       // upload to cloud through the gated useEffect.
       cloudPullDoneRef.current = true;
@@ -394,11 +441,31 @@ function App() {
             const fromCloud = {};
             for (const ev of events) {
               const id = ev.story_id + lvlSuffix;
-              const slot = fromCloud[id] || { steps: [], lastTab: 'read', lastTouchedAt: '' };
+              const dateMatch = ev.story_id && ev.story_id.match(/^(\d{4}-\d{2}-\d{2})/);
+              const slot = fromCloud[id] || {
+                steps: [], lastTab: 'read', lastTouchedAt: '',
+                // Snapshot fields populated from the event row when present.
+                // Older events written before the title/image_url columns
+                // existed will have NULLs; we keep "" so the popover's
+                // `snap.title` truthiness check drops them gracefully (the
+                // ARTICLES.find fallback will pick them up if today's
+                // bundle still has the story).
+                title: ev.title || '',
+                category: ev.category || '',
+                level: ev.level || '',
+                imageURL: ev.image_url || '',
+                archiveDate: dateMatch ? dateMatch[1] : null,
+              };
               if (!slot.steps.includes(ev.step)) slot.steps.push(ev.step);
               if ((ev.occurred_at || '') > (slot.lastTouchedAt || '')) {
                 slot.lastTouchedAt = ev.occurred_at;
                 slot.lastTab = ev.step;
+                // Only the latest event refreshes title/image_url —
+                // earlier writes may pre-date the schema migration.
+                if (ev.title)     slot.title    = ev.title;
+                if (ev.image_url) slot.imageURL = ev.image_url;
+                if (ev.category)  slot.category = ev.category;
+                if (ev.level)     slot.level    = ev.level;
               }
               fromCloud[id] = slot;
             }
@@ -406,15 +473,28 @@ function App() {
             for (const [id, cloudSlot] of Object.entries(fromCloud)) {
               const local = mergedAP[id];
               if (!local || typeof local !== 'object') {
+                // No local snapshot (cross-device first-touch). Cloud
+                // snapshot fields (title/category/imageURL) are now
+                // sufficient for the popover to render this entry.
                 mergedAP[id] = cloudSlot;
               } else {
                 // Union of steps (cloud may have more), latest lastTouchedAt
-                // wins for lastTab. Snapshot fields (title, category, etc.)
-                // come from local — cloud doesn't have them.
+                // wins for lastTab. Snapshot fields prefer LOCAL when set
+                // (it's authoritative on the device that read), but fall
+                // back to cloud values for fields the local entry lacks
+                // (e.g., a stale legacy entry without title).
                 const stepsSet = new Set([...(local.steps || []), ...(cloudSlot.steps || [])]);
                 const newer = (cloudSlot.lastTouchedAt || '') > (local.lastTouchedAt || '');
                 mergedAP[id] = {
+                  ...cloudSlot,
                   ...local,
+                  // Specific fields where we WANT cloud-fallback rather
+                  // than local-wins-empty:
+                  title:    local.title    || cloudSlot.title    || '',
+                  category: local.category || cloudSlot.category || '',
+                  level:    local.level    || cloudSlot.level    || '',
+                  imageURL: local.imageURL || cloudSlot.imageURL || '',
+                  archiveDate: local.archiveDate || cloudSlot.archiveDate || null,
                   steps: [...stepsSet],
                   lastTab: newer ? cloudSlot.lastTab : (local.lastTab || cloudSlot.lastTab),
                   lastTouchedAt: newer ? cloudSlot.lastTouchedAt : (local.lastTouchedAt || cloudSlot.lastTouchedAt),
@@ -611,6 +691,8 @@ function App() {
           tweaks={tweaks}
           updateTweak={updateTweak}
           onOpenUserPanel={()=>setUserPanelOpen(true)}
+          magicConsuming={magicConsuming}
+          magicLinkError={magicLinkError}
         />
       ) : (
         <ArticlePage
