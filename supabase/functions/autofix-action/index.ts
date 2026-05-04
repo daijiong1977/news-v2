@@ -110,6 +110,7 @@ function html(status: number, body: string): Response {
 
 const ISSUE_ACTIONS = new Set(["fix", "close", "snooze"]);
 const PR_ACTIONS    = new Set(["merge", "close", "leave", "rollback", "keep"]);
+const FEEDBACK_ACTIONS = new Set(["treat-as-bug", "dismiss"]);
 const GH_ISSUE_TOKEN = Deno.env.get("GH_ISSUE_TOKEN") || "";
 const GH_REPO = Deno.env.get("GH_REPO") || "daijiong1977/news-v2";
 
@@ -211,6 +212,129 @@ async function handleIssueAction(issueNum: number, action: string): Promise<Resp
 
   return html(400, htmlPage({
     title: "Bad request", message: `Unknown issue action ${action}.`,
+  }));
+}
+
+// ── Feedback row actions ──────────────────────────────────────────
+// Buttons in the daily quality-digest email's "feedback awaiting your
+// call" section. Two actions per row:
+//   ?fb=<row_id>&action=treat-as-bug&sig=<hmac16("feedback|<row_id>|treat-as-bug")>
+//     → flip redesign_feedback.triaged_status='converted'
+//     → if the row has a github_issue_number, also enqueue it in
+//       redesign_autofix_queue so the next 3am/10am scheduled-task fire
+//       picks it up. Idempotent like handleIssueAction(fix).
+//   ?fb=<row_id>&action=dismiss&sig=<hmac16(...)>
+//     → flip redesign_feedback.triaged_status='dismissed'
+//     → write a triaged_note recording the email-button origin.
+async function handleFeedbackAction(rowId: number, action: string): Promise<Response> {
+  // Pull the row first so we know its gh_issue_number + classification.
+  const { data: row, error: selErr } = await sb
+    .from("redesign_feedback")
+    .select("id,gh_issue_number,triaged_status,triage_classification,triage_summary")
+    .eq("id", rowId)
+    .maybeSingle();
+  if (selErr) {
+    return html(500, htmlPage({
+      title: "DB error", message: `Couldn't load feedback row: ${selErr.message}`,
+    }));
+  }
+  if (!row) {
+    return html(404, htmlPage({
+      title: "Not found", message: `Feedback row #${rowId} doesn't exist.`,
+    }));
+  }
+  // Idempotent: if already actioned, return a friendly already-done page.
+  if (row.triaged_status !== "new") {
+    return html(200, htmlPage({
+      title: "Already actioned",
+      message: `Feedback #${rowId} is already ${row.triaged_status}. No change.`,
+    }));
+  }
+
+  if (action === "treat-as-bug") {
+    // Step 1: flip the feedback row to 'converted'.
+    const { error: updErr } = await sb
+      .from("redesign_feedback")
+      .update({
+        triaged_status: "converted",
+        triaged_note: `Converted to bug via digest-email button at ${new Date().toISOString()}`,
+      })
+      .eq("id", rowId);
+    if (updErr) {
+      return html(500, htmlPage({
+        title: "Update failed", message: updErr.message,
+      }));
+    }
+
+    // Step 2: if there's a GH issue, enqueue it for the scheduled-task fire.
+    // No-op when gh_issue_number is null (rare — triage usually opens one).
+    if (row.gh_issue_number) {
+      const issueNum = row.gh_issue_number;
+      // Idempotent: skip if a fix-requested row already exists for this issue.
+      const { data: existing } = await sb
+        .from("redesign_autofix_queue")
+        .select("id,status")
+        .eq("github_issue_number", issueNum)
+        .in("status", ["queued", "fix-requested", "running"])
+        .maybeSingle();
+      if (!existing) {
+        const { error: insErr } = await sb
+          .from("redesign_autofix_queue").insert({
+            github_issue_number: issueNum,
+            problem_type:        "github_issue",
+            status:              "fix-requested",
+            problem_detail:      {
+              issue_url: `https://github.com/${GH_REPO}/issues/${issueNum}`,
+              source: `feedback#${rowId}`,
+              summary: row.triage_summary || null,
+            },
+          });
+        if (insErr) {
+          return html(500, htmlPage({
+            title: "Queue insert failed",
+            message: `Feedback row updated, but autofix queue insert failed: ${insErr.message}`,
+            color: COLOR.dismiss,
+          }));
+        }
+      }
+      return html(200, htmlPage({
+        title: "Treated as bug",
+        message: `Feedback #${rowId} → converted. GH issue #${issueNum} queued for the next 3am or 10am scheduled-task fire.`,
+        detail: "The local Claude Code scheduled task will run kidsnews-bugfix on this issue and open a PR with Closes #" + issueNum + ".",
+        color: COLOR.fix,
+      }));
+    }
+
+    // No GH issue (unusual for triaged rows). Just record the conversion.
+    return html(200, htmlPage({
+      title: "Converted",
+      message: `Feedback #${rowId} marked as converted, but no GH issue exists to queue. Open admin → Feedback to add manually.`,
+      color: COLOR.fix,
+    }));
+  }
+
+  if (action === "dismiss") {
+    const { error: updErr } = await sb
+      .from("redesign_feedback")
+      .update({
+        triaged_status: "dismissed",
+        triaged_note: `Dismissed via digest-email button at ${new Date().toISOString()}`,
+      })
+      .eq("id", rowId);
+    if (updErr) {
+      return html(500, htmlPage({
+        title: "Update failed", message: updErr.message,
+      }));
+    }
+    return html(200, htmlPage({
+      title: "Dismissed",
+      message: `Feedback #${rowId} → dismissed. Won't show in future digests.`,
+      color: COLOR.dismiss,
+    }));
+  }
+
+  return html(400, htmlPage({
+    title: "Bad request", message: `Unknown feedback action ${action}.`,
   }));
 }
 
@@ -329,12 +453,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const idStr    = url.searchParams.get("id") ?? "";
   const issueStr = url.searchParams.get("issue") ?? "";
   const prStr    = url.searchParams.get("pr") ?? "";
+  const fbStr    = url.searchParams.get("fb") ?? "";
 
   if (!BUTTON_SECRET) {
     return html(500, htmlPage({
       title: "Misconfigured",
       message: "AUTOFIX_BUTTON_SECRET not set in this environment.",
     }));
+  }
+
+  // Feedback branch — HMAC namespace "feedback|<row_id>|<action>".
+  if (fbStr) {
+    const rowId = parseInt(fbStr, 10);
+    if (!Number.isFinite(rowId) || rowId <= 0) {
+      return html(400, htmlPage({
+        title: "Bad request", message: "Missing or invalid `fb` parameter.",
+      }));
+    }
+    if (!FEEDBACK_ACTIONS.has(action)) {
+      return html(400, htmlPage({
+        title: "Bad request",
+        message: `Unknown feedback action ${action}. Expected: treat-as-bug / dismiss.`,
+      }));
+    }
+    const expectedSig = await hmac16(`feedback|${rowId}|${action}`, BUTTON_SECRET);
+    if (!constantTimeEqual(sig, expectedSig)) {
+      return html(403, htmlPage({
+        title: "Invalid signature",
+        message: "The button URL signature didn't validate.",
+      }));
+    }
+    return await handleFeedbackAction(rowId, action);
   }
 
   // PR branch — own HMAC namespace ("pr|N|action")

@@ -526,6 +526,160 @@ def render_escalated_panel(rows: list[dict]) -> str:
     )
 
 
+# ── Pending feedback panel (suggestions + content) ────────────────
+# Surfaces user feedback that auto-triage classified as 'suggestion'
+# or 'content' — these aren't bugs (so the autofix queue + scheduled
+# task don't see them), but the user wants to know about them and
+# decide per-row: treat as bug (-> queue for next scheduled-task fire)
+# or dismiss.
+
+FEEDBACK_VISIBLE = 8          # max rows shown — a digest with 8+ pending
+                              # is already a signal to triage in admin.
+FEEDBACK_WINDOW_DAYS = 7      # lookback for "still untouched" rows
+
+
+def _feedback_action_url(row_id: int, action: str) -> str:
+    if not AUTOFIX_BUTTON_SECRET:
+        return ""
+    sig = _hmac.new(
+        AUTOFIX_BUTTON_SECRET.encode(),
+        f"feedback|{row_id}|{action}".encode(),
+        _hashlib.sha256,
+    ).hexdigest()[:16]
+    return f"{ACTION_FN_URL}?fb={row_id}&action={action}&sig={sig}"
+
+
+def fetch_pending_feedback(days: int) -> list[dict]:
+    """Pull triaged feedback rows that are still 'new' AND classified
+    as suggestion/content. We exclude bug (already opens a GH issue +
+    will hit the autofix queue if escalated), noise (auto-dismissed by
+    triage), and duplicate (linked to existing issue)."""
+    try:
+        from urllib.parse import urlencode
+        from datetime import timedelta
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        url = (f"{SUPABASE_URL}/rest/v1/redesign_feedback?"
+               + urlencode({
+                   "select":   "id,created_at,category,message,"
+                               "triage_classification,triage_summary,"
+                               "triage_severity,gh_issue_url,gh_issue_number",
+                   "triaged_status":         "eq.new",
+                   "triage_classification":  "in.(suggestion,content)",
+                   "created_at":             f"gte.{since}",
+                   "order":                  "created_at.desc",
+                   "limit":                  "20",
+               }))
+        req = request.Request(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        })
+        with request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        log.warning("pending-feedback fetch failed: %s", e)
+        return []
+
+
+def render_feedback_panel(rows: list[dict]) -> str:
+    """Render the feedback awaiting triage section. Each row gets 3
+    buttons: 🐞 Treat as bug (queues + flips DB), 🚫 Not fixing
+    (dismisses), GH↗ (opens the auto-triaged GitHub issue)."""
+    if not rows:
+        return ""
+    if not AUTOFIX_BUTTON_SECRET:
+        log.warning("AUTOFIX_BUTTON_SECRET not set — skipping feedback panel")
+        return ""
+
+    visible = rows[:FEEDBACK_VISIBLE]
+    overflow = max(0, len(rows) - FEEDBACK_VISIBLE)
+    n = len(rows)
+
+    item_blocks: list[str] = []
+    for r in visible:
+        rid = r["id"]
+        # Choose an emoji + label per classification.
+        klass = (r.get("triage_classification") or "").lower()
+        if klass == "suggestion":
+            badge_text = "💡 SUG"
+            badge_color = "#7a4d18"
+            badge_bg = "#fff5e8"
+        elif klass == "content":
+            badge_text = "📰 CONTENT"
+            badge_color = "#0e6da3"
+            badge_bg = "#eaf6fc"
+        else:
+            badge_text = klass.upper()
+            badge_color = "#555"
+            badge_bg = "#f5f5f5"
+
+        summary = (r.get("triage_summary") or "").strip()
+        original = (r.get("message") or "").strip()
+        # Truncate the original message to keep email under Gmail's
+        # clip threshold. Suggestions tend to be 1-3 sentences.
+        if len(original) > 280:
+            original = original[:277] + "…"
+        gh_url = r.get("gh_issue_url") or ""
+        gh_num = r.get("gh_issue_number")
+
+        url_treat = _feedback_action_url(rid, "treat-as-bug")
+        url_dismiss = _feedback_action_url(rid, "dismiss")
+
+        gh_link_html = (
+            f'<a href="{gh_url}" target="_blank" '
+            'style="display:inline-block;padding:7px 14px;'
+            'background:#fff;color:#1f6bbf;border:1px solid #b9d0eb;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">'
+            f'GH#{gh_num} ↗</a>'
+        ) if gh_url else ""
+
+        item_blocks.append(
+            '<div style="border:1px solid #e6e6f3;border-radius:8px;'
+            'padding:12px 14px;margin-bottom:10px;background:#fff;">'
+            f'<div style="font-size:13px;color:#1b1230;font-weight:600;">'
+            f'<span style="display:inline-block;padding:1px 7px;border-radius:4px;'
+            f'font-size:11px;font-weight:700;color:{badge_color};'
+            f'background:{badge_bg};margin-right:6px;">{badge_text}</span>'
+            f'{summary or "(no summary)"}'
+            f'</div>'
+            f'<div style="font-size:12px;color:#555;margin:6px 0 10px;'
+            f'font-style:italic;">"{original}"</div>'
+            f'<a href="{url_treat}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#1b1230;color:#fff;text-decoration:none;'
+            'border-radius:6px;font-weight:700;font-size:12px;">🐞 Treat as bug</a>'
+            f'<a href="{url_dismiss}" '
+            'style="display:inline-block;padding:7px 14px;margin-right:6px;'
+            'background:#fff;color:#666;border:1px solid #ddd;'
+            'text-decoration:none;border-radius:6px;font-weight:700;font-size:12px;">🚫 Not fixing</a>'
+            + gh_link_html +
+            '</div>'
+        )
+    overflow_note = (
+        f'<div style="font-size:12px;color:#0e6da3;margin-top:6px;">'
+        f'… and {overflow} more pending. View all at '
+        f'<a href="https://news.6ray.com/admin#feedback" '
+        f'style="color:#0e6da3;">admin → Feedback</a>.'
+        '</div>'
+        if overflow else ''
+    )
+    return (
+        '<div style="margin-bottom:18px;padding:18px 20px;'
+        'background:#eaf6fc;border:1px solid #b9d0eb;border-radius:10px;'
+        'color:#0e6da3;">'
+        f'<div style="font-weight:700;font-size:15px;margin-bottom:10px;">'
+        f'💬 {n} feedback{"" if n == 1 else " items"} awaiting your call'
+        f'</div>'
+        '<div style="font-size:12px;color:#0e6da3;margin-bottom:12px;">'
+        f'These were auto-triaged as suggestions or content notes (not bugs). '
+        f'Pick one per row — click <strong>🐞 Treat as bug</strong> to queue '
+        f'for the next 3am/10am scheduled-task fire, or <strong>🚫 Not fixing</strong> '
+        f'to dismiss.'
+        '</div>'
+        + ''.join(item_blocks) + overflow_note +
+        '</div>'
+    )
+
+
 # ── PR review panel + rollback panel ──────────────────────────────
 # Surfaces claude-opened PRs that need human approval, plus recently
 # merged PRs the admin can roll back if they don't like the result.
@@ -845,6 +999,13 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     if escalated_rows:
         lines.append(render_escalated_panel(escalated_rows))
 
+    # Pending feedback — auto-triaged suggestions/content rows the
+    # user hasn't actioned yet. Surfaced so suggestions don't sit
+    # forgotten in the GitHub issue tracker.
+    pending_feedback = fetch_pending_feedback(FEEDBACK_WINDOW_DAYS)
+    if pending_feedback:
+        lines.append(render_feedback_panel(pending_feedback))
+
     # Pending-fixes panel — items still queued (auto-fix hasn't run yet
     # for some reason, or admin's earlier dismissed items got re-queued
     # by tomorrow's scan).
@@ -862,6 +1023,7 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     escalated_count = len(escalated_rows)
     open_pr_count = len(open_prs)
     rollback_count = len(rollback_rows)
+    feedback_count = len(pending_feedback)
 
     # Pull recent pipeline runs for the tuning panel.
     pipeline_runs = fetch_pipeline_runs(len(days))
@@ -872,7 +1034,8 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     # without listing every checked date — user only wants to see dates
     # that have something wrong.
     if (bad_variants == 0 and queue_count == 0 and escalated_count == 0
-            and open_pr_count == 0 and rollback_count == 0):
+            and open_pr_count == 0 and rollback_count == 0
+            and feedback_count == 0):
         today_label = days[0]["date"] if days else datetime.now(ET).date().isoformat()
         missing = [d["date"] for d in days if d.get("missing_day")]
         lines.append(
