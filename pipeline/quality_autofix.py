@@ -1,5 +1,7 @@
-"""Queue body-length / keyword / image issues for the local Mac
-daemon (runs `claude -p`) to fix via LLM regen.
+"""Queue body-length / keyword / image issues for in-process autofix
+to handle (pipeline.autofix_apply, runs DeepSeek / og:image regrab),
+or for the local Claude Code scheduled task to escalate (3am / 10am
+fires) for harder cases.
 
 This module is intentionally NOT a fixer — every quality miss is
 queued. We never mechanically trim article content: a hard cut at
