@@ -549,11 +549,58 @@ def _feedback_action_url(row_id: int, action: str) -> str:
     return f"{ACTION_FN_URL}?fb={row_id}&action={action}&sig={sig}"
 
 
+def _is_gh_issue_closed(issue_num: int) -> bool:
+    """Best-effort check via GitHub's public API. Returns True only on
+    a confirmed CLOSED state — any failure (network, 404, rate limit)
+    returns False so the row stays visible (no false-cleanup)."""
+    try:
+        url = f"https://api.github.com/repos/daijiong1977/news-v2/issues/{issue_num}"
+        req = request.Request(url, headers={
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        })
+        with request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+        return (data.get("state") or "").lower() == "closed"
+    except Exception:
+        return False
+
+
+def _resolve_feedback_row(row_id: int, gh_issue_num: int) -> None:
+    """Mark a feedback row resolved when its underlying GH issue is
+    closed. Best-effort — failure logs and moves on."""
+    try:
+        body = json.dumps({
+            "triaged_status": "resolved",
+            "triaged_note":   f"Auto-resolved by digest: GH issue #{gh_issue_num} is closed",
+        }).encode()
+        req = request.Request(
+            f"{SUPABASE_URL}/rest/v1/redesign_feedback?id=eq.{row_id}",
+            method="PATCH", data=body,
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type":  "application/json",
+                "Prefer":        "return=minimal",
+            },
+        )
+        with request.urlopen(req, timeout=10) as r:
+            r.read()
+    except Exception as e:
+        log.warning("auto-resolve feedback row %d failed: %s", row_id, e)
+
+
 def fetch_pending_feedback(days: int) -> list[dict]:
     """Pull triaged feedback rows that are still 'new' AND classified
     as suggestion/content. We exclude bug (already opens a GH issue +
     will hit the autofix queue if escalated), noise (auto-dismissed by
-    triage), and duplicate (linked to existing issue)."""
+    triage), and duplicate (linked to existing issue).
+
+    Self-healing: for each candidate row whose GH issue is already
+    closed, flip the row to 'resolved' in the DB and skip it from
+    the digest. Without this, manually-closed issues (e.g. fixed by
+    an admin PR but DB row was never updated) keep nagging the user
+    in every daily email until they click 🚫 in the email."""
     try:
         from urllib.parse import urlencode
         from datetime import timedelta
@@ -574,10 +621,23 @@ def fetch_pending_feedback(days: int) -> list[dict]:
             "Authorization": f"Bearer {SUPABASE_KEY}",
         })
         with request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read())
+            rows = json.loads(r.read())
     except Exception as e:
         log.warning("pending-feedback fetch failed: %s", e)
         return []
+
+    # Filter out rows whose underlying GH issue is already closed.
+    # Auto-resolve those rows in the DB so they don't reappear.
+    kept: list[dict] = []
+    for row in rows:
+        gh_num = row.get("gh_issue_number")
+        if gh_num and _is_gh_issue_closed(int(gh_num)):
+            log.info("feedback row %d: GH issue #%d closed → auto-resolving",
+                     row["id"], gh_num)
+            _resolve_feedback_row(row["id"], int(gh_num))
+            continue
+        kept.append(row)
+    return kept
 
 
 def render_feedback_panel(rows: list[dict]) -> str:
