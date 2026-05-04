@@ -136,8 +136,9 @@ Step 1 — Build eligible pool (today-ready)
 Step 2 — Sort eligible
   ORDER BY
     next_pickup_at  ASC NULLS FIRST,    -- most overdue first; never-used first
-    priority        ASC,                -- ties: low priority number wins
-    last_used_at    ASC NULLS FIRST     -- secondary tiebreak: LRU
+    priority        ASC,                -- editor's importance ranking
+    cadence_days    ASC,                -- daily beats weekly at priority tie
+    last_used_at    ASC NULLS FIRST     -- final tiebreak: LRU
 
 Step 3 — Take top N
   picked = ELIGIBLE.take(N)             -- N=3 today, configurable per cat
@@ -159,6 +160,25 @@ Step 4 — Exhaust the pool to fill shortfall
   -- the shortfall and emit a telemetry warning ("category X: only K/N
   -- sources available"). Pipeline still runs through downstream stages
   -- with whatever it got.
+
+Step 4.5 — Runtime backfill at aggregate-time (added 2026-05-04)
+  -- load_sources(cat, n=12) returns the top-12 prioritized pool.
+  -- aggregate_category iterates the pool, calling runner(source) on
+  -- each. Sources that return None (RSS fetch failed, < 2 fresh
+  -- articles, all candidates fail vet) are skipped, NOT stamped, and
+  -- the loop tries the next source. Iteration stops when N=3 sources
+  -- have actually contributed candidates OR the pool is exhausted.
+  --
+  -- Why this exists: 2026-05-04 dry-run picked 3 Fun sources by
+  -- cadence (Polygon + 2 Smithsonians). Both Smithsonians had 0
+  -- articles past the 5-day RSS freshness filter. The pre-backfill
+  -- algorithm shipped only Polygon's content as all 3 winners
+  -- (gaming-only). Backfill would have woken NG Kids / DOGOnews /
+  -- SwimSwam from the cadence pool to hit the diversity target.
+  --
+  -- Sources woken early via backfill are NOT stamped unless their
+  -- article wins (Step 5 unchanged). So a weekly source pulled in
+  -- early and not winning stays eligible at its original next_pickup.
 
 Step 5 — Stamp on winning contribution (idempotent)
   -- Only sources whose article actually shipped in today's bundle get

@@ -37,22 +37,55 @@ log = logging.getLogger("full-round")
 # 1) Aggregate 3 categories
 # -------------------------------------------------------------------
 
-def aggregate_category(label: str, enabled: list, runner) -> dict[str, dict]:
-    """Run each source through `runner`. No backup-swap (Q1=b).
+def aggregate_category(label: str, pool: list, runner,
+                       want: int = 3,
+                       max_attempts: int | None = None) -> dict[str, dict]:
+    """Iterate `pool` (in load_sources priority order) through `runner`
+    until `want` distinct sources have contributed candidates OR
+    `max_attempts` sources have been tried.
 
     `runner` returns dict | None (None when RSS fetch failed or fewer
-    than 2 viable candidates). Skip None — downstream code iterates
-    `by_source.items()` expecting each value to be a dict with `source`
-    + `candidates` keys.
+    than 2 viable candidates). When None comes back, we skip and try
+    the next source — this is the runtime-backfill complement to
+    cadence-aware load_sources. Cadence picks "which sources are
+    eligible today"; this loop picks "if today's first picks fail to
+    produce content, try the next ones".
+
+    Why this matters: 2026-05-04 dry-run picked 3 Fun sources by
+    cadence (Polygon + 2 Smithsonians). Both Smithsonians had 0
+    articles past the 5-day RSS freshness filter, so all 3 winners
+    came from Polygon (gaming-only). With backfill, we'd have tried
+    DOGOnews / NG Kids / SwimSwam / etc until 3 sources contributed.
+
+    Args:
+      pool: full prioritized pool from db_config.load_sources(cat, n=10).
+      want: number of contributing sources required (default 3).
+      max_attempts: cap on iteration. None = try every source in pool.
     """
-    log.info("[%s] aggregating from %d sources", label, len(enabled))
+    cap = max_attempts if max_attempts is not None else len(pool)
+    log.info("[%s] aggregating, want=%d, pool=%d, max_attempts=%d",
+             label, want, len(pool), cap)
+
     out: dict[str, dict] = {}
-    for src_obj in enabled:
+    attempts = 0
+    for src_obj in pool[:cap]:
+        if len(out) >= want:
+            log.info("[%s] target %d contributors reached after %d attempts",
+                     label, want, attempts)
+            break
+        attempts += 1
         res = runner(src_obj)
         if res is None:
-            log.info("  [%s] returned no candidates — skipping", src_obj.name)
+            log.info("  [%s] returned no candidates — skipping (attempt %d)",
+                     src_obj.name, attempts)
             continue
         out[src_obj.name] = res
+
+    if len(out) < want:
+        log.warning(
+            "[%s] backfill exhausted: only %d/%d sources contributed "
+            "after %d attempts (pool size %d)",
+            label, len(out), want, attempts, len(pool))
     return out
 
 
@@ -1078,9 +1111,22 @@ def main() -> None:
     log.info("=== AGGREGATE (up to 4 candidates per source) ===")
     from datetime import date as _date
     today_d = _date.today()
-    news_bs    = aggregate_category("News",    db_config.load_sources("News",    today=today_d, n=3), run_news)
-    science_bs = aggregate_category("Science", db_config.load_sources("Science", today=today_d, n=3), run_sci)
-    fun_bs     = aggregate_category("Fun",     db_config.load_sources("Fun",     today=today_d, n=3), run_fun)
+    # Load a deep-enough pool so aggregate_category can backfill if the
+    # top-3 cadence picks fail to produce candidates (e.g. weekly source
+    # had no articles in the freshness window). want=3 is the diversity
+    # target; pool of 12 covers 4× backfill headroom for Fun (largest
+    # category) without runaway compute on a fully-failing day.
+    POOL_DEPTH = 12
+    SOURCES_PER_CATEGORY = 3
+    news_bs    = aggregate_category(
+        "News",    db_config.load_sources("News",    today=today_d, n=POOL_DEPTH),
+        run_news,  want=SOURCES_PER_CATEGORY)
+    science_bs = aggregate_category(
+        "Science", db_config.load_sources("Science", today=today_d, n=POOL_DEPTH),
+        run_sci,   want=SOURCES_PER_CATEGORY)
+    fun_bs     = aggregate_category(
+        "Fun",     db_config.load_sources("Fun",     today=today_d, n=POOL_DEPTH),
+        run_fun,   want=SOURCES_PER_CATEGORY)
     _set_phase("aggregate", t,
                candidate_counts={"News": sum(len(b["candidates"]) for b in news_bs.values()),
                                  "Science": sum(len(b["candidates"]) for b in science_bs.values()),

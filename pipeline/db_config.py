@@ -154,10 +154,17 @@ def load_sources(category_name: str, *,
         return (s or "")[:10]
 
     def _sort_key(r):
+        # Order: most-overdue first, then editor-priority, then cadence
+        # (daily beats weekly at priority ties — fresh-content bias),
+        # then LRU. The cadence_days tiebreak was added after the
+        # 2026-05-04 dry-run produced 2 weekly empty Smithsonian sources
+        # in the Fun pool because all priority-1 ties resolved by
+        # arbitrary insertion order.
         npa = _date_part(r.get("next_pickup_at"))   # NULL/"" sorts first
         prio = int(r.get("priority") or 99)
+        cad = int(r.get("cadence_days") or 1)
         lua = _date_part(r.get("last_used_at"))
-        return (npa, prio, lua)
+        return (npa, prio, cad, lua)
 
     today_iso = today.isoformat()
     eligible = sorted(

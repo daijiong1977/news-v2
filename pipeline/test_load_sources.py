@@ -96,6 +96,19 @@ def test_lru_secondary_tiebreak():
     print("PASS: LRU tiebreak — oldest last_used wins")
 
 
+def test_cadence_days_tiebreak():
+    """Same priority + same next_pickup: daily-cadence wins over weekly."""
+    today = date(2026, 5, 3)
+    rows = [
+        _row("Weekly", priority=1, cadence_days=7, next_pickup="2026-05-03"),
+        _row("Daily",  priority=1, cadence_days=1, next_pickup="2026-05-03"),
+    ]
+    with _patch_rows(rows):
+        out = db_config.load_sources("Fun", today=today, n=2)
+    assert _names(out) == ["Daily", "Weekly"], _names(out)
+    print("PASS: cadence_days tiebreak — daily beats weekly at priority tie")
+
+
 def test_disabled_excluded():
     """enabled=false sources never appear."""
     today = date(2026, 5, 3)
@@ -154,6 +167,7 @@ def main():
         test_eligible_only_picked,
         test_priority_tiebreak_within_eligible,
         test_lru_secondary_tiebreak,
+        test_cadence_days_tiebreak,
         test_disabled_excluded,
         test_is_backup_now_included,
         test_cross_category_excluded,
