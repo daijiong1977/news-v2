@@ -58,7 +58,7 @@ def aggregate_category(label: str, pool: list, runner,
     DOGOnews / NG Kids / SwimSwam / etc until 3 sources contributed.
 
     Args:
-      pool: full prioritized pool from db_config.load_sources(cat, n=10).
+      pool: full prioritized pool from db_config.load_sources(cat, max_pool=12).
       want: number of contributing sources required (default 3).
       max_attempts: cap on iteration. None = try every source in pool.
     """
@@ -1119,13 +1119,13 @@ def main() -> None:
     POOL_DEPTH = 12
     SOURCES_PER_CATEGORY = 3
     news_bs    = aggregate_category(
-        "News",    db_config.load_sources("News",    today=today_d, n=POOL_DEPTH),
+        "News",    db_config.load_sources("News",    today=today_d, max_pool=POOL_DEPTH),
         run_news,  want=SOURCES_PER_CATEGORY)
     science_bs = aggregate_category(
-        "Science", db_config.load_sources("Science", today=today_d, n=POOL_DEPTH),
+        "Science", db_config.load_sources("Science", today=today_d, max_pool=POOL_DEPTH),
         run_sci,   want=SOURCES_PER_CATEGORY)
     fun_bs     = aggregate_category(
-        "Fun",     db_config.load_sources("Fun",     today=today_d, n=POOL_DEPTH),
+        "Fun",     db_config.load_sources("Fun",     today=today_d, max_pool=POOL_DEPTH),
         run_fun,   want=SOURCES_PER_CATEGORY)
     _set_phase("aggregate", t,
                candidate_counts={"News": sum(len(b["candidates"]) for b in news_bs.values()),
@@ -1359,12 +1359,20 @@ def main_mega() -> None:
         return result
 
     # ---- Phase A* light: RSS only, no body, no LLM ----
+    # Default load_sources args (min_pool=6, no max_pool) return ALL
+    # eligible sources for the day, with sleeping ones backfilling only
+    # when fewer than 6 are eligible. Probe + curator naturally cap how
+    # many briefs survive downstream — RSS fetch itself is cheap.
+    from datetime import date as _date_cls
+    today_d_mega = _date_cls.fromisoformat(today)
+
     def _phase_a_runner():
         t0 = time.monotonic()
         log.info("=== MEGA Phase A* (light RSS fetch) ===")
         out = {}
         for cat_name in cat_names:
-            srcs = db_config.load_sources(cat_name)
+            srcs = db_config.load_sources(cat_name, today=today_d_mega)
+            log.info("  [%s] mega pool: %d sources", cat_name, len(srcs))
             out[cat_name] = phase_a_light(cat_name, srcs)
         _set_phase("phase_a_light", t0,
                    counts={c: len(b) for c, b in out.items()})
@@ -1398,6 +1406,15 @@ def main_mega() -> None:
     PROBE_MAX_PER_CAT = 10
     PROBE_WORKERS = 8
 
+    # Per-source health: cumulative attempts and drops are stamped on
+    # redesign_source_configs after each run. When drop_rate >= the
+    # threshold AND we have enough samples, the source is auto-paused
+    # (state='paused', paused_reason='high_probe_drop_rate'). load_sources
+    # filters out paused rows so they never enter a future pool until
+    # admin manually unpauses.
+    AUTOPAUSE_DROP_RATE = 0.6
+    AUTOPAUSE_MIN_ATTEMPTS = 10
+
     def _probe_one(brief: dict) -> dict:
         from .news_rss_core import _fetch_and_enrich
         try:
@@ -1409,8 +1426,53 @@ def main_mega() -> None:
         wc = int(art.get("word_count") or 0)
         return {"brief": brief, "art": art, "wc": wc}
 
+    def _stamp_probe_health(per_source_run: dict[str, dict]) -> None:
+        """UPSERT cumulative probe counters and auto-pause sources whose
+        drop rate has crossed the threshold. `per_source_run` is
+        {source_name: {"attempts": int, "thin": int, "long": int}}."""
+        if not per_source_run:
+            return
+        try:
+            from .supabase_io import client
+            sb = client()
+            current = sb.table("redesign_source_configs") \
+                .select("name,probe_attempts,probe_drops_thin,probe_drops_long,state") \
+                .in_("name", list(per_source_run.keys())) \
+                .execute().data or []
+            now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            for row in current:
+                name = row["name"]
+                run = per_source_run.get(name, {})
+                attempts = int(row.get("probe_attempts") or 0) + run.get("attempts", 0)
+                thin = int(row.get("probe_drops_thin") or 0) + run.get("thin", 0)
+                long_ = int(row.get("probe_drops_long") or 0) + run.get("long", 0)
+                drops = thin + long_
+                update: dict = {
+                    "probe_attempts": attempts,
+                    "probe_drops_thin": thin,
+                    "probe_drops_long": long_,
+                }
+                if (attempts >= AUTOPAUSE_MIN_ATTEMPTS
+                        and drops / max(attempts, 1) >= AUTOPAUSE_DROP_RATE
+                        and (row.get("state") in (None, "live"))):
+                    update["state"] = "paused"
+                    update["paused_at"] = now_iso
+                    update["paused_reason"] = "high_probe_drop_rate"
+                    log.warning(
+                        "  auto-pausing source %s: %d/%d drops (%.0f%%) "
+                        "≥ %.0f%% threshold",
+                        name, drops, attempts, 100 * drops / attempts,
+                        100 * AUTOPAUSE_DROP_RATE)
+                sb.table("redesign_source_configs") \
+                    .update(update) \
+                    .eq("name", name) \
+                    .execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning("  probe-health stamp failed: %s", e)
+
     def _stage1_5_runner():
         from concurrent.futures import ThreadPoolExecutor
+        from collections import defaultdict
         t0 = time.monotonic()
         log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %d) ===",
                  PROBE_MIN_WORDS, PROBE_MAX_WORDS, PROBE_MAX_PER_CAT)
@@ -1418,6 +1480,8 @@ def main_mega() -> None:
         kept_total = 0
         dropped_thin = 0
         dropped_long = 0
+        per_source: dict[str, dict] = defaultdict(
+            lambda: {"attempts": 0, "thin": 0, "long": 0})
         for cat, briefs in briefs_by_cat.items():
             if not briefs:
                 out[cat] = []
@@ -1427,11 +1491,15 @@ def main_mega() -> None:
             kept: list[dict] = []
             for r in results:
                 wc = r["wc"]
+                src = (r["brief"].get("_source_name") or "") or "<unknown>"
+                per_source[src]["attempts"] += 1
                 if wc < PROBE_MIN_WORDS:
                     dropped_thin += 1
+                    per_source[src]["thin"] += 1
                     continue
                 if wc > PROBE_MAX_WORDS:
                     dropped_long += 1
+                    per_source[src]["long"] += 1
                     continue
                 b = r["brief"]
                 b["_probe_art"] = r["art"]
@@ -1445,11 +1513,16 @@ def main_mega() -> None:
                      cat, len(kept), len(briefs),
                      sum(1 for r in results if r["wc"] < PROBE_MIN_WORDS),
                      sum(1 for r in results if r["wc"] > PROBE_MAX_WORDS))
+        # Stamp cumulative counters + auto-pause crashed sources. Drops
+        # the "<unknown>" key — we only care about real source names.
+        per_source.pop("<unknown>", None)
+        _stamp_probe_health(dict(per_source))
         _set_phase("phase_a_probe", t0,
                    counts={c: len(b) for c, b in out.items()},
                    dropped_thin=dropped_thin,
                    dropped_long=dropped_long,
-                   kept=kept_total)
+                   kept=kept_total,
+                   per_source={k: dict(v) for k, v in per_source.items()})
         return out
     briefs_by_cat = _load_or_run("phase_a_probe", _stage1_5_runner)
 

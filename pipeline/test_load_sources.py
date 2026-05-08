@@ -48,24 +48,49 @@ def test_never_used_sorts_first():
         _row("Older", priority=1, last_used="2026-04-26", next_pickup="2026-04-28"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=3)
+        out = db_config.load_sources("Fun", today=today, max_pool=3)
     assert _names(out) == ["New", "Older", "Old"], _names(out)
     print("PASS: never-used sorts before any dated entry")
 
 
-def test_eligible_only_picked():
-    """Only sources with next_pickup_at <= today are in the eligible pool."""
+def test_eligible_first_skips_sleeping_when_enough():
+    """If eligible >= min_pool, sleeping sources are NOT tapped."""
     today = date(2026, 5, 3)
     rows = [
-        _row("Today",      priority=1, next_pickup="2026-05-03"),
-        _row("Tomorrow",   priority=1, next_pickup="2026-05-04"),  # NOT eligible
-        _row("Yesterday",  priority=2, next_pickup="2026-05-02"),
+        _row(f"E{i}", priority=1, next_pickup="2026-05-03") for i in range(7)
+    ] + [
+        _row("Sleep1", priority=1, next_pickup="2026-05-10"),
+        _row("Sleep2", priority=1, next_pickup="2026-05-15"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=3)
-    # Step 3 takes 2 eligible, Step 4 fills with Tomorrow
-    assert _names(out) == ["Yesterday", "Today", "Tomorrow"], _names(out)
-    print("PASS: Step 4 fills shortfall from closest non-eligible")
+        out = db_config.load_sources("Fun", today=today, min_pool=6)
+    # All 7 eligible should be returned; neither sleeping source picked.
+    names = _names(out)
+    assert len(names) == 7, names
+    assert all(n.startswith("E") for n in names), names
+    assert "Sleep1" not in names and "Sleep2" not in names
+    print("PASS: sleeping skipped when eligible >= min_pool")
+
+
+def test_sleeping_fills_only_shortfall():
+    """When eligible < min_pool, sleeping fills only up to min_pool."""
+    today = date(2026, 5, 3)
+    rows = [
+        _row("E1", priority=1, next_pickup="2026-05-03"),
+        _row("E2", priority=1, next_pickup="2026-05-02"),
+        _row("Sleep1", priority=1, next_pickup="2026-05-04"),
+        _row("Sleep2", priority=1, next_pickup="2026-05-05"),
+        _row("Sleep3", priority=1, next_pickup="2026-05-06"),
+        _row("Sleep4", priority=1, next_pickup="2026-05-07"),
+        _row("Sleep5", priority=1, next_pickup="2026-05-08"),
+    ]
+    with _patch_rows(rows):
+        out = db_config.load_sources("Fun", today=today, min_pool=6)
+    # 2 eligible + 4 sleeping (closest first) = 6 total. Sleep5 left out.
+    names = _names(out)
+    assert len(names) == 6, names
+    assert "Sleep5" not in names, names
+    print("PASS: sleeping fills exactly the shortfall (not more)")
 
 
 def test_priority_tiebreak_within_eligible():
@@ -76,7 +101,7 @@ def test_priority_tiebreak_within_eligible():
         _row("HighPri", priority=1, next_pickup="2026-05-03"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=2)
+        out = db_config.load_sources("Fun", today=today, max_pool=2)
     assert _names(out) == ["HighPri", "LowPri"], _names(out)
     print("PASS: priority tiebreak within same next_pickup")
 
@@ -91,7 +116,7 @@ def test_lru_secondary_tiebreak():
              last_used="2026-04-26"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=2)
+        out = db_config.load_sources("Fun", today=today, max_pool=2)
     assert _names(out) == ["Old", "Recent"], _names(out)
     print("PASS: LRU tiebreak — oldest last_used wins")
 
@@ -104,7 +129,7 @@ def test_cadence_days_tiebreak():
         _row("Daily",  priority=1, cadence_days=1, next_pickup="2026-05-03"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=2)
+        out = db_config.load_sources("Fun", today=today, max_pool=2)
     assert _names(out) == ["Daily", "Weekly"], _names(out)
     print("PASS: cadence_days tiebreak — daily beats weekly at priority tie")
 
@@ -117,9 +142,24 @@ def test_disabled_excluded():
         _row("Disabled", enabled=False),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=3)
+        out = db_config.load_sources("Fun", today=today, max_pool=3)
     assert _names(out) == ["Active"], _names(out)
     print("PASS: disabled sources excluded")
+
+
+def test_paused_excluded():
+    """state='paused' sources are auto-paused: invisible to load_sources."""
+    today = date(2026, 5, 3)
+    rows = [
+        _row("Live",   state="live"),
+        _row("Paused", state="paused"),  # auto-paused by phase_a_probe
+        _row("Null",   state=None),       # legacy NULL state — still live
+    ]
+    with _patch_rows(rows):
+        out = db_config.load_sources("Fun", today=today, max_pool=5)
+    names = sorted(_names(out))
+    assert names == ["Live", "Null"], names
+    print("PASS: state='paused' excluded; NULL/'live' included")
 
 
 def test_is_backup_now_included():
@@ -130,7 +170,7 @@ def test_is_backup_now_included():
         _row("Backup",  is_backup=True,  priority=2),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=2)
+        out = db_config.load_sources("Fun", today=today, max_pool=2)
     assert _names(out) == ["Primary", "Backup"], _names(out)
     print("PASS: is_backup field is ignored (Q1=b)")
 
@@ -143,35 +183,50 @@ def test_cross_category_excluded():
         _row("NewsSrc", cat="News"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=3)
+        out = db_config.load_sources("Fun", today=today, max_pool=3)
     assert _names(out) == ["FunSrc"], _names(out)
     print("PASS: cross-category sources excluded")
 
 
 def test_under_fill_accepted():
-    """Category with fewer than N enabled sources returns what it has."""
+    """Category with fewer than min_pool sources returns what it has."""
     today = date(2026, 5, 3)
     rows = [
         _row("Only",  next_pickup="2026-05-03"),
     ]
     with _patch_rows(rows):
-        out = db_config.load_sources("Fun", today=today, n=3)
-    assert len(out) == 1
-    print("PASS: under-fill returns < N gracefully")
+        out = db_config.load_sources("Fun", today=today, min_pool=6)
+    assert len(out) == 1, out
+    print("PASS: under-fill returns < min_pool gracefully")
+
+
+def test_max_pool_caps_eligible():
+    """max_pool caps the return size even when more eligible exist."""
+    today = date(2026, 5, 3)
+    rows = [
+        _row(f"E{i}", priority=1, next_pickup="2026-05-03") for i in range(15)
+    ]
+    with _patch_rows(rows):
+        out = db_config.load_sources("Fun", today=today, max_pool=5)
+    assert len(out) == 5, len(out)
+    print("PASS: max_pool caps the eligible pool")
 
 
 def main():
     import sys
     tests = [
         test_never_used_sorts_first,
-        test_eligible_only_picked,
+        test_eligible_first_skips_sleeping_when_enough,
+        test_sleeping_fills_only_shortfall,
         test_priority_tiebreak_within_eligible,
         test_lru_secondary_tiebreak,
         test_cadence_days_tiebreak,
         test_disabled_excluded,
+        test_paused_excluded,
         test_is_backup_now_included,
         test_cross_category_excluded,
         test_under_fill_accepted,
+        test_max_pool_caps_eligible,
     ]
     try:
         for t in tests:
