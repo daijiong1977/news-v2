@@ -74,19 +74,36 @@ PR #24 — three coordinated changes:
    sleeping). Legacy `aggregate_category` callers now pass
    `max_pool=POOL_DEPTH` explicitly to preserve their hard cap of 12.
 
-3. **`pipeline/full_round.py:1404-1531`** — per-source probe drop
+3. **`pipeline/full_round.py:1404-1559`** — per-source probe drop
    counters in `_stage1_5_runner`. Each probe attempt is attributed to
-   `brief["_source_name"]`; thin/long drops increment per-source counts.
-   After the run, `_stamp_probe_health` UPSERTs cumulative counters
-   (`probe_attempts`, `probe_drops_thin`, `probe_drops_long`) on
-   `redesign_source_configs` and auto-pauses any source where
-   `drops/attempts >= 0.6 AND attempts >= 10` by setting
-   `state='paused'`, `paused_at=now()`, `paused_reason='high_probe_drop_rate'`.
-   `load_sources` filters out paused rows so they never re-enter a pool
-   until admin manually unpauses (sets `state='live'`).
+   `brief["_source_name"]`; thin/long drops increment per-source counts;
+   fetch exceptions (network/5xx) increment a SEPARATE `probe_errors`
+   column and are EXCLUDED from auto-pause math (so a flaky network
+   doesn't pause an otherwise healthy source). After the run,
+   `_stamp_probe_health` reads current counters then per-row UPDATEs
+   cumulative `probe_attempts/probe_drops_thin/probe_drops_long/probe_errors`.
+   Auto-pause fires only when `content_drops / content_attempts >= 0.6
+   AND content_attempts >= 10` (where `content_attempts = attempts - errors`).
+   `load_sources` filters out paused rows by default; checkpoint lookup
+   passes `include_paused=True` so resume-after-mid-run-pause still
+   rehydrates `_source` refs.
 
-Migration `add_source_probe_health_counters` adds the four new
-columns to `redesign_source_configs` (defaulted to 0 / NULL).
+4. **`pipeline/feedback_triage.py:_deepseek_call`** — bumped retry
+   budget from 3 attempts (2s/4s = 6s total wait) to 4 attempts with
+   2s/8s/30s backoff = 40s total wait. Captures per-attempt error
+   trail in the final `RuntimeError` message so `agent_log` reflects
+   the actual failure mode (network / 429 / JSON parse) instead of
+   an opaque "exhausted N attempts".
+
+5. **`pipeline/autofix_apply.py:_fix_keyword`** — when the targeted
+   weave-or-drop call exhausts all retries, fall back to deterministic
+   drop instead of escalating to a human queue row. Pack-time scrub
+   already removes definition-less keywords, so dropping is harmless
+   and unblocks the queue.
+
+Migrations: `supabase/migrations/20260508_source_probe_health.sql`
+adds the five new columns to `redesign_source_configs` (defaulted to
+0 / NULL).
 
 ## Invariant
 

@@ -42,10 +42,26 @@ GH_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 GH_REPO      = os.environ.get("GH_REPO", "daijiong1977/news-v2")  # owner/name
 
 
+# Backoff schedule for _deepseek_call. Total sleep budget across 4
+# attempts: 2 + 8 + 30 = 40 seconds — long enough for one full DeepSeek
+# rate-limit window (typically 60s) to halfway clear, AND long enough
+# to ride through provider-side 5xx blips that our short 6s budget
+# (2+4) was missing. The autofix-side `_fix_keyword` cost is one tiny
+# call per slot, so spending a minute is fine when the alternative is
+# escalating to a manual queue row.
+_DEEPSEEK_BACKOFF_SECS = [2, 8, 30]
+_DEEPSEEK_MAX_ATTEMPTS = len(_DEEPSEEK_BACKOFF_SECS) + 1
+
+
 def _deepseek_call(system: str, user: str, max_tokens: int = 800) -> dict:
     """Inline DeepSeek call — same provider as the rewrite/curator
     pipeline but without the news_rss_core dependency tree (which
-    pulls in feedparser etc. that triage doesn't need)."""
+    pulls in feedparser etc. that triage doesn't need).
+
+    On exhaust, raises RuntimeError whose message includes the
+    per-attempt error trail so the autofix `agent_log` records the
+    actual failure mode (network, 429, JSON parse) instead of a
+    blank "exhausted N attempts"."""
     if not DEEPSEEK_KEY:
         raise RuntimeError("DEEPSEEK_API_KEY not set")
     payload = json.dumps({
@@ -65,7 +81,8 @@ def _deepseek_call(system: str, user: str, max_tokens: int = 800) -> dict:
         },
     )
     last_err: Exception | None = None
-    for attempt in range(1, 4):
+    per_attempt: list[str] = []
+    for attempt in range(1, _DEEPSEEK_MAX_ATTEMPTS + 1):
         try:
             with request.urlopen(req, timeout=60) as r:
                 body = r.read().decode()
@@ -74,11 +91,16 @@ def _deepseek_call(system: str, user: str, max_tokens: int = 800) -> dict:
             return json.loads(content)
         except Exception as e:
             last_err = e
-            log.warning("deepseek call attempt %d failed: %s", attempt, e)
-            if attempt < 3:
+            per_attempt.append(f"#{attempt}: {type(e).__name__}: {str(e)[:200]}")
+            log.warning("deepseek call attempt %d/%d failed: %s",
+                        attempt, _DEEPSEEK_MAX_ATTEMPTS, e)
+            if attempt <= len(_DEEPSEEK_BACKOFF_SECS):
                 import time
-                time.sleep(2 * attempt)
-    raise RuntimeError(f"deepseek_call exhausted 3 attempts") from last_err
+                time.sleep(_DEEPSEEK_BACKOFF_SECS[attempt - 1])
+    trail = " | ".join(per_attempt)
+    raise RuntimeError(
+        f"deepseek_call exhausted {_DEEPSEEK_MAX_ATTEMPTS} attempts: {trail}"
+    ) from last_err
 
 
 SYSTEM_PROMPT = """You triage user feedback for a kids-news website.

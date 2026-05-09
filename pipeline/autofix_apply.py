@@ -187,7 +187,27 @@ def _fix_keyword(payload: dict, missed: list[str]) -> tuple[bool, str, dict]:
     try:
         out = _deepseek_call(_KEYWORD_FIX_SYSTEM, user_prompt, max_tokens=1400)
     except Exception as e:
-        return (False, f"DeepSeek call failed: {e}", {"error": str(e)})
+        # Final fallback — if even the targeted weave-or-drop call
+        # cannot complete, drop the missed terms from the keyword
+        # array. A hover-card with no body match is broken UX
+        # anyway (pack-time scrub later removes definition-less
+        # entries), so dropping is harmless and lets the run move
+        # on without escalating to a human queue row.
+        kept: list[dict] = []
+        removed: list[str] = []
+        missed_lc = {t.lower() for t in missed}
+        for k in (payload.get("keywords") or []):
+            term = (k.get("term") or "")
+            if term.lower() in missed_lc:
+                removed.append(term)
+            else:
+                kept.append(k)
+        payload["keywords"] = kept
+        return (True,
+                f"DeepSeek unavailable — dropped {len(removed)} keyword(s) instead",
+                {"action": "drop_fallback",
+                 "dropped": removed,
+                 "error": str(e)[:300]})
 
     action = (out.get("action") or "").strip().lower()
     if action == "weave":

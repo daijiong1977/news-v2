@@ -162,6 +162,22 @@ def test_paused_excluded():
     print("PASS: state='paused' excluded; NULL/'live' included")
 
 
+def test_paused_included_when_flag_set():
+    """include_paused=True surfaces paused rows (for checkpoint lookup)."""
+    today = date(2026, 5, 3)
+    rows = [
+        _row("Live",   state="live"),
+        _row("Paused", state="paused"),
+        _row("Null",   state=None),
+    ]
+    with _patch_rows(rows):
+        out = db_config.load_sources("Fun", today=today, max_pool=5,
+                                     include_paused=True)
+    names = sorted(_names(out))
+    assert names == ["Live", "Null", "Paused"], names
+    print("PASS: include_paused=True surfaces paused rows for lookup builds")
+
+
 def test_is_backup_now_included():
     """Q1=b: is_backup is no longer a filter. Backup rows participate."""
     today = date(2026, 5, 3)
@@ -223,6 +239,7 @@ def main():
         test_cadence_days_tiebreak,
         test_disabled_excluded,
         test_paused_excluded,
+        test_paused_included_when_flag_set,
         test_is_backup_now_included,
         test_cross_category_excluded,
         test_under_fill_accepted,

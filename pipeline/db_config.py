@@ -124,7 +124,8 @@ _TARGET_MIN_POOL = 6  # below this size we tap sleeping sources as fallback
 def load_sources(category_name: str, *,
                  today: "date | None" = None,
                  min_pool: int = _TARGET_MIN_POOL,
-                 max_pool: int | None = None) -> list[NewsSource]:
+                 max_pool: int | None = None,
+                 include_paused: bool = False) -> list[NewsSource]:
     """Cadence-aware source selection per category.
 
     Eligible sources (next_pickup_at IS NULL OR <= today) come first, sorted
@@ -135,15 +136,23 @@ def load_sources(category_name: str, *,
     sources are pure fallback so they keep their cadence rest unless eligible
     can't carry the run.
 
-    `state='paused'` sources are excluded entirely (auto-paused by
+    `state='paused'` sources are excluded by default (auto-paused by
     phase_a_probe when their drop rate is too high; manual unpause via admin
-    flips state back to 'live'). `is_backup` is ignored.
+    flips state back to 'live'). Pass `include_paused=True` ONLY for
+    checkpoint-rehydration / lookup-table use cases that need the full set
+    of sources a run might have touched, not for selection. `is_backup` is
+    ignored.
 
     Args:
       today: anchor date for the eligibility split. Defaults to today.
       min_pool: minimum pool size before tapping sleeping sources.
       max_pool: optional cap on returned size. None = no cap (return all
                 eligible + any needed fallback).
+      include_paused: include state='paused' rows. Default False (never
+                in selection). Used only for source_lookup builds in
+                main_mega so checkpoint resume after auto-pause does not
+                lose `_source` refs for sources that were already used
+                upstream in the same run.
     """
     from datetime import date as _date
     if today is None:
@@ -152,12 +161,20 @@ def load_sources(category_name: str, *,
     raw_by_cat = _ensure_src_cache()
     rows = raw_by_cat.get(category_name, [])
 
-    # Filter: enabled, state in (NULL, 'live'). 'paused' rows (auto- or
-    # manually paused) are dropped here so the rest of the pipeline never
-    # sees them. is_backup ignored.
-    candidates = [r for r in rows
-                  if r.get("enabled")
-                  and (r.get("state") in (None, "live"))]
+    # Filter: enabled. State filter depends on caller intent.
+    # - Default (selection): state in (NULL, 'live') only. Paused rows
+    #   are auto-pause victims and stay out of any future pool.
+    # - include_paused=True (checkpoint lookup): allow 'paused' too so
+    #   resume can rehydrate `_source` refs that were valid earlier in
+    #   the same run before the auto-pause stamp landed.
+    if include_paused:
+        candidates = [r for r in rows
+                      if r.get("enabled")
+                      and (r.get("state") in (None, "live", "paused"))]
+    else:
+        candidates = [r for r in rows
+                      if r.get("enabled")
+                      and (r.get("state") in (None, "live"))]
 
     # Slice the first 10 chars (YYYY-MM-DD) so we compare dates, not
     # timestamps. next_pickup_at is DATE; last_used_at is full ISO
