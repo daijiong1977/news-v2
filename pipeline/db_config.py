@@ -118,19 +118,41 @@ def _ensure_src_cache() -> dict[str, list[dict]]:
     return by_cat
 
 
+_TARGET_MIN_POOL = 6  # below this size we tap sleeping sources as fallback
+
+
 def load_sources(category_name: str, *,
                  today: "date | None" = None,
-                 n: int = 3) -> list[NewsSource]:
+                 min_pool: int = _TARGET_MIN_POOL,
+                 max_pool: int | None = None,
+                 include_paused: bool = False) -> list[NewsSource]:
     """Cadence-aware source selection per category.
 
-    See docs/superpowers/specs/2026-05-03-cadence-aware-source-selection-design.md
-    for the full algorithm. Returns up to `n` sources, ordered by:
-      next_pickup_at ASC NULLS FIRST, priority ASC, last_used_at ASC NULLS FIRST.
+    Eligible sources (next_pickup_at IS NULL OR <= today) come first, sorted
+    by: next_pickup_at ASC NULLS FIRST, priority ASC, cadence ASC, LRU. ALL
+    eligible are returned (capped at `max_pool` if set). If the eligible pool
+    is below `min_pool`, sleeping sources (next_pickup_at > today) backfill —
+    closest-to-expiring first — only enough to reach `min_pool`. Sleeping
+    sources are pure fallback so they keep their cadence rest unless eligible
+    can't carry the run.
 
-    Eligible (next_pickup_at IS NULL OR <= today) come first; if fewer than
-    `n` are eligible, fill from closest-to-eligible (next_pickup_at > today,
-    soonest first). The pool is exhausted before under-fill is accepted.
-    `is_backup` is ignored — all enabled sources participate.
+    `state='paused'` sources are excluded by default (auto-paused by
+    phase_a_probe when their drop rate is too high; manual unpause via admin
+    flips state back to 'live'). Pass `include_paused=True` ONLY for
+    checkpoint-rehydration / lookup-table use cases that need the full set
+    of sources a run might have touched, not for selection. `is_backup` is
+    ignored.
+
+    Args:
+      today: anchor date for the eligibility split. Defaults to today.
+      min_pool: minimum pool size before tapping sleeping sources.
+      max_pool: optional cap on returned size. None = no cap (return all
+                eligible + any needed fallback).
+      include_paused: include state='paused' rows. Default False (never
+                in selection). Used only for source_lookup builds in
+                main_mega so checkpoint resume after auto-pause does not
+                lose `_source` refs for sources that were already used
+                upstream in the same run.
     """
     from datetime import date as _date
     if today is None:
@@ -139,27 +161,33 @@ def load_sources(category_name: str, *,
     raw_by_cat = _ensure_src_cache()
     rows = raw_by_cat.get(category_name, [])
 
-    # Filter: enabled, state in (NULL, 'live'). is_backup ignored (Q1=b).
-    candidates = [r for r in rows
-                  if r.get("enabled")
-                  and (r.get("state") in (None, "live"))]
+    # Filter: enabled. State filter depends on caller intent.
+    # - Default (selection): state in (NULL, 'live') only. Paused rows
+    #   are auto-pause victims and stay out of any future pool.
+    # - include_paused=True (checkpoint lookup): allow 'paused' too so
+    #   resume can rehydrate `_source` refs that were valid earlier in
+    #   the same run before the auto-pause stamp landed.
+    if include_paused:
+        candidates = [r for r in rows
+                      if r.get("enabled")
+                      and (r.get("state") in (None, "live", "paused"))]
+    else:
+        candidates = [r for r in rows
+                      if r.get("enabled")
+                      and (r.get("state") in (None, "live"))]
 
     # Slice the first 10 chars (YYYY-MM-DD) so we compare dates, not
-    # timestamps. next_pickup_at is currently DATE (PostgREST returns
-    # 'YYYY-MM-DD'); last_used_at is stored as a full ISO timestamp via
-    # full_round's stamp loop. Slicing makes the sort/eligibility checks
-    # robust against either format AND against a future schema migration
-    # to TIMESTAMPTZ on next_pickup_at.
+    # timestamps. next_pickup_at is DATE; last_used_at is full ISO
+    # timestamp. Slicing makes the sort/eligibility checks robust against
+    # either format AND against a future schema migration to TIMESTAMPTZ.
     def _date_part(s):
         return (s or "")[:10]
 
     def _sort_key(r):
         # Order: most-overdue first, then editor-priority, then cadence
         # (daily beats weekly at priority ties — fresh-content bias),
-        # then LRU. The cadence_days tiebreak was added after the
-        # 2026-05-04 dry-run produced 2 weekly empty Smithsonian sources
-        # in the Fun pool because all priority-1 ties resolved by
-        # arbitrary insertion order.
+        # then LRU. cadence_days tiebreak: prevent 2 weekly empty
+        # Smithsonian sources from filling priority-1 slots in Fun.
         npa = _date_part(r.get("next_pickup_at"))   # NULL/"" sorts first
         prio = int(r.get("priority") or 99)
         cad = int(r.get("cadence_days") or 1)
@@ -178,9 +206,12 @@ def load_sources(category_name: str, *,
         key=_sort_key,
     )
 
-    picked = eligible[:n]
-    if len(picked) < n:
-        picked += sleeping[:n - len(picked)]
+    picked = list(eligible)
+    if len(picked) < min_pool:
+        needed = min_pool - len(picked)
+        picked += sleeping[:needed]
+    if max_pool is not None and len(picked) > max_pool:
+        picked = picked[:max_pool]
 
     return [_row_to_source(r) for r in picked]
 

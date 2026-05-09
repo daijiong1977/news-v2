@@ -58,7 +58,7 @@ def aggregate_category(label: str, pool: list, runner,
     DOGOnews / NG Kids / SwimSwam / etc until 3 sources contributed.
 
     Args:
-      pool: full prioritized pool from db_config.load_sources(cat, n=10).
+      pool: full prioritized pool from db_config.load_sources(cat, max_pool=12).
       want: number of contributing sources required (default 3).
       max_attempts: cap on iteration. None = try every source in pool.
     """
@@ -1119,13 +1119,13 @@ def main() -> None:
     POOL_DEPTH = 12
     SOURCES_PER_CATEGORY = 3
     news_bs    = aggregate_category(
-        "News",    db_config.load_sources("News",    today=today_d, n=POOL_DEPTH),
+        "News",    db_config.load_sources("News",    today=today_d, max_pool=POOL_DEPTH),
         run_news,  want=SOURCES_PER_CATEGORY)
     science_bs = aggregate_category(
-        "Science", db_config.load_sources("Science", today=today_d, n=POOL_DEPTH),
+        "Science", db_config.load_sources("Science", today=today_d, max_pool=POOL_DEPTH),
         run_sci,   want=SOURCES_PER_CATEGORY)
     fun_bs     = aggregate_category(
-        "Fun",     db_config.load_sources("Fun",     today=today_d, n=POOL_DEPTH),
+        "Fun",     db_config.load_sources("Fun",     today=today_d, max_pool=POOL_DEPTH),
         run_fun,   want=SOURCES_PER_CATEGORY)
     _set_phase("aggregate", t,
                candidate_counts={"News": sum(len(b["candidates"]) for b in news_bs.values()),
@@ -1338,10 +1338,15 @@ def main_mega() -> None:
 
     # Build a {(name, rss_url): NewsSource} map across every category's
     # primary + backup feed list. Checkpoint hydration uses this to
-    # resurrect Source dataclass instances from JSON refs.
+    # resurrect Source dataclass instances from JSON refs. Pass
+    # include_paused=True so that resuming after a mid-run auto-pause
+    # (phase_a_probe stamping state='paused' partway through the run)
+    # still finds the `_source` ref for any brief that was hydrated
+    # earlier in the same run.
     all_sources_for_lookup = []
     for cat_name in cat_names:
-        all_sources_for_lookup.extend(db_config.load_sources(cat_name))
+        all_sources_for_lookup.extend(
+            db_config.load_sources(cat_name, include_paused=True))
     source_lookup = ckpt.build_source_lookup(all_sources_for_lookup)
 
     resume_target = ckpt.resume_from()
@@ -1359,12 +1364,20 @@ def main_mega() -> None:
         return result
 
     # ---- Phase A* light: RSS only, no body, no LLM ----
+    # Default load_sources args (min_pool=6, no max_pool) return ALL
+    # eligible sources for the day, with sleeping ones backfilling only
+    # when fewer than 6 are eligible. Probe + curator naturally cap how
+    # many briefs survive downstream — RSS fetch itself is cheap.
+    from datetime import date as _date_cls
+    today_d_mega = _date_cls.fromisoformat(today)
+
     def _phase_a_runner():
         t0 = time.monotonic()
         log.info("=== MEGA Phase A* (light RSS fetch) ===")
         out = {}
         for cat_name in cat_names:
-            srcs = db_config.load_sources(cat_name)
+            srcs = db_config.load_sources(cat_name, today=today_d_mega)
+            log.info("  [%s] mega pool: %d sources", cat_name, len(srcs))
             out[cat_name] = phase_a_light(cat_name, srcs)
         _set_phase("phase_a_light", t0,
                    counts={c: len(b) for c, b in out.items()})
@@ -1398,19 +1411,87 @@ def main_mega() -> None:
     PROBE_MAX_PER_CAT = 10
     PROBE_WORKERS = 8
 
+    # Per-source health: cumulative attempts and drops are stamped on
+    # redesign_source_configs after each run. When drop_rate >= the
+    # threshold AND we have enough samples, the source is auto-paused
+    # (state='paused', paused_reason='high_probe_drop_rate'). load_sources
+    # filters out paused rows so they never enter a future pool until
+    # admin manually unpauses.
+    AUTOPAUSE_DROP_RATE = 0.6
+    AUTOPAUSE_MIN_ATTEMPTS = 10
+
     def _probe_one(brief: dict) -> dict:
         from .news_rss_core import _fetch_and_enrich
+        fetch_error = False
         try:
             art = _fetch_and_enrich(dict(brief))
         except Exception as e:  # noqa: BLE001
             log.warning("  probe fetch failed for %s: %s",
                         brief.get("link", "")[:80], e)
             art = {"word_count": 0, "body": "", "og_image": None}
+            fetch_error = True
         wc = int(art.get("word_count") or 0)
-        return {"brief": brief, "art": art, "wc": wc}
+        return {"brief": brief, "art": art, "wc": wc, "fetch_error": fetch_error}
+
+    def _stamp_probe_health(per_source_run: dict[str, dict]) -> None:
+        """Increment cumulative probe counters per source via SELECT-then-
+        UPDATE, and auto-pause any source whose CONTENT drop rate
+        (thin+long, NOT errors) has crossed the threshold.
+        `per_source_run` is {source_name: {"attempts", "thin", "long",
+        "errors"}}. Errors track transport / fetch exceptions and are
+        excluded from the auto-pause denominator so a flaky network
+        does not pause an otherwise healthy source."""
+        if not per_source_run:
+            return
+        try:
+            from .supabase_io import client
+            sb = client()
+            current = sb.table("redesign_source_configs") \
+                .select("name,probe_attempts,probe_drops_thin,probe_drops_long,probe_errors,state") \
+                .in_("name", list(per_source_run.keys())) \
+                .execute().data or []
+            now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            for row in current:
+                name = row["name"]
+                run = per_source_run.get(name, {})
+                attempts = int(row.get("probe_attempts") or 0) + run.get("attempts", 0)
+                thin = int(row.get("probe_drops_thin") or 0) + run.get("thin", 0)
+                long_ = int(row.get("probe_drops_long") or 0) + run.get("long", 0)
+                errors = int(row.get("probe_errors") or 0) + run.get("errors", 0)
+                content_drops = thin + long_
+                # Auto-pause uses content drops only. The denominator
+                # excludes attempts that errored (no body delivered) so
+                # a network-flaky source can't be paused by transport
+                # blips alone.
+                content_attempts = max(attempts - errors, 0)
+                update: dict = {
+                    "probe_attempts": attempts,
+                    "probe_drops_thin": thin,
+                    "probe_drops_long": long_,
+                    "probe_errors": errors,
+                }
+                if (content_attempts >= AUTOPAUSE_MIN_ATTEMPTS
+                        and content_drops / max(content_attempts, 1) >= AUTOPAUSE_DROP_RATE
+                        and (row.get("state") in (None, "live"))):
+                    update["state"] = "paused"
+                    update["paused_at"] = now_iso
+                    update["paused_reason"] = "high_probe_drop_rate"
+                    log.warning(
+                        "  auto-pausing source %s: %d/%d content-drops (%.0f%%) "
+                        "≥ %.0f%% threshold (errors=%d excluded)",
+                        name, content_drops, content_attempts,
+                        100 * content_drops / content_attempts,
+                        100 * AUTOPAUSE_DROP_RATE, errors)
+                sb.table("redesign_source_configs") \
+                    .update(update) \
+                    .eq("name", name) \
+                    .execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning("  probe-health stamp failed: %s", e)
 
     def _stage1_5_runner():
         from concurrent.futures import ThreadPoolExecutor
+        from collections import defaultdict
         t0 = time.monotonic()
         log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %d) ===",
                  PROBE_MIN_WORDS, PROBE_MAX_WORDS, PROBE_MAX_PER_CAT)
@@ -1418,6 +1499,9 @@ def main_mega() -> None:
         kept_total = 0
         dropped_thin = 0
         dropped_long = 0
+        errored = 0
+        per_source: dict[str, dict] = defaultdict(
+            lambda: {"attempts": 0, "thin": 0, "long": 0, "errors": 0})
         for cat, briefs in briefs_by_cat.items():
             if not briefs:
                 out[cat] = []
@@ -1427,11 +1511,22 @@ def main_mega() -> None:
             kept: list[dict] = []
             for r in results:
                 wc = r["wc"]
+                src = (r["brief"].get("_source_name") or "") or "<unknown>"
+                per_source[src]["attempts"] += 1
+                # Fetch-exception path: count as error, NOT thin. Skips
+                # auto-pause math AND this brief is not retained for
+                # downstream stages.
+                if r.get("fetch_error"):
+                    errored += 1
+                    per_source[src]["errors"] += 1
+                    continue
                 if wc < PROBE_MIN_WORDS:
                     dropped_thin += 1
+                    per_source[src]["thin"] += 1
                     continue
                 if wc > PROBE_MAX_WORDS:
                     dropped_long += 1
+                    per_source[src]["long"] += 1
                     continue
                 b = r["brief"]
                 b["_probe_art"] = r["art"]
@@ -1441,15 +1536,22 @@ def main_mega() -> None:
                     break
             out[cat] = kept
             kept_total += len(kept)
-            log.info("  [%s] probe: %d kept / %d input (dropped %d thin, %d long)",
+            log.info("  [%s] probe: %d kept / %d input (dropped %d thin, %d long, %d errored)",
                      cat, len(kept), len(briefs),
-                     sum(1 for r in results if r["wc"] < PROBE_MIN_WORDS),
-                     sum(1 for r in results if r["wc"] > PROBE_MAX_WORDS))
+                     sum(1 for r in results if not r.get("fetch_error") and r["wc"] < PROBE_MIN_WORDS),
+                     sum(1 for r in results if not r.get("fetch_error") and r["wc"] > PROBE_MAX_WORDS),
+                     sum(1 for r in results if r.get("fetch_error")))
+        # Stamp cumulative counters + auto-pause crashed sources. Drops
+        # the "<unknown>" key — we only care about real source names.
+        per_source.pop("<unknown>", None)
+        _stamp_probe_health(dict(per_source))
         _set_phase("phase_a_probe", t0,
                    counts={c: len(b) for c, b in out.items()},
                    dropped_thin=dropped_thin,
                    dropped_long=dropped_long,
-                   kept=kept_total)
+                   errored=errored,
+                   kept=kept_total,
+                   per_source={k: dict(v) for k, v in per_source.items()})
         return out
     briefs_by_cat = _load_or_run("phase_a_probe", _stage1_5_runner)
 
