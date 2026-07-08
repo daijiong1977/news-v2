@@ -38,26 +38,24 @@ def test_real_slang_and_editorial_choices_still_forbidden():
     assert is_forbidden("betting on the game")[0] is True           # ditto — deliberately kept
 
 
-# ── 2. image is optional: keep the article, clear a missing/generic image ──
+# ── 2. image quality: reject a missing/generic image, keep a real one ──
 
-def test_missing_image_kept_and_cleared():
-    # 2026-07-08: a missing image is no longer a reason to drop — keep the
-    # article, ship image-less (frontend renders a category-colour card).
+def test_missing_image_rejected():
+    # Owner choice (2026-07-08): a real photo matters — reject rather than ship
+    # a blank/wrong card. Missing image → reject, honest reason.
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": None}
     ok, reason = core.verify_article_content(art)
-    assert ok is True and reason is None
-    assert art["og_image"] is None
+    assert ok is False and reason == "no og:image"
 
 
-def test_generic_image_cleared_not_shipped():
-    # A generic NPR facebook-default image is CLEARED (not shipped as the
-    # article photo) — the article is kept but rendered as a colour card.
+def test_generic_image_rejected():
+    # NPR's facebook-default (generic branding) image → reject (don't ship the
+    # wrong photo). The safety loosening keeps News filled from real-image sources.
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": "https://media.npr.org/include/images/facebook-default-wide.jpg"}
     ok, reason = core.verify_article_content(art)
-    assert ok is True and reason is None
-    assert art["og_image"] is None          # generic image cleared, not shipped
+    assert ok is False and "generic social image" in reason
 
 
 def test_real_image_kept():
@@ -65,7 +63,6 @@ def test_real_image_kept():
            "og_image": "https://example.com/real-article-photo.jpg"}
     ok, reason = core.verify_article_content(art)
     assert ok is True and reason is None
-    assert art["og_image"] == "https://example.com/real-article-photo.jpg"
 
 
 # ── 3. cadence estimator ──

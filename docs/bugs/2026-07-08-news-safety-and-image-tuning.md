@@ -68,3 +68,14 @@ article for its image; never ship the generic branding image.
   these thresholds are applied to.
 - Follow-up: real per-category placeholder art (nicer than a plain colour card);
   extracting a real in-body image for NPR instead of clearing.
+
+## Update (same day) — image policy reverted to REJECT
+
+Owner decision: image quality matters more than article count — if the image
+is wrong/missing, REJECT the article rather than ship a blank category-colour
+card. `verify_article_content` is back to rejecting on missing/generic image.
+This is affordable because the per-dimension safety loosening (kept) lets
+real-image hard-news sources (PBS/BBC/Al Jazeera) through, so News fills from
+good-image articles. Residual thin-News risk remains → durable fix is more
+News sources and/or extracting a real in-body image for NPR.
+Tests: test_missing_image_rejected, test_generic_image_rejected, test_real_image_kept.

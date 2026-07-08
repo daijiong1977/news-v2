@@ -1799,17 +1799,18 @@ def verify_article_content(art: dict) -> tuple[bool, str | None]:
         return False, f"body {wc}w < {MIN_PICK_BODY_WORDS}w"
     if wc > MAX_PICK_BODY_WORDS:
         return False, f"body {wc}w > {MAX_PICK_BODY_WORDS}w (suspect aggregate page)"
-    # Image is OPTIONAL — never a reason to drop a kid-safe article, and we
-    # never ship an ugly generic branding image (e.g. NPR's facebook-default,
-    # which showed the NPR logo instead of a real photo). A missing OR generic
-    # image is CLEARED (set to None): the article ships image-less and the
-    # frontend renders a clean category-colour card (home.jsx:
-    # `s.image ? url(...) : c.color`); process_images() skips a null og_image
-    # (guarded at full_round.py `if not og: continue`). Dropping on image
-    # starved thin categories (News collapsed to 1 on 2026-07-08).
-    # Bug: docs/bugs/2026-07-08-news-image-drop-starves-supply.md
-    if not art.get("og_image") or is_generic_social_image(art.get("og_image")):
-        art["og_image"] = None
+    # A real, relevant photo matters (owner choice 2026-07-08): REJECT an
+    # article whose image is missing or a generic social default (e.g. NPR's
+    # facebook-default logo) rather than ship a wrong/blank card. This is
+    # affordable now because the per-dimension safety loosening lets hard-news
+    # sources with REAL photos (PBS, BBC, Al Jazeera) through, so News stays
+    # filled without accepting bad images. (Order: the missing check first —
+    # is_generic_social_image(None) is True, so it would otherwise misreport.)
+    # Bug: docs/bugs/2026-07-08-news-safety-and-image-tuning.md
+    if not art.get("og_image"):
+        return False, "no og:image"
+    if is_generic_social_image(art.get("og_image")):
+        return False, f"generic social image: {art.get('og_image')}"
     return True, None
 
 
