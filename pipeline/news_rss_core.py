@@ -29,6 +29,7 @@ import feedparser
 import requests
 
 from .cleaner import extract_article_from_html
+from .quiz_shuffle import shuffle_quiz_options
 _REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
 
 
@@ -1545,6 +1546,12 @@ def detail_enrich(rewrite_result: dict) -> dict:
             # Continue — the other level may still succeed.
 
     filter_keywords(details, rewrite_result)
+    # Break the LLM's positional bias in MCQ answers (was ~70% "B", 0% "D")
+    # so a kid can't score 100% by always tapping the same letter. Reorders
+    # each question's options in place; correct_answer (a string) stays valid,
+    # so both the web payload and the printable PDF pick up the fix.
+    # Bug: docs/bugs/2026-07-07-quiz-answer-position-bias.md
+    shuffle_quiz_options(details)
     # NOTE: pipeline/keyword_extractor.augment_details_with_keywords used
     # to run here as a safety net, padding each slot with deterministic
     # body-grounded vocab (empty explanations). Pack-time scrub now
