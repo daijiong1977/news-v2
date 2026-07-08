@@ -105,6 +105,33 @@ def test_easy_band_aligned_with_digest_gate():
     assert "210-300" in core.TRI_VARIANT_REWRITER_PROMPT
 
 
+# ── per-dimension safety thresholds (2026-07-08) ──
+
+def _safety(**dims):
+    base = {d: 0 for d in core.SAFETY_DIMS}
+    base.update(dims)
+    return {"safety": base}
+
+
+def test_moderate_news_dims_pass():
+    # War/politics/conflict at a MODERATE level (3) is allowed for a news site.
+    assert core.evaluate_rewriter_safety(
+        _safety(violence=3, fear=3, distress=3, adult_themes=3, bias=3)
+    )["verdict"] == "PASS"
+
+
+def test_severe_news_dim_rejected():
+    # Graphic/severe (>=4) still rejects.
+    assert core.evaluate_rewriter_safety(_safety(violence=4))["verdict"] == "REJECT"
+    assert core.evaluate_rewriter_safety(_safety(fear=5))["verdict"] == "REJECT"
+
+
+def test_strict_dims_still_reject_at_3():
+    # Sexual / substance / language are never-appropriate regardless of news value.
+    for d in ("sexual", "substance", "language"):
+        assert core.evaluate_rewriter_safety(_safety(**{d: 3}))["verdict"] == "REJECT", d
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

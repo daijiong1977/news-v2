@@ -38,23 +38,34 @@ def test_real_slang_and_editorial_choices_still_forbidden():
     assert is_forbidden("betting on the game")[0] is True           # ditto — deliberately kept
 
 
-# ── 2. image check order ──
+# ── 2. image is optional: keep the article, clear a missing/generic image ──
 
-def test_missing_image_reported_honestly():
+def test_missing_image_kept_and_cleared():
+    # 2026-07-08: a missing image is no longer a reason to drop — keep the
+    # article, ship image-less (frontend renders a category-colour card).
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": None}
     ok, reason = core.verify_article_content(art)
-    assert ok is False
-    assert reason == "no og:image"          # was "generic social image: None"
+    assert ok is True and reason is None
+    assert art["og_image"] is None
 
 
-def test_generic_image_now_kept():
-    # 2026-07-08 policy change: a generic social image is ugly but valid — the
-    # article is KEPT (dropping it starved News). Missing image still rejects.
+def test_generic_image_cleared_not_shipped():
+    # A generic NPR facebook-default image is CLEARED (not shipped as the
+    # article photo) — the article is kept but rendered as a colour card.
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": "https://media.npr.org/include/images/facebook-default-wide.jpg"}
     ok, reason = core.verify_article_content(art)
     assert ok is True and reason is None
+    assert art["og_image"] is None          # generic image cleared, not shipped
+
+
+def test_real_image_kept():
+    art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
+           "og_image": "https://example.com/real-article-photo.jpg"}
+    ok, reason = core.verify_article_content(art)
+    assert ok is True and reason is None
+    assert art["og_image"] == "https://example.com/real-article-photo.jpg"
 
 
 # ── 3. cadence estimator ──
