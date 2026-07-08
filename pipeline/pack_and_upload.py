@@ -393,6 +393,92 @@ def _overlay_fresh_categories(old_root: Path, fresh_root: Path,
                  cat, len(new_ids), len(old_ids - new_ids))
 
 
+def _derive_pack_plan(local_counts: dict[str, int],
+                      merge_env_cats: set[str] | None = None,
+                      ) -> tuple[set[str], set[str], set[str]]:
+    """Decide per category what to publish, from local listing article
+    counts (middle level). Returns (fresh, short, keep_old):
+      fresh:    cats publishing local content (≥1 article; restricted to
+                merge_env_cats when a partial run set them)
+      short:    fresh cats with <3 articles → top up from previous bundle
+      keep_old: cats keeping the previous live content entirely
+    Owner rule (2026-07-08): a category should always ship 3 — dig other
+    sources first (Stage-3 backfill), then carry over from the previous
+    bundle; only a 0-fresh category keeps old content wholesale."""
+    pool = set(merge_env_cats) if merge_env_cats else set(local_counts)
+    fresh = {c for c in pool if local_counts.get(c, 0) >= 1}
+    short = {c for c in fresh if local_counts.get(c, 0) < 3}
+    keep_old = set(CATS) - fresh
+    return fresh, short, keep_old
+
+
+def _topup_thin_categories(final_root: Path, old_root: Path,
+                           target: int = 3) -> dict[str, list[str]]:
+    """Append carried-over stories from the previous live bundle to any
+    category whose listings have 1..target-1 articles, until `target`.
+    Copies the carried stories' detail payloads / images / PDFs. Pure
+    file ops — no LLM, no gate changes. Returns {cat: [carried ids]}."""
+    carried: dict[str, list[str]] = {}
+    for cat in CATS:
+        mid = final_root / "payloads" / f"articles_{cat}_middle.json"
+        old_mid = old_root / "payloads" / f"articles_{cat}_middle.json"
+        if not (mid.is_file() and old_mid.is_file()):
+            continue
+        try:
+            fresh_arts = json.loads(mid.read_text()).get("articles") or []
+            old_arts = json.loads(old_mid.read_text()).get("articles") or []
+        except Exception as e:  # noqa: BLE001
+            log.warning("topup: [%s] unreadable listing (%s) — skipped", cat, e)
+            continue
+        if not fresh_arts or len(fresh_arts) >= target:
+            continue
+        fresh_ids = {a.get("id") for a in fresh_arts}
+        cand_ids = [a.get("id") for a in old_arts
+                    if a.get("id") and a["id"] not in fresh_ids]
+        cand_ids = cand_ids[: target - len(fresh_arts)]
+        if not cand_ids:
+            continue
+        # Splice into every level's listing (old bundle has all levels).
+        for lvl in ("easy", "middle", "cn"):
+            fp = final_root / "payloads" / f"articles_{cat}_{lvl}.json"
+            op = old_root / "payloads" / f"articles_{cat}_{lvl}.json"
+            if not (fp.is_file() and op.is_file()):
+                continue
+            fdoc = json.loads(fp.read_text())
+            by_id = {a.get("id"): a
+                     for a in json.loads(op.read_text()).get("articles") or []}
+            arts = fdoc.get("articles") or []
+            for cid in cand_ids:
+                if cid in by_id and all(a.get("id") != cid for a in arts):
+                    arts.append(by_id[cid])
+            fdoc["articles"] = arts[:target]
+            fp.write_text(json.dumps(fdoc, ensure_ascii=False))
+        # Carry the artifacts.
+        img_names: set[str] = set()
+        for a in old_arts:
+            if a.get("id") in cand_ids and a.get("image_url"):
+                img_names.add(Path(a["image_url"]).name)
+        for cid in cand_ids:
+            src = old_root / "article_payloads" / f"payload_{cid}"
+            if src.is_dir():
+                dst = final_root / "article_payloads" / f"payload_{cid}"
+                shutil.rmtree(dst, ignore_errors=True)
+                shutil.copytree(src, dst)
+            for pdf in (old_root / "article_pdfs").glob(f"{cid}-*.pdf"):
+                dst_dir = final_root / "article_pdfs"
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(pdf, dst_dir / pdf.name)
+        for img in img_names:
+            src = old_root / "article_images" / img
+            if src.is_file():
+                dst_dir = final_root / "article_images"
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst_dir / img)
+        carried[cat] = cand_ids
+        log.info("topup: [%s] carried %s over from previous bundle", cat, cand_ids)
+    return carried
+
+
 DATED_ZIP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.zip$")
 DATED_MANIFEST_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-manifest\.json$")
 DATED_DIR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})$")
@@ -604,10 +690,12 @@ def main() -> None:
     republish = os.environ.get("PACK_REPUBLISH_ONLY") == "1"
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
-    # Merge mode (partial category run): fresh content for SOME categories
-    # is on local disk; everything else comes from the live latest.zip.
-    # Full validation still gates the publish — a bad merge refuses to
-    # upload and the site keeps its current bundle.
+    # Merge / top-up planning: fresh categories publish from local disk;
+    # a short category (1-2 articles) is topped up to 3 with carried-over
+    # stories from the previous live bundle; a 0-fresh category keeps the
+    # previous live content entirely. Full validation still gates the
+    # publish — a bad merge refuses to upload and the site keeps its
+    # current bundle.
     merge_env = (os.environ.get("PACK_MERGE_CATEGORIES") or "").strip()
     merge_cats = {c.strip().lower() for c in merge_env.split(",") if c.strip()}
     if merge_cats:
@@ -617,42 +705,56 @@ def main() -> None:
         unknown = merge_cats - set(CATS)
         if unknown:
             raise SystemExit(f"PACK_MERGE_CATEGORIES unknown: {sorted(unknown)}")
-        import tempfile
-        merge_root = Path(tempfile.mkdtemp(prefix="pack_merge_"))
-        try:
-            blob = sb.storage.from_(BUCKET).download("latest.zip")
-        except Exception as e:  # noqa: BLE001
-            # No fallback: local disk only has the fresh categories, so
-            # packing local-only would ship a bundle missing the rest.
-            raise SystemExit(f"merge mode needs the live latest.zip: {e}")
-        with zipfile.ZipFile(BytesIO(blob)) as zf:
-            for info in zf.infolist():
-                top = info.filename.split("/", 1)[0]
-                if top in CONTENT_DIRS:
-                    zf.extract(info, merge_root)
-        _overlay_fresh_categories(merge_root, WEB, merge_cats)
-        validate_bundle(today, content_root=merge_root)
-        body = build_zip(content_root=merge_root)
-        manifest = build_manifest(today, body, content_root=merge_root)
-        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
-        check_not_overwriting_newer(sb)
-        for key in (f"{today}.zip", "latest.zip"):
-            sb.storage.from_(BUCKET).upload(
-                path=key, file=body,
-                file_options={"content-type": "application/zip", "upsert": "true"})
-            log.info("uploaded %s", key)
-        for key in (f"{today}-manifest.json", "latest-manifest.json"):
-            sb.storage.from_(BUCKET).upload(
-                path=key, file=manifest_bytes,
-                file_options={"content-type": "application/json", "upsert": "true"})
-            log.info("uploaded %s", key)
-        try:
-            upload_dated_flat_files(sb, today, bundle=body)
-        except Exception as e:  # noqa: BLE001
-            log.warning("dated-flat upload failed (non-fatal): %s", e)
-        log.info("merge publish done: %s replaced · stories=%d",
-                 sorted(merge_cats), manifest["story_count"])
-        return
+
+    content_root: Path | None = None   # None → pack straight from WEB
+    if not republish:
+        local_counts: dict[str, int] = {}
+        for cat in CATS:
+            p = WEB / "payloads" / f"articles_{cat}_middle.json"
+            if p.is_file():
+                try:
+                    local_counts[cat] = len(
+                        json.loads(p.read_text()).get("articles") or [])
+                except Exception:  # noqa: BLE001
+                    local_counts[cat] = 0
+        fresh, short, keep_old = _derive_pack_plan(local_counts,
+                                                   merge_cats or None)
+        if not fresh:
+            raise SystemExit("no fresh category content on disk — "
+                             "nothing to publish")
+        if keep_old or short:
+            import tempfile
+            old_root = Path(tempfile.mkdtemp(prefix="pack_old_"))
+            try:
+                blob = sb.storage.from_(BUCKET).download("latest.zip")
+            except Exception as e:  # noqa: BLE001
+                if keep_old or any(local_counts.get(c, 0) < 2 for c in fresh):
+                    # Can't ship a bundle with a category-shaped hole.
+                    raise SystemExit(
+                        f"pack needs the live latest.zip for merge/top-up: {e}")
+                log.warning("top-up skipped — no previous bundle (%s); "
+                            "shipping %s with <3 articles", e, sorted(short))
+            else:
+                with zipfile.ZipFile(BytesIO(blob)) as zf:
+                    for info in zf.infolist():
+                        top = info.filename.split("/", 1)[0]
+                        if top in CONTENT_DIRS:
+                            zf.extract(info, old_root)
+                # Final bundle starts as the old content; fresh categories
+                # overlay it; short ones borrow back from old_root.
+                merge_root = Path(tempfile.mkdtemp(prefix="pack_merge_"))
+                for d in CONTENT_DIRS:
+                    if (old_root / d).is_dir():
+                        shutil.copytree(old_root / d, merge_root / d)
+                _overlay_fresh_categories(merge_root, WEB, fresh)
+                carried = _topup_thin_categories(merge_root, old_root)
+                if keep_old:
+                    log.warning("pack: %s keep previous live content",
+                                sorted(keep_old))
+                if carried:
+                    log.warning("pack: topped up %s with carried-over stories",
+                                {c: len(v) for c, v in carried.items()})
+                content_root = merge_root
 
     if republish:
         # Pull current latest.zip and extract CONTENT_DIRS to a temp dir
@@ -676,10 +778,11 @@ def main() -> None:
             content_root = None
         body = build_zip(content_root=content_root)
     else:
-        validate_bundle(today)
-        body = build_zip()
+        validate_bundle(today, content_root=content_root)
+        body = build_zip(content_root=content_root)
 
-    manifest = build_manifest(today, body)
+    manifest = build_manifest(today, body,
+                              content_root=None if republish else content_root)
     manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
     if not republish:
         check_not_overwriting_newer(sb)
@@ -719,7 +822,10 @@ def main() -> None:
     # present, so DatePopover never advertises a date whose payloads 404.
     today_flat_ok = False
     try:
-        n = upload_dated_flat_files(sb, today)
+        # Extract from the just-built zip so dated flats always match the
+        # published bundle exactly (incl. merged/topped-up categories and
+        # scrubbed detail payloads).
+        n = upload_dated_flat_files(sb, today, bundle=body)
         today_flat_ok = n > 0
     except Exception as e:  # noqa: BLE001
         log.warning("dated-flat upload failed (non-fatal for today's deploy): %s", e)

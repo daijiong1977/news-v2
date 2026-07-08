@@ -56,3 +56,13 @@ PR: fix/deep-backfill-degraded-publish.
 - `docs/bugs/2026-07-08-probe-cap-starves-low-priority-sources.md` — the
   probe interleave these spares inherit.
 - PR #40 partial-category run — the merge machinery reused here.
+
+## Follow-up (same day) — pack-time carry-over top-up
+
+Owner refinement: a category should ALWAYS ship 3 — after cross-source
+backfill, borrow from the previous live bundle. `_topup_thin_categories`
+(pack_and_upload.py) appends previous-bundle stories (listings + payloads
++ images + PDFs, id-deduped) to any 1-2-story category until 3; a 0-story
+category still keeps old content wholesale; only all-0 refuses to publish.
+main_mega threshold moved to min_per_cat=1. Pure file ops, no LLM, gates
+unchanged. Tests: pipeline/test_pack_topup.py.
