@@ -62,3 +62,4 @@ you must not break.
 - `docs/superpowers/specs/` — design docs for the feature the bug
   lives in. The spec tells you the *intended* shape; the bug record
   tells you *where reality diverged and what saved us*.
+| 2026-07-08 | [probe-cap-starves-low-priority-sources](2026-07-08-probe-cap-starves-low-priority-sources.md) | pipeline | BBC got 0 probe slots: Stage-1.5 cap ate briefs in source-priority order; fix = round-robin interleave + per-source funnel telemetry | fixed |
