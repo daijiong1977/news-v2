@@ -859,6 +859,48 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     return out
 
 
+def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict]) -> list[dict]:
+    """Deep backfill pool (2026-07-08): the curator ranks only 5 per cat,
+    so after verify/safety attrition a category could starve while
+    probe-kept briefs sat unused — one thin category then aborted the
+    whole publish. Turn every probed-but-unranked brief into an
+    unverified Stage-3 spare (source-interleaved). Each still passes
+    body/image verify + the full safety vet in promote_spare_and_rewrite
+    before it can ship — this deepens the pool, it does not lower gates."""
+    used_keys = set()
+    for r in ranked:
+        b = r.get("brief") or {}
+        used_keys.add(b.get("link") or b.get("title") or id(b))
+    leftovers = [b for b in briefs
+                 if (b.get("link") or b.get("title") or id(b)) not in used_keys]
+    out: list[dict] = []
+    for i, b in enumerate(_interleave_by_source(leftovers), start=1):
+        src = b.get("_source")
+        if src is None:
+            continue
+        out.append({
+            "_unverified_spare": True,
+            "source": src,
+            "_winner_brief": b,
+            "_rank": f"probe+{i}",
+            "_curator_id": None,
+        })
+    return out
+
+
+def _split_publishable(final_stories_by_cat: dict,
+                       min_per_cat: int = 2) -> tuple[list[str], list[str]]:
+    """Partition categories into (fresh_ok, too_thin) for the pack step.
+    A thin category no longer sinks the whole bundle — pack runs in merge
+    mode publishing the fresh ones while the thin one keeps its current
+    live content."""
+    ok: list[str] = []
+    thin: list[str] = []
+    for cat, stories in final_stories_by_cat.items():
+        (ok if len(stories) >= min_per_cat else thin).append(cat)
+    return ok, thin
+
+
 def promote_spare_and_rewrite(
     cat: str,
     spares: list[dict],
@@ -1766,6 +1808,15 @@ def main_mega() -> None:
         log.info("=== MEGA verify body + og:image on rank 1-4 ===")
         vstats: dict = {}
         out = verify_picks_lazy(ranked_by_cat, max_top=4, stats=vstats)
+        # Deep backfill: probed-but-unranked briefs join the spare pool so
+        # Stage-3 promotion can dig past the curator's 5 ranks instead of
+        # starving the category.
+        for cat, briefs in briefs_by_cat.items():
+            extra = _unpicked_probe_spares(briefs, ranked_by_cat.get(cat) or [])
+            if extra:
+                out.setdefault(cat, []).extend(extra)
+                log.info("  [%s] +%d probe-pool spares for Stage-3 backfill",
+                         cat, len(extra))
         verified_counts = {c: sum(1 for s in v if not s.get("_unverified_spare"))
                            for c, v in out.items()}
         _set_phase("verify", t0, verified=verified_counts, per_source=vstats)
@@ -1977,9 +2028,24 @@ def main_mega() -> None:
     log.info("=== PACK + UPLOAD ZIP ===")
     upload_ok = False
     upload_err: str | None = None
+    ok_cats, thin_cats = _split_publishable(final_stories_by_cat)
     try:
         from .pack_and_upload import main as _pack_upload
-        if partial_cats:
+        if thin_cats and not ok_cats:
+            # Nothing publishable at all — refuse; site keeps its bundle.
+            raise SystemExit(
+                f"no publishable category (all <2 stories): {thin_cats}")
+        if thin_cats:
+            # Degraded publish: ship the fresh categories, keep the thin
+            # one's current live content (merge mode). No more one-thin-
+            # category-sinks-the-whole-bundle full re-runs.
+            telemetry["warnings"].append(
+                f"degraded publish — thin: {', '.join(thin_cats)} kept "
+                f"previous live content; fresh: {', '.join(ok_cats)}")
+            log.warning("degraded publish — thin %s keep live content; "
+                        "publishing fresh %s via merge", thin_cats, ok_cats)
+            os.environ["PACK_MERGE_CATEGORIES"] = ",".join(ok_cats)
+        elif partial_cats:
             # Merge mode: pack splices the other categories' content from
             # the live latest.zip; validation still gates the publish.
             os.environ["PACK_MERGE_CATEGORIES"] = ",".join(partial_cats)
@@ -1999,8 +2065,11 @@ def main_mega() -> None:
                     "telemetry": telemetry}
         if upload_ok:
             # Rotation stamping moved here from persist_to_supabase: only a
-            # DEPLOYED bundle counts as "used" for source rotation.
-            stamp_shipped_sources(final_stories_by_cat)
+            # DEPLOYED bundle counts as "used" for source rotation. On a
+            # degraded publish, a thin category's stories did NOT deploy.
+            deployed_by_cat = {c: s for c, s in final_stories_by_cat.items()
+                               if c not in thin_cats}
+            stamp_shipped_sources(deployed_by_cat)
             terminal["status"] = ("completed_with_warnings" if telemetry["warnings"]
                                    else "completed")
             terminal["notes"] = (f"stories persisted: {count}; deployed "
