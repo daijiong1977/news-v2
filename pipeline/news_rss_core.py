@@ -1791,8 +1791,16 @@ def verify_article_content(art: dict) -> tuple[bool, str | None]:
     # as "generic social image: None" (and the branch below is unreachable).
     if not art.get("og_image"):
         return False, "no og:image"
+    # A generic social image (e.g. NPR's facebook-default) is ugly but VALID and
+    # renderable — NOT a reason to drop an otherwise-good, kid-safe article.
+    # Dropping on it starved thin categories: News collapsed to 1 story on
+    # 2026-07-08 because 3 of 5 candidates were NPR with the default image, and
+    # bundle-validation then refused to publish. We keep the article (it still
+    # has a valid image); a nicer per-category placeholder is a follow-up.
+    # Bug: docs/bugs/2026-07-08-news-image-drop-starves-supply.md
     if is_generic_social_image(art.get("og_image")):
-        return False, f"generic social image: {art.get('og_image')}"
+        log.info("  keeping article despite generic social image: %s",
+                 art.get("og_image"))
     return True, None
 
 

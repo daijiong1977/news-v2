@@ -48,11 +48,13 @@ def test_missing_image_reported_honestly():
     assert reason == "no og:image"          # was "generic social image: None"
 
 
-def test_generic_image_still_rejected():
+def test_generic_image_now_kept():
+    # 2026-07-08 policy change: a generic social image is ugly but valid — the
+    # article is KEPT (dropping it starved News). Missing image still rejects.
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": "https://media.npr.org/include/images/facebook-default-wide.jpg"}
     ok, reason = core.verify_article_content(art)
-    assert ok is False and "generic social image" in reason
+    assert ok is True and reason is None
 
 
 # ── 3. cadence estimator ──
