@@ -990,30 +990,43 @@ def tri_variant_rewrite(
 # produce easy_en as a simplified subset (shorter sentences, plainer
 # words, same facts), so if middle passes, easy is safe by construction.
 # zh is for adult consumption (parents reading with kids) and not vetted.
-STRICT_REJECT_THRESHOLD = 3
+# Per-dimension Stage-3 reject thresholds (admin choice 2026-07-08).
+# Kids on a NEWS site should be allowed to read age-appropriate hard news —
+# war, politics, conflict at a MODERATE level (score 3) — so those
+# "news-inherent" dims only reject at SEVERE (>=4). But sexual / substance /
+# offensive-language content is never appropriate regardless of news value, so
+# those stay strict (>=3). Bug: docs/bugs/2026-07-08-safety-threshold-per-dim.md
+STRICT_SAFETY_DIMS = ("sexual", "substance", "language")
+STRICT_SAFETY_THRESHOLD = 3
+NEWS_SAFETY_DIMS = ("violence", "fear", "distress", "adult_themes", "bias")
+NEWS_SAFETY_THRESHOLD = 4
 
 
 def evaluate_rewriter_safety(article_entry: dict) -> dict:
     """For one rewriter output article, returns:
         {"verdict": "PASS"|"REJECT", "reason": "...", "scores": {...}}
-    Verdict is determined by middle_en's safety scores (the single
-    `safety` field on the article entry). Strict any_dim ≥ 3 → REJECT.
+    Verdict is from middle_en's safety scores (the `safety` field). REJECT if
+    any strict dim (sexual/substance/language) >= 3, OR any news-inherent dim
+    (violence/fear/distress/adult_themes/bias) >= 4.
     """
     scores = article_entry.get("safety") or {}
     if not scores:
         return {"verdict": "REJECT",
                 "reason": "no safety scores returned",
                 "scores": {}}
-    max_dim = max(((scores.get(d, 0) or 0) for d in SAFETY_DIMS), default=0)
     total = sum((scores.get(d, 0) or 0) for d in SAFETY_DIMS)
-    if max_dim >= STRICT_REJECT_THRESHOLD:
+    hits = [f"{d}={scores.get(d, 0) or 0}"
+            for d in STRICT_SAFETY_DIMS if (scores.get(d, 0) or 0) >= STRICT_SAFETY_THRESHOLD]
+    hits += [f"{d}={scores.get(d, 0) or 0}"
+             for d in NEWS_SAFETY_DIMS if (scores.get(d, 0) or 0) >= NEWS_SAFETY_THRESHOLD]
+    if hits:
         return {
             "verdict": "REJECT",
-            "reason": f"any_dim ≥ {STRICT_REJECT_THRESHOLD} (max={max_dim}, total={total})",
+            "reason": f"over threshold: {', '.join(hits)} (total={total})",
             "scores": scores,
         }
     return {"verdict": "PASS",
-            "reason": f"max_dim={max_dim} total={total}",
+            "reason": f"total={total}",
             "scores": scores}
 
 
@@ -1786,21 +1799,17 @@ def verify_article_content(art: dict) -> tuple[bool, str | None]:
         return False, f"body {wc}w < {MIN_PICK_BODY_WORDS}w"
     if wc > MAX_PICK_BODY_WORDS:
         return False, f"body {wc}w > {MAX_PICK_BODY_WORDS}w (suspect aggregate page)"
-    # Order matters: is_generic_social_image(None) is True, so the generic
-    # check must come AFTER the missing check or absent images get reported
-    # as "generic social image: None" (and the branch below is unreachable).
-    if not art.get("og_image"):
-        return False, "no og:image"
-    # A generic social image (e.g. NPR's facebook-default) is ugly but VALID and
-    # renderable — NOT a reason to drop an otherwise-good, kid-safe article.
-    # Dropping on it starved thin categories: News collapsed to 1 story on
-    # 2026-07-08 because 3 of 5 candidates were NPR with the default image, and
-    # bundle-validation then refused to publish. We keep the article (it still
-    # has a valid image); a nicer per-category placeholder is a follow-up.
+    # Image is OPTIONAL — never a reason to drop a kid-safe article, and we
+    # never ship an ugly generic branding image (e.g. NPR's facebook-default,
+    # which showed the NPR logo instead of a real photo). A missing OR generic
+    # image is CLEARED (set to None): the article ships image-less and the
+    # frontend renders a clean category-colour card (home.jsx:
+    # `s.image ? url(...) : c.color`); process_images() skips a null og_image
+    # (guarded at full_round.py `if not og: continue`). Dropping on image
+    # starved thin categories (News collapsed to 1 on 2026-07-08).
     # Bug: docs/bugs/2026-07-08-news-image-drop-starves-supply.md
-    if is_generic_social_image(art.get("og_image")):
-        log.info("  keeping article despite generic social image: %s",
-                 art.get("og_image"))
+    if not art.get("og_image") or is_generic_social_image(art.get("og_image")):
+        art["og_image"] = None
     return True, None
 
 
