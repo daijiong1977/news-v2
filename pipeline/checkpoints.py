@@ -79,7 +79,14 @@ def _walk_to_jsonable(obj: Any) -> Any:
 
 
 def _walk_from_jsonable(obj: Any, source_lookup: dict) -> Any:
-    """Reverse of `_walk_to_jsonable`. Source refs → NewsSource."""
+    """Reverse of `_walk_to_jsonable`. Source refs → NewsSource.
+
+    Also coerces pure-digit dict keys back to int: the JSONB round-trip
+    stringifies int keys ({0: art} → {"0": art}), which made
+    RESUME_FROM=enrich/persist raise KeyError on
+    final_variants_by_cat[cat][i] — the exact recovery path used after a
+    deploy_failed. Slot keys like "0_easy" are not pure digits and stay
+    strings. Bug: docs/bugs/2026-07-08-p1-reliability.md"""
     if _is_source_ref(obj):
         s = _ref_to_source(obj, source_lookup)
         if s is None:
@@ -87,7 +94,9 @@ def _walk_from_jsonable(obj: Any, source_lookup: dict) -> Any:
                         obj.get("name"))
         return s
     if isinstance(obj, dict):
-        return {k: _walk_from_jsonable(v, source_lookup) for k, v in obj.items()}
+        return {(int(k) if isinstance(k, str) and k.isdigit() else k):
+                    _walk_from_jsonable(v, source_lookup)
+                for k, v in obj.items()}
     if isinstance(obj, list):
         return [_walk_from_jsonable(x, source_lookup) for x in obj]
     return obj

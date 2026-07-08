@@ -1130,40 +1130,64 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
             else:
                 log.warning("  insert failed: %s", art.get("title", "")[:60])
 
-    # Stamp last_used_at for every source whose article shipped today.
-    # Powers the rotation in db_config.load_sources — least-recently-used
-    # sources surface first on the next run.
+        # Same-day re-run hygiene: a second run that ships FEWER slots than a
+        # prior attempt upserts slots 1..N but used to leave the prior run's
+        # higher slot rows live under today's date (DB/site divergence for
+        # search, digest, archive). Delete anything above today's shipped count.
+        try:
+            from .supabase_io import client
+            gone = client().table("redesign_stories").delete() \
+                .eq("published_date", today).eq("category", category) \
+                .gt("story_slot", len(stories)).execute().data or []
+            if gone:
+                log.info("  [%s] removed %d orphan slot row(s) from a prior "
+                         "same-day attempt", category, len(gone))
+        except Exception as e:  # noqa: BLE001
+            log.warning("  [%s] orphan-slot cleanup failed (non-fatal): %s",
+                        category, e)
+    return count
+
+
+def stamp_shipped_sources(stories_by_cat) -> None:
+    """Stamp last_used_at + next_pickup_at (= today + cadence_days) for every
+    source whose article shipped today. Powers the rotation in
+    db_config.load_sources — least-recently-used sources surface first.
+
+    Called AFTER pack_and_upload succeeds (was inside persist_to_supabase):
+    stamping before deploy meant a deploy_failed day marked today's sources
+    ineligible, so a fresh re-run mined a different, possibly weaker bundle.
+    Bug: docs/bugs/2026-07-08-p1-reliability.md"""
     used_source_names: set[str] = set()
     for category, stories in stories_by_cat.items():
         for s in stories:
             n = (s.get("source") and s["source"].name) or ""
             if n: used_source_names.add(n)
-    if used_source_names:
-        try:
-            from .supabase_io import client
-            from datetime import timedelta, date as _date
-            now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            today_d = _date.today()
-            # Stamp BOTH last_used_at AND next_pickup_at = today + cadence_days.
-            # Per-source PATCH because cadence_days varies. Source list is small
-            # (≤9 winners per run), so per-row is fine.
-            src_rows = client().table("redesign_source_configs") \
-                .select("name,cadence_days") \
-                .in_("name", list(used_source_names)) \
-                .execute().data or []
+    if not used_source_names:
+        return
+    try:
+        from .supabase_io import client
+        from datetime import timedelta, date as _date
+        now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        today_d = _date.today()
+        # Stamp BOTH last_used_at AND next_pickup_at = today + cadence_days.
+        # Per-source PATCH because cadence_days varies. Source list is small
+        # (≤9 winners per run), so per-row is fine.
+        src_rows = client().table("redesign_source_configs") \
+            .select("name,cadence_days") \
+            .in_("name", list(used_source_names)) \
+            .execute().data or []
 
-            for row in src_rows:
-                cd = int(row.get("cadence_days") or 1)
-                next_pickup = (today_d + timedelta(days=cd)).isoformat()
-                client().table("redesign_source_configs") \
-                    .update({"last_used_at": now_iso, "next_pickup_at": next_pickup}) \
-                    .eq("name", row["name"]) \
-                    .execute()
-            log.info("  stamped last_used_at + next_pickup_at on %d source(s)",
-                     len(src_rows))
-        except Exception as e:  # noqa: BLE001
-            log.warning("  last_used_at stamp failed: %s", e)
-    return count
+        for row in src_rows:
+            cd = int(row.get("cadence_days") or 1)
+            next_pickup = (today_d + timedelta(days=cd)).isoformat()
+            client().table("redesign_source_configs") \
+                .update({"last_used_at": now_iso, "next_pickup_at": next_pickup}) \
+                .eq("name", row["name"]) \
+                .execute()
+        log.info("  stamped last_used_at + next_pickup_at on %d source(s)",
+                 len(src_rows))
+    except Exception as e:  # noqa: BLE001
+        log.warning("  last_used_at stamp failed: %s", e)
 
 
 # -------------------------------------------------------------------
@@ -1384,6 +1408,9 @@ def main() -> None:
         terminal = {"finished_at": datetime.now(timezone.utc).isoformat(),
                     "telemetry": telemetry}
         if upload_ok:
+            # Rotation stamping moved here from persist_to_supabase: only a
+            # DEPLOYED bundle counts as "used" for source rotation.
+            stamp_shipped_sources(stories_by_cat)
             if telemetry["warnings"]:
                 terminal["status"] = "completed_with_warnings"
                 terminal["notes"] = (f"stories persisted: {count}; deployed; "
@@ -1805,6 +1832,9 @@ def main_mega() -> None:
         terminal = {"finished_at": datetime.now(timezone.utc).isoformat(),
                     "telemetry": telemetry}
         if upload_ok:
+            # Rotation stamping moved here from persist_to_supabase: only a
+            # DEPLOYED bundle counts as "used" for source rotation.
+            stamp_shipped_sources(final_stories_by_cat)
             terminal["status"] = ("completed_with_warnings" if telemetry["warnings"]
                                    else "completed")
             terminal["notes"] = (f"stories persisted: {count}; deployed "
