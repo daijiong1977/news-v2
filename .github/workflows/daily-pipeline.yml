@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       pipeline_variant:
-        description: "Pipeline variant — current (legacy per-source vet) or mega (Stage 1-3, ~half the LLM calls)"
+        description: "Pipeline variant — auto (follow redesign_cron_config, recommended), current (legacy per-source vet), mega (Stage 1-3, ~half the LLM calls)"
         type: choice
-        options: [current, mega]
-        default: current
+        options: [auto, current, mega]
+        default: auto
       resume_from:
         description: "Resume mega from a checkpoint (skip earlier stages). Empty = full run."
         type: choice
@@ -48,39 +48,47 @@ jobs:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-      # Manually-dispatched runs can flip this between 'current' and 'mega'.
-      # Scheduled runs default to 'current' (the empty input falls through).
-      PIPELINE_VARIANT: ${{ inputs.pipeline_variant || 'current' }}
+      # NOTE: the effective variant is resolved by the cron_check step
+      # (explicit input wins; 'auto'/empty follows redesign_cron_config;
+      # DB unreachable falls back to 'mega'). The Run step reads that
+      # output — there is deliberately no job-level PIPELINE_VARIANT
+      # fallback any more (the old `|| 'current'` default silently ran
+      # the legacy pipeline on retries and manual runs).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check admin enabled flag + read variant
-        # YAML cron fires at the admin's configured time (synced by
-        # quality-digest at end of each run). Here we only check the
-        # `enabled` flag + read the `pipeline_variant` — no window
-        # gating. If admin disabled the cron in the website admin
-        # panel, we exit early (still success, no work done). On
-        # workflow_dispatch this step is skipped — manual runs always
-        # proceed.
+      - name: Check admin enabled flag + resolve variant
+        # Runs on EVERY trigger (schedule + workflow_dispatch) and is the
+        # single place the effective pipeline variant is resolved:
+        #   · explicit dispatch input 'current'/'mega' wins;
+        #   · 'auto' (dispatch default, watchdog retries) and scheduled
+        #     runs follow redesign_cron_config — the admin-edited row;
+        #   · DB unreachable → 'mega' (the production variant), so a
+        #     Supabase blip can't silently demote a run to the legacy path.
+        # The `enabled` flag only gates SCHEDULED runs — a human clicking
+        # "Run workflow" (or the watchdog retrying) always proceeds.
         id: cron_check
-        if: github.event_name == 'schedule'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GH_EVENT: ${{ github.event_name }}
+          REQUESTED_VARIANT: ${{ inputs.pipeline_variant || 'auto' }}
         run: |
           set -euo pipefail
-          # Use stdlib only — no croniter needed since we don't gate
-          # on time window any more.
           python3 - <<'PY'
           import os, sys, json
           from urllib import request, error
 
           out_path = os.environ['GITHUB_OUTPUT']
-          def emit(proceed, variant='current'):
+          def emit(proceed, variant='mega'):
               with open(out_path, 'a') as f:
                   f.write(f"proceed={'true' if proceed else 'false'}\n")
                   f.write(f"variant={variant}\n")
+
+          event = os.environ.get('GH_EVENT', '')
+          requested = (os.environ.get('REQUESTED_VARIANT') or '').lower()
+          explicit = requested if requested in ('current', 'mega') else None
 
           url = os.environ['SUPABASE_URL']
           key = os.environ['SUPABASE_SERVICE_KEY']
@@ -92,20 +100,20 @@ jobs:
               with request.urlopen(req, timeout=10) as r:
                   rows = json.loads(r.read())
           except Exception as e:
-              # If we can't reach the DB, assume enabled with default
-              # variant so we don't accidentally skip a real day.
-              print(f"::warning::cron_config fetch failed: {e}; defaulting to enabled+current", flush=True)
-              emit(True, 'current'); sys.exit(0)
+              v = explicit or 'mega'
+              print(f"::warning::cron_config fetch failed: {e}; defaulting to enabled+{v}", flush=True)
+              emit(True, v); sys.exit(0)
 
           if not rows:
-              print("::warning::no redesign_cron_config row; defaulting to enabled+current", flush=True)
-              emit(True, 'current'); sys.exit(0)
+              v = explicit or 'mega'
+              print(f"::warning::no redesign_cron_config row; defaulting to enabled+{v}", flush=True)
+              emit(True, v); sys.exit(0)
           cfg = rows[0]
-          if not cfg.get('enabled'):
-              print(f"cron disabled in admin config; skipping run", flush=True)
+          if not cfg.get('enabled') and event == 'schedule':
+              print("cron disabled in admin config; skipping scheduled run", flush=True)
               emit(False); sys.exit(0)
-          variant = cfg.get('pipeline_variant') or 'current'
-          print(f"admin: enabled, variant={variant} → proceed", flush=True)
+          variant = explicit or cfg.get('pipeline_variant') or 'mega'
+          print(f"resolved: enabled, variant={variant} (event={event}, requested={requested})", flush=True)
           emit(True, variant)
           PY
 
@@ -141,11 +149,10 @@ jobs:
       - name: Run full_round
         if: steps.cron_check.outputs.proceed != 'false'
         env:
-          # On scheduled runs the cron_check step emits the variant from
-          # the admin-edited DB row; on workflow_dispatch that step is
-          # skipped (its outputs are empty), so fall through to the
-          # job-level env which reads inputs.pipeline_variant.
-          PIPELINE_VARIANT: ${{ steps.cron_check.outputs.variant || inputs.pipeline_variant || 'current' }}
+          # cron_check now runs on every trigger and always emits the
+          # resolved variant (explicit input > DB config > 'mega').
+          # The || 'mega' is a belt-and-braces fallback only.
+          PIPELINE_VARIANT: ${{ steps.cron_check.outputs.variant || 'mega' }}
           # Optional checkpoint resume — only honored on workflow_dispatch
           # (scheduled runs always start fresh).
           RESUME_FROM: ${{ inputs.resume_from || '' }}

@@ -16,8 +16,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .news_rss_core import (CALL_STATS, check_duplicates, detail_enrich,
-                              filter_safe_rewrites, reset_call_stats,
-                              run_source_phase_a, tri_variant_rewrite)
+                              fetch_source_entries, filter_safe_rewrites,
+                              reset_call_stats, run_source_phase_a,
+                              tri_variant_rewrite)
 from .image_optimize import fetch_and_optimize
 from .supabase_io import insert_run, insert_story, update_run, upload_image
 from .news_aggregate import run_source as run_news
@@ -587,26 +588,31 @@ def _short_hash(s: str) -> str:
 # ─── Mega pipeline helpers ─────────────────────────────────────────────
 
 def phase_a_light(category: str, sources, max_per_source: int = 4) -> list[dict]:
-    """Light Phase A for the mega path: RSS metadata only — NO body fetch,
+    """Light Phase A for the mega path: feed metadata only — NO body fetch,
     NO LLM. Returns a flat list of brief dicts annotated with _source +
     _category. Bodies + og:images are fetched lazily after the curator
     has narrowed the pool to ranks 1-4.
+
+    Routes through fetch_source_entries (NOT raw feedparser) so that:
+      · the 5-day RSS freshness filter applies (bug 2026-05-01 had
+        silently regressed on this path), and
+      · feed_kind dispatch works — html_list/sitemap sources (DOGOnews,
+        NG Kids) produced 0 briefs when this called feedparser directly.
+    Bug: docs/bugs/2026-07-08-mega-path-regressions.md
     """
-    import feedparser
     briefs: list[dict] = []
     for source in sources:
         try:
-            feed = feedparser.parse(source.rss_url)
+            entries = fetch_source_entries(source, max_entries=max_per_source)
         except Exception as e:  # noqa: BLE001
-            log.warning("[%s] RSS fetch failed: %s", source.name, e)
+            log.warning("[%s] feed fetch failed: %s", source.name, e)
             continue
-        for entry in feed.entries[:max_per_source]:
+        for entry in entries:
             briefs.append({
-                "title": getattr(entry, "title", "") or "",
-                "summary": getattr(entry, "summary", "") or "",
-                "link": getattr(entry, "link", "") or "",
-                "published": getattr(entry, "published", "")
-                              or getattr(entry, "updated", "") or "",
+                "title": entry.get("title") or "",
+                "summary": entry.get("summary") or "",
+                "link": entry.get("link") or "",
+                "published": entry.get("published") or "",
                 "_source_name": source.name,
                 "_source": source,
                 "_category": category,
@@ -614,6 +620,113 @@ def phase_a_light(category: str, sources, max_per_source: int = 4) -> list[dict]
     log.info("  [%s] phase_a_light: %d briefs from %d sources",
              category, len(briefs), len(sources))
     return briefs
+
+
+def _drop_dup_briefs(briefs: list[dict], past_titles: list[str],
+                     threshold: float = 0.80) -> tuple[list[dict], list[dict]]:
+    """Pure core of the mega-path past-run dedup: split briefs into
+    (kept, dropped) by title similarity against recently published titles."""
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    for b in briefs:
+        t = b.get("title") or ""
+        best = max((_title_similarity(t, pt) for pt in past_titles), default=0.0)
+        (dropped if best >= threshold else kept).append(b)
+    return kept, dropped
+
+
+def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
+                                 days: int = 3,
+                                 threshold: float = 0.80) -> dict[str, list[dict]]:
+    """Mega-path counterpart of filter_past_duplicates (which only the
+    legacy path calls): drop briefs whose title ≥threshold-matches a story
+    the same category published in the last `days` days. A sticky
+    top-of-feed item on a cadence-1 source would otherwise be eligible to
+    republish on consecutive days. Fail-open: any DB error keeps all briefs."""
+    from datetime import date, timedelta
+    from .supabase_io import client
+    start = (date.today() - timedelta(days=days)).isoformat()
+    try:
+        r = client().table("redesign_stories").select(
+            "source_title, category"
+        ).gte("published_date", start).execute()
+        past_by_cat: dict[str, list[str]] = {}
+        for row in (r.data or []):
+            past_by_cat.setdefault(row.get("category") or "", []).append(
+                row.get("source_title") or "")
+    except Exception as e:  # noqa: BLE001
+        log.warning("brief past-dedup skipped — query failed: %s", e)
+        return briefs_by_cat
+
+    out: dict[str, list[dict]] = {}
+    for cat, briefs in briefs_by_cat.items():
+        kept, dropped = _drop_dup_briefs(briefs, past_by_cat.get(cat, []), threshold)
+        for b in dropped:
+            log.info("  [%s] past-dup brief drop: %s", cat, (b.get("title") or "")[:70])
+        out[cat] = kept
+    return out
+
+
+def _probe_bump(next_pickup_at: str | None, today_iso: str) -> str | None:
+    """Bump rule for a picked-but-unshipped source: if its next_pickup_at is
+    unset or already due, move it to tomorrow so it stops winning the
+    most-overdue rotation slot every day (the failure mode that let a dead
+    PBS hog 1 of 3 News slots for a month). A source already scheduled in
+    the future is left alone (it was a sleeping filler pick)."""
+    npa = (next_pickup_at or "")[:10]
+    if npa and npa > today_iso:
+        return None
+    from datetime import date, timedelta
+    return (date.fromisoformat(today_iso) + timedelta(days=1)).isoformat()
+
+
+def stamp_probe_outcomes(picked_by_cat: dict[str, list],
+                         briefs_by_cat: dict[str, list[dict]],
+                         shipped_names: set[str]) -> None:
+    """Close the pickup feedback loop: record an outcome for every picked
+    source that did NOT ship a story today.
+
+      · probe_attempts += 1   (it was picked and produced nothing shippable)
+      · probe_errors  += 1    when it produced zero briefs (fetch/parse-level
+                              failure — the PBS/WAF class)
+      · next_pickup_at → tomorrow when unset/overdue (see _probe_bump)
+
+    Shipped sources are stamped by persist_to_supabase as before. Non-fatal:
+    each row is best-effort; a failed PATCH only costs telemetry.
+    Bug: docs/bugs/2026-07-08-mega-path-regressions.md
+    """
+    from datetime import date
+    from .supabase_io import client
+    today_iso = date.today().isoformat()
+    contributed = {b.get("_source_name")
+                   for briefs in briefs_by_cat.values() for b in briefs}
+    stamped = 0
+    for cat, sources in picked_by_cat.items():
+        for s in sources:
+            if s.name in shipped_names:
+                continue
+            try:
+                rows = client().table("redesign_source_configs") \
+                    .select("probe_attempts,probe_errors,next_pickup_at") \
+                    .eq("name", s.name).limit(1).execute().data or []
+                cur = rows[0] if rows else {}
+                fields: dict = {
+                    "probe_attempts": int(cur.get("probe_attempts") or 0) + 1,
+                }
+                if s.name not in contributed:
+                    fields["probe_errors"] = int(cur.get("probe_errors") or 0) + 1
+                bump = _probe_bump(cur.get("next_pickup_at"), today_iso)
+                if bump:
+                    fields["next_pickup_at"] = bump
+                client().table("redesign_source_configs") \
+                    .update(fields).eq("name", s.name).execute()
+                stamped += 1
+                log.info("  probe-stamp [%s/%s]: %s", cat, s.name,
+                         ", ".join(f"{k}={v}" for k, v in fields.items()))
+            except Exception as e:  # noqa: BLE001
+                log.warning("probe-stamp %s failed (non-fatal): %s", s.name, e)
+    if stamped:
+        log.info("probe outcomes stamped on %d unshipped source(s)", stamped)
 
 
 def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
@@ -1341,7 +1454,10 @@ def main_mega() -> None:
     # resurrect Source dataclass instances from JSON refs.
     all_sources_for_lookup = []
     for cat_name in cat_names:
-        all_sources_for_lookup.extend(db_config.load_sources(cat_name))
+        # n=999 → every enabled source. The lookup exists to hydrate
+        # checkpoint refs; it must cover ANY source a prior attempt might
+        # have picked, not just today's top slice.
+        all_sources_for_lookup.extend(db_config.load_sources(cat_name, n=999))
     source_lookup = ckpt.build_source_lookup(all_sources_for_lookup)
 
     resume_target = ckpt.resume_from()
@@ -1358,14 +1474,26 @@ def main_mega() -> None:
         ckpt.save(stage, result, run_date=today)
         return result
 
-    # ---- Phase A* light: RSS only, no body, no LLM ----
+    # ---- Phase A* light: feed metadata only, no body, no LLM ----
+    # picked_sources_by_cat feeds stamp_probe_outcomes after persist; it
+    # stays empty on RESUME runs (phase A skipped), which disables probe
+    # stamping for that attempt — acceptable, resume is the rare path.
+    picked_sources_by_cat: dict[str, list] = {}
+
     def _phase_a_runner():
         t0 = time.monotonic()
-        log.info("=== MEGA Phase A* (light RSS fetch) ===")
+        log.info("=== MEGA Phase A* (light feed fetch) ===")
         out = {}
         for cat_name in cat_names:
-            srcs = db_config.load_sources(cat_name)
+            # n=8 (was default 3): briefs are metadata-only, so a wider
+            # pool costs almost nothing and one dead/stale feed no longer
+            # collapses a category to 2/3. Curator still narrows to 3.
+            srcs = db_config.load_sources(cat_name, n=8)
+            picked_sources_by_cat[cat_name] = srcs
             out[cat_name] = phase_a_light(cat_name, srcs)
+        # Drop briefs that ~match a story published in the last 3 days —
+        # the mega path previously had NO past-run dedup at all.
+        out = filter_past_duplicate_briefs(out)
         _set_phase("phase_a_light", t0,
                    counts={c: len(b) for c, b in out.items()})
         return out
@@ -1644,6 +1772,17 @@ def main_mega() -> None:
                                  "telemetry": telemetry})
             ckpt.save("persist", {"stories_persisted": count}, run_date=today)
     _set_phase("persist", t, stories_persisted=count)
+
+    # Close the pickup loop: record outcomes for picked-but-unshipped
+    # sources (probe_* counters + next_pickup bump) so a failing source
+    # degrades gracefully instead of hogging a rotation slot for weeks.
+    if picked_sources_by_cat:
+        shipped_names = {(s.get("source") and s["source"].name) or ""
+                         for stories in final_stories_by_cat.values()
+                         for s in stories}
+        stamp_probe_outcomes(picked_sources_by_cat, briefs_by_cat, shipped_names)
+    else:
+        log.info("probe-stamp skipped (resume run — picked sources unknown)")
 
     t = time.monotonic()
     log.info("=== PACK + UPLOAD ZIP ===")
