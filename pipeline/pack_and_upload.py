@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import zipfile
 from datetime import datetime, timezone
@@ -96,18 +97,21 @@ DETAIL_MIN = [
 ]
 
 
-def validate_bundle(today: str) -> None:
+def validate_bundle(today: str, content_root: Path | None = None) -> None:
     """Fail (SystemExit 1) if today's bundle is incomplete. Check:
       · 9 listing files (3 cats × easy/middle/cn), each with exactly 3 articles
       · 18 detail payloads (9 stories × easy/middle), each with non-empty
         keywords/questions/background_read/Article_Structure
       · 9 article images on disk (one per story id)
+    `content_root` overrides where content is read from (merge mode);
+    default is the local website dir.
     """
+    root = content_root or WEB
     errs: list[str] = []
 
     # Listing files — 2 or 3 per cat/lvl acceptable (ideal=3; 2 after
     # cross-source dup drops when all backups are exhausted). <2 is fatal.
-    payloads = WEB / "payloads"
+    payloads = root / "payloads"
     short_cats: set[str] = set()  # cats that shipped <3
     for cat in CATS:
         for lvl in ("easy", "middle", "cn"):
@@ -133,7 +137,7 @@ def validate_bundle(today: str) -> None:
     # Detail payloads (easy + middle only; cn has no detail page) — iterate
     # actual story IDs from the middle listing so 2-article cats validate
     # cleanly.
-    details = WEB / "article_payloads"
+    details = root / "article_payloads"
     all_story_ids: list[str] = []
     for cat in CATS:
         p = payloads / f"articles_{cat}_middle.json"
@@ -167,7 +171,7 @@ def validate_bundle(today: str) -> None:
                 errs.append(f"{story_id}/{lvl}: parse error {e}")
 
     # Per-story images (same image used across easy/middle for a story)
-    images_dir = WEB / "article_images"
+    images_dir = root / "article_images"
     needed_images: set[str] = set()
     for cat in CATS:
         # Pull image_urls from today's listings — whichever level works
@@ -282,12 +286,14 @@ def build_zip(content_root: Path | None = None) -> bytes:
     return buf.getvalue()
 
 
-def build_manifest(today: str, body: bytes) -> dict:
+def build_manifest(today: str, body: bytes,
+                   content_root: Path | None = None) -> dict:
     """Summarize what this zip contains — version + content hash + story IDs.
     Consumers can compare manifest sha256 without downloading the zip."""
+    root = content_root or WEB
     stories: list[dict] = []
     for cat in CATS:
-        p = WEB / "payloads" / f"articles_{cat}_middle.json"
+        p = root / "payloads" / f"articles_{cat}_middle.json"
         if not p.is_file():
             continue
         try:
@@ -311,6 +317,80 @@ def build_manifest(today: str, body: bytes) -> dict:
         "story_count": len(stories),
         "stories": stories,
     }
+
+
+def _overlay_fresh_categories(old_root: Path, fresh_root: Path,
+                              cats: set[str]) -> None:
+    """Splice freshly-generated categories into an extracted copy of the
+    live bundle (partial-run merge). For each cat in `cats` (lowercase,
+    e.g. 'news'): replace its 3 listing files, remove artifacts of the
+    replaced story ids (detail dirs / images / PDFs), copy the fresh
+    ones in. Everything else in old_root is untouched. A missing fresh
+    listing aborts — never publish a bundle with a category-shaped hole."""
+
+    def _ids_imgs(p: Path) -> tuple[set[str], set[str]]:
+        ids: set[str] = set()
+        imgs: set[str] = set()
+        try:
+            for a in (json.loads(p.read_text()).get("articles") or []):
+                if a.get("id"):
+                    ids.add(str(a["id"]))
+                if a.get("image_url"):
+                    imgs.add(Path(a["image_url"]).name)
+        except Exception as e:  # noqa: BLE001
+            raise SystemExit(f"merge: unreadable listing {p}: {e}")
+        return ids, imgs
+
+    for cat in sorted(cats):
+        old_ids: set[str] = set()
+        old_imgs: set[str] = set()
+        new_ids: set[str] = set()
+        new_imgs: set[str] = set()
+        for lvl in ("easy", "middle", "cn"):
+            rel = f"payloads/articles_{cat}_{lvl}.json"
+            fresh_p = fresh_root / rel
+            if not fresh_p.is_file():
+                raise SystemExit(f"merge: fresh listing missing: {rel}")
+            old_p = old_root / rel
+            if old_p.is_file():
+                ids, imgs = _ids_imgs(old_p)
+                old_ids |= ids
+                old_imgs |= imgs
+            ids, imgs = _ids_imgs(fresh_p)
+            new_ids |= ids
+            new_imgs |= imgs
+            old_p.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(fresh_p, old_p)
+        # Drop artifacts of replaced stories that are NOT re-shipped
+        # (same-slot ids overwrite in place below).
+        for sid in old_ids - new_ids:
+            shutil.rmtree(old_root / "article_payloads" / f"payload_{sid}",
+                          ignore_errors=True)
+            for pdf in (old_root / "article_pdfs").glob(f"{sid}-*.pdf"):
+                pdf.unlink()
+        for img in old_imgs - new_imgs:
+            old_img = old_root / "article_images" / img
+            if old_img.is_file():
+                old_img.unlink()
+        # Copy the fresh artifacts in.
+        for sid in new_ids:
+            src = fresh_root / "article_payloads" / f"payload_{sid}"
+            if src.is_dir():
+                dst = old_root / "article_payloads" / f"payload_{sid}"
+                shutil.rmtree(dst, ignore_errors=True)
+                shutil.copytree(src, dst)
+            for pdf in (fresh_root / "article_pdfs").glob(f"{sid}-*.pdf"):
+                dst_dir = old_root / "article_pdfs"
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(pdf, dst_dir / pdf.name)
+        for img in new_imgs:
+            src = fresh_root / "article_images" / img
+            if src.is_file():
+                dst_dir = old_root / "article_images"
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst_dir / img)
+        log.info("merge: [%s] %d fresh stories in, %d replaced out",
+                 cat, len(new_ids), len(old_ids - new_ids))
 
 
 DATED_ZIP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.zip$")
@@ -523,6 +603,56 @@ def main() -> None:
     # are content-driven, not shell-driven).
     republish = os.environ.get("PACK_REPUBLISH_ONLY") == "1"
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+    # Merge mode (partial category run): fresh content for SOME categories
+    # is on local disk; everything else comes from the live latest.zip.
+    # Full validation still gates the publish — a bad merge refuses to
+    # upload and the site keeps its current bundle.
+    merge_env = (os.environ.get("PACK_MERGE_CATEGORIES") or "").strip()
+    merge_cats = {c.strip().lower() for c in merge_env.split(",") if c.strip()}
+    if merge_cats:
+        if republish:
+            raise SystemExit("PACK_MERGE_CATEGORIES and PACK_REPUBLISH_ONLY "
+                             "are mutually exclusive")
+        unknown = merge_cats - set(CATS)
+        if unknown:
+            raise SystemExit(f"PACK_MERGE_CATEGORIES unknown: {sorted(unknown)}")
+        import tempfile
+        merge_root = Path(tempfile.mkdtemp(prefix="pack_merge_"))
+        try:
+            blob = sb.storage.from_(BUCKET).download("latest.zip")
+        except Exception as e:  # noqa: BLE001
+            # No fallback: local disk only has the fresh categories, so
+            # packing local-only would ship a bundle missing the rest.
+            raise SystemExit(f"merge mode needs the live latest.zip: {e}")
+        with zipfile.ZipFile(BytesIO(blob)) as zf:
+            for info in zf.infolist():
+                top = info.filename.split("/", 1)[0]
+                if top in CONTENT_DIRS:
+                    zf.extract(info, merge_root)
+        _overlay_fresh_categories(merge_root, WEB, merge_cats)
+        validate_bundle(today, content_root=merge_root)
+        body = build_zip(content_root=merge_root)
+        manifest = build_manifest(today, body, content_root=merge_root)
+        manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode()
+        check_not_overwriting_newer(sb)
+        for key in (f"{today}.zip", "latest.zip"):
+            sb.storage.from_(BUCKET).upload(
+                path=key, file=body,
+                file_options={"content-type": "application/zip", "upsert": "true"})
+            log.info("uploaded %s", key)
+        for key in (f"{today}-manifest.json", "latest-manifest.json"):
+            sb.storage.from_(BUCKET).upload(
+                path=key, file=manifest_bytes,
+                file_options={"content-type": "application/json", "upsert": "true"})
+            log.info("uploaded %s", key)
+        try:
+            upload_dated_flat_files(sb, today, bundle=body)
+        except Exception as e:  # noqa: BLE001
+            log.warning("dated-flat upload failed (non-fatal): %s", e)
+        log.info("merge publish done: %s replaced · stories=%d",
+                 sorted(merge_cats), manifest["story_count"])
+        return
 
     if republish:
         # Pull current latest.zip and extract CONTENT_DIRS to a temp dir
