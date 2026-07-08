@@ -25,8 +25,11 @@ on:
   workflow_run:
     workflows: ["Daily pipeline"]
     types: [completed]
-  schedule:
-    - cron: "30 5 * * *"
+  # Removed the standalone `schedule: 30 5 * * *` (2026-07-08) — it sent a
+  # SECOND, duplicate quality-digest every day on top of the post-publish
+  # one. The workflow_run trigger above fires on every pipeline completion
+  # (success OR failure), so the quality report still goes out exactly once,
+  # right after publish. Net: one fewer email/day.
   workflow_dispatch:
     inputs:
       skip_sleep:
