@@ -124,6 +124,32 @@ HTML_FETCH_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+# Some publishers (e.g. PBS, 2026-07) put article pages behind AWS WAF, which
+# serves a tiny JS-challenge stub to normal browser UAs but allowlists search
+# crawlers. When a fetch returns such a stub we retry once as Googlebot.
+GOOGLEBOT_FETCH_HEADERS = {
+    **HTML_FETCH_HEADERS,
+    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+}
+
+# Stable markers of an AWS WAF challenge interstitial. Present across AWS WAF
+# deployments; absent from real article HTML.
+_BOT_CHALLENGE_MARKERS = (
+    "awsWafCookieDomainList",
+    "AwsWafIntegration",
+    "token.awswaf.com",
+    "challenge-container",
+)
+
+
+def is_bot_challenge_page(html) -> bool:
+    """True if `html` is a bot-challenge interstitial (AWS WAF etc.) rather than
+    real article content. Such pages are short and carry no article body, so
+    treating them as a fetch miss (and retrying with a crawler UA) is safe."""
+    if not html:
+        return False
+    return any(marker in html for marker in _BOT_CHALLENGE_MARKERS)
+
 SAFETY_DIMS = ["violence", "sexual", "substance", "language", "fear",
                "adult_themes", "distress", "bias"]
 SAFETY_SHORT = ["Viol", "Sex", "Subst", "Lang", "Fear", "Adult", "Distr", "Bias"]
@@ -295,7 +321,18 @@ def fetch_html(url: str) -> str | None:
                          allow_redirects=True)
         if r.status_code >= 400:
             return None
-        return r.text
+        html = r.text
+        if is_bot_challenge_page(html):
+            # Blocked by a WAF JS-challenge (e.g. PBS via AWS WAF). Retry once
+            # as Googlebot, which these WAFs allowlist for SEO. Only fires when
+            # the normal fetch is already blocked, so the happy path is unchanged.
+            log.info("[fetch] bot-challenge stub for %s — retrying as Googlebot", url[:90])
+            r2 = requests.get(url, timeout=HTML_FETCH_TIMEOUT,
+                              headers=GOOGLEBOT_FETCH_HEADERS, allow_redirects=True)
+            if r2.status_code < 400 and not is_bot_challenge_page(r2.text):
+                return r2.text
+            return None
+        return html
     except requests.RequestException:
         return None
 
