@@ -17,6 +17,10 @@ on:
         description: "Internal — set by pipeline-watchdog to prevent retry-of-retry loop"
         type: boolean
         default: false
+      categories:
+        description: "Partial run — comma-separated categories (e.g. News). Other categories keep today's live content (merged from latest.zip). Empty = all."
+        type: string
+        default: ''
   schedule:
     # Hardcoded admin-configured fire time. Synced FROM
     # `redesign_cron_config` table by the quality-digest workflow at
@@ -156,6 +160,9 @@ jobs:
           # Optional checkpoint resume — only honored on workflow_dispatch
           # (scheduled runs always start fresh).
           RESUME_FROM: ${{ inputs.resume_from || '' }}
+          # Optional partial run (workflow_dispatch only): regenerate just
+          # these categories; the rest merge in from the live latest.zip.
+          PIPELINE_CATEGORIES: ${{ inputs.categories || '' }}
         run: python -m pipeline.full_round
 
       - name: Refresh search index

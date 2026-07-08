@@ -1003,6 +1003,60 @@ def rewrite_for_category(stories: list[dict],
 
 
 # -------------------------------------------------------------------
+# 3.5) Partial-run helpers (PIPELINE_CATEGORIES=News → run one category)
+# -------------------------------------------------------------------
+
+def _filter_categories(available: list[str], requested: str) -> list[str]:
+    """Resolve a comma-separated PIPELINE_CATEGORIES value against the
+    DB-active category names (case-insensitive). Unknown names are a
+    hard error — a typo must never silently run the full pipeline."""
+    by_lower = {c.lower(): c for c in available}
+    out: list[str] = []
+    unknown: list[str] = []
+    for raw in requested.split(","):
+        name = raw.strip()
+        if not name:
+            continue
+        canon = by_lower.get(name.lower())
+        if canon is None:
+            unknown.append(name)
+        elif canon not in out:
+            out.append(canon)
+    if unknown:
+        raise SystemExit(
+            f"PIPELINE_CATEGORIES unknown: {unknown} (active: {available})")
+    if not out:
+        raise SystemExit("PIPELINE_CATEGORIES is set but empty")
+    return out
+
+
+def _archive_replaced_stories(cats: list[str], date_str: str) -> None:
+    """Partial-run hygiene: mark today's existing rows for the re-run
+    categories archived=true and drop their search-index rows, so the
+    replaced stories don't double-count in digests or linger in search.
+    Non-fatal on error — the re-run content itself is unaffected."""
+    from .supabase_io import client
+    try:
+        sb = client()
+        r = (sb.table("redesign_stories")
+               .update({"archived": True})
+               .eq("published_date", date_str)
+               .in_("category", cats)
+               .execute())
+        rows = r.data or []
+        sids = [row.get("payload_story_id") for row in rows
+                if row.get("payload_story_id")]
+        log.info("partial: archived %d replaced %s stories",
+                 len(rows), "/".join(cats))
+        if sids:
+            sb.table("redesign_search_index").delete() \
+              .in_("story_id", sids).execute()
+            log.info("partial: dropped %d search-index story ids", len(sids))
+    except Exception as e:  # noqa: BLE001
+        log.warning("partial: archive/search cleanup failed (non-fatal): %s", e)
+
+
+# -------------------------------------------------------------------
 # 4) Emit v1-shape payload files (what the existing v2 UI reads)
 # -------------------------------------------------------------------
 
@@ -1053,7 +1107,10 @@ def emit_v1_shape(stories_by_cat: dict[str, list[dict]],
 
     mined_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    for category in ("News", "Science", "Fun"):
+    # Only the categories actually passed in — a partial run must not
+    # emit EMPTY listings for absent categories (the pack merge would
+    # ship them over good live content).
+    for category in stories_by_cat:
         stories = stories_by_cat.get(category, [])
         variants = variants_by_cat.get(category, {})
         details = details_by_cat.get(category, {})
@@ -1180,6 +1237,11 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
                 "primary_image_url": s.get("_image_storage_url") or art.get("og_image"),
                 "primary_image_local": s.get("_image_local"),
                 "primary_image_credit": src_host,
+                # Explicit: a freshly-shipped story is never archived. The
+                # (date,category,slot) upsert overwrites a partial-run's
+                # superseded row, which _archive_replaced_stories just
+                # flagged — without this the flag would stick to the NEW row.
+                "archived": False,
                 "payload_path": f"payloads/articles_{category.lower()}_easy.json",
                 "payload_story_id": story_id,
             }
@@ -1537,6 +1599,23 @@ def main_mega() -> None:
     cat_names = [c["name"] for c in categories]
     log.info("=== MEGA active categories from DB: %s ===", cat_names)
 
+    # ---- Partial run (PIPELINE_CATEGORIES=News): one category only ----
+    # Checkpoints are disabled (a partial save would clobber the day's
+    # full-run trail) and pack_and_upload runs in merge mode — the other
+    # categories' content is spliced in from the live latest.zip, so the
+    # site never loses a category.
+    requested_cats = (os.environ.get("PIPELINE_CATEGORIES") or "").strip()
+    partial_cats: list[str] | None = None
+    if requested_cats:
+        if (os.environ.get("RESUME_FROM") or "").strip():
+            raise SystemExit(
+                "PIPELINE_CATEGORIES cannot be combined with RESUME_FROM")
+        cat_names = _filter_categories(cat_names, requested_cats)
+        partial_cats = cat_names
+        telemetry["partial_categories"] = cat_names
+        log.info("=== PARTIAL RUN — categories: %s (checkpoints off, "
+                 "pack merges the rest from live bundle) ===", cat_names)
+
     # Build a {(name, rss_url): NewsSource} map across every category's
     # primary + backup feed list. Checkpoint hydration uses this to
     # resurrect Source dataclass instances from JSON refs.
@@ -1554,7 +1633,11 @@ def main_mega() -> None:
 
     def _load_or_run(stage: str, runner):
         """If we're resuming past `stage`, load the stage's checkpoint.
-        Otherwise run `runner()`, save the result, return it."""
+        Otherwise run `runner()`, save the result, return it.
+        Partial runs never checkpoint — a single-category save would
+        clobber the day's full-run trail (used for funnel diagnosis)."""
+        if partial_cats is not None:
+            return runner()
         if resume_target and ckpt.STAGES.index(stage) < ckpt.STAGES.index(resume_target):
             log.info("  [%s] resume: loading checkpoint", stage)
             return ckpt.load(stage, source_lookup, run_date=today)
@@ -1866,12 +1949,17 @@ def main_mega() -> None:
         if resume_target and ckpt.STAGES.index("persist") < ckpt.STAGES.index(resume_target):
             log.info("=== resume: skipping persist (already done) ===")
         else:
+            if partial_cats:
+                # Replacing today's content for these categories — mark the
+                # superseded rows + purge their search-index entries first.
+                _archive_replaced_stories(partial_cats, today)
             count = persist_to_supabase(final_stories_by_cat,
                                          final_variants_by_cat, today, run_id)
             update_run(run_id, {"status": "persisted",
                                  "notes": f"stories persisted: {count}",
                                  "telemetry": telemetry})
-            ckpt.save("persist", {"stories_persisted": count}, run_date=today)
+            if partial_cats is None:
+                ckpt.save("persist", {"stories_persisted": count}, run_date=today)
     _set_phase("persist", t, stories_persisted=count)
 
     # Close the pickup loop: record outcomes for picked-but-unshipped
@@ -1891,6 +1979,10 @@ def main_mega() -> None:
     upload_err: str | None = None
     try:
         from .pack_and_upload import main as _pack_upload
+        if partial_cats:
+            # Merge mode: pack splices the other categories' content from
+            # the live latest.zip; validation still gates the publish.
+            os.environ["PACK_MERGE_CATEGORIES"] = ",".join(partial_cats)
         _pack_upload()
         upload_ok = True
     except SystemExit as e:
