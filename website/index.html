@@ -288,21 +288,24 @@ function App() {
       try {
         if (magicMatch && window.kidsync && typeof window.kidsync.consumeMagicLink === 'function') {
           const token = decodeURIComponent(magicMatch[1]);
+          // Strip ?magic= from the URL BEFORE consuming, so a refresh mid-RPC
+          // can't re-attempt an already-spent token (which shows "invalid or
+          // expired" and loses the sign-in — the token is single-use). The
+          // token is captured above, so removing it from the bar is safe.
+          // Preserve the hash. The magicConsuming gate stays UP until
+          // fetchProfile (below) hydrates the profile, bridging the
+          // cross-device window where the clicking device has consumed the
+          // token but hasn't pulled the name/avatar from cloud yet.
+          try {
+            let cleanSearch = window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
+            if (cleanSearch === '?') cleanSearch = '';
+            history.replaceState(null, '', window.location.pathname + cleanSearch + (window.location.hash || ''));
+          } catch (e) {}
           let r = null;
           try {
             r = await window.kidsync.consumeMagicLink(token);
-          } finally {
-            // Drop the magic= URL param even if the token was bad — we don't
-            // want refreshes to re-attempt consumption. The magicConsuming
-            // gate intentionally stays UP here; we wait until fetchProfile
-            // (further down) populates the kid's profile before lifting the
-            // spinner. Keeping the spinner up bridges the cross-device
-            // window where Device B has consumed the token but hasn't yet
-            // pulled Alice's name/avatar from cloud.
-            try {
-              const clean = window.location.pathname + window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
-              history.replaceState(null, '', clean.endsWith('?') ? clean.slice(0, -1) : clean);
-            } catch (e) {}
+          } catch (e) {
+            console.warn('[boot] consumeMagicLink threw', e);
           }
           if (r && r.ok) {
             console.log('[boot] magic link consumed');
