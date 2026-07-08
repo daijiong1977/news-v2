@@ -96,8 +96,13 @@ jobs:
       - name: Re-dispatch daily-pipeline (one-shot)
         if: steps.decide.outputs.should_retry == 'true'
         run: |
+          # 'auto' → daily-pipeline resolves the variant from
+          # redesign_cron_config, same as a scheduled run. Previously this
+          # hardcoded 'current', so a failed mega run was retried on the
+          # LEGACY pipeline (different checkpoints, double LLM cost,
+          # upserts over mega's rows).
           gh workflow run daily-pipeline.yml \
             -R ${{ github.repository }} \
-            -f pipeline_variant=current \
+            -f pipeline_variant=auto \
             -f is_retry=true
           echo "✓ re-dispatched daily-pipeline with is_retry=true"
