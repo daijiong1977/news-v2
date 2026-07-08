@@ -2028,22 +2028,31 @@ def main_mega() -> None:
     log.info("=== PACK + UPLOAD ZIP ===")
     upload_ok = False
     upload_err: str | None = None
-    ok_cats, thin_cats = _split_publishable(final_stories_by_cat)
+    # min_per_cat=1: a 1-2-story category still publishes fresh — pack
+    # tops it up to 3 with carried-over stories from the previous bundle
+    # (owner rule 2026-07-08: a category always ships 3 — other sources
+    # first, then borrow from the previous day). Only a 0-story category
+    # keeps the previous live content wholesale.
+    ok_cats, thin_cats = _split_publishable(final_stories_by_cat, min_per_cat=1)
+    short_cats = [c for c in ok_cats
+                  if len(final_stories_by_cat.get(c) or []) < 3]
     try:
         from .pack_and_upload import main as _pack_upload
         if thin_cats and not ok_cats:
             # Nothing publishable at all — refuse; site keeps its bundle.
             raise SystemExit(
-                f"no publishable category (all <2 stories): {thin_cats}")
+                f"no publishable category (all 0 stories): {thin_cats}")
         if thin_cats:
-            # Degraded publish: ship the fresh categories, keep the thin
-            # one's current live content (merge mode). No more one-thin-
-            # category-sinks-the-whole-bundle full re-runs.
             telemetry["warnings"].append(
-                f"degraded publish — thin: {', '.join(thin_cats)} kept "
-                f"previous live content; fresh: {', '.join(ok_cats)}")
-            log.warning("degraded publish — thin %s keep live content; "
+                f"degraded publish — {', '.join(thin_cats)} kept previous "
+                f"live content; fresh: {', '.join(ok_cats)}")
+            log.warning("degraded publish — %s keep live content; "
                         "publishing fresh %s via merge", thin_cats, ok_cats)
+        if short_cats:
+            telemetry["warnings"].append(
+                f"top-up publish — {', '.join(short_cats)} shipped <3 fresh; "
+                "pack carries previous-bundle stories over to fill 3")
+        if thin_cats:
             os.environ["PACK_MERGE_CATEGORIES"] = ",".join(ok_cats)
         elif partial_cats:
             # Merge mode: pack splices the other categories' content from
