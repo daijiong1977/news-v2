@@ -147,16 +147,6 @@ def load(stage: str, source_lookup: dict, run_date: str | None = None) -> Any:
              rd, stage, row.get("size_bytes") or 0, row.get("created_at"))
     return _walk_from_jsonable(row["data"], source_lookup)
 
-
-def has(stage: str, run_date: str | None = None) -> bool:
-    rd = run_date or _today()
-    sb = client()
-    res = sb.table("redesign_checkpoints") \
-        .select("run_date,stage", count="exact") \
-        .eq("run_date", rd).eq("stage", stage).execute()
-    return (res.count or 0) > 0
-
-
 def resume_from() -> str | None:
     """Read RESUME_FROM env var; validate and return canonical stage name
     or None when not set / blank. Raises on unknown values to fail fast."""
@@ -172,15 +162,6 @@ def resume_from() -> str | None:
 
 def stage_index(stage: str) -> int:
     return STAGES.index(stage)
-
-
-def should_skip(current_stage: str, resume_target: str | None) -> bool:
-    """True if `current_stage` should be skipped because we're resuming
-    from a later stage. (i.e. resume_target is later than current_stage.)"""
-    if resume_target is None:
-        return False
-    return STAGES.index(current_stage) <= STAGES.index(resume_target) - 1
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Source-lookup builder

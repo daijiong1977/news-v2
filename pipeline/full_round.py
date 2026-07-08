@@ -104,7 +104,7 @@ def _title_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, _normalize_title(a), _normalize_title(b)).ratio()
 
 
-# Shape used by filter_past_duplicates + pick_winners_with_dedup:
+# Shape used by filter_past_duplicates:
 #   by_source = {
 #     <source_name>: {"source": <SourceObj>, "candidates": [{"winner": art, "slot": "choice_1"}, ...]},
 #     ...
@@ -150,16 +150,6 @@ def filter_past_duplicates(category: str, by_source: dict[str, dict],
                 kept.append(c)
         result[name] = {"source": bundle["source"], "candidates": kept}
     return result
-
-
-def pick_winners_with_dedup(by_source: dict[str, dict]) -> list[dict]:
-    """Per-category cross-source dedup. Picks each source's highest-ranked
-    surviving candidate, runs cross-source check_duplicates, on dup
-    promotes the next candidate from the weaker source. Operates within a
-    single category — see `pick_all_winners_with_xcat_dedup` for the
-    unified pass that also catches News-vs-Fun overlaps."""
-    return _pick_with_dedup_unified({"_": by_source}, cat_priority=None)["_"]
-
 
 # Fun > Science > News. On a cross-category dup the lower-priority
 # (numerically higher) category drops + promotes its next candidate.

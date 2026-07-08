@@ -87,7 +87,21 @@ def compute_cadence_days(pub_dates: list[float]) -> int | None:
     if len(gaps_seconds) < MIN_GAPS_REQUIRED:
         return None
     median_gap_days = statistics.median(gaps_seconds) / 86400.0
-    return max(CADENCE_MIN, min(CADENCE_MAX, round(median_gap_days)))
+    # Burst guard: a publisher that posts 9 items in an hour then sleeps two
+    # weeks has a tiny median gap but a ~2-week rhythm. Floor the estimate
+    # with the overall span per entry so bursty feeds aren't miscalibrated
+    # to cadence=1 (eligible daily with nothing fresh).
+    span_days = (pub_dates[0] - pub_dates[-1]) / 86400.0
+    rhythm_days = span_days / max(1, len(pub_dates) - 1)
+    est = max(median_gap_days, rhythm_days)
+    return max(CADENCE_MIN, min(CADENCE_MAX, round(est)))
+
+
+def _clamp_step(old: int, new: int, max_step: int = 2) -> int:
+    """Limit how far one calibration run can move cadence_days — a single
+    weird feed snapshot (outage backlog, holiday burst) shouldn't bench a
+    good source for a month or make a monthly source daily overnight."""
+    return max(old - max_step, min(old + max_step, new))
 
 
 def _load_sources(source_id: int | None) -> list[dict]:
@@ -132,6 +146,8 @@ def calibrate(*, dry_run: bool = True,
 
         pub = fetch_pub_timestamps(rss_url)
         new = compute_cadence_days(pub)
+        if new is not None:
+            new = _clamp_step(old, new)
         if new is None:
             report.append((name, old, None,
                            f"insufficient data ({len(pub)} dates)"))

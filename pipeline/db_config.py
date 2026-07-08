@@ -130,7 +130,13 @@ def load_sources(category_name: str, *,
     Eligible (next_pickup_at IS NULL OR <= today) come first; if fewer than
     `n` are eligible, fill from closest-to-eligible (next_pickup_at > today,
     soonest first). The pool is exhausted before under-fill is accepted.
-    `is_backup` is ignored — all enabled sources participate.
+
+    2026-07-08: two previously-dead columns are now honored —
+      · active_weekdays: non-empty list gates eligibility to those weekdays
+        (Mon=0, per the table comment); NULL/empty = every day.
+      · is_backup: backups sort AFTER non-backups within each pool, so they
+        only fill when the primaries can't cover `n` — "adding a backup
+        source" now actually means something.
     """
     from datetime import date as _date
     if today is None:
@@ -139,10 +145,12 @@ def load_sources(category_name: str, *,
     raw_by_cat = _ensure_src_cache()
     rows = raw_by_cat.get(category_name, [])
 
-    # Filter: enabled, state in (NULL, 'live'). is_backup ignored (Q1=b).
+    # Filter: enabled, state in (NULL, 'live'), and active on today's weekday.
+    wd = today.weekday()   # Mon=0 — matches the active_weekdays column comment
     candidates = [r for r in rows
                   if r.get("enabled")
-                  and (r.get("state") in (None, "live"))]
+                  and (r.get("state") in (None, "live"))
+                  and (not r.get("active_weekdays") or wd in r["active_weekdays"])]
 
     # Slice the first 10 chars (YYYY-MM-DD) so we compare dates, not
     # timestamps. next_pickup_at is currently DATE (PostgREST returns
@@ -160,11 +168,12 @@ def load_sources(category_name: str, *,
         # 2026-05-04 dry-run produced 2 weekly empty Smithsonian sources
         # in the Fun pool because all priority-1 ties resolved by
         # arbitrary insertion order.
+        backup = 1 if r.get("is_backup") else 0     # primaries before backups
         npa = _date_part(r.get("next_pickup_at"))   # NULL/"" sorts first
         prio = int(r.get("priority") or 99)
         cad = int(r.get("cadence_days") or 1)
         lua = _date_part(r.get("last_used_at"))
-        return (npa, prio, cad, lua)
+        return (backup, npa, prio, cad, lua)
 
     today_iso = today.isoformat()
     eligible = sorted(

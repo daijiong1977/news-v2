@@ -1786,10 +1786,13 @@ def verify_article_content(art: dict) -> tuple[bool, str | None]:
         return False, f"body {wc}w < {MIN_PICK_BODY_WORDS}w"
     if wc > MAX_PICK_BODY_WORDS:
         return False, f"body {wc}w > {MAX_PICK_BODY_WORDS}w (suspect aggregate page)"
-    if is_generic_social_image(art.get("og_image")):
-        return False, f"generic social image: {art.get('og_image')}"
+    # Order matters: is_generic_social_image(None) is True, so the generic
+    # check must come AFTER the missing check or absent images get reported
+    # as "generic social image: None" (and the branch below is unreachable).
     if not art.get("og_image"):
         return False, "no og:image"
+    if is_generic_social_image(art.get("og_image")):
+        return False, f"generic social image: {art.get('og_image')}"
     return True, None
 
 

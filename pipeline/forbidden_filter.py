@@ -50,7 +50,11 @@ FORBIDDEN_PATTERNS: list[str] = [
     r"\bporn(?:ography|ographic)?\b",
     r"\bonlyfans\b",
     r"\b(?:erotic|erotica|obscene|obscenity|obscenities)\b",
-    r"\b(?:gnoc|cd9|asl)\b",          # predator slang acronyms
+    r"\bgnoc\b",                      # predator slang acronym
+    # NOTE (2026-07-08): dropped \basl\b and \bcd9\b — chat-slang detectors
+    # meaningless in news copy. They hard-killed legitimate kid headlines
+    # ("ASL interpreter program", the band CD9). The gambling group below
+    # is a DOCUMENTED editorial choice and stays as-is.
 
     # ─── Graphic violence ───
     r"\bbeheaded?\b",
