@@ -719,14 +719,70 @@ def stamp_probe_outcomes(picked_by_cat: dict[str, list],
         log.info("probe outcomes stamped on %d unshipped source(s)", stamped)
 
 
+def _interleave_by_source(briefs: list[dict]) -> list[dict]:
+    """Round-robin briefs across sources (first-seen source order,
+    within-source order preserved). The Stage-1.5 probe cap walks briefs
+    in list order, and phase_a_light emits them grouped by source in
+    priority order — so with 4 News sources × 4 briefs and cap 10, the
+    priority-4 source (BBC) got ZERO probe slots on any day the earlier
+    feeds were healthy (found 2026-07-08 via checkpoint reconstruction).
+    Interleaving makes the cap sample every source fairly."""
+    by_src: dict[str, list[dict]] = {}
+    for b in briefs:
+        by_src.setdefault(b.get("_source_name") or "", []).append(b)
+    queues = list(by_src.values())
+    out: list[dict] = []
+    while queues:
+        queues = [q for q in queues if q]
+        for q in queues:
+            if q:
+                out.append(q.pop(0))
+    return out
+
+
+def _partition_probe_results(results: list[dict], min_words: int,
+                             max_words: int, cap: int,
+                             ) -> tuple[list[dict], dict[str, dict[str, int]]]:
+    """Classify probe results per source and apply the per-cat cap.
+    Returns (kept_briefs, tally) with tally[src] = {in, kept, thin, long,
+    cap_cut}. Unlike the old break-at-cap loop, every brief is classified,
+    so a source starved by the cap shows up as cap_cut in telemetry
+    instead of vanishing silently."""
+    kept: list[dict] = []
+    tally: dict[str, dict[str, int]] = {}
+    for r in results:
+        src = (r["brief"].get("_source_name") or "?")
+        t = tally.setdefault(
+            src, {"in": 0, "kept": 0, "thin": 0, "long": 0, "cap_cut": 0})
+        t["in"] += 1
+        wc = r["wc"]
+        if wc < min_words:
+            t["thin"] += 1
+        elif wc > max_words:
+            t["long"] += 1
+        elif len(kept) >= cap:
+            t["cap_cut"] += 1
+        else:
+            b = r["brief"]
+            b["_probe_art"] = r["art"]
+            b["word_count"] = wc
+            kept.append(b)
+            t["kept"] += 1
+    return kept, tally
+
+
 def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
                        max_top: int = 4,
-                       min_body_words: int = 250) -> dict[str, list[dict]]:
+                       min_body_words: int = 250,
+                       stats: dict | None = None) -> dict[str, list[dict]]:
     """For each category's top-`max_top` ranked picks, fetch HTML body +
     og:image and verify. If a rank-1..4 pick fails, promote rank 5.
     Returns {cat: [story_dict_with_winner, ...]} where story_dict has
     `winner`, `source`, `winner_slot`, `_rank`. Includes the verified
     spares too (so Stage 3 can promote them on safety reject).
+
+    If `stats` (a dict) is passed, it is filled per category/source with
+    {"verified": n, "rejects": {reason: n}} for funnel telemetry.
     """
     from .news_rss_core import _fetch_and_enrich, verify_article_content
 
@@ -734,6 +790,12 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     for cat, ranked in ranked_by_cat.items():
         verified: list[dict] = []
         used: set[int] = set()
+
+        def _stat(r: dict) -> dict:
+            src = getattr(r.get("source"), "name", None) or "?"
+            cstats = stats.setdefault(cat, {}) if stats is not None else {}
+            return cstats.setdefault(src, {"verified": 0, "rejects": {}})
+
         # Walk in rank order; verify each. We aim to fill up to max_top
         # AND keep all ranks beyond as un-verified spares (verify lazily
         # later if Stage 3 needs them).
@@ -752,14 +814,23 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
             art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
             ok, reason = verify_article_content(art)
             if not ok:
-                log.info("  [%s] rank %s body-verify FAIL: %s",
-                         cat, r.get("rank"), reason)
+                log.info("  [%s] rank %s (%s) body-verify FAIL: %s",
+                         cat, r.get("rank"),
+                         getattr(r.get("source"), "name", "?"), reason)
+                if stats is not None:
+                    st = _stat(r)
+                    st["rejects"][reason] = st["rejects"].get(reason, 0) + 1
                 continue
             if (art.get("word_count") or 0) < min_body_words:
                 log.info("  [%s] rank %s too thin: %dw < %d",
                          cat, r.get("rank"), art.get("word_count", 0), min_body_words)
+                if stats is not None:
+                    st = _stat(r)
+                    st["rejects"]["too thin"] = st["rejects"].get("too thin", 0) + 1
                 continue
             used.add(cid)
+            if stats is not None:
+                _stat(r)["verified"] += 1
             verified.append({
                 "source": r["source"],
                 "winner": art,
@@ -1563,38 +1634,36 @@ def main_mega() -> None:
         kept_total = 0
         dropped_thin = 0
         dropped_long = 0
+        per_source: dict[str, dict] = {}
         for cat, briefs in briefs_by_cat.items():
             if not briefs:
                 out[cat] = []
                 continue
+            # Interleave across sources so the cap samples every source
+            # instead of eating the pool in priority order (BBC starvation,
+            # bug 2026-07-08).
+            briefs = _interleave_by_source(briefs)
             with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
                 results = list(ex.map(_probe_one, briefs))
-            kept: list[dict] = []
-            for r in results:
-                wc = r["wc"]
-                if wc < PROBE_MIN_WORDS:
-                    dropped_thin += 1
-                    continue
-                if wc > PROBE_MAX_WORDS:
-                    dropped_long += 1
-                    continue
-                b = r["brief"]
-                b["_probe_art"] = r["art"]
-                b["word_count"] = wc
-                kept.append(b)
-                if len(kept) >= PROBE_MAX_PER_CAT:
-                    break
+            kept, tally = _partition_probe_results(
+                results, PROBE_MIN_WORDS, PROBE_MAX_WORDS, PROBE_MAX_PER_CAT)
             out[cat] = kept
+            per_source[cat] = tally
             kept_total += len(kept)
-            log.info("  [%s] probe: %d kept / %d input (dropped %d thin, %d long)",
+            dropped_thin += sum(t["thin"] for t in tally.values())
+            dropped_long += sum(t["long"] for t in tally.values())
+            log.info("  [%s] probe: %d kept / %d input · %s",
                      cat, len(kept), len(briefs),
-                     sum(1 for r in results if r["wc"] < PROBE_MIN_WORDS),
-                     sum(1 for r in results if r["wc"] > PROBE_MAX_WORDS))
+                     ", ".join(
+                         f"{s}:{t['kept']}/{t['in']}"
+                         + (f" (cap_cut {t['cap_cut']})" if t["cap_cut"] else "")
+                         for s, t in tally.items()))
         _set_phase("phase_a_probe", t0,
                    counts={c: len(b) for c, b in out.items()},
                    dropped_thin=dropped_thin,
                    dropped_long=dropped_long,
-                   kept=kept_total)
+                   kept=kept_total,
+                   per_source=per_source)
         return out
     briefs_by_cat = _load_or_run("phase_a_probe", _stage1_5_runner)
 
@@ -1612,10 +1681,11 @@ def main_mega() -> None:
     def _verify_runner():
         t0 = time.monotonic()
         log.info("=== MEGA verify body + og:image on rank 1-4 ===")
-        out = verify_picks_lazy(ranked_by_cat, max_top=4)
+        vstats: dict = {}
+        out = verify_picks_lazy(ranked_by_cat, max_top=4, stats=vstats)
         verified_counts = {c: sum(1 for s in v if not s.get("_unverified_spare"))
                            for c, v in out.items()}
-        _set_phase("verify", t0, verified=verified_counts)
+        _set_phase("verify", t0, verified=verified_counts, per_source=vstats)
         for cat, ws in out.items():
             verified = [s for s in ws if not s.get("_unverified_spare")]
             log.info("  [%s] %d verified + %d spare ranks",
@@ -1659,13 +1729,24 @@ def main_mega() -> None:
     # ---- Stage 3: Python safety filter on rewritten bodies ----
     def _safety_runner():
         t0 = time.monotonic()
-        log.info("=== MEGA Stage 3 — Python safety filter (any_dim ≥ 3 = REJECT) ===")
+        log.info("=== MEGA Stage 3 — Python safety filter "
+                 "(strict dims ≥3 / news dims ≥4 = REJECT) ===")
         final_stories: dict[str, list[dict]] = {}
         final_variants: dict[str, dict[int, dict]] = {}
+        s3_per_source: dict[str, dict] = {}
         for cat, bundle in rewrites_by_cat.items():
             winners = bundle.get("_winners") or []
             rewrite_res = {"articles": bundle.get("articles") or []}
             kept, rejected = filter_safe_rewrites(rewrite_res)
+            cs = s3_per_source.setdefault(cat, {})
+            for a in rejected:
+                sid = a.get("source_id")
+                w = winners[sid] if isinstance(sid, int) and 0 <= sid < len(winners) else None
+                name = w["source"].name if w and w.get("source") else "?"
+                e = cs.setdefault(name, {"shipped": 0, "safety_rejected": 0})
+                e["safety_rejected"] += 1
+                reason = ((a.get("_safety_eval") or {}).get("reason") or "")[:120]
+                log.info("  [%s] Stage-3 REJECT %s: %s", cat, name, reason)
             kept_by_sid: dict[int, dict] = {a["source_id"]: a for a in kept
                                              if isinstance(a.get("source_id"), int)}
             survived_winners: list[dict] = []
@@ -1698,6 +1779,9 @@ def main_mega() -> None:
                     break
             final_stories[cat] = survived_winners[:3]
             final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+            for w in final_stories[cat]:
+                name = w["source"].name if w.get("source") else "?"
+                cs.setdefault(name, {"shipped": 0, "safety_rejected": 0})["shipped"] += 1
             if promotions:
                 telemetry["warnings"].append(
                     f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot")
@@ -1706,7 +1790,7 @@ def main_mega() -> None:
                     f"{cat}: only {len(survived_winners)} stories shipped after Stage 3")
             log.info("  [%s] final: %d stories (%d rejected, %d promoted)",
                      cat, len(survived_winners), len(rejected), promotions)
-        _set_phase("stage3_safety", t0)
+        _set_phase("stage3_safety", t0, per_source=s3_per_source)
         # Bundle both products into a single checkpoint payload.
         return {"final_stories_by_cat": final_stories, "final_variants_by_cat": final_variants}
 
