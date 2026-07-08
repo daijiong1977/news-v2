@@ -368,7 +368,10 @@
       }
       return ensureSupabase().then(function (sb) {
         if (!sb) throw new Error('Cloud sync not available.');
-        return sb.rpc('issue_magic_link', { p_email: to }).then(function (res) {
+        // Pass THIS device's client_id so the email binds to the device that
+        // holds the reading history — not whatever device taps the link (often
+        // an empty phone). See docs/bugs/2026-07-08-magic-link-binds-clicking-device.md
+        return sb.rpc('issue_magic_link', { p_email: to, p_client_id: clientId() || null }).then(function (res) {
           if (res && res.error) throw new Error(res.error.message);
           var token = res && res.data;
           if (!token) throw new Error('No token returned.');
