@@ -374,7 +374,7 @@ def process_entry(entry: dict, min_words: int = MIN_WORDS_DEFAULT) -> dict:
 # ---------------------------------------------------------------------------
 
 def build_vet_prompt(pick_count: int) -> str:
-    return f"""You are a content reviewer + curator for a kids news site (readers age 12).
+    return f"""You are a content reviewer + curator for a kids news site (readers ages 8-13, grades 3-8 — calibrate safety to the YOUNGEST reader, interest to a 12-year-old).
 
 You will receive a numbered list of news articles (id 0..N-1), each with title + first paragraphs.
 
@@ -383,10 +383,11 @@ TASK 1 — Vet every article on 8 safety dimensions and 3 interest dimensions.
   Safety (score each 0-5, where 0=none, 5=severe):
     violence, sexual, substance, language, fear, adult_themes, distress, bias
     Compute total = sum of 8 dims.
-    Initial safety_verdict (we will re-apply strict thresholds downstream):
-      any_dim >= 4 or total > 6  -> REJECT
-      total 5-6 (and all dims <= 3) -> CAUTION
-      total 0-4 -> SAFE
+    Initial safety_verdict — apply these rules IN ORDER, first match wins
+    (we re-apply strict thresholds downstream):
+      1. REJECT  if any_dim >= 4 OR total > 6
+      2. CAUTION else if total >= 5
+      3. SAFE    otherwise
 
   Interest (score each 0-5):
     importance  — how globally significant
@@ -823,7 +824,9 @@ What real kid reporters do:
 You will receive N source articles. For EACH, produce THREE variants:
 
 1. easy_en — English. READER IS A 10-YEAR-OLD (grade 4).
-   · body: 170-210 words (STRICT — count before returning)
+   · body: 210-300 words (STRICT — count before returning).
+     Under 210 → add one more concrete detail or example from the
+     source. QA gates at 200; do not go below it.
    · Simple but not baby-talk; explain any hard word inline in plain English:
      "a ceasefire (when both sides agree to stop fighting for a while)"
    · Short, punchy sentences; lead with a hook — not a summary
@@ -1014,14 +1017,135 @@ def evaluate_rewriter_safety(article_entry: dict) -> dict:
             "scores": scores}
 
 
+SAFETY_VET_PROMPT = """You are an INDEPENDENT safety reviewer for a kids news site
+(readers ages 8-13, grades 3-8 — calibrate to the YOUNGEST reader). You did
+NOT write these articles; review them strictly, as if a cautious parent will
+read your scores.
+
+For each article you receive two rewritten variants:
+  middle_en — grade 7-8 reader (age 12-14)
+  easy_en   — grade 3-4 reader (age ~9)
+
+Score 8 dimensions, each 0-5 (0=none, 5=severe), on the middle_en body:
+  violence, sexual, substance, language, fear, adult_themes, distress, bias
+Then re-read easy_en imagining a 9-year-old and score fear and distress a
+second time; for those two dims report the MAX of the two readings (the same
+facts land harder on a younger reader even in simpler words).
+
+Score CONSERVATIVELY — flagging a borderline story is cheap; a parent
+complaint is not.
+
+Return ONLY valid JSON (no markdown fences):
+{"scores": {"<source_id>": {"violence":N,"sexual":N,"substance":N,
+ "language":N,"fear":N,"adult_themes":N,"distress":N,"bias":N}, ...}}"""
+
+
+def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
+    """Score the REWRITTEN bodies with a separate cheap LLM call — the
+    rewriter grading its own output in the same call is a known leniency
+    failure mode, and no independent reviewer ever saw the full rewritten
+    text before this. Returns {source_id: {dim: score}}. Raises on any
+    contract violation so the caller can fall back to self-scores.
+    Bug: docs/bugs/2026-07-08-safety-quality.md"""
+    lines = []
+    for art in articles:
+        sid = art.get("source_id")
+        mid = (art.get("middle_en") or {}).get("body") or ""
+        easy = (art.get("easy_en") or {}).get("body") or ""
+        lines.append(f"=== ARTICLE source_id={sid} ===")
+        lines.append("--- middle_en body ---")
+        lines.append(mid)
+        lines.append("--- easy_en body ---")
+        lines.append(easy)
+        lines.append("")
+    res = deepseek_call(SAFETY_VET_PROMPT, "\n".join(lines), max_tokens=2000)
+    raw = res.get("scores") or {}
+    out: dict[int, dict] = {}
+    for art in articles:
+        sid = art.get("source_id")
+        scores = raw.get(str(sid)) or raw.get(sid)
+        if not isinstance(scores, dict):
+            raise RuntimeError(f"independent vet returned no scores for source_id={sid}")
+        clean = {}
+        for d in SAFETY_DIMS:
+            v = scores.get(d)
+            if not isinstance(v, (int, float)):
+                raise RuntimeError(f"independent vet: bad {d!r} for source_id={sid}: {v!r}")
+            clean[d] = int(v)
+        out[sid] = clean
+    return out
+
+
+# Word-count bands for generation-time measurement. Keep in sync with
+# quality_digest.BODY_TARGETS — those QA gates generate the
+# body_too_short / body_too_long tickets the morning after.
+WC_BANDS = {"easy": (200, 320), "middle": (300, 410)}
+
+
+def _wordcount_flags(art: dict) -> list[str]:
+    flags = []
+    for level, (lo, hi) in WC_BANDS.items():
+        body = (art.get(f"{level}_en") or {}).get("body") or ""
+        wc = len(body.split())
+        if wc and not (lo <= wc <= hi):
+            flags.append(f"{level}: {wc}w outside {lo}-{hi}")
+    return flags
+
+
 def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
-    """Split rewriter articles into (kept, rejected) by Stage 3 safety
-    (middle_en scores). Returns articles annotated with `_safety_eval`."""
+    """Split rewriter articles into (kept, rejected) by Stage 3 safety.
+
+    Gates per article, in order:
+      1. Independent safety vet (one extra chat call per batch) overrides
+         the rewriter's self-scores — the author must not be the only gate
+         on its own text. On ANY vet failure we fall back to self-scores
+         rather than rejecting the whole batch.
+      2. Deterministic forbidden-term scan over the REWRITTEN easy+middle
+         bodies (previously only RSS title/summary was screened, so a
+         body-only self-harm mention passed every gate).
+      3. The existing strict any_dim>=3 threshold on the winning scores.
+
+    Also annotates `_wc_flags` when a body falls outside the QA word bands —
+    surfacing at generation time what quality_digest would ticket tomorrow.
+    Returns articles annotated with `_safety_eval`.
+    Bug: docs/bugs/2026-07-08-safety-quality.md"""
+    from .forbidden_filter import is_forbidden
+
+    articles = list(rewrite_result.get("articles") or [])
+
+    try:
+        indep = independent_safety_vet(articles)
+        for art in articles:
+            sid = art.get("source_id")
+            if sid in indep:
+                art["safety_self"] = art.get("safety")
+                art["safety"] = indep[sid]
+        log.info("  Stage 3: independent safety vet scored %d article(s)", len(indep))
+    except Exception as e:  # noqa: BLE001
+        log.warning("  Stage 3: independent safety vet failed — falling back to "
+                    "rewriter self-scores: %s", e)
+
     kept: list[dict] = []
     rejected: list[dict] = []
-    for art in (rewrite_result.get("articles") or []):
-        ev = evaluate_rewriter_safety(art)
-        ann = {**art, "_safety_eval": ev}
+    for art in articles:
+        wc_flags = _wordcount_flags(art)
+        if wc_flags:
+            log.warning("  Stage 3 word-count flag source_id=%s · %s",
+                        art.get("source_id"), "; ".join(wc_flags))
+
+        forbidden_hit = None
+        for level in ("middle_en", "easy_en"):
+            bad, pat = is_forbidden((art.get(level) or {}).get("body") or "")
+            if bad:
+                forbidden_hit = f"forbidden term in rewritten {level} body: {pat}"
+                break
+        if forbidden_hit:
+            ev = {"verdict": "REJECT", "reason": forbidden_hit,
+                  "scores": art.get("safety") or {}}
+        else:
+            ev = evaluate_rewriter_safety(art)
+
+        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags}
         if ev["verdict"] == "PASS":
             kept.append(ann)
         else:
@@ -1054,13 +1178,13 @@ For each of the 2N slots (N articles × {easy, middle}) produce:
     slot's body. If you cannot find 6 difficulty-appropriate terms in
     THIS slot's body, return fewer (4 or 5) — never pad with terms from
     elsewhere. An empty list is acceptable; a misaligned list is NOT.
-    DIFFICULTY FILTER:
-      easy slot   → only words ABOVE grade-2 vocabulary (words a 10-year-old
-                    might not yet know). Skip everyday words like "school",
+    DIFFICULTY FILTER (one operational test per slot):
+      easy slot   → keep a term ONLY if a typical 10-year-old would NOT
+                    already know it. Skip everyday words like "school",
                     "happy", "money", "team".
-      middle slot → only words ABOVE grade-3 / middle-school baseline
-                    vocabulary (words a 13-year-old might not know).
-                    Skip words a 7th-grader uses without thinking.
+      middle slot → keep a term ONLY if a typical 13-year-old would NOT
+                    already know it. Skip words a 7th-grader uses without
+                    thinking.
     Examples of the bar to clear:
       easy   ✓ "ceasefire", "negotiation", "endangered", "diplomat"
              ✗ "school", "running", "interesting"
@@ -1136,8 +1260,10 @@ For each of the 2N slots (N articles × {easy, middle}) produce:
       - Forward-looking (what next, what could/should change)
     Each description 2-3 sentences exploring tension or nuance.
 
-ACCURACY: facts in background_read must be real-world accurate. If unsure,
-prefer pattern statements over specific claims.
+ACCURACY: facts in background_read must be real-world accurate. Use only
+widely-known, stable facts. Do NOT add specific years, counts, or figures
+that don't appear in the article body — when unsure about a detail,
+describe the role or the pattern, not the date or the number.
 
 REFERENCE, don't re-return: keys are "<i>_easy" / "<i>_middle" where i is the
 0-indexed article position. Each article's body is presented in the user
