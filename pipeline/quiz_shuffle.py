@@ -39,13 +39,24 @@ def _perm_seed(slot_key: str, q_index: int, question_text: str, seed) -> int:
     return int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:16], 16)
 
 
+def _normalize_answer(s) -> str:
+    """Casefold + collapse whitespace + strip trailing period, for matching a
+    near-miss correct_answer against its options."""
+    return " ".join(str(s or "").split()).casefold().rstrip(".")
+
+
 def shuffle_quiz_options(details: dict, *, seed=None) -> dict:
     """Shuffle ``options`` for every quiz question in ``details`` in place.
 
     ``details`` maps slot keys (e.g. ``"0_easy"``) to dicts that may carry a
-    ``"questions"`` list. Questions whose ``correct_answer`` does not match an
-    option, or that have fewer than two options, are left untouched (a
-    malformed question is a data bug, not something to silently reorder).
+    ``"questions"`` list.
+
+    When ``correct_answer`` doesn't match an option verbatim, we try a
+    normalized match (casefold / whitespace / trailing period). A unique
+    fuzzy match rewrites ``correct_answer`` to the option's exact text; no
+    match (or an ambiguous one) DROPS the question — an unanswerable MCQ
+    must never ship (the frontend silently maps it to option A).
+    Bug follow-up: docs/bugs/2026-07-08-p1-reliability.md
 
     Returns the same ``details`` object for convenience.
     """
@@ -58,20 +69,32 @@ def shuffle_quiz_options(details: dict, *, seed=None) -> dict:
         questions = det.get("questions")
         if not isinstance(questions, list):
             continue
+        kept: list = []
         for i, q in enumerate(questions):
             if not isinstance(q, dict):
+                kept.append(q)
                 continue
             opts = q.get("options")
             correct = q.get("correct_answer")
             if not isinstance(opts, list) or len(opts) < _MIN_OPTIONS:
+                kept.append(q)
                 continue
             if correct not in opts:
-                log.warning(
-                    "[%s] q%d: correct_answer not among options — left unshuffled",
-                    slot_key, i,
-                )
-                continue
+                want = _normalize_answer(correct)
+                matches = [o for o in opts if _normalize_answer(o) == want]
+                if len(matches) == 1:
+                    log.info("[%s] q%d: correct_answer fuzzy-matched to option %r",
+                             slot_key, i, str(matches[0])[:50])
+                    q["correct_answer"] = matches[0]
+                else:
+                    log.warning(
+                        "[%s] q%d: correct_answer matches no option — question dropped",
+                        slot_key, i,
+                    )
+                    continue  # unanswerable — do not ship
             rng = random.Random(_perm_seed(slot_key, i, str(q.get("question", "")), seed))
             rng.shuffle(opts)  # in place; correct_answer string still matches an option
+            kept.append(q)
+        det["questions"] = kept
 
     return details

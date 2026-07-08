@@ -212,6 +212,32 @@ def _from_sitemap(
 
 # ── HTML listing page ──────────────────────────────────────────────
 
+def _derive_title(el, anchor, url: str, title_selector: str | None) -> str:
+    """Best-effort title for one html_list item. Image-only card links
+    (<a><img/></a>, e.g. DOGOnews) have no anchor text, which shipped
+    empty-title briefs the curator ranks last — fall back to the image's
+    alt text, then aria-label, then a humanized URL slug."""
+    title = ""
+    if title_selector:
+        t_el = el.select_one(title_selector) or anchor
+        title = t_el.get_text(" ", strip=True)
+    else:
+        title = anchor.get_text(" ", strip=True) or anchor.get("title", "")
+    if not title:
+        img = anchor.find("img") if hasattr(anchor, "find") else None
+        if img is not None:
+            title = (img.get("alt") or "").strip()
+    if not title:
+        title = (anchor.get("aria-label") or el.get("aria-label") or "").strip()
+    if not title:
+        slug = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+        slug = re.sub(r"\.[a-z0-9]+$", "", slug, flags=re.I)
+        if slug and not slug.isdigit():
+            title = re.sub(r"[-_]+", " ", slug).strip()
+            title = title[:1].upper() + title[1:]
+    return re.sub(r"\s+", " ", title).strip()[:200]
+
+
 def _from_html_list(
     list_url: str,
     article_selector: str,
@@ -244,14 +270,7 @@ def _from_html_list(
         if urlparse(url).netloc and urlparse(url).netloc != urlparse(final_url).netloc:
             continue
 
-        # Title extraction
-        title = ""
-        if title_selector:
-            t_el = el.select_one(title_selector) or anchor
-            title = t_el.get_text(" ", strip=True)
-        else:
-            title = anchor.get_text(" ", strip=True) or anchor.get("title", "")
-        title = re.sub(r"\s+", " ", title).strip()[:200]
+        title = _derive_title(el, anchor, url, title_selector)
 
         seen.add(url)
         items.append({"url": url, "title": title, "description": ""})

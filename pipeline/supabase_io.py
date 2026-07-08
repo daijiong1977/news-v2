@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -49,15 +50,24 @@ def upload_image(local_path: Path, remote_name: str) -> str | None:
         return None
 
 
-def insert_run(row: dict[str, Any]) -> str | None:
-    """Insert a redesign_runs row, return generated id."""
-    try:
-        sb = client()
-        res = sb.table("redesign_runs").insert(row).execute()
-        return res.data[0]["id"] if res.data else None
-    except Exception as e:
-        log.error("insert_run failed: %s", e)
-        return None
+def insert_run(row: dict[str, Any], attempts: int = 3) -> str | None:
+    """Insert a redesign_runs row, return generated id.
+
+    Retries transient failures: a None here silently disables ALL DB
+    persistence for the day (persist is gated `if run_id:`) while the site
+    still deploys — so one startup blip used to cost a whole day of
+    stories/telemetry. Bug: docs/bugs/2026-07-08-p1-reliability.md"""
+    for i in range(attempts):
+        try:
+            sb = client()
+            res = sb.table("redesign_runs").insert(row).execute()
+            return res.data[0]["id"] if res.data else None
+        except Exception as e:
+            log.error("insert_run attempt %d/%d failed: %s", i + 1, attempts, e)
+            if i + 1 < attempts:
+                time.sleep(2 * (i + 1))
+    log.error("insert_run gave up after %d attempts — run will not persist!", attempts)
+    return None
 
 
 def update_run(run_id: str, fields: dict[str, Any]) -> bool:

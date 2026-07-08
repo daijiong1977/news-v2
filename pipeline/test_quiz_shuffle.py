@@ -58,14 +58,16 @@ def test_deterministic_across_runs():
     assert seq1 == seq2   # same input -> same output (no reshuffle churn on re-runs)
 
 
-def test_malformed_questions_left_untouched():
-    # correct_answer not among options -> leave order alone, do not crash
+def test_malformed_questions_dropped_not_shipped():
+    # correct_answer matches no option (even fuzzily) -> question is DROPPED
+    # (2026-07-08 behavior change: an unanswerable MCQ must never ship; the
+    # frontend silently mapped unmatched answers to option A).
     q_bad = {"question": "x", "options": ["a", "b", "c", "d"], "correct_answer": "zzz"}
     d = {"0_easy": {"questions": [q_bad]}}
     shuffle_quiz_options(d)
-    assert d["0_easy"]["questions"][0]["options"] == ["a", "b", "c", "d"]
+    assert d["0_easy"]["questions"] == []
 
-    # fewer than 2 options -> nothing to shuffle
+    # fewer than 2 options -> nothing to shuffle, question kept as-is
     q_thin = {"question": "y", "options": ["a"], "correct_answer": "a"}
     d2 = {"0_easy": {"questions": [q_thin]}}
     shuffle_quiz_options(d2)
