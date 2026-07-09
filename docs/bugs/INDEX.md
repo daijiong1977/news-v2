@@ -64,3 +64,4 @@ you must not break.
   tells you *where reality diverged and what saved us*.
 | 2026-07-08 | [probe-cap-starves-low-priority-sources](2026-07-08-probe-cap-starves-low-priority-sources.md) | pipeline | BBC got 0 probe slots: Stage-1.5 cap ate briefs in source-priority order; fix = round-robin interleave + per-source funnel telemetry | fixed |
 | 2026-07-08 | [thin-category-sinks-whole-publish](2026-07-08-thin-category-sinks-whole-publish.md) | pipeline | 1 thin category aborted the whole publish + backfill only saw curator's 5 ranks; fix = probe-brief deep spares + per-category degraded publish via merge mode | fixed |
+| 2026-07-08 | [news-subject-cap](2026-07-08-news-subject-cap.md) | pipeline | 3 Trump stories shipped: cluster_id groups by story not person; fix = curator `subject` tag + deterministic ≤1-subject cap on News top 3 | fixed |
