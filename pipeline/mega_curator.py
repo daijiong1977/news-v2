@@ -43,12 +43,24 @@ ALGORITHM (internal, don't output intermediate work):
 
   2. CLUSTER: group candidates covering the same real-world story into
      topic clusters. Pick AT MOST ONE candidate per cluster across all
-     3 categories combined.
+     3 categories combined. Also tag each pick with a `subject` — the
+     ONE dominant named person or organization the story centers on
+     (e.g. "Donald Trump", "NASA", "Taylor Swift"), or "" if no single
+     person/org dominates. `subject` is COARSER than cluster_id: three
+     different Trump stories (a summit, an election ruling, a tariff)
+     share subject "Donald Trump" even though their cluster_ids differ.
 
   3. PICK 5 PER CAT, RANKED:
      - Prefer high interest_peak (max of importance / fun / kid_appeal)
        AND low safety_total.
      - Prefer DIFFERENT topic clusters within a cat.
+     - HARD RULE — subject diversity in NEWS top 3: ranks 1, 2, 3 of
+       the News category MUST each have a DIFFERENT `subject` (a
+       non-empty subject may appear only ONCE in the News top 3). Do
+       NOT ship three stories about the same person — e.g. three Trump
+       stories. Keep the single strongest one and fill the other News
+       ranks with different-subject stories. Only repeat a subject if
+       News genuinely has no other qualifying story.
      - HARD RULE — source diversity in top 3: ranks 1, 2, 3 of each
        category MUST come from THREE DIFFERENT sources (different
        `src=` value). Only break this rule if the category has fewer
@@ -68,7 +80,7 @@ has the vet signal. Use SHORT integer scores, no totals/peaks, no prose.
 {
   "picks": {
     "News": [
-      {"rank":1,"id":N,"cluster_id":"<short>",
+      {"rank":1,"id":N,"cluster_id":"<short>","subject":"<person/org or empty>",
        "safety":{"violence":N,"sexual":N,"substance":N,"language":N,
                  "fear":N,"adult_themes":N,"distress":N,"bias":N},
        "interest":{"importance":N,"fun_factor":N,"kid_appeal":N}},
@@ -183,6 +195,7 @@ def mega_curate(
                 "safety": p.get("safety") or {},
                 "interest": p.get("interest") or {},
                 "cluster_id": p.get("cluster_id") or "",
+                "subject": (p.get("subject") or "").strip(),
             }
             vet[cid] = pick_vet
             out[cat].append({
@@ -194,11 +207,87 @@ def mega_curate(
             })
 
     out = _enforce_top3_source_diversity(out)
+    # Subject cap runs AFTER source diversity and prefers a spare that
+    # keeps 3 distinct sources, so it doesn't undo the source pass.
+    out = _enforce_top3_subject_diversity(out)
 
     for cat, picks in out.items():
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),
                  ", ".join(f"rank{p['rank']}={p['source'].name}" for p in picks[:6]))
     return out, vet, reasoning
+
+
+def _enforce_top3_subject_diversity(
+    ranked_by_cat: dict[str, list[dict]],
+    cap_categories: tuple[str, ...] = ("News",),
+) -> dict[str, list[dict]]:
+    """Enforce: within the capped categories' top 3, a non-empty
+    `subject` (dominant person/org) appears at most ONCE — so News never
+    ships three stories about the same person (owner ask 2026-07-08:
+    "all 3 news were Trump"). Deterministic backstop for the prompt HARD
+    RULE, mirroring _enforce_top3_source_diversity.
+
+    Strategy per capped category: if a subject repeats in ranks 1-3, swap
+    the WORST-rank duplicate for a rank-4/5 spare with a DIFFERENT
+    subject — preferring a spare that also keeps 3 distinct sources, then
+    falling back to any different-subject spare (subject cap wins over
+    source diversity when they conflict). Empty subject never collides.
+    Degrades cleanly (leaves picks intact + warns) when the pool has no
+    other subject to offer; deep backfill / carry-over then fill from
+    other sources downstream."""
+    from collections import Counter
+
+    def _subj(p: dict) -> str:
+        return ((p.get("vet") or {}).get("subject") or "").strip()
+
+    for cat, picks in ranked_by_cat.items():
+        if cat not in cap_categories or len(picks) < 3:
+            continue
+        for _ in range(4):
+            top3 = picks[:3]
+            top3_subs = {_subj(p) for p in top3 if _subj(p)}
+            counter = Counter(_subj(p) for p in top3 if _subj(p))
+            dups = [s for s, c in counter.items() if c > 1]
+            if not dups:
+                break
+            dup_idx = max((i for i in range(3) if _subj(picks[i]) in dups),
+                          key=lambda i: picks[i]["rank"])
+
+            def _spare(keep_source: bool):
+                for j in range(3, len(picks)):
+                    if _subj(picks[j]) in top3_subs:
+                        continue                     # not a new subject
+                    if keep_source:
+                        new_srcs = [picks[i]["source"].name
+                                    for i in range(3) if i != dup_idx]
+                        new_srcs.append(picks[j]["source"].name)
+                        if len(set(new_srcs)) < 3:
+                            continue                 # would create a source dup
+                    return j
+                return None
+
+            spare_idx = _spare(keep_source=True)
+            if spare_idx is None:
+                spare_idx = _spare(keep_source=False)
+            if spare_idx is None:
+                log.warning("  [%s] subject-cap: subject %s repeats but no "
+                            "different-subject spare — top 3 stays "
+                            "(only %d distinct subjects in curator's top %d)",
+                            cat, dups,
+                            len({_subj(p) for p in picks if _subj(p)}),
+                            len(picks))
+                break
+
+            old, new = picks[dup_idx], picks[spare_idx]
+            log.info("  [%s] subject-cap swap: rank%d/%s (%s) ↔ rank%d/%s (%s)",
+                     cat, old["rank"], old["source"].name, _subj(old),
+                     new["rank"], new["source"].name, _subj(new))
+            old_rank, new_rank = old["rank"], new["rank"]
+            picks[dup_idx], picks[spare_idx] = new, old
+            picks[dup_idx]["rank"] = old_rank
+            picks[spare_idx]["rank"] = new_rank
+
+    return ranked_by_cat
 
 
 def _enforce_top3_source_diversity(
