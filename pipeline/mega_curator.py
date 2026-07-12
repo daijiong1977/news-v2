@@ -206,6 +206,9 @@ def mega_curate(
                 "vet": pick_vet,
             })
 
+    # Drop same-story duplicates FIRST (two sources carrying one wire
+    # story), then reorder survivors for source/subject diversity.
+    out = _dedupe_ranked_stories(out)
     out = _enforce_top3_source_diversity(out)
     # Subject cap runs AFTER source diversity and prefers a spare that
     # keeps 3 distinct sources, so it doesn't undo the source pass.
@@ -215,6 +218,75 @@ def mega_curate(
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),
                  ", ".join(f"rank{p['rank']}={p['source'].name}" for p in picks[:6]))
     return out, vet, reasoning
+
+
+def _story_tokens(title: str) -> set[str]:
+    """Content words (≥3 chars) of a headline, for overlap comparison."""
+    import re
+    s = re.sub(r"[^\w\s]", " ", (title or "").lower())
+    return {w for w in s.split() if len(w) >= 3}
+
+
+def titles_same_story(a: str, b: str, thresh: float = 0.7) -> bool:
+    """True when two headlines describe the same event — overlap
+    coefficient (shared words / smaller headline) ≥ thresh. Used both to
+    dedup the curator's ranked list and to guard Stage-3 spare promotion
+    (probe-pool spares carry no cluster_id, so title is the only signal)."""
+    ta, tb = _story_tokens(a), _story_tokens(b)
+    if not ta or not tb:
+        return False
+    return len(ta & tb) / min(len(ta), len(tb)) >= thresh
+
+
+def _dedupe_ranked_stories(
+    ranked_by_cat: dict[str, list[dict]],
+    subject_cap_categories: tuple[str, ...] = ("News",),
+    title_thresh: float = 0.7,
+) -> dict[str, list[dict]]:
+    """Drop same-story duplicates from each category's ranked list, then
+    re-rank survivors 1..N. Two sources routinely carry the SAME wire
+    story (e.g. the NYT Air Force One subpoena from both PBS and NPR);
+    the curator tags them with the same cluster_id but still emits both,
+    and a lower-ranked dup gets promoted into the shipped 3 when a top
+    pick is dropped downstream (live bug 2026-07-11).
+
+    A pick is dropped if, versus a better-ranked survivor: cluster_id
+    matches, OR title is near-identical (titles_same_story), OR — for the
+    capped categories (News) — its non-empty subject repeats. This is the
+    deterministic backstop for the prompt's soft cluster/subject rules;
+    deep backfill / carry-over refill the freed slots with different
+    stories."""
+    for cat, picks in ranked_by_cat.items():
+        seen_clusters: set[str] = set()
+        seen_subjects: set[str] = set()
+        kept_titles: list[str] = []
+        kept: list[dict] = []
+        for p in sorted(picks, key=lambda x: int(x.get("rank") or 99)):
+            vet = p.get("vet") or {}
+            cl = (vet.get("cluster_id") or "").strip().lower()
+            subj = (vet.get("subject") or "").strip().lower()
+            title = ((p.get("brief") or {}).get("title") or "")
+            why = None
+            if cl and cl in seen_clusters:
+                why = f"cluster={cl}"
+            elif cat in subject_cap_categories and subj and subj in seen_subjects:
+                why = f"subject={subj}"
+            elif any(titles_same_story(title, t, title_thresh) for t in kept_titles):
+                why = "title~dup"
+            if why:
+                log.info("  [%s] story-dedup drop rank%s (%s): %s",
+                         cat, p.get("rank"), why, title[:60])
+                continue
+            if cl:
+                seen_clusters.add(cl)
+            if subj:
+                seen_subjects.add(subj)
+            kept_titles.append(title)
+            kept.append(p)
+        for i, p in enumerate(kept, start=1):
+            p["rank"] = i
+        ranked_by_cat[cat] = kept
+    return ranked_by_cat
 
 
 def _enforce_top3_subject_diversity(
