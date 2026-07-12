@@ -888,6 +888,47 @@ def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict]) -> list[dict]
     return out
 
 
+def _deep_dig_spares(cat: str, sources, exclude_links: set,
+                     max_per_source: int = 15) -> list[dict]:
+    """Reactive deep backfill (2026-07-11): when a category is short after
+    promoting the shallow probe spares, dig DEEPER into the same day's
+    sources — phase_a only fetched 4/source, so items 5..max_per_source
+    of each feed were never seen. Fetch them, drop already-considered
+    links, interleave across sources, and wrap each as an unverified
+    Stage-3 spare. Each still passes body/image verify + safety vet +
+    title-dedup in promote_spare_and_rewrite — this only widens the
+    candidate net with fresh same-day stories; it does not lower gates.
+    Runs BEFORE the pack-time carry-over from yesterday's bundle."""
+    from .news_rss_core import fetch_source_entries
+    seen = set(exclude_links or ())
+    briefs: list[dict] = []
+    for source in sources:
+        try:
+            entries = fetch_source_entries(source, max_entries=max_per_source)
+        except Exception as e:  # noqa: BLE001
+            log.warning("  [%s] deep-dig fetch failed for %s: %s",
+                        cat, getattr(source, "name", "?"), e)
+            continue
+        for entry in entries:
+            link = entry.get("link") or ""
+            if not link or link in seen:
+                continue
+            seen.add(link)
+            briefs.append({
+                "title": entry.get("title") or "",
+                "summary": entry.get("summary") or "",
+                "link": link,
+                "published": entry.get("published") or "",
+                "_source_name": source.name,
+                "_source": source,
+                "_category": cat,
+            })
+    briefs = _interleave_by_source(briefs)
+    return [{"_unverified_spare": True, "source": b["_source"],
+             "_winner_brief": b, "_rank": f"dig+{i}", "_curator_id": None}
+            for i, b in enumerate(briefs, start=1)]
+
+
 def _split_publishable(final_stories_by_cat: dict,
                        min_per_cat: int = 2) -> tuple[list[str], list[str]]:
     """Partition categories into (fresh_ok, too_thin) for the pack step.
@@ -1905,30 +1946,52 @@ def main_mega() -> None:
             spare_pool = [s for s in stories_by_cat.get(cat, [])
                           if s.get("_unverified_spare")]
             promotions = 0
-            while len(survived_winners) < 3 and spare_pool:
+
+            def _drain(pool):
                 # Diversity-aware spare promotion: prefer a source NOT
-                # already in the surviving top 3. Falls back to any
-                # remaining spare if all new-source candidates fail
-                # verify/vet.
-                used_names = {
-                    w["source"].name for w in survived_winners
-                    if w.get("source")
-                }
-                used_titles = {
-                    (w.get("winner") or {}).get("title") or ""
-                    for w in survived_winners
-                }
-                promoted_winner, promoted_article = promote_spare_and_rewrite(
-                    cat, spare_pool, used_source_names=used_names,
-                    used_titles=used_titles,
-                )
-                if not promoted_winner:
-                    break
-                survived_winners.append(promoted_winner)
-                survived_articles.append(promoted_article)
-                promotions += 1
-                if promotions >= 3:
-                    break
+                # already in the surviving top 3, and skip any spare that
+                # is the same story as one already shipping. Falls back to
+                # a duplicate source only when nothing else survives.
+                nonlocal promotions
+                while len(survived_winners) < 3 and pool:
+                    used_names = {w["source"].name for w in survived_winners
+                                  if w.get("source")}
+                    used_titles = {(w.get("winner") or {}).get("title") or ""
+                                   for w in survived_winners}
+                    pw, pa = promote_spare_and_rewrite(
+                        cat, pool, used_source_names=used_names,
+                        used_titles=used_titles)
+                    if not pw:
+                        break
+                    survived_winners.append(pw)
+                    survived_articles.append(pa)
+                    promotions += 1
+
+            _drain(spare_pool)
+
+            # Still short? Dig DEEPER into today's same sources (items
+            # 5..15 of each feed) BEFORE falling back to yesterday's
+            # carry-over at pack time. Fresh same-day content is preferred.
+            dug = 0
+            if len(survived_winners) < 3 and picked_sources_by_cat.get(cat):
+                seen_links: set[str] = set()
+                for r in (ranked_by_cat.get(cat) or []):
+                    seen_links.add(((r.get("brief") or {}).get("link")) or "")
+                for s in stories_by_cat.get(cat, []):
+                    b = s.get("_winner_brief") or s.get("_brief") or {}
+                    seen_links.add((b.get("link")) or "")
+                    seen_links.add(((s.get("winner") or {}).get("link")) or "")
+                for w in survived_winners:
+                    seen_links.add(((w.get("winner") or {}).get("link")) or "")
+                dig_pool = _deep_dig_spares(cat, picked_sources_by_cat[cat],
+                                            seen_links, max_per_source=15)
+                if dig_pool:
+                    before = len(survived_winners)
+                    log.info("  [%s] short (%d/3) after spares — deep-digging "
+                             "%d more feed items", cat, before, len(dig_pool))
+                    _drain(dig_pool)
+                    dug = len(survived_winners) - before
+
             final_stories[cat] = survived_winners[:3]
             final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
             for w in final_stories[cat]:
@@ -1936,12 +1999,14 @@ def main_mega() -> None:
                 cs.setdefault(name, {"shipped": 0, "safety_rejected": 0})["shipped"] += 1
             if promotions:
                 telemetry["warnings"].append(
-                    f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot")
+                    f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot"
+                    + (f" ({dug} via deep-dig into today's feeds)" if dug else ""))
             if len(survived_winners) < 3:
                 telemetry["warnings"].append(
-                    f"{cat}: only {len(survived_winners)} stories shipped after Stage 3")
-            log.info("  [%s] final: %d stories (%d rejected, %d promoted)",
-                     cat, len(survived_winners), len(rejected), promotions)
+                    f"{cat}: only {len(survived_winners)} stories shipped after Stage 3"
+                    " (deep-dig exhausted; pack will carry over from yesterday)")
+            log.info("  [%s] final: %d stories (%d rejected, %d promoted, %d deep-dug)",
+                     cat, len(survived_winners), len(rejected), promotions, dug)
         _set_phase("stage3_safety", t0, per_source=s3_per_source)
         # Bundle both products into a single checkpoint payload.
         return {"final_stories_by_cat": final_stories, "final_variants_by_cat": final_variants}
