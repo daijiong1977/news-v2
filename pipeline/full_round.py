@@ -905,6 +905,7 @@ def promote_spare_and_rewrite(
     cat: str,
     spares: list[dict],
     used_source_names: set[str] | None = None,
+    used_titles: set[str] | None = None,
 ) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
@@ -916,15 +917,27 @@ def promote_spare_and_rewrite(
     back to spares whose source repeats. This preserves source
     diversity through Stage 3 promotion while still letting the bundle
     fill its 3 slots when alternatives are exhausted.
+
+    `used_titles` are the headlines already shipping — a probe-pool spare
+    (no cluster_id) whose title matches one is the same wire story from a
+    third source and is skipped, so promotion can't reintroduce the dup
+    that _dedupe_ranked_stories just removed upstream.
     """
     from .news_rss_core import _fetch_and_enrich, verify_article_content
+    from .mega_curator import titles_same_story
 
     used = set(used_source_names or ())
+    shipped_titles = list(used_titles or ())
 
     def _try_one(spare: dict):
         if not spare.get("_unverified_spare"):
             return None, None
         brief = spare.get("_winner_brief") or {}
+        spare_title = (brief.get("title") or "") if isinstance(brief, dict) else ""
+        if any(titles_same_story(spare_title, t) for t in shipped_titles):
+            log.info("  [%s] spare rank %s skipped — same story as a shipped "
+                     "pick: %s", cat, spare.get("_rank"), spare_title[:60])
+            return None, None
         cached = brief.get("_probe_art") if isinstance(brief, dict) else None
         art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
         ok, _ = verify_article_content(art)
@@ -1901,8 +1914,13 @@ def main_mega() -> None:
                     w["source"].name for w in survived_winners
                     if w.get("source")
                 }
+                used_titles = {
+                    (w.get("winner") or {}).get("title") or ""
+                    for w in survived_winners
+                }
                 promoted_winner, promoted_article = promote_spare_and_rewrite(
                     cat, spare_pool, used_source_names=used_names,
+                    used_titles=used_titles,
                 )
                 if not promoted_winner:
                     break
