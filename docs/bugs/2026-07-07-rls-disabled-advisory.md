@@ -2,7 +2,7 @@
 
 **Severity:** high (security)
 **Area:** infra (Supabase RLS)
-**Status:** partially fixed (6/9 done; 3 admin tables have a proposed policy)
+**Status:** FIXED 2026-07-31 (9/9 — Phase 2 applied with an admins-only policy)
 **Keywords:** rls, row-level-security, anon-key, engine_config, redesign_search_index, security, supabase, admin-policy
 
 ## Symptom
@@ -35,10 +35,34 @@ engine_source_candidates, redesign_source_candidates, redesign_search_index`.
   search is unaffected. **Verified:** `GET /functions/v1/archive-search?q=science`
   → HTTP 200, 3 hits, after the migration.
 
-**Phase 2 — proposed, NOT yet applied:** `engine_config, engine_source_reports,
-engine_mining_runs` are read (and, for `engine_config`, likely written) by
-`website/admin.html`, which runs as an authenticated Google-SSO session. They
-need an admins-only policy before RLS is turned on, or the admin panel breaks:
+**Phase 2 — APPLIED 2026-07-31** (`supabase/migrations/20260731_enable_rls_admin_tables.sql`):
+`engine_config, engine_source_reports, engine_mining_runs` are read (and, for
+`engine_config`, written) by `website/admin.html`, which runs as an authenticated
+Google-SSO session. Each got an admins-only `FOR ALL TO authenticated` policy,
+then RLS was enabled.
+
+- Shipped policy uses **`public._is_admin()`** rather than the inline subquery
+  sketched below. `_is_admin()` is STABLE SECURITY DEFINER with a pinned
+  `search_path`, so it reads `redesign_admin_users` without re-entering that
+  table's own RLS; the inline subquery would run under the caller's policies
+  (slower, and a recursion hazard).
+- Precondition re-verified before applying: `App()` in admin.html returns
+  `<SignInPanel/>` when `!session` and an access-denied screen when
+  `!bootState.allowed`, so every `engine_*` read happens post-sign-in — there is
+  no pre-auth read to black out. Bootstrap mode is inactive
+  (`redesign_admin_users` has 1 row).
+- Confirmed the hole was real before closing it: with the publishable key, all 3
+  tables returned rows, and an anon INSERT into `engine_config` **succeeded** in
+  principle (writes were unrestricted). After the migration: reads return `[]`
+  and the same INSERT is rejected with `42501 new row violates row-level
+  security policy`.
+- Pinning test now passes: all 9 tables `relrowsecurity = true`, and the
+  `rls_disabled` advisor returns **0 findings**.
+- ⚠️ Still to do by a human: load the admin panel signed in as an allowlisted
+  admin and confirm the Config, Reports and Mining tabs still populate. This
+  could not be verified programmatically (it needs a real Google SSO session).
+
+Original proposed sketch, kept for the record:
 
 ```sql
 -- Repeat for engine_config, engine_source_reports, engine_mining_runs:
