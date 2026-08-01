@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>21mins · Brand Handoff Preview</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon-21mins.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="tokens.css" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 64px 48px;
+      background: var(--twentyone-cream);
+      color: var(--twentyone-ink);
+      font-family: var(--twentyone-sans);
+      font-weight: 600;
+      line-height: 1.55;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 {
+      font-family: var(--twentyone-serif);
+      font-weight: 500; font-size: 56px;
+      letter-spacing: -0.025em; margin: 0 0 8px;
+      font-variation-settings: '"opsz" 144';
+    }
+    h2 {
+      font-family: var(--twentyone-sans);
+      font-weight: 800; font-size: 11px;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--twentyone-muted);
+      margin: 48px 0 16px;
+    }
+    .lede {
+      font-family: var(--twentyone-serif);
+      font-weight: 600; font-style: italic;
+      font-size: 20px; color: var(--twentyone-muted);
+      margin: 0 0 12px;
+    }
+    .grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+    }
+    .card {
+      background: var(--twentyone-paper);
+      border: 1.5px solid var(--twentyone-border);
+      border-radius: var(--twentyone-r-lg);
+      padding: 32px;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 18px;
+    }
+    .card.dark { background: var(--twentyone-ink); }
+    .card img { width: 160px; height: 160px; }
+    .label {
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+      font-weight: 800; color: var(--twentyone-muted);
+    }
+    .card.dark .label { color: #b9a98a; }
+    .archive-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .archive-grid .card { padding: 18px; }
+    .archive-grid img { width: 100px; height: 100px; }
+    .meta {
+      display: grid; grid-template-columns: 200px 1fr; gap: 6px 18px;
+      font-size: 14px;
+    }
+    .meta b { font-weight: 800; }
+    code {
+      font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+      background: rgba(27,18,48,.06); padding: 2px 6px; border-radius: 4px;
+    }
+    .files {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px; line-height: 1.7;
+      background: var(--twentyone-paper);
+      border: 1.5px solid var(--twentyone-border);
+      border-radius: var(--twentyone-r-md);
+      padding: 18px 22px;
+      white-space: pre;
+    }
+    .swatch-row {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px;
+    }
+    .swatch {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .swatch .chip {
+      height: 64px; border-radius: 12px;
+      border: 1.5px solid var(--twentyone-border);
+    }
+    .swatch .name {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--twentyone-muted);
+    }
+    .swatch .hex {
+      font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="lede">Brand handoff · v1.0</p>
+    <h1>21mins</h1>
+    <p style="margin: 0; max-width: 640px; color: var(--twentyone-muted);">
+      Locked-in marks for the parent and kidsnews vertical, plus tokens, fonts, and
+      archived explorations. Everything Claude Code needs to ship the site.
+    </p>
+
+    <h2>Locked · Parent mark</h2>
+    <div class="grid">
+      <div class="card">
+        <img src="assets/21mins-mark.svg" alt="21mins mark, light">
+        <span class="label">21mins-mark.svg · light</span>
+      </div>
+      <div class="card dark">
+        <img src="assets/21mins-mark-dark.svg" alt="21mins mark, dark">
+        <span class="label">21mins-mark-dark.svg · dark</span>
+      </div>
+    </div>
+
+    <h2>Locked · Kidsnews mark</h2>
+    <div class="grid">
+      <div class="card">
+        <img src="assets/kidsnews-mark.svg" alt="kidsnews mark, light">
+        <span class="label">kidsnews-mark.svg · light</span>
+      </div>
+      <div class="card dark">
+        <img src="assets/kidsnews-mark-dark.svg" alt="kidsnews mark, dark">
+        <span class="label">kidsnews-mark-dark.svg · dark</span>
+      </div>
+    </div>
+
+    <h2>Color tokens</h2>
+    <div class="swatch-row">
+      <div class="swatch"><div class="chip" style="background:#1b1230"></div><span class="name">Ink</span><span class="hex">#1b1230</span></div>
+      <div class="swatch"><div class="chip" style="background:#fff9ef"></div><span class="name">Cream</span><span class="hex">#fff9ef</span></div>
+      <div class="swatch"><div class="chip" style="background:#fffaf0"></div><span class="name">Paper</span><span class="hex">#fffaf0</span></div>
+      <div class="swatch"><div class="chip" style="background:#ece2d0"></div><span class="name">Border</span><span class="hex">#ece2d0</span></div>
+      <div class="swatch"><div class="chip" style="background:#9a8d7a"></div><span class="name">Muted</span><span class="hex">#9a8d7a</span></div>
+      <div class="swatch"><div class="chip" style="background:#ffc83d"></div><span class="name">Gold</span><span class="hex">#ffc83d</span></div>
+      <div class="swatch"><div class="chip" style="background:#ff6b5b"></div><span class="name">Coral</span><span class="hex">#ff6b5b</span></div>
+    </div>
+
+    <h2>Slogans</h2>
+    <div class="meta">
+      <b>21mins · short</b><div>"Little Daily, Vast Magic."</div>
+      <b>21mins · long</b><div>"21 minutes. Every day. <i>The magic compounds.</i>"</div>
+      <b>kidsnews · hero</b><div>"Little Daily, Big Magic!"</div>
+    </div>
+
+    <h2>Type</h2>
+    <div class="meta">
+      <b>Display / serif</b><div>Fraunces (variable, opsz 9–144) · 500/600/700/800/900</div>
+      <b>Sans / UI</b><div>Nunito · 400/600/700/800/900</div>
+      <b>"MINS" tracking</b><div><code>letter-spacing: 0.34em</code></div>
+    </div>
+
+    <h2>Archive · earlier explorations</h2>
+    <p style="margin: 0 0 16px; color: var(--twentyone-muted); font-size: 14px;">
+      Walked away from these but kept for reference if a future vertical needs a different metaphor.
+    </p>
+    <div class="archive-grid">
+      <div class="card">
+        <img src="assets/archive/clock-arc.svg" alt="Clock arc">
+        <span class="label">Clock arc</span>
+      </div>
+      <div class="card">
+        <img src="assets/archive/loop.svg" alt="Loop">
+        <span class="label">Loop</span>
+      </div>
+      <div class="card">
+        <img src="assets/archive/sunrise.svg" alt="Sunrise">
+        <span class="label">Sunrise</span>
+      </div>
+      <div class="card">
+        <img src="assets/archive/dot-grid.svg" alt="Dot grid">
+        <span class="label">Dot grid</span>
+      </div>
+    </div>
+
+    <h2>File map</h2>
+    <div class="files">21mins-brand/
+├── README.md
+├── tokens.css
+├── tokens.json
+├── fonts.css
+├── assets/
+│   ├── 21mins-mark.svg
+│   ├── 21mins-mark-dark.svg
+│   ├── favicon-21mins.svg
+│   ├── kidsnews-mark.svg
+│   ├── kidsnews-mark-dark.svg
+│   ├── favicon-kidsnews.svg
+│   └── archive/
+│       ├── clock-arc.svg
+│       ├── loop.svg
+│       ├── sunrise.svg
+│       └── dot-grid.svg
+└── react/
+    ├── Big21.jsx
+    └── SunFace21.jsx</div>
+
+    <h2 style="margin-top: 64px;">For Claude Code</h2>
+    <p style="margin: 0 0 12px;">
+      Open <code>README.md</code> first. <code>tokens.css</code> drops into your global stylesheet;
+      <code>tokens.json</code> is the same data for build tools (Tailwind, Style Dictionary, etc.).
+      The two React components in <code>react/</code> are the canonical mark implementations —
+      use them in product. The static SVGs in <code>assets/</code> are for email, OG images,
+      print, and any non-React surface.
+    </p>
+  </div>
+</body>
+</html>

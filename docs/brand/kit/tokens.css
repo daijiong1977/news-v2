@@ -1,0 +1,38 @@
+/* 21mins brand tokens — drop-in CSS custom properties.
+   Use :root or scope to a brand container. */
+
+:root {
+  /* ── Color · core ───────────────────────────── */
+  --twentyone-ink:    #1b1230;
+  --twentyone-cream:  #fff9ef;
+  --twentyone-paper:  #fffaf0;
+  --twentyone-border: #ece2d0;
+  --twentyone-muted:  #9a8d7a;
+
+  /* ── Color · accents ────────────────────────── */
+  --twentyone-gold:   #ffc83d;  /* sun · default + kidsnews */
+  --twentyone-coral:  #ff6b5b;  /* "news" highlight        */
+
+  /* Per-vertical accent — override on a sibling root */
+  --twentyone-accent: var(--twentyone-gold);
+
+  /* ── Type ───────────────────────────────────── */
+  --twentyone-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --twentyone-sans:  'Nunito', system-ui, -apple-system, sans-serif;
+
+  /* ── Radii ──────────────────────────────────── */
+  --twentyone-r-sm: 8px;
+  --twentyone-r-md: 14px;
+  --twentyone-r-lg: 22px;
+  --twentyone-r-pill: 999px;
+
+  /* ── Shadows (offset, not blurry) ────────────── */
+  --twentyone-shadow-card:  0 2px 0 rgba(27, 18, 48, 0.08);
+  --twentyone-shadow-pop:   0 6px 0 rgba(27, 18, 48, 0.18);
+}
+
+/* Vertical color presets — opt in by adding the class to <html> or section */
+.brand-kidsnews { --twentyone-accent: #ffc83d; }
+.brand-ai       { --twentyone-accent: #5bb4ff; }
+.brand-finance  { --twentyone-accent: #7cbf5a; }
+.brand-tech     { --twentyone-accent: #a78bfa; }
