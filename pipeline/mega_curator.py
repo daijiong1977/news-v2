@@ -157,13 +157,14 @@ def mega_curate(
              len(registry), len(briefs_by_cat))
 
     # Reasoner thinking budget shares max_tokens with output. 6k truncated
-    # at 34 candidates (run 24921275967), 12k truncated at 89, and 12k
-    # also truncated today on DeepSeek V4 Pro at 27 candidates (run
-    # 24997954155) — V4 Pro produces longer chain-of-thought than the
-    # earlier provider. Bumped to 20k to give the reasoner ~14k of
-    # thinking room above the slim 6k output budget.
+    # at 34 candidates (run 24921275967), 12k truncated at 89 and again
+    # at 27 on V4 Pro (run 24997954155), 20k truncated at 30 on V4 Flash
+    # (run 32878436351, 2026-08-25) — CoT length is content-dependent and
+    # keeps outgrowing incremental bumps. 64k is well under the API's
+    # accepted ceiling (131072 verified) and billing is per generated
+    # token, so the headroom is free unless actually used.
     res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
-                                  max_tokens=20000)
+                                  max_tokens=65536)
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""
 
