@@ -1527,7 +1527,7 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
             time.sleep(wait)
 
 
-def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
+def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 65536,
                            max_transport_attempts: int = 4,
                            max_content_attempts: int = 2) -> dict:
     """Call the active reasoner (thinking mode) provider.
@@ -1708,10 +1708,16 @@ def detail_enrich(rewrite_result: dict) -> dict:
             # If 20k starts truncating too, the next architectural
             # step is a true "1 slot at a time" fallback below
             # split-batch (deferred — see invariant in bug record).
+            # 2026-09-05: 20000 → 65536. V4 Flash (sole provider since
+            # 2026-08-23) spends CoT from the same max_tokens budget;
+            # 4/6 enrich calls truncated at 20k every day 08-29..09-05,
+            # leaving slots without questions/background_read and
+            # failing bundle validation. API ceiling 131072 verified;
+            # billing is per generated token so headroom is free.
             res = deepseek_reasoner_call(
                 DETAIL_ENRICH_PROMPT,
                 _detail_enrich_input_single_level(rewrite_result, level),
-                max_tokens=20000,
+                max_tokens=65536,
             )
             for k, v in (res.get("details") or {}).items():
                 details[k] = v
@@ -1891,7 +1897,7 @@ def run_source_phase_a(source, html_tag_stripper=None) -> dict | None:
     # add a per-brief fallback similar to detail_enrich's pattern.
     batch_vet = deepseek_reasoner_call(build_vet_prompt(2),
                                         vet_curator_input(briefs, 2),
-                                        max_tokens=12000)
+                                        max_tokens=65536)
 
     # Re-apply strict thresholds authoritatively
     for v in batch_vet.get("vet") or []:
