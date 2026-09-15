@@ -624,7 +624,7 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
                 log.warning("  raw[-200:] = %r", tail)
             if attempt < max_attempts:
                 time.sleep(_retry_sleep_for(last_err, attempt))
-        except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
+        except requests.RequestException as e:
             last_err = e
             CALL_STATS["chat_retries"] += 1
             wait = _retry_sleep_for(e, attempt)
@@ -1512,7 +1512,7 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
                     f"reasoner on {model}: {max_content_attempts} content attempts failed"
                 ) from last_err
             time.sleep(_retry_sleep_for(last_err, content_attempts))
-        except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
+        except requests.RequestException as e:
             transport_attempts += 1
             CALL_STATS["reasoner_transport_retries"] += 1
             last_err = e
