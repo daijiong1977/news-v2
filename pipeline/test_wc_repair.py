@@ -63,3 +63,46 @@ def test_short_easy_body_expanded(monkeypatch):
     rr = {"articles": [_art(150, 350)]}
     assert core.repair_wordcounts(rr) == 1
     assert len(rr["articles"][0]["easy_en"]["body"].split()) == 240
+
+
+# --- source-article threading (the 2026-09-15 echo-back regression) ---
+
+def test_expand_prompt_carries_source_article(monkeypatch):
+    """Too-short bodies must get the SOURCE article as raw material —
+    without it the model echoed the input back unchanged."""
+    calls = []
+
+    def fake_call(system, user, max_tokens, temperature=0.2, **kw):
+        calls.append(user)
+        return {"body": " ".join(["x"] * 350)}
+
+    monkeypatch.setattr(core, "deepseek_call", fake_call)
+    rr = {"articles": [_art(250, 254)]}          # middle too short
+    srcs = {0: {"body": "SOURCE_MATERIAL_MARKER " + " ".join(["s"] * 50)}}
+    assert core.repair_wordcounts(rr, srcs) == 1
+    assert "EXPAND" in calls[0]
+    assert "SOURCE ARTICLE" in calls[0]
+    assert "SOURCE_MATERIAL_MARKER" in calls[0]
+
+
+def test_shrink_prompt_has_no_source_section(monkeypatch):
+    calls = []
+
+    def fake_call(system, user, max_tokens, temperature=0.2, **kw):
+        calls.append(user)
+        return {"body": " ".join(["x"] * 350)}
+
+    monkeypatch.setattr(core, "deepseek_call", fake_call)
+    rr = {"articles": [_art(250, 724)]}          # middle too long
+    srcs = {0: {"body": "SOURCE_MATERIAL_MARKER"}}
+    assert core.repair_wordcounts(rr, srcs) == 1
+    assert "SHORTEN" in calls[0]
+    assert "SOURCE ARTICLE" not in calls[0]
+
+
+def test_expand_without_source_still_attempts(monkeypatch):
+    """Missing source (e.g. the spare-promotion path) must not crash."""
+    monkeypatch.setattr(core, "deepseek_call",
+                        lambda *a, **k: {"body": " ".join(["x"] * 350)})
+    rr = {"articles": [_art(250, 254)]}
+    assert core.repair_wordcounts(rr, None) == 1

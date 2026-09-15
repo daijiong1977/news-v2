@@ -985,7 +985,7 @@ def promote_spare_and_rewrite(
         if not ok:
             return None, None
         rewrite_res = tri_variant_rewrite([(0, art)], category=cat)
-        kept, _ = filter_safe_rewrites(rewrite_res)
+        kept, _ = filter_safe_rewrites(rewrite_res, {0: art})
         if not kept:
             log.warning(
                 "  [%s] spare rank %s passed body-verify but failed Stage 3 vet",
@@ -1925,7 +1925,11 @@ def main_mega() -> None:
         for cat, bundle in rewrites_by_cat.items():
             winners = bundle.get("_winners") or []
             rewrite_res = {"articles": bundle.get("articles") or []}
-            kept, rejected = filter_safe_rewrites(rewrite_res)
+            # source_id → source article, so the wc-repair pass can draw
+            # real details from the source when a body needs expanding.
+            srcs_by_id = {i: (w or {}).get("winner") or {}
+                          for i, w in enumerate(winners)}
+            kept, rejected = filter_safe_rewrites(rewrite_res, srcs_by_id)
             cs = s3_per_source.setdefault(cat, {})
             for a in rejected:
                 sid = a.get("source_id")
