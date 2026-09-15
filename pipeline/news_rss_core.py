@@ -1105,6 +1105,65 @@ def _wordcount_flags(art: dict) -> list[str]:
     return flags
 
 
+# Repair targets sit inside WC_BANDS with margin, so a repaired body
+# that drifts a few words on the second pass still lands inside the
+# QA band that _wordcount_flags / quality_digest enforce.
+WC_REPAIR_TARGETS = {"easy": (210, 300), "middle": (320, 380)}
+
+WC_REPAIR_PROMPT = """You are a precise editor for a kids news site. You get ONE article
+body that is outside its required word band. Rewrite it to fit the band
+EXACTLY — count words before returning. Keep the same facts, names,
+numbers, and quotes, the kid-reporter voice, and the hook opening.
+Too long → cut padding and merge repetitive sentences. Too short →
+expand only with details already present in the text. NEVER invent.
+
+Return ONLY valid JSON (no markdown fences): {"body": "..."}"""
+
+
+def repair_wordcounts(rewrite_result: dict) -> int:
+    """One targeted repair call per body outside WC_BANDS, mutating the
+    rewrite in place. ONE attempt per variant (project regen policy);
+    the repaired text is applied only when it lands inside the band, so
+    a failed repair degrades to the old behavior (flag + digest ticket).
+    Runs BEFORE the independent safety vet so the vet scores the text
+    that ships. Returns the number of bodies repaired.
+    Bug: docs/bugs/2026-09-15-middle-body-wordcount-repair.md"""
+    fixed = 0
+    for art in rewrite_result.get("articles") or []:
+        for level, (lo, hi) in WC_BANDS.items():
+            var = art.get(f"{level}_en") or {}
+            body = var.get("body") or ""
+            wc = len(body.split())
+            if not wc or lo <= wc <= hi:
+                continue
+            t_lo, t_hi = WC_REPAIR_TARGETS[level]
+            reader = ("a 10-year-old (grade 4)" if level == "easy"
+                      else "a middle schooler (grade 7-8)")
+            user = (f"Reader: {reader}.\n"
+                    f"Required band: {t_lo}-{t_hi} words (hard limits "
+                    f"{lo}-{hi}). Current length: {wc} words.\n\n"
+                    f"Article body:\n{body}")
+            try:
+                res = deepseek_call(WC_REPAIR_PROMPT, user,
+                                    max_tokens=2000, temperature=0.3)
+            except Exception as e:  # noqa: BLE001
+                log.warning("  wc-repair [%s/%s]: call failed (%s) — keeping original",
+                            art.get("source_id"), level, e)
+                continue
+            new_body = ((res or {}).get("body") or "").strip()
+            new_wc = len(new_body.split())
+            if new_body and lo <= new_wc <= hi:
+                var["body"] = new_body
+                fixed += 1
+                log.info("  wc-repair [%s/%s]: %dw → %dw (band %d-%d)",
+                         art.get("source_id"), level, wc, new_wc, lo, hi)
+            else:
+                log.warning("  wc-repair [%s/%s]: repair returned %dw, "
+                            "still outside %d-%d — keeping original %dw",
+                            art.get("source_id"), level, new_wc, lo, hi, wc)
+    return fixed
+
+
 def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
     """Split rewriter articles into (kept, rejected) by Stage 3 safety.
 
@@ -1125,6 +1184,14 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
     from .forbidden_filter import is_forbidden
 
     articles = list(rewrite_result.get("articles") or [])
+
+    # Word-count repair BEFORE the safety vet, so the vet scores the text
+    # that actually ships. The rewriter prompt's hard caps are advisory to
+    # the model; this pass is the deterministic enforcement.
+    try:
+        repair_wordcounts(rewrite_result)
+    except Exception as e:  # noqa: BLE001
+        log.warning("  Stage 3: wc-repair pass failed (%s) — continuing", e)
 
     try:
         indep = independent_safety_vet(articles)
