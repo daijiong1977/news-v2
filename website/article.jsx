@@ -58,7 +58,7 @@ const KidStats = {
 };
 window.KidStats = KidStats;
 
-function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, updateTweak }) {
+function ArticlePage({ articleId, onBack, onComplete, onOpenArticle, progress, setProgress, updateTweak }) {
   const narrow = useIsNarrow();
   const baseArticle = ARTICLES.find(a => a.id === articleId) || ARTICLES[0];
   // Resume at the tab the user was last on for this article (issue #2).
@@ -295,6 +295,35 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
 
   const catColor = getCatColor(article.category);
 
+  // The next story in today's edition, for the card at the bottom of the page.
+  const nextArticle = React.useMemo(() => {
+    if (typeof onOpenArticle !== 'function') return null;
+    const i = ARTICLES.findIndex(a => a.id === article.id);
+    return i >= 0 && i + 1 < ARTICLES.length ? ARTICLES[i + 1] : null;
+  }, [article.id, onOpenArticle]);
+
+  // Horizontal swipe moves between the four stages — the tab strip is right
+  // there on screen, so that is the unambiguous meaning. It deliberately does
+  // NOT change article: the card at the bottom does that. Ignores gestures
+  // starting within 24px of the left edge, where iOS owns the back-swipe, and
+  // anything more vertical than horizontal.
+  const swipe = React.useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    swipe.current = t.clientX < 24 ? null : { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e) => {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start || !e.changedTouches.length) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const i = stages.findIndex(st => st.id === tab);
+    const n = dx < 0 ? i + 1 : i - 1;
+    if (n >= 0 && n < stages.length) switchTab(stages[n].id);
+  };
+
   // Build paragraphs for the Read tab from detail.body (preferred) or a
   // sentence-grouped fallback over the summary while detail is loading.
   const paragraphs = useMemoA(() => {
@@ -378,7 +407,10 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
         </div>
       </div>
 
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 60px'}}>
+      <div
+        onTouchStart={narrow ? onTouchStart : undefined}
+        onTouchEnd={narrow ? onTouchEnd : undefined}
+        style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 60px'}}>
 
         {/* ——— Title block ——— */}
         <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1.1fr 1fr', gap: narrow ? 16 : 28, alignItems:'stretch', marginBottom:24}}>
@@ -466,6 +498,39 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
           <DiscussTab article={article} paragraphs={paragraphs}
             onSavedFinal={()=>bumpStep('discuss')}
             onDone={()=>{ bumpStep('discuss'); onComplete(); }} />
+        )}
+
+        {/* Next story in today's edition. Finishing an article used to end at
+            the home page; a reader working through the day's three had to go
+            back and find their place each time. */}
+        {nextArticle && (
+          <div style={{
+            marginTop:22, background:'#fff', border:'2px solid #f0e8d8', borderRadius:18,
+            padding:'14px 16px', display:'flex', alignItems:'center', gap:14,
+          }}>
+            {nextArticle.image && (
+              <div style={{
+                width:56, height:56, borderRadius:12, flexShrink:0,
+                background:`url(${nextArticle.image}) center/cover, #f0e8d8`,
+              }}/>
+            )}
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{
+                fontSize:11, fontWeight:900, letterSpacing:'.1em', textTransform:'uppercase',
+                color:'#9a8d7a',
+              }}>Next story</div>
+              <div style={{
+                fontFamily:'Fraunces, serif', fontWeight:800, fontSize:15, color:'#1b1230',
+                lineHeight:1.25, marginTop:2,
+                display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:2, overflow:'hidden',
+              }}>{nextArticle.title}</div>
+            </div>
+            <button onClick={()=>onOpenArticle(nextArticle.id)} style={{
+              background:'#1b1230', color:'#fff', border:'none', borderRadius:999,
+              padding:'10px 16px', fontWeight:800, fontSize:14, cursor:'pointer',
+              fontFamily:'Nunito, sans-serif', flexShrink:0,
+            }}>Read →</button>
+          </div>
         )}
       </div>
 

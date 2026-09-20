@@ -708,6 +708,28 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
   // (Ordering already follows source priority + last-used rotation upstream.)
   const [featureCandidate, ...smallCandidates] = cur.candidates;
 
+  // Which card the phone deck is showing, for the dots. Derived from scroll
+  // position rather than tracked on tap, so a swipe updates it too.
+  const deckRef = React.useRef(null);
+  const [deckIdx, setDeckIdx] = React.useState(0);
+  const onDeckScroll = React.useCallback(() => {
+    const el = deckRef.current;
+    if (!el || !el.children.length) return;
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = 0, bestGap = Infinity;
+    for (let i = 0; i < el.children.length; i++) {
+      const c = el.children[i];
+      const gap = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+      if (gap < bestGap) { bestGap = gap; best = i; }
+    }
+    setDeckIdx(best);
+  }, []);
+  // A new category starts at its first card.
+  React.useEffect(() => {
+    setDeckIdx(0);
+    if (deckRef.current) deckRef.current.scrollLeft = 0;
+  }, [step]);
+
   // ── Complete-status screen (after the 3rd pick auto-fires) ─────────
   // Shows all three picked stories side-by-side with a confirmation CTA.
   // Kid can change their mind via tracker pills or "Change my picks".
@@ -898,26 +920,83 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 
       {/* — Big feature + 2 small compagnion cards — */}
       <div style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 28px'}}>
-        {featureCandidate && (
-          <PickCard
-            story={featureCandidate} variant="feature"
-            picked={selectedId === featureCandidate.id}
-            onSelect={() => select(featureCandidate.id)}
-          />
-        )}
-        {smallCandidates.length > 0 && (
-          <div style={{
-            display:'grid',
-            gridTemplateColumns: (narrow || smallCandidates.length === 1) ? '1fr' : 'repeat(2, 1fr)',
-            gap:18, marginTop:18,
-          }}>
-            {smallCandidates.map(s => (
-              <PickCard key={s.id} story={s} variant="normal"
-                picked={selectedId === s.id}
-                onSelect={() => select(s.id)}
+        {narrow ? (
+          /* Phone: a swipeable deck. Stacked vertically these candidates were
+             1387px of card in a 1933px page — 2.3 screens of scrolling to choose
+             one of three, and three categories to get through. One card per
+             screen, swipe across, tap to pick.
+
+             CSS scroll-snap rather than touch handlers: it inherits the OS
+             momentum and rubber-banding, never fights Safari's back-swipe, and
+             leaves vertical scrolling alone. */
+          <>
+            <div
+              ref={deckRef}
+              onScroll={onDeckScroll}
+              style={{
+                display:'flex', gap:12,
+                overflowX:'auto', overflowY:'hidden',
+                scrollSnapType:'x mandatory',
+                WebkitOverflowScrolling:'touch', scrollbarWidth:'none',
+                // full-bleed: cancel the page gutter so a card can sit centred
+                // with its neighbours peeking in at the edges
+                marginInline:'calc(-1 * clamp(12px, 4vw, 28px))',
+                paddingInline:'clamp(12px, 4vw, 28px)',
+                scrollPaddingInline:'clamp(12px, 4vw, 28px)',
+                paddingBottom:4,
+              }}>
+              {cur.candidates.map(s => (
+                <div key={s.id} style={{flex:'0 0 88%', scrollSnapAlign:'center'}}>
+                  <PickCard story={s} variant="normal"
+                    picked={selectedId === s.id}
+                    onSelect={() => select(s.id)}
+                  />
+                </div>
+              ))}
+            </div>
+            {cur.candidates.length > 1 && (
+              <div style={{display:'flex', justifyContent:'center', gap:8, marginTop:14}}
+                   aria-hidden="true">
+                {cur.candidates.map((s, i) => (
+                  <span key={s.id} style={{
+                    width: i === deckIdx ? 22 : 8, height:8, borderRadius:999,
+                    background: i === deckIdx ? cur.cat.color : '#e0d6c4',
+                    transition:'width .18s, background .18s',
+                  }}/>
+                ))}
+              </div>
+            )}
+            <div style={{
+              textAlign:'center', marginTop:10, fontSize:13, color:'#9a8d7a',
+              fontFamily:'Nunito, sans-serif', fontWeight:700,
+            }}>
+              {selectedId ? 'Picked! Swipe on, or tap Next below.' : 'Swipe to see all 3 · tap one to pick'}
+            </div>
+          </>
+        ) : (
+          <>
+            {featureCandidate && (
+              <PickCard
+                story={featureCandidate} variant="feature"
+                picked={selectedId === featureCandidate.id}
+                onSelect={() => select(featureCandidate.id)}
               />
-            ))}
-          </div>
+            )}
+            {smallCandidates.length > 0 && (
+              <div style={{
+                display:'grid',
+                gridTemplateColumns: smallCandidates.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+                gap:18, marginTop:18,
+              }}>
+                {smallCandidates.map(s => (
+                  <PickCard key={s.id} story={s} variant="normal"
+                    picked={selectedId === s.id}
+                    onSelect={() => select(s.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* — Bottom nav: Back + progress hint (Next is implicit — tap card) — */}
