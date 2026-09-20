@@ -22,6 +22,7 @@ class Fake:
 
     def __init__(self, fail=(), delay=0.0, pairs_fail=False):
         self.fail, self.delay, self.pairs_fail, self.rank_calls, self.pair_calls = fail, delay, pairs_fail, 0, 0
+        self.event_calls = 0
         self.by_title: dict[str, float] = {}
 
     def system_one(self, state, questions):
@@ -38,7 +39,9 @@ class Fake:
             raise RuntimeError("pair boom")
         a, b = state["headline_A"], state["headline_B"]
         if "same_event" in questions:
-            same = "White House" in a and "White House" in b and "denied" in a and "denied" in b
+            self.event_calls += 1
+            # "the same single event" when both headlines carry the same marker phrase
+            same = any(m in a and m in b for m in ("White House", "assisted dying"))
             return SimpleNamespace(answers={"same_event": SimpleNamespace(noul=0.9 if same else 0.05)})
         ans = {"same_story": SimpleNamespace(noul=0.9 if ("assisted dying" in a and "assisted dying" in b) else 0.05)}
         if "same_subject" in questions:
@@ -263,6 +266,53 @@ def test_no_key_returns_none(monkeypatch=None):
         if saved is not None:
             os.environ["TYPESAFE_API_KEY"] = saved
     assert out is None and "TYPESAFE_API_KEY" in rep["jev"]
+
+
+def test_already_published_is_asked_once_per_brief():
+    """_select asks hard_reason up to three times per brief. Without a cache each
+    ask re-sent the same Jev calls and inflated the reported count."""
+    recent = ["MPs vote against fresh attempt to legalise assisted dying"]
+    pool = [_b("An extraordinary result - why MPs rejected the assisted dying bill", src="A", pick=0.9)]
+    pool += [_b(t, src="BBC News", pick=0.8 - i / 100) for i, t in enumerate(TRUMP[:3])]
+    pool += [_b(t, src=f"V{i}", pick=0.1) for i, t in enumerate(VOLCANO)]   # below floor, forces the fills
+    fake = Fake()
+    for b in pool:
+        fake.by_title[b["title"]] = b["_p"]
+    out, rep = jr.rank_briefs({"News": pool}, client=fake, recent_titles=recent)
+    assert not any("assisted dying" in t for t in _sent(out, "News"))   # it was published
+    # One recent title, one brief that shares words with it: one ask, not one per pass.
+    # One recent title shares >=2 content words with exactly one brief. _select asks
+    # hard_reason for that brief in the main pass and again in each fill: 1 call, not 3.
+    assert fake.event_calls == 1, f"{fake.event_calls} already-published calls — the cache is not working"
+
+
+def test_scratch_state_never_survives_onto_the_briefs():
+    """_jev_pick is internal to _select. A failure mid-selection used to leave it
+    on every brief, and the caller checkpoints those briefs."""
+    pool = {"News": [_b(t, src=f"S{i}", pick=0.8) for i, t in enumerate(VOLCANO)]}
+    ok, _ = _run(pool)
+    assert not any(k.startswith("_jev_pick") for b in pool["News"] for k in b)
+
+    pool2 = {"News": [_b(t, src=f"S{i}", pick=0.8) for i, t in enumerate(VOLCANO)]}
+    real, jr._select = jr._select, lambda *a, **k: (_ for _ in ()).throw(ZeroDivisionError("boom"))
+    try:
+        out, rep = _run(pool2)[0]
+    finally:
+        jr._select = real
+    assert out is None and "unexpected error" in rep["jev"]
+    assert not any(k.startswith("_jev_pick") for b in pool2["News"] for k in b)
+
+
+def test_a_fill_pass_reports_the_real_blocking_reason():
+    """A brief deferred by the source cap, then blocked by a duplicate when the
+    fills run, must be reported as the duplicate — not as 'capped'."""
+    pool = [_b("Volcano buries Icelandic fishing harbour", src="A", pick=0.9),
+            _b("Volcano buries Icelandic fishing harbour today", src="B", pick=0.2)]
+    pool += [_b(t, src="BBC News", pick=0.8 - i / 100) for i, t in enumerate(TRUMP[:3])]
+    (out, rep), _ = _run({"News": pool})
+    whys = {d["title"]: d["why"] for d in rep["skipped"]}
+    dup = "Volcano buries Icelandic fishing harbour today"
+    assert dup in whys and "same story" in whys[dup], whys
 
 
 def test_output_is_json_safe_for_checkpoints():
