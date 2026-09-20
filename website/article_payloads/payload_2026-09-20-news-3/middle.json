@@ -1,0 +1,114 @@
+{
+  "title": "Trump Announces 'AI Force' and an AI Tsar, Calls Safety Worries a 'Hoax'",
+  "summary": "President Donald Trump wants the United States to build an 'AI Force' — and to put a single official, an artificial intelligence tsar, in charge of it.\n\nTrump announced the plan in a social media post on Saturday. He wrote that his administration 'will not in any way hinder or stifle the growth' of the AI industry, pushing back against calls to slow development until stronger safeguards exist. He also repeated his view that warnings about AI's dangers are a 'hoax.'\n\nTrump framed AI as an economic revolution. 'AI is the next Industrial Revolution, or Internet, but will be even larger and more impactful, possibly as much as 25% of our Country's GDP,' he wrote. GDP, or gross domestic product, is the total value of everything a country produces in a year — so 25% would be an enormous share.\n\nA big reason for the push: China. AI now sits at the heart of the U.S.-China rivalry, as the world's two largest economies compete for an edge in advanced technology. Trump said he wants the U.S. to keep leading China, and the topic is expected to come up when he meets President Xi Jinping next week.\n\nNot everyone shares his confidence. Anthropic head Dario Amodei has called for AI development to slow down, proposing industry-wide deceleration, regulation, and independent monitoring of AI models. Sam Altman of OpenAI and Elon Musk of xAI have both said they agree with his recommendations.\n\nSeveral major AI companies — Anthropic, OpenAI, and Google, the makers of Claude, ChatGPT, and Gemini — have disclosed security breaches or cases where their chatbots were used for 'malicious activity.' Altman said this week that Washington has struggled to keep pace with the technology, and argued people should trust AI firms to keep it safe. 'The world should trust that we are going to do the right thing because it's the right thing and we feel the magnitude of this,' he said at a conference in San Francisco.\n\nIn the UK, MPs from multiple parties and peers have flagged human rights risks from AI. The Joint Committee on Human Rights published a report calling for a new AI bill to 'address the scale and seriousness' of those threats.",
+  "why_it_matters": "AI policy now shapes jobs, news, privacy and national security for everyone, and the split between 'move fast' and 'slow down' camps will determine what protections and opportunities young people inherit as the technology spreads through schools, workplaces and public life.",
+  "image_url": "/article_images/article_f2c909c5378c.webp",
+  "keywords": [],
+  "questions": [
+    {
+      "question": "What does Trump want the United States to build?",
+      "options": [
+        "An AI safety agency",
+        "A national AI university",
+        "An 'AI Force'",
+        "A global AI treaty"
+      ],
+      "correct_answer": "An 'AI Force'"
+    },
+    {
+      "question": "What did Trump call warnings about AI's dangers?",
+      "options": [
+        "A 'challenge'",
+        "A 'risk'",
+        "A 'hoax'",
+        "A 'priority'"
+      ],
+      "correct_answer": "A 'hoax'"
+    },
+    {
+      "question": "How large a share of GDP did Trump say AI could become?",
+      "options": [
+        "As much as 10%",
+        "As much as 25%",
+        "As much as 5%",
+        "As much as 50%"
+      ],
+      "correct_answer": "As much as 25%"
+    },
+    {
+      "question": "Who has called for AI development to slow down?",
+      "options": [
+        "Dario Amodei",
+        "Sam Altman",
+        "Xi Jinping",
+        "Elon Musk"
+      ],
+      "correct_answer": "Dario Amodei"
+    },
+    {
+      "question": "Who said, 'The world should trust that we are going to do the right thing'?",
+      "options": [
+        "Sam Altman",
+        "Donald Trump",
+        "A UK MP",
+        "Dario Amodei"
+      ],
+      "correct_answer": "Sam Altman"
+    },
+    {
+      "question": "What did the UK Joint Committee on Human Rights call for?",
+      "options": [
+        "A ban on AI chatbots",
+        "A national AI tsar",
+        "A new AI bill",
+        "An AI Force"
+      ],
+      "correct_answer": "A new AI bill"
+    }
+  ],
+  "background_read": [
+    "Artificial intelligence means computer systems that learn from data and carry out tasks that used to require human thinking — writing, translating, recognising images or holding a conversation. It has become the centre of the US-China rivalry, with the world's two largest economies competing for an edge in advanced technology; Xi Jinping (China's president since 2012) leads the other side of that contest.",
+    "Trump's push follows his administration's 'AI Action Plan', a strategy to speed up American AI development and promote US technology abroad. The companies named in the debate are now household names: OpenAI makes ChatGPT, Anthropic makes Claude, Google makes Gemini, and Elon Musk's xAI is another major player.",
+    "Serious AI-safety discussions have been going on for years. In 2023 the UK hosted the Bletchley Park summit, where countries including the United States and China signed a declaration acknowledging the risks of advanced AI, and the European Union has passed its own AI Act, which sorts AI uses into risk categories with stricter rules for the most dangerous ones.",
+    "Trump's position — that safety warnings are a 'hoax' — sits opposite researchers who worry about job losses, the spread of misinformation, and systems powerful enough to act against human control. In the UK, the Joint Committee on Human Rights is a parliamentary committee that includes members of the House of Commons and the House of Lords; its calls for an AI bill show that some governments see regulation as a duty rather than an obstacle."
+  ],
+  "Article_Structure": [
+    "LEAD: Trump announces an 'AI Force' and an AI tsar to lead it, in a social media post",
+    "  ├─ STANCE: the US 'will not in any way hinder or stifle' AI growth",
+    "  └─ FRAMING: warnings about AI's dangers are 'a hoax'",
+    "ECONOMIC ARGUMENT: 'AI is the next Industrial Revolution, or Internet... possibly as much as 25% of GDP'",
+    "  └─ explainer built into the article: GDP = value of everything a country produces in a year",
+    "GEOPOLITICS: US-China rivalry is the engine behind the plan",
+    "  ├─ Trump wants the US to keep leading China",
+    "  └─ topic expected when he meets President Xi Jinping next week",
+    "COUNTER-VOICES",
+    "  ├─ Dario Amodei (Anthropic): slow down — industry-wide deceleration, regulation, independent monitoring of models",
+    "  └─ Sam Altman (OpenAI) and Elon Musk (xAI) both say they agree with his recommendations",
+    "EVIDENCE OF RISK: Anthropic, OpenAI and Google have disclosed security breaches or chatbots used for 'malicious activity'",
+    "  └─ Altman: Washington has struggled to keep pace; 'the world should trust that we are going to do the right thing'",
+    "OUTSIDE PRESSURE: UK MPs from multiple parties and peers flag human rights risks; Joint Committee on Human Rights report calls for a new AI bill to 'address the scale and seriousness' of the threats",
+    "OPEN QUESTION: who sets the speed of AI — the industry, or governments?"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive — speed as a national advantage",
+      "description": "Trump frames AI as the next Industrial Revolution and argues that heavy-handed rules would hand leadership to rivals such as China. A single AI tsar and an 'AI Force' could give the US a clearer strategy, faster investment and a stronger bargaining position in talks with Beijing."
+    },
+    {
+      "perspective": "Critical — dismissing safety as a 'hoax'",
+      "description": "Calling safety warnings a hoax clashes with evidence from the industry itself: Anthropic, OpenAI and Google have all reported security breaches or misuse of their chatbots. Researchers warn about misinformation, job displacement and systems that could escape human control, and UK human rights committees say the risks are serious enough to need legislation."
+    },
+    {
+      "perspective": "Analytical — the pattern of a race between rivals",
+      "description": "Technology competitions, from nuclear weapons to semiconductors, have repeatedly pushed safety concerns down the priority list while states fear falling behind. AI fits that pattern: even executives who publicly back slower, monitored development keep shipping products, because the competitive logic pushes in the opposite direction from caution."
+    },
+    {
+      "perspective": "Forward-looking — who ends up setting the rules",
+      "description": "The key question is whether oversight comes from governments, from voluntary industry promises, or from international agreements such as the Bletchley declaration and the EU AI Act. If the US refuses new rules while other countries write them, companies and users could face a patchwork of standards — and the next wave of AI may arrive before any of it is settled."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "Sat, 19 Sep 2026 21:01:56 GMT",
+  "source_name": "BBC News",
+  "source_url": "https://www.bbc.co.uk/news/articles/cqlykr2vrv04o?at_medium=RSS&at_campaign=rss"
+}

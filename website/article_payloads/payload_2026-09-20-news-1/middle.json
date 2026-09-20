@@ -1,0 +1,114 @@
+{
+  "title": "Congo Launches Ebola Vaccine Drive for Front-Line Workers in Outbreak Epicenter",
+  "summary": "Congo launched an Ebola vaccination campaign in Bunia on Saturday, prioritizing the health workers who are most exposed to the virus in the epicenter of the fastest-growing outbreak in history.\n\nThe vaccine being used is Ervebo, which proved effective in past outbreaks caused by the Zaire strain of Ebola. But this outbreak is caused by the Bundibugyo virus, a different type with no licensed vaccine or treatment. Health authorities say Ervebo could offer some protection because the two viruses are related, but whether it actually prevents illness from Bundibugyo Ebola is still being studied in clinical trials.\n\n\"Our collective duty is to protect life. Launching this vaccination drive for front-line staff in Ituri is not an arbitrary choice, as these workers are particularly exposed and deeply involved in the response,\" said Maj. Gen. Gaby Kasongo Mulumba, the military governor of Ituri.\n\nThe rollout is targeting the Bunia and Mongbwalu zones in Ituri province, both among the hardest-hit areas. The campaign in Ituri and North Kivu is expected to cover 20,000 front-line workers over six to nine months. About 70,000 doses of Ervebo have been approved for use in Congo. Roughly 50,000 doses are intended for front-line and health workers, while 20,000 will be used in a clinical trial to study the vaccine's effectiveness against Bundibugyo virus.\n\nAs of Saturday, Congo had recorded 7,541 confirmed cases, including 3,639 deaths, according to government figures. Another 1,823 people have recovered. The outbreak is concentrated in Ituri province and is already the deadliest of the country's 17 Ebola outbreaks.\n\nThe response is unfolding under extremely difficult conditions. Insecurity, displacement, a health workers' strike, and intense population movements are fueling the spread. The World Health Organization has said the outbreak remains out of control and is on track to surpass the 2014-2016 West Africa Ebola outbreak, which killed more than 11,000 people.\n\nSome health workers have mixed feelings. Dr. Jeannot Elua, whom the Associated Press met at a health facility in Bunia, called the vaccine \"beneficial\" but added, \"We healthcare workers don't really have a choice: we are going to receive it.\" Dr. Jean Paul Uzele, who received Ervebo during a previous outbreak, said it was unclear whether he should get vaccinated again. \"If it arrives, we will receive it too,\" he said. \"But the question is whether we need to be vaccinated a second time.\"",
+  "why_it_matters": "This outbreak tests whether the world can move fast enough to protect the health workers everyone else depends on — and the answer shapes how prepared we are for the next epidemic that reaches our own communities.",
+  "image_url": "/article_images/article_1e167e8d083b.webp",
+  "keywords": [],
+  "questions": [
+    {
+      "question": "Where did Congo launch the Ebola vaccination campaign?",
+      "options": [
+        "Goma",
+        "Mongbwalu",
+        "Bunia",
+        "Kinshasa"
+      ],
+      "correct_answer": "Bunia"
+    },
+    {
+      "question": "Which vaccine is being used in the campaign?",
+      "options": [
+        "Iturix",
+        "Zairevax",
+        "Ervebo",
+        "Bundibugyo"
+      ],
+      "correct_answer": "Ervebo"
+    },
+    {
+      "question": "Which virus is causing this outbreak?",
+      "options": [
+        "The West Africa strain",
+        "The Zaire strain",
+        "The Bundibugyo virus",
+        "The 2014 virus"
+      ],
+      "correct_answer": "The Bundibugyo virus"
+    },
+    {
+      "question": "How many front-line workers is the campaign in Ituri and North Kivu expected to cover?",
+      "options": [
+        "70,000",
+        "50,000",
+        "20,000",
+        "7,541"
+      ],
+      "correct_answer": "20,000"
+    },
+    {
+      "question": "How many confirmed cases had Congo recorded as of Saturday?",
+      "options": [
+        "1,823",
+        "11,000",
+        "7,541",
+        "3,639"
+      ],
+      "correct_answer": "7,541"
+    },
+    {
+      "question": "Who said, 'Our collective duty is to protect life'?",
+      "options": [
+        "The World Health Organization spokesperson",
+        "Dr. Jean Paul Uzele",
+        "Maj. Gen. Gaby Kasongo Mulumba",
+        "Dr. Jeannot Elua"
+      ],
+      "correct_answer": "Maj. Gen. Gaby Kasongo Mulumba"
+    }
+  ],
+  "background_read": [
+    "Congo — more formally the Democratic Republic of the Congo, a huge country in Central Africa — has fought more Ebola outbreaks than any other nation; this is its 17th. Ebola is a deadly virus spread through contact with the body fluids of an infected person, and it was first identified in 1976 near the Ebola River in what is now Congo.",
+    "Ituri province, in Congo's northeast, is where this outbreak is concentrated, and the region has also been troubled by armed groups and large-scale displacement of civilians. The World Health Organization (the United Nations agency that tracks and coordinates the global response to disease outbreaks) has declared similar emergencies before, including the 2014-2016 West Africa outbreak that killed more than 11,000 people.",
+    "Ervebo, the vaccine used here, became the first Ebola vaccine approved for human use, and it was designed against the Zaire strain that caused most earlier outbreaks. The Bundibugyo strain was first identified in Uganda and is rarer — it has never had a licensed vaccine or treatment, which is why part of the doses are going into a clinical trial instead of a normal rollout."
+  ],
+  "Article_Structure": [
+    "LEAD: Congo launches an Ebola vaccination drive in Bunia, epicenter of the fastest-growing outbreak in history",
+    "  └─ WHO/WHERE: front-line health workers in Bunia, Ituri province",
+    "THE COMPLICATION: the vaccine does not match the virus exactly",
+    "  ├─ Ervebo: proven effective against the Zaire strain in past outbreaks",
+    "  ├─ This outbreak: Bundibugyo virus — no licensed vaccine or treatment",
+    "  └─ HOPE / UNKNOWN: Ervebo might cross-protect, but that is still being studied in clinical trials",
+    "OFFICIAL VOICE: Maj. Gen. Gaby Kasongo Mulumba, military governor of Ituri — 'our collective duty is to protect life'",
+    "SCALE / NUMBERS",
+    "  ├─ targets Bunia and Mongbwalu zones; 20,000 front-line workers over six to nine months",
+    "  ├─ about 70,000 Ervebo doses approved: 50,000 for workers, 20,000 for a trial",
+    "  └─ 7,541 confirmed cases, 3,639 deaths, 1,823 recovered — already the deadliest of Congo's 17 outbreaks",
+    "OBSTACLES: insecurity, displacement, a health workers' strike and population movements — WHO says the outbreak is out of control",
+    "VIEWPOINTS ON THE VACCINE",
+    "  ├─ Dr. Jeannot Elua: 'beneficial' but 'we don't really have a choice'",
+    "  └─ Dr. Jean Paul Uzele: unclear whether a second vaccination is needed",
+    "OPEN QUESTION: can the campaign outrun the virus and stop it surpassing the 2014-2016 West Africa outbreak?"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive — protection where it is needed most",
+      "description": "Vaccinating front-line staff first keeps hospitals and treatment centres running, and the related Zaire-strain vaccine may offer some cross-protection while the trial runs. Even partial protection could slow an outbreak that is already the deadliest in Congo's history."
+    },
+    {
+      "perspective": "Critical — an unproven tool in impossible conditions",
+      "description": "The vaccine was not designed for the Bundibugyo virus, so nobody yet knows if it will work, and 20,000 doses are being used in research rather than a guaranteed rollout. Health workers describe being vaccinated out of duty rather than choice, while insecurity, strikes and mass movement continue to fuel the spread."
+    },
+    {
+      "perspective": "Analytical — a familiar pattern in global health",
+      "description": "Ebola outbreaks repeatedly hit regions with weak health systems and active conflict, where response teams struggle to reach patients and trace contacts. Trials and emergency campaigns often run side by side, meaning science and crisis management have to happen at the same time and under pressure."
+    },
+    {
+      "perspective": "Forward-looking — what the trial must deliver",
+      "description": "The key question is whether the clinical trial produces answers quickly enough to change the response, and whether enough doses reach the hardest-hit zones. Whatever happens here will inform how the world stockpiles vaccines and reacts to the next unknown strain."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "Sat, 19 Sep 2026 14:48:50 -0400",
+  "source_name": "PBS NewsHour",
+  "source_url": "https://www.pbs.org/newshour/world/congo-begins-ebola-vaccinations-for-health-workers-in-the-epicenter-of-the-outbreak"
+}

@@ -1,34 +1,37 @@
 {
   "articles": [
     {
-      "id": "2026-04-24-science-1",
-      "title": "Meet the SuperAgers: 80-Year-Olds with Brains Like 50-Year-Olds!",
-      "summary": "What if your 80-year-old grandparent had a memory as sharp as your parent's? That's the reality for 'SuperAgers'—people 80 or older whose brains work like they're 50. Scientists at Northwestern University spent 25 years studying them. SuperAgers score as well on memory tests as people 30 years younger. Researchers first thought healthy lifestyles made them special. But brain scans revealed a bigger surprise: some SuperAgers had no harmful 'plaques and tangles' that cause memory loss. Others had them but stayed sharp because their brains are 'resilient.' 'Exceptional memory in old age is not only possible,' says lead researcher Dr. Sandra Weintraub. Scientists hope this discovery will lead to new ways to protect everyone's brain health as they age.",
-      "source": "ScienceDaily All",
-      "time_ago": "Thu, 23 Apr 2026 07:46:30 EDT",
-      "image_url": "/article_images/article_70eafbd186b1.webp",
+      "id": "2026-09-20-science-1",
+      "source": "ScienceDaily Strange & Offbeat",
+      "time_ago": "Wed, 16 Sep 2026 07:03:10 EDT",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Wed, 16 Sep 2026 07:03:10 EDT",
+      "image_url": "/article_images/article_ad8e3fd6c947.webp",
       "category": "Science",
-      "mined_at": "2026-04-24T01:01:42.570832+00:00"
+      "title": "Earth Was Built From Its Own Backyard, Scientists Say",
+      "summary": "Scientists thought Earth was partly built from stuff far past Jupiter. A new study says almost all of it came from right next door. They were 'truly astonished.'"
     },
     {
-      "id": "2026-04-24-science-2",
-      "title": "This Cow Learned to Use a Brush as a Tool — and Scientists Are Amazed!",
-      "summary": "Meet Veronika, a Brown Swiss cow in Austria who is amazing scientists. When she gets an itch, she picks up a long-handled deck brush with her tongue and scratches herself — the first time a cow has been seen using a tool! Even cooler, she uses both ends: the hard bristles for her tough back and the soft handle for sensitive spots like her belly button. Sometimes she grabs the brush in the middle so she can switch ends without dropping it. Scientists thought it was a mistake at first, but now they know she's a clever problem-solver. This kind of smart behavior was only seen before in chimpanzees. Veronika shows that cows are smarter than we think — they…",
+      "id": "2026-09-20-science-2",
+      "source": "Popular Science",
+      "time_ago": "Sat, 19 Sep 2026 08:00:00 -0400",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 08:00:00 -0400",
+      "image_url": "/article_images/article_69d2463a5d55.webp",
+      "category": "Science",
+      "title": "Three Red Panda Cubs Are the Star of This Panda Party",
+      "summary": "Three red panda cubs were born this summer at the Smithsonian's National Zoo. One is feisty and huff-quacks at keepers. Fewer than 10,000 red pandas remain in the wild."
+    },
+    {
+      "id": "2026-09-20-science-3",
       "source": "Science News Explores",
-      "time_ago": "Fri, 17 Apr 2026 10:30:00 +0000",
-      "image_url": "/article_images/article_4d246624b13b.webp",
+      "time_ago": "Wed, 16 Sep 2026 10:30:00 +0000",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Wed, 16 Sep 2026 10:30:00 +0000",
+      "image_url": "/article_images/article_be437b2a21fb.webp",
       "category": "Science",
-      "mined_at": "2026-04-24T01:01:42.840165+00:00"
-    },
-    {
-      "id": "2026-04-24-science-3",
-      "title": "Nearly Half of US Kids Are Breathing Dirty Air — and It's Getting Worse",
-      "summary": "Nearly half of all kids in the US are breathing dirty air that can hurt their lungs, according to a new report from the American Lung Association. The report looked at smog and soot from cars and factories. Kids are especially at risk because their lungs are still growing and they play outside a lot. Breathing this air can cause asthma and long-term damage. Communities of color are hit hardest — 54% of people in the most polluted areas are people of color, even though they make up only 42% of the US population. Why is the air getting worse? Climate change brings hotter temperatures and more wildfires. Also, the government has weakened rules that protected the air, like limits…",
-      "source": "Guardian Environment",
-      "time_ago": "Wed, 22 Apr 2026 10:00:24 GMT",
-      "image_url": "/article_images/article_41611642a438.webp",
-      "category": "Science",
-      "mined_at": "2026-04-24T01:01:43.107567+00:00"
+      "title": "Orcas Are Smashing Sunfish Like Piñatas",
+      "summary": "Scientists filmed orcas slamming into sunfish hard enough to make them explode. One orca holds the fish; another smashes it. It may help feed young orcas — or just be fun."
     }
   ]
 }

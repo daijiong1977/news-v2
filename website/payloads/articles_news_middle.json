@@ -1,34 +1,37 @@
 {
   "articles": [
     {
-      "id": "2026-04-24-news-1",
-      "title": "Betting on Yourself: Three Congressional Candidates Fined for Wagering on Their Own Elections",
-      "summary": "Imagine being so sure you'd win an election that you bet money on yourself. That's exactly what three congressional candidates did on a prediction market called Kalshi. But Kalshi has a rule: candidates can't bet on themselves. When the company found out, it fined and suspended Mark Moran, Ezekiel Enriquez, and Matt Klein for five years. Moran, running for Senate in Virginia, bet $100 and bragged online, so he got the biggest fine: over $6,200. Klein and Enriquez each bet under $100 and paid smaller fines. Some politicians, like Rep. Mike Levin, say the penalties are too weak — just 'a parking ticket.' The fines came from the company, not the government agency that oversees prediction markets. Klein admitted his…",
+      "id": "2026-09-20-news-1",
       "source": "PBS NewsHour",
-      "time_ago": "Thu, 23 Apr 2026 19:05:03 -0400",
-      "image_url": "/article_images/article_e70859ec15f4.webp",
+      "time_ago": "Sat, 19 Sep 2026 14:48:50 -0400",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 14:48:50 -0400",
+      "image_url": "/article_images/article_1e167e8d083b.webp",
       "category": "News",
-      "mined_at": "2026-04-24T01:01:41.723732+00:00"
+      "title": "Congo Launches Ebola Vaccine Drive for Front-Line Workers in Outbreak Epicenter",
+      "summary": "Congo began vaccinating health workers in Bunia on Saturday as it battles its deadliest Ebola outbreak ever. The vaccine, Ervebo, was designed for a different Ebola strain, so scientists are studying whether it protects against the Bundibugyo virus now spreading."
     },
     {
-      "id": "2026-04-24-news-2",
-      "title": "Mind Over Washington: Mentalist Oz Pearlman to Stun Trump and Reporters at White House Dinner",
-      "summary": "Imagine being able to read someone's mind — even the president's! That's what mentalist Oz Pearlman will try to do at the White House Correspondents' Dinner this Saturday. Instead of a comedian, the 43-year-old performer will take the stage to wow President Donald Trump and hundreds of reporters. Pearlman is famous for guessing secret words and PIN numbers, a trick called mentalism. He got his big break on America's Got Talent in 2015. Pearlman has been planning one amazing moment for 10 years, and he hopes to bring everyone together. Even though experts say it's not real mind-reading, the show promises to be unforgettable. Will he actually read Trump's mind? We'll find out Saturday night!",
-      "source": "NPR World",
-      "time_ago": "Thu, 23 Apr 2026 12:46:53 -0400",
-      "image_url": "/article_images/article_c9fd806dc459.webp",
+      "id": "2026-09-20-news-2",
+      "source": "BBC News",
+      "time_ago": "Sat, 19 Sep 2026 23:00:27 GMT",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 23:00:27 GMT",
+      "image_url": "/article_images/article_7ffe8b5c7454.webp",
       "category": "News",
-      "mined_at": "2026-04-24T01:01:42.087792+00:00"
+      "title": "US and Denmark Strike Greenland Security Deal, Ending Months of Tension",
+      "summary": "The US and Denmark announced a deal on Greenland's security Saturday, after Trump threatened to seize the island. The agreement gives the US a role in defending Greenland but recognizes Danish sovereignty. Leaders expect to sign it at the UN next week."
     },
     {
-      "id": "2026-04-24-news-3",
-      "title": "Iranian Leaders Unite to Reject Trump's Claims of a Rift: 'We Are One Soul, One Nation'",
-      "summary": "Imagine a country where everyone is saying the exact same thing at the exact same time — that's what happened in Iran this week. President Trump claimed Iran's leaders were fighting each other, but they proved him wrong. Iran's president, foreign minister, and parliament speaker all posted the same message on X: 'We are one soul, one nation.' This show of unity comes after a huge event — Iran's former Supreme Leader was killed in U.S.-Israeli strikes on February 28. Now, the U.S. has blocked Iranian ports, and Iran closed the Strait of Hormuz, a key waterway for oil. Oil prices are going up as a result. Trump warned he would 'shoot and kill' anyone laying mines in the strait.…",
-      "source": "Al Jazeera",
-      "time_ago": "Thu, 23 Apr 2026 20:26:13 +0000",
-      "image_url": "/article_images/article_23d2604d763b.webp",
+      "id": "2026-09-20-news-3",
+      "source": "BBC News",
+      "time_ago": "Sat, 19 Sep 2026 21:01:56 GMT",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 21:01:56 GMT",
+      "image_url": "/article_images/article_f2c909c5378c.webp",
       "category": "News",
-      "mined_at": "2026-04-24T01:01:42.32737+00:00"
+      "title": "Trump Announces 'AI Force' and an AI Tsar, Calls Safety Worries a 'Hoax'",
+      "summary": "President Trump says the U.S. will create an 'AI Force' and appoint an AI tsar to lead it. In a Saturday post he rejected calls to slow AI down, saying it could reach 25% of America's GDP."
     }
   ]
 }

@@ -1,0 +1,123 @@
+{
+  "title": "Earth Was Built From Its Own Backyard, Scientists Say",
+  "summary": "Imagine baking a cake. For years, scientists thought some of the flour came from a store far, far away. Now a new study says: nope. Earth was baked from ingredients in its own neighborhood.\n\nEarth sits in the inner Solar System — the closer part, near the Sun. Some scientists thought 6 to 40 percent of Earth's building blocks drifted in from beyond Jupiter, way out in the cold. That idea helped explain where Earth's water came from.\n\nBut two scientists in Switzerland, Paolo Sossi and Dan Bower, checked the numbers again. They looked at isotopes in many meteorites. Isotopes are like sibling atoms — same element, but different weights. Think of identical twins where one is a little heavier.\n\nTheir result? Earth's material came entirely from the inner Solar System. Outer material is less than 2 percent of Earth's mass — maybe zero.\n\n\"We were truly astonished,\" Bower said.\n\nWhy does it matter? It means Earth's water was probably here all along, close to the Sun. And Jupiter may have acted like a giant wall, blocking stuff from drifting inward. Earth grew up in a quiet, steady neighborhood.",
+  "why_it_matters": "It changes the story of how Earth got its water — the thing every living creature, including you, needs to survive.",
+  "image_url": "/article_images/article_ad8e3fd6c947.webp",
+  "keywords": [
+    {
+      "term": "isotopes",
+      "explanation": "Atoms of the same element with different weights, like twins where one twin is a little heavier."
+    },
+    {
+      "term": "meteorites",
+      "explanation": "Space rocks that fall to Earth; scientists study them to learn what the Solar System was made of."
+    },
+    {
+      "term": "element",
+      "explanation": "A basic kind of material, such as iron or oxygen, that everything is built from."
+    },
+    {
+      "term": "mass",
+      "explanation": "How much stuff something is made of — basically how heavy it is."
+    },
+    {
+      "term": "astonished",
+      "explanation": "Very, very surprised."
+    },
+    {
+      "term": "Jupiter",
+      "explanation": "The biggest planet in our Solar System, which may have acted like a wall in this story."
+    }
+  ],
+  "questions": [
+    {
+      "question": "Where did Earth's building blocks come from, according to the new study?",
+      "options": [
+        "From another galaxy",
+        "From far beyond Jupiter",
+        "From the inner Solar System near the Sun",
+        "From the Moon"
+      ],
+      "correct_answer": "From the inner Solar System near the Sun"
+    },
+    {
+      "question": "What did some scientists once think had drifted in from beyond Jupiter?",
+      "options": [
+        "All of Earth's water",
+        "Earth's Moon",
+        "Only a few meteorites",
+        "6 to 40 percent of Earth's building blocks"
+      ],
+      "correct_answer": "6 to 40 percent of Earth's building blocks"
+    },
+    {
+      "question": "In the story, isotopes are compared to what?",
+      "options": [
+        "Two kinds of meteorites",
+        "Identical twins where one is a little heavier",
+        "A store far away",
+        "Twin cakes"
+      ],
+      "correct_answer": "Identical twins where one is a little heavier"
+    },
+    {
+      "question": "Who checked the numbers again?",
+      "options": [
+        "A team at NASA",
+        "Paolo Sossi and Marianne Nyegaard",
+        "Two scientists in Switzerland, Paolo Sossi and Dan Bower",
+        "Two scientists in Japan"
+      ],
+      "correct_answer": "Two scientists in Switzerland, Paolo Sossi and Dan Bower"
+    },
+    {
+      "question": "How much of Earth's mass is outer material, according to the result?",
+      "options": [
+        "Exactly 10 percent",
+        "Less than 2 percent",
+        "6 to 40 percent",
+        "About 50 percent"
+      ],
+      "correct_answer": "Less than 2 percent"
+    },
+    {
+      "question": "What may Jupiter have acted like?",
+      "options": [
+        "A second Sun",
+        "A store far away",
+        "A giant wall blocking stuff from drifting inward",
+        "A big cake"
+      ],
+      "correct_answer": "A giant wall blocking stuff from drifting inward"
+    }
+  ],
+  "background_read": [
+    "Earth formed about 4.5 billion years ago out of a spinning cloud of dust and gas around the young Sun.",
+    "Meteorites are leftover space rocks from that time, so scientists test them to figure out what the Solar System was made of.",
+    "Jupiter is the biggest planet in the Solar System, and its strong gravity can push or pull smaller space rocks as they travel."
+  ],
+  "Article_Structure": [
+    "WHO: Two scientists in Switzerland — Paolo Sossi and Dan Bower — who checked the numbers again.",
+    "WHAT: A new study says Earth was built entirely from material in its own neighborhood, the inner Solar System.",
+    "WHERE: Earth, in the inner Solar System near the Sun; the scientists compared isotopes found in many meteorites.",
+    "WHY: It suggests Earth's water was probably here all along, and that Jupiter may have blocked outer material from drifting in."
+  ],
+  "perspectives": [
+    {
+      "perspective": "The researchers",
+      "description": "Sossi and Bower say the isotopes show Earth came only from its own neighborhood, and Bower said the team was 'truly astonished' by the result."
+    },
+    {
+      "perspective": "Supporters of the older idea",
+      "description": "Some scientists had thought material from beyond Jupiter brought Earth's water, so they may want more proof before giving up that explanation."
+    },
+    {
+      "perspective": "Future scientists and curious kids",
+      "description": "Either way, the study shows how science works: new measurements can change an idea people believed for years."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "Wed, 16 Sep 2026 07:03:10 EDT",
+  "source_name": "ScienceDaily Strange & Offbeat",
+  "source_url": "https://www.sciencedaily.com/releases/2026/09/260915232132.htm"
+}

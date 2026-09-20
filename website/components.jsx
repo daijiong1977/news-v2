@@ -41,9 +41,13 @@ function KidsNewsLockup({ size = 100, compact = false, hideEndorsement = false }
         {endorseLine && (
           <div style={{
             fontFamily:'Nunito, sans-serif', fontWeight: 800,
-            fontSize: endorseSize, letterSpacing: '.18em',
+            fontSize: endorseSize, 
+            // .18em over 40 uppercase characters is ~312px; with the sun and gap
+            // the lockup needed 392px and a 390px phone simply cut it off. Track
+            // tighter as the screen narrows, and allow a second line as a floor.
+            letterSpacing: 'clamp(.06em, 1.1vw, .18em)',
             textTransform:'uppercase', color: 'var(--twentyone-muted, #9a8d7a)',
-            lineHeight: 1.25, whiteSpace: 'nowrap',
+            lineHeight: 1.25, whiteSpace: 'normal',
           }}>
             {endorseLine}
           </div>

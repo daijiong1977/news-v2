@@ -1,0 +1,141 @@
+{
+  "title": "National Zoo Celebrates Three New Red Panda Cubs",
+  "summary": "This International Red Panda Day, the Smithsonian's National Zoo has three small reasons to celebrate. Three red panda cubs were born earlier this summer at the zoo's conservation campus in Front Royal, Virginia.\n\nOn May 29, a 3-year-old female named Sequoia and a 12-year-old male named Mow Mow welcomed twins — one female, one male. On June 11, a 3-year-old female named Keahi gave birth to a single female, sired by a 7-year-old male named Rocket.\n\n\"The new cubs are ensuring the population overall,\" Jessica Kordell, assistant curator of carnivores, told Popular Science. \"We can't conserve the species and continue to breed them if we don't have the animals.\"\n\nThe cubs have spent the summer in nest boxes with their parents, drinking milk and sleeping. Staff have started placing bamboo inside, though the cubs haven't eaten it yet. They're becoming more mobile, and their personalities are emerging.\n\n\"The singleton... is definitely feisty and huff-quacks at us every chance she gets,\" Kordell said. \"The twins are a bit more quiet and shy. They have each other and they rely on that.\"\n\nRed pandas are endangered mammals found in the treetops of Nepal, India, Bhutan, Myanmar, and China. They're most closely related to raccoons. They eat mostly bamboo — two to four pounds a day — but digest only about 24 percent of it, so they must eat 20 to 30 percent of their body weight daily.\n\nTheir reddish fur matches lichen growing on trees, Kordell noted, while their black bellies blend into shadows. In cold weather, red pandas enter \"torpor\" — a deep sleep that lowers their body temperature and saves energy.\n\nFewer than 10,000 remain in the wild, and habitat loss is the main threat. In Nepal, their habitat has fragmented into 400 small forest patches. The Red Panda Network has worked since 2007 on community-based conservation.\n\nThese cubs matter because they pass their parents' genetic material to the next generation — a crucial step for a species in trouble.",
+  "why_it_matters": "Red pandas are a flagship for the wider biodiversity crisis: a single appealing species pulls public attention and funding toward whole mountain forests, yet captive breeding only buys time — the 400 fragments of habitat in Nepal show how roads, farms and development squeeze wildlife into shrinking islands of forest.",
+  "image_url": "/article_images/article_69d2463a5d55.webp",
+  "keywords": [
+    {
+      "term": "sired",
+      "explanation": "Fathered — the male parent of a young animal."
+    },
+    {
+      "term": "curator",
+      "explanation": "A person who manages and cares for the animals or collections at a zoo or museum."
+    },
+    {
+      "term": "singleton",
+      "explanation": "A single baby born alone rather than as one of twins or triplets."
+    },
+    {
+      "term": "torpor",
+      "explanation": "A deep, energy-saving sleep in which an animal's body temperature drops."
+    },
+    {
+      "term": "lichen",
+      "explanation": "A crusty, plant-like growth on rocks and tree bark, made of a fungus living together with algae."
+    },
+    {
+      "term": "fragmented",
+      "explanation": "Broken into small, separate pieces — here, forest patches cut off from one another."
+    }
+  ],
+  "questions": [
+    {
+      "question": "How many red panda cubs were born at the zoo's conservation campus?",
+      "options": [
+        "Two",
+        "Four",
+        "One",
+        "Three"
+      ],
+      "correct_answer": "Three"
+    },
+    {
+      "question": "Which cubs were born on May 29?",
+      "options": [
+        "Keahi's single female cub",
+        "Twins born to Keahi and Rocket",
+        "Twins born to Sequoia and Mow Mow",
+        "Sequoia's two male cubs"
+      ],
+      "correct_answer": "Twins born to Sequoia and Mow Mow"
+    },
+    {
+      "question": "Who sired Keahi's cub?",
+      "options": [
+        "Kordell",
+        "Mow Mow",
+        "Rocket",
+        "Sequoia"
+      ],
+      "correct_answer": "Rocket"
+    },
+    {
+      "question": "About what percentage of the bamboo a red panda eats does it actually digest?",
+      "options": [
+        "About 100 percent",
+        "About 80 percent",
+        "About 50 percent",
+        "About 24 percent"
+      ],
+      "correct_answer": "About 24 percent"
+    },
+    {
+      "question": "Why do red pandas enter 'torpor' in cold weather?",
+      "options": [
+        "To lower their body temperature and save energy",
+        "To grow an extra layer of fur",
+        "To hide from predators",
+        "To find a mate"
+      ],
+      "correct_answer": "To lower their body temperature and save energy"
+    },
+    {
+      "question": "What is the main threat to red pandas in the wild?",
+      "options": [
+        "Too much bamboo",
+        "Habitat loss",
+        "Cold winters",
+        "Noise from nearby cities"
+      ],
+      "correct_answer": "Habitat loss"
+    }
+  ],
+  "background_read": [
+    "The Smithsonian's National Zoo (a major zoo in Washington, D.C., run by the Smithsonian Institution, a large US museum and research organisation) breeds its most vulnerable animals at a conservation campus in Front Royal, Virginia, where scientists work out how to keep struggling species going.",
+    "Red pandas were described by Western scientists in the 1820s, decades before the giant panda became known, and today they are the only living members of their own family, Ailuridae, inside the same broad group as raccoons and weasels.",
+    "'Endangered' is a formal ranking on the IUCN Red List (a global list showing how close each species is to extinction), and it means a species faces a very high risk of dying out in the wild.",
+    "Zoos swap animals and keep detailed family trees, because cubs born to unrelated parents carry more genetic variety — the raw material a species needs to survive new diseases and a changing climate.",
+    "Habitat loss is the pattern behind most modern extinctions: forests get cut into fragments too small to support breeding populations, which is what happened to red panda habitat in Nepal.",
+    "The Red Panda Network (a conservation group that works with communities in Nepal and nearby countries) focuses on protecting the forests where the animals still live."
+  ],
+  "Article_Structure": [
+    "LEAD: on International Red Panda Day, the Smithsonian's National Zoo has three new cubs",
+    "  └─ WHERE: the zoo's conservation campus in Front Royal, Virginia",
+    "BIRTH TIMELINE",
+    "  ├─ May 29: Sequoia (3-year-old female) and Mow Mow (12-year-old male) welcomed twins, one female and one male",
+    "  └─ June 11: Keahi (3-year-old female) gave birth to a single female, sired by Rocket (7-year-old male)",
+    "WHY THE ZOO CARES: 'ensuring the population overall' — Jessica Kordell, assistant curator of carnivores",
+    "  └─ logic: 'We can't conserve the species and continue to breed them if we don't have the animals'",
+    "CUB DEVELOPMENT: summer in nest boxes, drinking milk and sleeping; bamboo now offered but not yet eaten; mobility and personalities emerging",
+    "  ├─ the singleton: 'feisty', huff-quacks at staff",
+    "  └─ the twins: quieter and shyer, relying on each other",
+    "SPECIES BACKGROUND: endangered, living in the treetops of Nepal, India, Bhutan, Myanmar and China",
+    "  ├─ DIET: 2–4 pounds of bamboo a day but only about 24% digested, so 20–30% of body weight must be eaten daily",
+    "  ├─ CAMOUFLAGE: reddish fur matches tree lichen; black belly blends into shadow; torpor saves energy in the cold",
+    "  └─ THREATS: fewer than 10,000 left; habitat loss; Nepal's habitat fragmented into 400 patches; Red Panda Network active since 2007",
+    "CLOSING: the cubs pass their parents' genetic material to the next generation — crucial for a species in trouble"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Positive — zoo staff and conservationists",
+      "description": "Three healthy cubs mean new genetic lines for a small captive population, and every birth keeps the species' options open. The publicity also brings visitors and donations that can be channelled into field conservation."
+    },
+    {
+      "perspective": "Critical — some animal-welfare and wild-conservation advocates",
+      "description": "They argue that zoo births can create a false sense that a species is safe while the real problem — destroyed habitat — gets less attention. Space in breeding programmes is limited, so only a fraction of zoo-born animals ever contribute to the wild population."
+    },
+    {
+      "perspective": "Neutral and analytical",
+      "description": "Captive breeding works as genetic insurance: a back-up population kept alive while habitat is protected or restored. Success is measured in decades and depends on zoos co-ordinating family trees and on groups like the Red Panda Network working with the communities who live alongside the animals."
+    },
+    {
+      "perspective": "Forward-looking",
+      "description": "If restored forest corridors can reconnect Nepal's scattered patches, future zoo-bred pandas may have somewhere to go. Researchers are also studying how red pandas cope with warming temperatures, since the cool mountain forests they depend on are themselves under pressure."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "Sat, 19 Sep 2026 08:00:00 -0400",
+  "source_name": "Popular Science",
+  "source_url": "https://www.popsci.com/environment/red-panda-day-smithsonian-national-zoo-new-cubs/"
+}
