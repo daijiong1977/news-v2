@@ -1,36 +1,71 @@
 {
   "title": "Congo Races to Protect Health Workers as Ebola Outbreak Grows",
   "summary": "Health workers in Congo are first in line for a vaccine that could protect them from Ebola. On Saturday, the country began vaccinating doctors, nurses, and other front-line workers in Bunia, the city at the center of the fastest-growing Ebola outbreak ever recorded.\n\n\"Our collective duty is to protect life,\" said Maj. Gen. Gaby Kasongo Mulumba, the military governor of Ituri province. He said these workers are \"particularly exposed and deeply involved in the response.\"\n\nThe vaccine is called Ervebo. It worked against a different, more common type of Ebola virus in past outbreaks. But this outbreak is caused by the Bundibugyo virus, which has no licensed vaccine or treatment. Scientists are still studying whether Ervebo can protect people from Bundibugyo Ebola. The two viruses are related, so there is hope it will help.\n\nAbout 70,000 doses of Ervebo have been approved for use in Congo. Around 50,000 doses will go to front-line and health workers. The other 20,000 doses will be used in a clinical trial to study whether the vaccine works against Bundibugyo virus.\n\nThe campaign in Ituri and North Kivu is expected to reach 20,000 front-line workers over six to nine months.\n\nAs of Saturday, Congo had recorded 7,541 confirmed cases, including 3,639 deaths. Another 1,823 people have recovered. The World Health Organization says the outbreak is still out of control and could become the deadliest Ebola outbreak in history.",
-  "why_it_matters": "When a disease spreads, protecting the people who care for the sick keeps clinics running and everyone safer — the same idea as washing your hands and getting your shots so illness doesn't reach your school or family.",
+  "why_it_matters": "When health workers are protected, they can keep caring for sick people — which helps stop a disease from spreading to families and communities far beyond Congo.",
   "image_url": "/article_images/article_1e167e8d083b.webp",
-  "keywords": [],
+  "keywords": [
+    {
+      "term": "Ebola",
+      "explanation": "A very serious disease caused by a virus that can spread from person to person and can kill people."
+    },
+    {
+      "term": "outbreak",
+      "explanation": "When a disease suddenly spreads to many people in one area."
+    },
+    {
+      "term": "Ervebo",
+      "explanation": "The name of a vaccine that was made to protect people from one type of Ebola virus."
+    },
+    {
+      "term": "clinical trial",
+      "explanation": "A careful test done with people to find out if a medicine or vaccine really works."
+    },
+    {
+      "term": "doses",
+      "explanation": "Measured amounts of a medicine or vaccine that are given to a person."
+    },
+    {
+      "term": "confirmed cases",
+      "explanation": "People who are known for sure to have the disease, because they were tested."
+    }
+  ],
   "questions": [
     {
-      "question": "In which city did Congo begin vaccinating health workers?",
+      "question": "Which city is at the center of the Ebola outbreak, where vaccinations began?",
       "options": [
-        "Nuuk",
-        "Kinshasa",
         "Bunia",
-        "Lagos"
+        "Goma",
+        "Kinshasa",
+        "Nuuk"
       ],
       "correct_answer": "Bunia"
     },
     {
-      "question": "What is the name of the vaccine being given to doctors, nurses, and other front-line workers?",
+      "question": "What is the name of the vaccine being given to health workers?",
       "options": [
-        "Kasongo",
-        "Ituri",
         "Ervebo",
+        "Kivu",
+        "Ituri",
         "Bundibugyo"
       ],
       "correct_answer": "Ervebo"
     },
     {
-      "question": "Which virus is causing this outbreak?",
+      "question": "Why are scientists not sure the vaccine will work in this outbreak?",
       "options": [
+        "It is too old to use",
+        "It has never been tested at all",
+        "It was made for a different virus",
+        "It only works on animals"
+      ],
+      "correct_answer": "It was made for a different virus"
+    },
+    {
+      "question": "What is the name of the virus causing this outbreak?",
+      "options": [
+        "Ituri virus",
+        "Bunia virus",
         "Bundibugyo virus",
-        "Marburg virus",
-        "Influenza virus",
         "Ervebo virus"
       ],
       "correct_answer": "Bundibugyo virus"
@@ -38,60 +73,50 @@
     {
       "question": "About how many doses of Ervebo have been approved for use in Congo?",
       "options": [
+        "7,000",
         "20,000",
-        "7,541",
         "70,000",
         "50,000"
       ],
       "correct_answer": "70,000"
     },
     {
-      "question": "How many doses will be used in a clinical trial?",
+      "question": "Which group says the outbreak is still out of control and could become the deadliest Ebola outbreak in history?",
       "options": [
-        "20,000",
-        "50,000",
-        "1,823",
-        "70,000"
+        "The clinical trial team",
+        "The World Health Organization",
+        "The military governor of Ituri",
+        "The Bunia city council"
       ],
-      "correct_answer": "20,000"
-    },
-    {
-      "question": "As of Saturday, how many deaths had Congo recorded?",
-      "options": [
-        "20,000",
-        "7,541",
-        "3,639",
-        "1,823"
-      ],
-      "correct_answer": "3,639"
+      "correct_answer": "The World Health Organization"
     }
   ],
   "background_read": [
-    "Ebola is a dangerous virus disease that was first found in central Africa and has caused many outbreaks there since the 1970s.",
-    "The World Health Organization (a part of the United Nations that watches over health around the world) helps countries track diseases and send help when outbreaks happen.",
-    "Vaccines usually take many years of testing before countries allow them to be used, which is why scientists must study whether Ervebo works against this new type of Ebola."
+    "Ebola is a serious disease caused by a virus. It was first discovered in 1976 in Congo, near a river called the Ebola River — that is how it got its name.",
+    "The World Health Organization (a health group run by countries around the world) tracks outbreaks and helps send doctors, vaccines and supplies to the places that need them.",
+    "Congo (also called the Democratic Republic of the Congo) is a large country in central Africa, and several Ebola outbreaks have started there."
   ],
   "Article_Structure": [
-    "WHO: Doctors, nurses, and other front-line health workers in Congo, the military governor of Ituri province (Maj. Gen. Gaby Kasongo Mulumba), and the World Health Organization.",
-    "WHAT: Congo started vaccinating health workers with Ervebo, even though Ervebo was made for a different Ebola type; about 70,000 doses are approved, with 20,000 saved for a clinical trial.",
-    "WHERE: In Bunia, the city at the center of the outbreak, and across the Ituri and North Kivu provinces of Congo.",
-    "WHY: The Bundibugyo Ebola outbreak is out of control and could become the deadliest in history, and the health workers caring for patients are the most exposed."
+    "WHO: Health workers, doctors and nurses in Congo, together with Congo's government and the World Health Organization.",
+    "WHAT: Congo began vaccinating front-line health workers with a vaccine called Ervebo.",
+    "WHERE: In Bunia, a city in Ituri province in eastern Congo; the campaign covers Ituri and North Kivu.",
+    "WHY: To protect the workers who are most exposed to the virus, as the outbreak grows out of control with thousands of cases and deaths."
   ],
   "perspectives": [
     {
-      "perspective": "Health officials in Congo",
-      "description": "They say it is their duty to protect life, and that vaccinating front-line workers first is the smartest way to keep the response going."
+      "perspective": "Hopeful scientists",
+      "description": "Ervebo worked against another type of Ebola in past outbreaks, and because the two viruses are related, researchers hope it can help against Bundibugyo too."
     },
     {
-      "perspective": "Concerned scientists",
-      "description": "They point out that no vaccine or treatment is licensed for the Bundibugyo virus, so everyone is relying on hope that a vaccine made for a related virus will work."
+      "perspective": "Careful doctors",
+      "description": "No vaccine or treatment is approved for the Bundibugyo virus yet, so the 20,000 doses being used in a clinical trial are still an experiment, not a proven shield."
     },
     {
-      "perspective": "The World Health Organization",
-      "description": "It reports that the outbreak is still out of control and warns it could become the deadliest Ebola outbreak ever, so the results of the vaccination campaign and trial matter a lot."
+      "perspective": "Worried health officials",
+      "description": "The outbreak is the fastest-growing ever recorded and is still out of control, so it could become the deadliest Ebola outbreak in history."
     }
   ],
-  "mined_at": "2026-09-20T02:58:39+00:00",
+  "mined_at": "2026-09-20T03:57:41+00:00",
   "source_published_at": "Sat, 19 Sep 2026 14:48:50 -0400",
   "source_name": "PBS NewsHour",
   "source_url": "https://www.pbs.org/newshour/world/congo-begins-ebola-vaccinations-for-health-workers-in-the-epicenter-of-the-outbreak"

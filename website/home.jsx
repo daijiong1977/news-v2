@@ -114,9 +114,13 @@ function SignInNudge({ tweaks, onOpenUserPanel }) {
           fontFamily:'Nunito, sans-serif', cursor:'pointer',
           letterSpacing:'.04em', whiteSpace:'nowrap',
         }}>🇬 Sign in →</button>
-        <button onClick={dismiss} title="Hide this for now" style={{
+        <button onClick={dismiss} title="Hide this for now" aria-label="Hide this for now" style={{
           background:'transparent', color:'#9a8d7a', border:'none',
-          padding:'4px 6px', fontSize:18, fontWeight:700, cursor:'pointer',
+          // 44x44 is Apple's minimum touch target; this measured 23x26 on a
+          // phone, next to a Sign in button a mis-tap would trigger.
+          minWidth:44, minHeight:44, display:'inline-flex',
+          alignItems:'center', justifyContent:'center',
+          padding:0, fontSize:18, fontWeight:700, cursor:'pointer',
           lineHeight:1, fontFamily:'Nunito, sans-serif',
         }}>×</button>
       </div>
@@ -1649,7 +1653,9 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
       </section>
 
       {/* ——————————— FOOTER ——————————— */}
-      <footer style={{textAlign:'center', padding:'28px 20px 40px', color:'#9a8d7a', fontSize:13}}>
+      <footer style={{textAlign:'center', padding:'28px 20px 40px', color:'#9a8d7a', fontSize:13,
+                      // give the legal links a finger-sized row rather than 16px
+                      lineHeight:1.9}}>
         {(() => {
           // Use the freshest mined_at across all loaded articles as the "page
           // generated" timestamp. Displayed in the reader's local timezone.
@@ -1921,8 +1927,10 @@ function SearchPage({ onBack, onOpenResult, level, language }) {
         }}>
           <button onClick={onBack} style={{
             background:'transparent', border:'none', cursor:'pointer',
-            fontSize:22, color:'#1b1230', padding:'4px 6px', lineHeight:1,
-          }} title="Back">←</button>
+            fontSize:22, color:'#1b1230', lineHeight:1,
+            minWidth:44, minHeight:44, display:'inline-flex',
+            alignItems:'center', justifyContent:'center', padding:0,
+          }} title="Back" aria-label="Back">←</button>
           <div style={{
             fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20,
             color:'#1b1230', marginRight:6,
@@ -2110,6 +2118,8 @@ function FeedbackModal({ onClose }) {
           </div>
           <button onClick={onClose} style={{
             background:'transparent', border:'none', fontSize:22, cursor:'pointer', color:'#888',
+            minWidth:44, minHeight:44, display:'inline-flex',
+            alignItems:'center', justifyContent:'center', padding:0,
           }} aria-label="Close">×</button>
         </div>
 

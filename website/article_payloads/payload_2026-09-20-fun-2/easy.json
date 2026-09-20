@@ -1,122 +1,122 @@
 {
   "title": "This Computer Runs on DNA and Fits in a Drop of Water",
   "summary": "What if you could do math without a calculator, a phone, or even electricity? Scientists have built a computer that uses DNA — the same stuff that carries your genes — to solve problems. And it all happens in a tiny drop of water. The computer is called the Scaffolded DNA Computer, or SDC. It's made of short DNA strands that mix with a longer DNA strand in salt water. When the water is heated and cooled, the strands compete to connect in the right way. The final shape gives the answer. \"The DNA molecules compete with each other to select a winner,\" said Damien Woods, a professor at Maynooth University in Ireland. The SDC can do simple math, like 10 + 3, in about 30 seconds. That's slow compared to a regular computer, which does it in a flash. But the DNA computer uses way less energy. It doesn't need constant power to keep going. Instead, it uses the laws of physics to settle into the correct answer. The team tested over 700 calculations, including addition, multiplication, and division. A really hard problem took up to 14 hours. Scientists think DNA computers could one day store data or even work inside living cells. \"They're not trying to replace electronic ones,\" said Abeer Eshra, a co-author. \"But they could be used in biological environments.\" So next time you do math, think about the tiny DNA computer that does it with just a drop of water!",
-  "why_it_matters": "Computers today use lots of electricity, so if DNA computers work, they could help store information in a totally new way and even run tiny medical devices inside our bodies.",
+  "why_it_matters": "It shows that the technology in your phone isn't the only way to solve problems — nature itself can be a computer, and kids today may grow up to build machines nobody has thought of yet.",
   "image_url": "/article_images/article_88b8f259b36c.webp",
   "keywords": [
     {
       "term": "DNA",
-      "explanation": "The long, twisty stuff inside living things that holds the instructions for how they grow and work."
+      "explanation": "The tiny instructions inside living things that tell a body how to grow and work."
     },
     {
       "term": "molecules",
-      "explanation": "Very tiny building blocks that make up everything around us."
+      "explanation": "Very tiny pieces of matter that everything is made of."
     },
     {
       "term": "strands",
-      "explanation": "Long, thin pieces — like pieces of string — such as a strand of DNA."
+      "explanation": "Long, thin strings — here, pieces of DNA."
     },
     {
       "term": "genes",
-      "explanation": "The parts of DNA that carry information from parents to children."
+      "explanation": "The parts of DNA that carry information about how a living thing looks and works."
     },
     {
-      "term": "biological",
-      "explanation": "Having to do with living things, like cells or bodies."
+      "term": "energy",
+      "explanation": "The power that makes things work, like electricity for a computer."
     },
     {
-      "term": "co-author",
-      "explanation": "A person who helps write a study or paper along with the other writers."
+      "term": "calculations",
+      "explanation": "The answers you get when you work out math problems."
     }
   ],
   "questions": [
     {
       "question": "What does the new computer use to solve problems?",
       "options": [
-        "DNA",
+        "Magnets",
         "Electricity",
-        "Sound waves",
-        "Sunlight"
+        "Light",
+        "DNA"
       ],
       "correct_answer": "DNA"
     },
     {
-      "question": "Where does all the computing happen?",
+      "question": "What is the computer called?",
       "options": [
+        "The Scaffolded DNA Computer (SDC)",
+        "The Maynooth Machine",
+        "The Gene Calculator",
+        "The Water Computer"
+      ],
+      "correct_answer": "The Scaffolded DNA Computer (SDC)"
+    },
+    {
+      "question": "Where does the DNA computing happen?",
+      "options": [
+        "In a big tank of salt water",
         "Inside a phone",
-        "In a metal box",
-        "In a big data centre",
+        "In a lab freezer",
         "In a tiny drop of water"
       ],
       "correct_answer": "In a tiny drop of water"
     },
     {
-      "question": "How long does the problem 10 + 3 take the DNA computer?",
+      "question": "How long does the SDC take to solve 10 + 3?",
       "options": [
+        "Less than a second",
+        "About 5 minutes",
         "About 30 seconds",
-        "It happens instantly",
-        "About 14 hours",
-        "About one minute"
+        "About 14 hours"
       ],
       "correct_answer": "About 30 seconds"
     },
     {
-      "question": "Who is Damien Woods?",
-      "options": [
-        "A professor at Maynooth University in Ireland",
-        "A volunteer on YouTube",
-        "The inventor of the calculator",
-        "A student in the United States"
-      ],
-      "correct_answer": "A professor at Maynooth University in Ireland"
-    },
-    {
       "question": "How many calculations did the team test?",
       "options": [
-        "More than 11,000",
-        "Only 3",
+        "About 100",
         "About 30",
-        "Over 700"
+        "Over 700",
+        "Over 14"
       ],
       "correct_answer": "Over 700"
     },
     {
-      "question": "What might DNA computers do in the future?",
+      "question": "What might DNA computers do one day?",
       "options": [
-        "Make electricity cheaper",
-        "Replace all phones",
-        "Fly to other planets",
-        "Work inside living cells"
+        "Power your phone with water",
+        "Make electricity out of DNA",
+        "Store data or work inside living cells",
+        "Replace all electronic computers"
       ],
-      "correct_answer": "Work inside living cells"
+      "correct_answer": "Store data or work inside living cells"
     }
   ],
   "background_read": [
-    "DNA is the long, twisty molecule inside every living thing, storing the instructions for building and running a body.",
-    "Maynooth University (a university in Ireland) is where the team that built this DNA computer works; scientists in several countries have been trying to compute with DNA for many years.",
-    "Regular computers use electricity and get hot, while nature packs enormous amounts of information into DNA — all the instructions for a tree or a person fit inside cells too small to see."
+    "DNA is often called the 'instruction book' of life, and it stores information in a code made of four letters.",
+    "Maynooth University (a university in Ireland) is where the team's professor, Damien Woods, works on this project.",
+    "Regular computers use tiny electric switches to work, but scientists have been experimenting with DNA computers for many years because DNA can hold a huge amount of information in a very small space."
   ],
   "Article_Structure": [
     "WHO: A team led by professor Damien Woods at Maynooth University in Ireland, with co-author Abeer Eshra.",
-    "WHAT: They built the Scaffolded DNA Computer (SDC), which uses DNA strands in salt water to solve math problems.",
-    "WHERE: In a tiny drop of water — no electricity or normal computer parts needed.",
-    "WHY: It uses far less energy than a regular computer and might one day store data or work inside living cells."
+    "WHAT: They built the Scaffolded DNA Computer (SDC), which uses DNA strands in a drop of water to do math.",
+    "WHERE: In a tiny drop of salt water, rather than on a chip that needs electricity.",
+    "WHY: It uses far less energy than a normal computer and might one day store data or work inside living cells."
   ],
   "perspectives": [
     {
-      "perspective": "Curious scientists",
-      "description": "They are excited that mixing DNA strands can produce correct answers by itself, like a tiny chemistry puzzle solving itself."
+      "perspective": "Impressed scientists",
+      "description": "They think the SDC is exciting because it solves problems using chemistry and physics, with almost no energy needed."
     },
     {
       "perspective": "Practical doubters",
-      "description": "They point out that 30 seconds for 10 + 3 is much slower than a normal computer, so DNA computers won't replace the laptop at home."
+      "description": "They point out that 30 seconds for simple math is very slow, so DNA computers probably won't replace the laptop or phone you already use."
     },
     {
       "perspective": "Doctors and biologists",
-      "description": "They see the real promise in biology — a computer that works in water and living cells could help inside the human body one day."
+      "description": "They are interested because a computer that works with DNA could one day run inside living cells and help in medicine."
     }
   ],
-  "mined_at": "2026-09-20T02:58:39+00:00",
+  "mined_at": "2026-09-20T03:57:41+00:00",
   "source_published_at": "Sat, 19 Sep 2026 14:00:00 +0000",
   "source_name": "Live Science",
   "source_url": "https://www.livescience.com/technology/computing/scientists-build-a-dna-computer-that-can-perform-calculations-in-a-drop-of-water"

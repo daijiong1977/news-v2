@@ -1,137 +1,136 @@
 {
   "title": "DNA Computer Performs Calculations in a Single Drop of Water",
   "summary": "Scientists have built a DNA-powered computer that can perform calculations using billions of molecules in a tiny drop of water. The system, called the Scaffolded DNA Computer (SDC), is described in a study published Sept. 16 in the journal Nature. Unlike conventional computers that need continuous energy, the SDC is designed so its most \"energetically favorable\" state is the correct answer. \"The clever part is that the binding process is competitive: the DNA molecules compete with each other to select a winner,\" said Damien Woods, a professor at Maynooth University in Ireland and co-author of the study. The SDC is made from short DNA strands that interact with a longer DNA scaffold. These strands are placed in salt water, then heated and cooled. As they interact, they assemble according to programmed rules. The strands act like molecular puzzle pieces, with their sequences determining which pieces attach where. By designing these binding rules, researchers effectively \"program\" a calculation. \"Each program corresponds to a set of DNA strands: to program a different computation, we simply select different DNA strands from the fridge,\" Woods and co-author Abeer Eshra told Live Science. The approach exploits thermodynamics — the tendency of systems to move toward more stable states. When heated and cooled, strands compete to form the most stable arrangements, with the correct configuration becoming favored. The final structure encodes the answer. The team demonstrated over 700 computations, including addition, multiplication by 3, division by 2, and 8-bit parity detection. Simple calculations like 10 + 3 took about 30 seconds. A harder sum in the range of 11 million to 34 million took up to 14 hours. \"They're trivial calculations you could easily do faster yourself,\" said Constantine Evans, a co-author. \"Our system uses just a handful of molecules, never really following an organized process of steps, and yet ending up with the right answer.\" Potential applications include molecular data storage, energy-efficient computing, and devices that could run inside living cells. \"Molecular computers like this are not trying to replace electronic ones,\" Eshra said. \"But they could be used in biological environments, smart materials and archival DNA data storage.\"",
-  "why_it_matters": "DNA can pack enormous amounts of information into almost no space, and it can react chemically in places silicon chips never could — inside cells, inside materials, inside long-term archives. This study is a proof of concept rather than a product, but it shows a path toward computing that needs a fraction of the energy of today's machines, which matters as data centres and AI demand ever more electricity.",
+  "why_it_matters": "If computations can be run by molecules that self-assemble in water, then the shrinking limits of silicon chips and the huge energy appetite of data centres may not be the end of the story — and DNA-based storage could change how the world archives its data for centuries.",
   "image_url": "/article_images/article_88b8f259b36c.webp",
   "keywords": [
     {
-      "term": "Scaffolded DNA Computer (SDC)",
-      "explanation": "The name of the new system, which uses short DNA strands arranged around a longer DNA strand to run calculations."
-    },
-    {
       "term": "thermodynamics",
-      "explanation": "The branch of physics about heat and energy, including the rule that systems tend to settle into their most stable state."
+      "explanation": "The science of how heat and energy push systems toward their most stable state."
     },
     {
       "term": "scaffold",
-      "explanation": "A long DNA strand that the shorter strands attach to, holding the whole structure together."
+      "explanation": "A long DNA strand that shorter strands attach to, working like a frame or template."
     },
     {
-      "term": "energetically favorable",
-      "explanation": "Describing the arrangement a system naturally prefers because it is the most stable and needs the least energy."
+      "term": "molecule",
+      "explanation": "A tiny group of atoms joined together — DNA is a very long molecule."
     },
     {
-      "term": "8-bit parity detection",
-      "explanation": "A computing task that checks whether a row of eight binary digits (0s and 1s) contains an odd or even number of 1s."
+      "term": "computation",
+      "explanation": "A calculation or a set of steps that produces an answer."
     },
     {
-      "term": "archival DNA data storage",
-      "explanation": "Using DNA to keep information safe for a very long time, like a library that could last for centuries."
+      "term": "binding",
+      "explanation": "Sticking together — here, when short DNA strands join onto a longer one."
+    },
+    {
+      "term": "archival",
+      "explanation": "Meant to be kept for a very long time, like records stored in an archive."
     }
   ],
   "questions": [
     {
-      "question": "What is the name of the DNA-powered computing system described in the study?",
+      "question": "What is the name of the DNA computer described in the study?",
       "options": [
-        "The Scaffolded DNA Computer (SDC)",
-        "The Nature Thermo Processor",
-        "The Molecular Puzzle Engine",
-        "The Competitive Binding Calculator"
+        "Maynooth DNA Array (MDA)",
+        "Scaffolded DNA Computer (SDC)",
+        "Molecular Parity Engine (MPE)",
+        "Competitive Binding Processor (CBP)"
       ],
-      "correct_answer": "The Scaffolded DNA Computer (SDC)"
+      "correct_answer": "Scaffolded DNA Computer (SDC)"
     },
     {
-      "question": "In which journal was the study published?",
+      "question": "What does the SDC use to perform calculations?",
       "options": [
-        "The Monthly Notices",
-        "Nature",
-        "Molecular Computing Today",
-        "Live Science"
+        "Light beams passing through glass chips",
+        "Tiny silicon transistors",
+        "Billions of molecules in a tiny drop of water",
+        "Electric currents in copper wires"
       ],
-      "correct_answer": "Nature"
+      "correct_answer": "Billions of molecules in a tiny drop of water"
     },
     {
-      "question": "Where does Damien Woods, a co-author of the study, work?",
+      "question": "According to Damien Woods, what is the 'clever part' of the system?",
       "options": [
-        "Harvard University in the United States",
-        "The University of Cambridge",
-        "The University of Southern California",
-        "Maynooth University in Ireland"
+        "It uses almost no water at all",
+        "It can run any program an electronic computer runs",
+        "The DNA molecules compete with each other to select a winner",
+        "It never produces an incorrect answer"
       ],
-      "correct_answer": "Maynooth University in Ireland"
+      "correct_answer": "The DNA molecules compete with each other to select a winner"
     },
     {
-      "question": "About how many calculations did the team demonstrate?",
+      "question": "Why do the researchers say the answer appears without being forced?",
       "options": [
-        "About 70",
-        "Over 700",
-        "Exactly 14",
-        "Over 7,000"
+        "Because the strands are magnetic and line up",
+        "Because the most energetically favorable state is the correct answer",
+        "Because a robot sorts the molecules by hand",
+        "Because the water is heated until it freezes solid"
       ],
-      "correct_answer": "Over 700"
+      "correct_answer": "Because the most energetically favorable state is the correct answer"
     },
     {
-      "question": "How long did a simple calculation such as 10 + 3 take?",
+      "question": "How long did the simple calculation 10 + 3 take?",
       "options": [
         "About 30 minutes",
-        "Less than a second",
-        "About 30 seconds",
-        "About 14 hours"
+        "About 3 seconds",
+        "About 14 hours",
+        "About 30 seconds"
       ],
       "correct_answer": "About 30 seconds"
     },
     {
-      "question": "Which of these is mentioned as a possible future use of DNA computers?",
+      "question": "Which set of calculations did the team demonstrate?",
       "options": [
-        "Replacing all electronic computers",
-        "Powering electric cars",
-        "Predicting the weather",
-        "Devices that could run inside living cells"
+        "Video rendering and image editing",
+        "Addition, multiplication by 3, division by 2 and 8-bit parity detection",
+        "Weather forecasting and chess",
+        "Speech recognition and translation"
       ],
-      "correct_answer": "Devices that could run inside living cells"
+      "correct_answer": "Addition, multiplication by 3, division by 2 and 8-bit parity detection"
     }
   ],
   "background_read": [
-    "In a normal computer, information is stored as bits — zeros and ones — and every step of a calculation needs a steady supply of electricity. DNA stores information differently: its four chemical letters (A, T, C and G) can spell out data at extraordinary density, and researchers have already encoded books and images in DNA.",
-    "Computing with DNA is not a new idea. The field began when the computer scientist Leonard Adleman (then at the University of Southern California) used DNA strands to solve a small version of a classic routing puzzle, and it has stayed a niche, proof-of-concept area ever since. The study appeared in Nature, one of the world's oldest and most cited science journals.",
-    "The new device's rules come from thermodynamics — the study of heat and energy, whose famous second law says systems tend to fall into their most stable, lowest-energy state. A scaffolded design exploits that law: instead of being pushed step by step, the molecules are built so that the correct answer is simply the most stable arrangement they can settle into."
+    "Molecular computing is not a brand-new idea. In the 1990s the mathematician Leonard Adleman (a computer scientist at the University of Southern California) used DNA strands in test tubes to solve a small version of a classic routing puzzle, showing that molecules could, in principle, compute. The idea stayed mostly in laboratories because DNA reactions are slow and prone to errors.",
+    "Today's electronic chips are made by etching silicon, and their circuits are shrinking toward physical limits, while data centres consume a growing share of the world's electricity. DNA has the opposite appeal: it can pack an enormous amount of information into a tiny space — far more than a hard drive of the same weight — and it can be stored dry at room temperature for a very long time, which is why it is studied for archival data storage.",
+    "The study appeared in Nature, one of the world's oldest and most respected science journals, and the co-authors include Damien Woods at Maynooth University (a university in Ireland, west of Dublin).",
+    "The team is careful to say molecular computers are not trying to replace electronic ones. Instead, the promise is in places electronics cannot easily go: inside living cells, inside smart materials that respond to their environment, and in long-term DNA archives."
   ],
   "Article_Structure": [
-    "LEAD: a computer that calculates in a single drop of water — powered by DNA, not electricity",
-    "  └─ hook quote: 'the binding process is competitive: the DNA molecules compete with each other to select a winner' — Damien Woods, Maynooth University",
+    "LEAD: a computer that performs calculations using DNA in one drop of water",
+    "  └─ named the Scaffolded DNA Computer (SDC); study published Sept. 16 in the journal Nature",
     "HOW IT WORKS",
-    "  ├─ MATERIAL: short DNA strands plus a longer DNA scaffold, placed in salt water",
-    "  ├─ PROCESS: heated and cooled so strands assemble according to programmed rules",
-    "  └─ PRINCIPLE: thermodynamics — the most 'energetically favorable' state is the answer",
-    "PROGRAMMING: choosing different strands 'from the fridge' means running a different computation",
-    "RESULTS",
-    "  ├─ SCALE: over 700 computations — addition, multiplication by 3, division by 2, 8-bit parity",
-    "  ├─ SPEED: 10 + 3 in about 30 seconds; a sum in the tens of millions took up to 14 hours",
-    "  └─ CAVEAT: 'trivial calculations you could easily do faster yourself' — Constantine Evans",
-    "WHERE IT COULD GO",
-    "  ├─ molecular data storage and energy-efficient computing",
-    "  └─ devices that could run inside living cells",
-    "CLOSING FRAME: not a replacement for electronic computers — 'biological environments, smart materials and archival DNA data storage'"
+    "  ├─ PARTS: short DNA strands plus a longer DNA scaffold, placed in salt water",
+    "  ├─ PROCESS: the mixture is heated and cooled, and strands bind according to programmed rules",
+    "  └─ PRINCIPLE: thermodynamics drives the system to its most stable state, which is the correct answer",
+    "PERFORMANCE",
+    "  ├─ SCALE: over 700 computations demonstrated — addition, multiplication by 3, division by 2, 8-bit parity detection",
+    "  ├─ EASY CASE: 10 + 3 took about 30 seconds",
+    "  └─ HARD CASE: a sum in the range of 11 million to 34 million took up to 14 hours",
+    "QUOTE / REALITY CHECK: co-author Constantine Evans calls them 'trivial calculations you could easily do faster yourself'",
+    "APPLICATIONS: molecular data storage, energy-efficient computing, devices that could run inside living cells",
+    "OPEN QUESTION: whether such molecular machines can scale beyond small demonstrations — 'not trying to replace' electronic computers"
   ],
   "perspectives": [
     {
-      "perspective": "Positive — molecular computing researchers",
-      "description": "This is a clean demonstration that thermodynamics itself can be programmed: set the molecules up so the right answer is the most stable state, and the physics does the work. That could lead to computers that barely need energy and to DNA archives far denser than any hard drive."
+      "perspective": "Positive — researchers and industry",
+      "description": "Supporters see a new computing paradigm that needs no constant power supply, because the correct answer is the most stable state the molecules can reach. Combined with DNA's extraordinary storage density, this could lead to energy-efficient computing and archives that last far longer than today's hard drives."
     },
     {
-      "perspective": "Critical — performance skeptics",
-      "description": "The numbers are humbling: up to 14 hours for one arithmetic problem and about 30 seconds for 10 + 3, which a phone solves instantly. Without error correction and a way to scale up, it is hard to see this beating electronics at anything practical in the near future."
+      "perspective": "Critical — skeptics of the hype",
+      "description": "A calculation that takes 14 hours when a child could do it in seconds is a demonstration, not a product, and calling it a 'computer' can oversell what is really a carefully designed chemistry experiment. DNA reactions are also error-prone and hard to reset, so scaling to real-world problems may prove extremely difficult."
     },
     {
-      "perspective": "Neutral — historians of the field",
-      "description": "DNA computing has existed since the 1990s, when Leonard Adleman used DNA to solve a routing puzzle, and it has always been a small proof-of-concept field. The new twist is the scaffold-based design, which shifts computation away from step-by-step operations and turns it into a competitive binding process."
+      "perspective": "Analytical — historians of computing",
+      "description": "Early electronic computers were also slow, bulky and unreliable compared with the machines that followed, so judging a new computing substrate by its first demonstrations can be misleading. The pattern is that a new platform starts as a curiosity in a lab and takes decades of engineering before it becomes practical — or fades away entirely."
     },
     {
-      "perspective": "Forward-looking — where it could go next",
-      "description": "The most promising paths are not faster calculators but places silicon cannot reach: sensors inside living cells, smart materials that respond chemically, and ultra-long-term DNA data archives. Progress will depend on making these reactions reliable — and cheap — at much larger scales."
+      "perspective": "Forward-looking — what comes next",
+      "description": "The immediate goal is not speed but placement: devices that could operate inside living cells or smart materials, where ordinary chips cannot go, and DNA archives for long-term data. Questions about safety, control and unintended interactions inside living bodies will need answers before molecular computers leave the lab."
     }
   ],
-  "mined_at": "2026-09-20T02:58:39+00:00",
+  "mined_at": "2026-09-20T03:57:41+00:00",
   "source_published_at": "Sat, 19 Sep 2026 14:00:00 +0000",
   "source_name": "Live Science",
   "source_url": "https://www.livescience.com/technology/computing/scientists-build-a-dna-computer-that-can-perform-calculations-in-a-drop-of-water"

@@ -1,97 +1,122 @@
 {
   "title": "Trump Wants an 'AI Force' — and a Special AI Boss",
   "summary": "Imagine a whole team in the government whose only job is artificial intelligence — AI. That's what President Donald Trump says he wants to build. He calls it the 'AI Force,' and he wants to put one special boss in charge: an AI tsar.\n\nTrump shared the plan in a social media post on Saturday. He said his team 'will not in any way hinder or stifle' AI — meaning he won't slow it down. He also said AI is 'the next Industrial Revolution, or Internet, but will be even larger.' He even guessed it could become 25% of America's GDP. GDP is the total money a country makes in a year — so that's a giant slice of the pie.\n\nWhy does he care so much? Trump says he wants the U.S. to stay ahead of China in AI.\n\nBut not everyone agrees. Some AI leaders, like Dario Amodei of Anthropic, want AI to slow down until it's safer. Trump calls those worries a 'hoax' — something fake. He says the government will go after people who use AI to do bad things.\n\nTrump meets China's President Xi Jinping next week, and AI is expected to come up.",
-  "why_it_matters": "AI tools are already inside phones, games, and homework helpers, so who leads on AI and how fast it grows will shape the technology and jobs you grow up with.",
+  "why_it_matters": "AI is already inside the apps, games and tools kids use every day, so choices made now about how fast it grows and who watches it will shape the world they grow up in.",
   "image_url": "/article_images/article_f2c909c5378c.webp",
-  "keywords": [],
+  "keywords": [
+    {
+      "term": "artificial intelligence",
+      "explanation": "Computer programs that can learn and do jobs that normally need human thinking, like writing or answering questions."
+    },
+    {
+      "term": "AI Force",
+      "explanation": "The name President Trump gave to the government team he wants to build just for AI."
+    },
+    {
+      "term": "AI tsar",
+      "explanation": "One special boss who would be in charge of all the government's AI work."
+    },
+    {
+      "term": "Industrial Revolution",
+      "explanation": "The time, starting in the 1700s, when machines and factories changed how people worked and lived."
+    },
+    {
+      "term": "GDP",
+      "explanation": "The total money a country makes in a year."
+    },
+    {
+      "term": "hoax",
+      "explanation": "Something fake that someone wants you to believe is real."
+    }
+  ],
   "questions": [
     {
-      "question": "What does President Donald Trump say he wants to build in the government?",
+      "question": "What does President Trump call the government team he wants to build?",
       "options": [
-        "An 'AI Force' led by one AI tsar",
-        "A space agency",
-        "A school for robots",
-        "A new branch of the army"
+        "The Tech Team",
+        "The AI Force",
+        "The Digital Force",
+        "The AI Bureau"
       ],
-      "correct_answer": "An 'AI Force' led by one AI tsar"
+      "correct_answer": "The AI Force"
     },
     {
-      "question": "Where did Trump share his plan?",
+      "question": "What is the name for the single boss Trump wants to put in charge of AI?",
       "options": [
-        "In a social media post",
-        "In a speech at the United Nations",
-        "In a letter to Congress",
-        "On a television show"
+        "An AI senator",
+        "An AI general",
+        "An AI tsar",
+        "An AI chief"
       ],
-      "correct_answer": "In a social media post"
+      "correct_answer": "An AI tsar"
     },
     {
-      "question": "Trump guessed that AI could become 25% of what?",
+      "question": "What share of America's GDP does Trump guess AI could become?",
       "options": [
-        "America's population",
-        "China's GDP",
-        "The world's energy use",
-        "America's GDP"
+        "10%",
+        "50%",
+        "25%",
+        "5%"
       ],
-      "correct_answer": "America's GDP"
-    },
-    {
-      "question": "In AI, Trump says he wants the United States to stay ahead of which country?",
-      "options": [
-        "Russia",
-        "Denmark",
-        "France",
-        "China"
-      ],
-      "correct_answer": "China"
+      "correct_answer": "25%"
     },
     {
       "question": "Who is Dario Amodei?",
       "options": [
-        "The president of China",
-        "The government's new AI boss",
-        "A scientist who says AI is a hoax",
-        "An AI leader at Anthropic who wants AI to slow down until it is safer"
+        "The President of China",
+        "A reporter who wrote about AI",
+        "Trump's AI tsar",
+        "An AI leader who wants AI to slow down until it is safer"
       ],
-      "correct_answer": "An AI leader at Anthropic who wants AI to slow down until it is safer"
+      "correct_answer": "An AI leader who wants AI to slow down until it is safer"
     },
     {
-      "question": "What does Trump call the worries about making AI safer first?",
+      "question": "What does Trump call worries about AI safety?",
       "options": [
-        "A new law",
-        "The next revolution",
-        "A good idea",
-        "A 'hoax'"
+        "A deal",
+        "A trial",
+        "A hoax",
+        "A law"
       ],
-      "correct_answer": "A 'hoax'"
+      "correct_answer": "A hoax"
+    },
+    {
+      "question": "Whose president is Trump meeting next week, where AI is expected to come up?",
+      "options": [
+        "France's",
+        "China's",
+        "Congo's",
+        "Denmark's"
+      ],
+      "correct_answer": "China's"
     }
   ],
   "background_read": [
-    "Artificial intelligence is already in everyday life — phone assistants, video recommendations, and chat programs that can write text all use it.",
-    "The United States and China are the two countries spending the most on AI research, so their leaders often treat AI as a race to win.",
-    "The word 'tsar' comes from the title of Russia's old emperors; in modern politics, an American 'tsar' is a person picked to lead one big project for the government."
+    "Artificial intelligence, or AI, means computer programs that can learn and do jobs that used to need a human brain, like writing, drawing, or answering questions.",
+    "US presidents have long given special helpers nicknames ending in 'czar' — such as a 'drug czar' in charge of fighting drugs. 'Tsar' was the old word for a Russian king.",
+    "The first Industrial Revolution began in Britain in the 1700s, when steam engines and factories changed how people worked and lived all over the world. Trump says AI could be an even bigger change than that."
   ],
   "Article_Structure": [
-    "WHO: President Donald Trump, AI leaders such as Dario Amodei of Anthropic, and China's President Xi Jinping.",
-    "WHAT: Trump said in a social media post that he wants an 'AI Force' in the government run by a single AI tsar, and promised not to 'hinder or stifle' AI.",
-    "WHERE: The plan was announced from the United States by social media, and Trump meets China's Xi Jinping next week where AI is expected to come up.",
-    "WHY: Trump says he wants America to stay ahead of China and believes AI is the next giant revolution that could become a quarter of the country's economy."
+    "WHO: President Donald Trump; AI company leader Dario Amodei of Anthropic; China's President Xi Jinping.",
+    "WHAT: Trump said he wants to build a government AI team called the 'AI Force' with one boss, an AI tsar.",
+    "WHERE: Announced in a social media post in the United States, ahead of a meeting with China's leader.",
+    "WHY: Trump wants the US to stay ahead of China in AI and says he will not slow the technology down."
   ],
   "perspectives": [
     {
-      "perspective": "Trump and AI supporters",
-      "description": "They argue AI is the next Industrial Revolution and bigger than the internet, so the government should push it forward fast instead of slowing it down."
+      "perspective": "Supportive",
+      "description": "Trump says AI is the next Industrial Revolution and could make up a quarter of America's GDP, so the government should race ahead and not hinder it."
     },
     {
-      "perspective": "Safety-focused AI leaders",
-      "description": "People like Dario Amodei of Anthropic want AI to slow down until it is safer, because rushing powerful tools could cause serious problems."
+      "perspective": "Cautious",
+      "description": "Some AI leaders, like Dario Amodei of Anthropic, want AI to slow down until it is safer, because they worry about the risks it could bring."
     },
     {
-      "perspective": "Neutral analysts",
-      "description": "So far this is only an announcement in a social media post — nobody knows who the AI tsar would be, what the AI Force would actually do, or whether Congress would agree."
+      "perspective": "Neutral",
+      "description": "Others note that Trump calls safety worries a 'hoax' but also says the government will go after people who use AI to do bad things."
     }
   ],
-  "mined_at": "2026-09-20T02:58:39+00:00",
+  "mined_at": "2026-09-20T03:57:41+00:00",
   "source_published_at": "Sat, 19 Sep 2026 21:01:56 GMT",
   "source_name": "BBC News",
   "source_url": "https://www.bbc.co.uk/news/articles/cqlykr2vrv04o?at_medium=RSS&at_campaign=rss"
