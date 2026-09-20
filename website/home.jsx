@@ -2457,6 +2457,7 @@ function KeywordTip({ term, def }) {
 }
 
 function ArticleCard({ article, onOpen, read, pct, variant }) {
+  const narrow = useIsNarrow();
   const [hover, setHover] = useStateH(false);
   const isFeature = variant === 'feature';
   const isTall = variant === 'tall-feature';
@@ -2482,7 +2483,7 @@ function ArticleCard({ article, onOpen, read, pct, variant }) {
         transform: clickable && hover ? 'translateY(-4px) rotate(-0.3deg)' : 'translateY(0)',
         boxShadow: clickable && hover ? '0 10px 0 rgba(27,18,48,0.08)' : '0 4px 0 rgba(27,18,48,0.06)',
         transition:'all .2s cubic-bezier(.3,1.4,.6,1)',
-        gridColumn: isFeature ? 'span 2' : 'auto',
+        gridColumn: (isFeature && !narrow) ? 'span 2' : 'auto',
         display:'flex',
         flexDirection:'column',
         width: isTall ? '100%' : undefined,

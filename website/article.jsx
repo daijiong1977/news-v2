@@ -928,7 +928,11 @@ function AnalyzeTab({ article, paragraphs, onNext }) {
       </div>
 
       {/* Full-width: Article reference collapsible */}
-      <div style={{gridColumn:'span 2', background:'#fff9ef', border:'2px solid #f0e8d8', borderRadius:22, padding:0, overflow:'hidden'}}>
+      {/* span 2 is for the desktop two-column grid. On a phone the grid is a
+          single column, and a child spanning 2 forces an implicit second one —
+          which squeezed the Background card into 94px and set its heading one
+          letter per line. */}
+      <div style={{gridColumn: narrow ? 'auto' : 'span 2', background:'#fff9ef', border:'2px solid #f0e8d8', borderRadius:22, padding:0, overflow:'hidden'}}>
         <button onClick={()=>setArticleOpen(!articleOpen)} style={{
           width:'100%', background:'transparent', border:'none', padding:'16px 22px',
           display:'flex', alignItems:'center', gap:10, cursor:'pointer', color:'#1b1230',
@@ -953,7 +957,7 @@ function AnalyzeTab({ article, paragraphs, onNext }) {
         )}
       </div>
 
-      <div style={{gridColumn:'span 2', display:'flex', justifyContent:'center', marginTop:8}}>
+      <div style={{gridColumn: narrow ? 'auto' : 'span 2', display:'flex', justifyContent:'center', marginTop:8}}>
         <BigButton bg="#ffc83d" color="#1b1230" onClick={onNext}>Ready for the quiz →</BigButton>
       </div>
     </div>
