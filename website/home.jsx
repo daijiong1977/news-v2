@@ -846,8 +846,16 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
               </div>
             </div>
 
-            {/* Tracker pills — clickable to jump back */}
-            <div style={{display:'flex', gap:8}}>
+            {/* Tracker pills — clickable to jump back.
+                Three at minWidth:130 plus gaps is 406px; a 390px phone has ~366px
+                to give, so the third pill was cut off and unreachable — the reader
+                could not jump back to Fun. Scroll the strip and let the pills
+                shrink. */}
+            <div style={{
+              display:'flex', gap:8,
+              overflowX:'auto', WebkitOverflowScrolling:'touch',
+              scrollbarWidth:'none', paddingBottom:2, maxWidth:'100%',
+            }}>
               {groups.map((g, i) => {
                 const sel = selections[g.cat.label];
                 const isCurrent = i === step;
@@ -858,7 +866,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
                     style={{
                       cursor:'pointer', border:'none',
                       background:'#fff', borderRadius:14,
-                      padding:'10px 14px', minWidth:130,
+                      padding:'10px 14px', minWidth: narrow ? 104 : 130, flexShrink:0,
                       borderTop: isCurrent ? `4px solid ${g.cat.color}` : '4px solid transparent',
                       borderLeft: sel ? `3px solid ${g.cat.color}` : '3px solid transparent',
                       boxShadow: isCurrent ? '0 4px 0 rgba(27,18,48,0.12)' : '0 2px 0 rgba(27,18,48,0.06)',
