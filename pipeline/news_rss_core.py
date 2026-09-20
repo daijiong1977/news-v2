@@ -1502,7 +1502,16 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
     reuses them across all keywords for that slot — avoids the N-per-
     keyword recomputation Copilot flagged in the 2026-04-29 review.
     """
-    articles_by_id = {a["source_id"]: a for a in rewrite_result.get("articles") or []}
+    # Slot keys are POSITIONAL: _detail_enrich_input_single_level builds them as
+    # f"{i}_{level}" for i in range(len(articles)). Looking them up by
+    # `source_id` only agreed while source_id happened to equal the position.
+    # Once Stage 3 rejected an article and a spare was promoted the two
+    # diverged, this returned {}, body was "", and EVERY keyword was dropped as
+    # "hallucinated" — 2 of 9 articles shipped with an empty Word Treasure on
+    # 2026-09-20, including an Ebola story whose dropped terms were "Ebola",
+    # "vaccine" and "outbreak".
+    # Bug: docs/bugs/2026-09-20-keywords-dropped-by-slot-id-mismatch.md
+    arts = rewrite_result.get("articles") or []
     for slot_key, det in details.items():
         kws = det.get("keywords") or []
         if not kws:
@@ -1512,9 +1521,19 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
             aid = int(aid_str)
         except (ValueError, TypeError):
             continue
-        art = articles_by_id.get(aid, {})
+        art = arts[aid] if 0 <= aid < len(arts) else None
+        if art is None:
+            log.warning("  [%s] slot has no article at that position (%d of %d) — "
+                        "keeping its %d keywords unvalidated", slot_key, aid, len(arts), len(kws))
+            continue
         variant = art.get(f"{lvl}_en" if lvl in ("easy", "middle") else lvl) or {}
         body = variant.get("body") or ""
+        if not body:
+            # Nothing to validate against. Dropping every keyword is the one
+            # outcome that is certainly wrong.
+            log.warning("  [%s] no body to validate against — keeping its %d keywords",
+                        slot_key, len(kws))
+            continue
         body_lc = body.lower()
         body_stems = _body_word_stem_index(body)
         kept = []
