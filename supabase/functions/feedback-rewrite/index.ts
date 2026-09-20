@@ -30,7 +30,7 @@ const CORS = {
   "Access-Control-Max-Age": "86400",
 };
 
-const SYSTEM_PROMPT = `You are a friendly writing coach for kids ages 8-13.
+const SYSTEM_PROMPT = `You are a friendly writing coach for kids ages 10-14.
 A kid just wrote a short response to a news story they read. Your job:
 
 1. SCORE their writing on 4 dimensions (each 1-5, where 5 = excellent for
