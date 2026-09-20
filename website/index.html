@@ -32,6 +32,24 @@
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
   button { font-family: var(--twentyone-sans); }
   ::selection { background: var(--twentyone-gold); color: var(--twentyone-ink); }
+  /* ---- Responsive safety net (2026-09-20) ----------------------------------
+     The app styles every component with inline React styles, so CSS cannot
+     override those without !important. These rules cover the structural
+     defaults that caused a 390px iPhone to scroll sideways by 436px:
+       · flex/grid children default to min-width:auto and refuse to shrink
+         below their content, which is what turns one long header row into a
+         page wider than the screen
+       · media and long unbroken strings (URLs, source names) push containers
+     Layout that genuinely differs per device is done with clamp() in the
+     component styles; this block only stops overflow. */
+  img, svg, video, canvas { max-width: 100%; height: auto; }
+  #root :where(header, main, section, article) :where(div, button, a, p, h1, h2, h3) { min-width: 0; }
+  #root p, #root h1, #root h2, #root h3, #root li { overflow-wrap: anywhere; }
+  /* Phones: nothing may force the page wider than the viewport. */
+  @media (max-width: 480px) {
+    html, body { max-width: 100%; overflow-x: hidden; }
+  }
+
   /* Scrollbar - subtle */
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-track { background: var(--twentyone-cream); }
@@ -49,13 +67,13 @@
      so window.kidsync is available everywhere downstream. -->
 <script src="kidsync.js?v=20260427pickssync"></script>
 
-<script type="text/babel" src="data.jsx?v=20260425g"></script>
-<script type="text/babel" src="components/SunFace21.jsx?v=20260425g"></script>
-<script type="text/babel" src="components/Big21.jsx?v=20260425g"></script>
-<script type="text/babel" src="components.jsx?v=20260425g"></script>
-<script type="text/babel" src="home.jsx?v=20260425g"></script>
-<script type="text/babel" src="article.jsx?v=20260425g"></script>
-<script type="text/babel" src="user-panel.jsx?v=20260425g"></script>
+<script type="text/babel" src="data.jsx?v=20260920b"></script>
+<script type="text/babel" src="components/SunFace21.jsx?v=20260920b"></script>
+<script type="text/babel" src="components/Big21.jsx?v=20260920b"></script>
+<script type="text/babel" src="components.jsx?v=20260920b"></script>
+<script type="text/babel" src="home.jsx?v=20260920b"></script>
+<script type="text/babel" src="article.jsx?v=20260920b"></script>
+<script type="text/babel" src="user-panel.jsx?v=20260920b"></script>
 
 <script type="text/babel">
 const { useState, useEffect } = React;

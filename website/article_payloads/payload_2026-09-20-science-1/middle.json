@@ -1,0 +1,141 @@
+{
+  "title": "Earth's Building Blocks Came From Its Own Neighborhood, Study Finds",
+  "summary": "For decades, planetary scientists have debated where Earth's raw material came from. Many thought 6 to 40 percent of it drifted in from the outer Solar System, beyond Jupiter. That idea helped explain how Earth got water and other volatile substances — materials that turn to gas easily.\n\nNew research challenges that picture. Paolo Sossi and Dan Bower of ETH Zurich compared isotope measurements from a wide range of meteorites with Earth's own composition. Isotopes are atoms of the same element with different masses — like siblings who weigh slightly different amounts.\n\nThe team used ten isotope systems. Earlier studies usually relied on just two. \"Our studies are actually data science experiments,\" Sossi said. They ran statistical calculations rarely used in geochemistry.\n\nThe conclusion: Earth formed entirely from inner Solar System material. Outer material makes up less than 2 percent of Earth's mass — possibly none at all. The study appeared in Nature Astronomy.\n\n\"We were truly astonished to find that the Earth is composed entirely of material from the inner Solar System,\" Bower said.\n\nScientists divide meteorites into two groups. Non-carbonaceous meteorites formed in the inner Solar System. Carbonaceous ones, richer in water and carbon, came from the outer region. Earth, the analysis says, is made only of the inner kind.\n\nWhy two separate reservoirs? Jupiter likely played a role. As the gas giant grew, its gravity carved a gap in the disc of gas and dust around the young Sun. Jupiter acted like a barrier, limiting how much outer material could move inward. Until now, scientists didn't know how effective that barrier was.\n\nThe finding suggests Earth grew in a relatively stable environment, gathering nearby planetary bodies. It also means water and other volatiles were probably present in the inner Solar System from the start — no delivery from far away needed.",
+  "why_it_matters": "This rewrites the origin story of our own planet: if Earth's water and carbon were local rather than shipped in from the outer Solar System, then rocky planets around other stars might start out with the ingredients for life far more often than scientists assumed.",
+  "image_url": "/article_images/article_ad8e3fd6c947.webp",
+  "keywords": [
+    {
+      "term": "isotopes",
+      "explanation": "Atoms of the same element that have slightly different masses, like siblings who weigh a bit more or less than each other."
+    },
+    {
+      "term": "meteorites",
+      "explanation": "Chunks of rock and metal from space that land on Earth; they are leftover building material from the early Solar System."
+    },
+    {
+      "term": "geochemistry",
+      "explanation": "The science of studying the chemical make-up of rocks, planets and other natural materials."
+    },
+    {
+      "term": "volatiles",
+      "explanation": "Substances such as water that turn into gas easily when they get warm."
+    },
+    {
+      "term": "carbonaceous",
+      "explanation": "Describing meteorites that are rich in water and carbon and formed far from the Sun."
+    },
+    {
+      "term": "reservoirs",
+      "explanation": "Separate stores or supplies of material — here, the inner and outer regions of the early Solar System."
+    }
+  ],
+  "questions": [
+    {
+      "question": "Before this study, what did many planetary scientists think about Earth's raw material?",
+      "options": [
+        "That 6 to 40 percent of it came from beyond Jupiter",
+        "That it all came from the inner Solar System",
+        "That it was made inside Jupiter's core",
+        "That it arrived from another star system"
+      ],
+      "correct_answer": "That 6 to 40 percent of it came from beyond Jupiter"
+    },
+    {
+      "question": "What did Sossi and Bower compare in their research?",
+      "options": [
+        "Isotope measurements from meteorites with Earth's own composition",
+        "Photos taken by space telescopes",
+        "Computer models of Jupiter's atmosphere",
+        "Rock samples collected on the Moon"
+      ],
+      "correct_answer": "Isotope measurements from meteorites with Earth's own composition"
+    },
+    {
+      "question": "How many isotope systems did the team use, and what did earlier studies usually rely on?",
+      "options": [
+        "Five; earlier studies used one",
+        "Forty; earlier studies used ten",
+        "Two; earlier studies usually used ten",
+        "Ten; earlier studies usually used two"
+      ],
+      "correct_answer": "Ten; earlier studies usually used two"
+    },
+    {
+      "question": "According to the new conclusion, how much of Earth's mass came from the outer Solar System?",
+      "options": [
+        "Less than 2 percent, possibly none at all",
+        "Exactly 6 percent",
+        "Between 10 and 40 percent",
+        "About half"
+      ],
+      "correct_answer": "Less than 2 percent, possibly none at all"
+    },
+    {
+      "question": "What role does the article suggest Jupiter played?",
+      "options": [
+        "Its gravity carved a gap in the disc of gas and dust, limiting how much outer material could move inward",
+        "It produced the water that later fell to Earth",
+        "It stopped the Sun from spinning",
+        "It pulled Earth closer to the Sun"
+      ],
+      "correct_answer": "Its gravity carved a gap in the disc of gas and dust, limiting how much outer material could move inward"
+    },
+    {
+      "question": "Which kind of meteorite does the analysis say Earth is made of?",
+      "options": [
+        "Non-carbonaceous meteorites only",
+        "Carbonaceous meteorites only",
+        "An equal mix of both kinds",
+        "Neither kind"
+      ],
+      "correct_answer": "Non-carbonaceous meteorites only"
+    }
+  ],
+  "background_read": [
+    "ETH Zurich (the Swiss Federal Institute of Technology in Zurich) is one of Europe's leading research universities, and Nature Astronomy is a peer-reviewed journal that publishes space and planetary science.",
+    "For decades, the leading explanation for Earth's water was delivery from afar: icy bodies from beyond Jupiter — carbonaceous meteorites and comets — crashing into the young planet.",
+    "Jupiter is the largest planet in the Solar System, and its gravity is stronger than any other planet's. Planetary scientists have long argued that as Jupiter grew, it opened a gap in the swirling disc of gas and dust (the protoplanetary disc) that surrounded the newborn Sun; one well-known version of this idea, the 'Grand Tack', pictures Jupiter wandering inward and then back out, reshaping the early Solar System.",
+    "Meteorites act as free samples of that early era. The carbon-rich, water-rich kind (carbonaceous chondrites) formed farther out, while the drier, non-carbonaceous kind formed closer in, and their chemistry works like a fingerprint.",
+    "Isotopes are the tool for reading those fingerprints, because the same element can come in slightly heavier or slightly lighter versions — exactly what Sossi and Bower measured."
+  ],
+  "Article_Structure": [
+    "LEAD: a decades-long debate about where Earth's building blocks came from",
+    "  └─ older view: 6–40% of Earth's material drifted in from beyond Jupiter, explaining its water and other volatiles",
+    "NEW STUDY: Paolo Sossi and Dan Bower of ETH Zurich compared meteorite isotopes with Earth's own composition",
+    "  ├─ METHOD: ten isotope systems, where earlier studies used only two",
+    "  └─ the researchers call their work 'data science experiments' using rare statistical calculations",
+    "PUBLICATION: the study appeared in Nature Astronomy",
+    "TURNING POINT: Earth formed entirely from inner Solar System material",
+    "  ├─ outer material is under 2% of Earth's mass — possibly none at all",
+    "  └─ QUOTE: 'We were truly astonished…' — Dan Bower",
+    "EVIDENCE: two meteorite families",
+    "  ├─ non-carbonaceous = inner Solar System",
+    "  └─ carbonaceous (water- and carbon-rich) = outer; Earth matches only the inner kind",
+    "MECHANISM: Jupiter as a barrier",
+    "  └─ its growing gravity carved a gap in the disc of gas and dust, limiting how much outer material moved inward — until now, nobody knew how effective that barrier was",
+    "IMPLICATION: Earth grew in a stable neighbourhood, and its water and volatiles were local from the start",
+    "OPEN QUESTION: no delivery from far away was needed"
+  ],
+  "perspectives": [
+    {
+      "perspective": "Supportive — planetary scientists who favour a local origin",
+      "description": "The team's ten isotope systems point to a single source for Earth, and the mix of meteorite chemistry and statistics gives the 'everything came from nearby' camp its strongest evidence yet. It also makes Earth less of a lucky exception."
+    },
+    {
+      "perspective": "Critical — researchers who backed outer-Solar-System delivery",
+      "description": "Models that brought in water aboard comets and carbon-rich meteorites lose their main explanation for Earth's oceans. Some will also question whether heavy statistical methods and a limited set of meteorites can really settle such a huge question, so the debate may not be over."
+    },
+    {
+      "perspective": "Neutral and analytical",
+      "description": "This is a classic scientific upgrade: replacing two-isotope comparisons with a broad statistical fingerprint. It also puts a number on a long-hypothesised mechanism — Jupiter acting as a gatekeeper in the young Solar System."
+    },
+    {
+      "perspective": "Forward-looking",
+      "description": "The next steps are checking whether inner-Solar-System material really can hold that much water, testing more meteorites and samples, and applying the same logic to other planetary systems."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "Wed, 16 Sep 2026 07:03:10 EDT",
+  "source_name": "ScienceDaily Strange & Offbeat",
+  "source_url": "https://www.sciencedaily.com/releases/2026/09/260915232132.htm"
+}

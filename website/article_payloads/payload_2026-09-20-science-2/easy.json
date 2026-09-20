@@ -1,0 +1,123 @@
+{
+  "title": "Three Red Panda Cubs Are the Star of This Panda Party",
+  "summary": "Happy International Red Panda Day! At the Smithsonian's National Zoo, there are three tiny reasons to celebrate.\n\nThree red panda cubs were born this summer at the zoo's campus in Front Royal, Virginia. On May 29, a mom named Sequoia and dad Mow Mow had twins — one girl, one boy. On June 11, a mom named Keahi had a single girl.\n\nAll three are doing well. They've spent the summer in nest boxes, drinking milk and sleeping. They're starting to move around more, and their personalities are showing.\n\n\"The singleton... is definitely feisty and huff-quacks at us every chance she gets,\" said Jessica Kordell, an assistant curator. \"The twins are a bit more quiet and shy.\"\n\nRed pandas are endangered. Fewer than 10,000 live in the wild, in the treetops of Nepal, India, Bhutan, Myanmar, and China. They eat mostly bamboo — about two to four pounds a day — but can digest only about 24 percent of it. That's why they eat so much!\n\nTheir red fur helps them blend in with reddish lichen growing on trees. Their black bellies fade into shadows.\n\nWhy does this matter? These cubs pass their parents' genes to the next generation. That helps keep the species going.",
+  "why_it_matters": "When an animal is endangered, every healthy baby matters — these cubs help make sure red pandas don't disappear from the world you are growing up in.",
+  "image_url": "/article_images/article_69d2463a5d55.webp",
+  "keywords": [
+    {
+      "term": "endangered",
+      "explanation": "In danger of disappearing forever because very few are left in the wild."
+    },
+    {
+      "term": "bamboo",
+      "explanation": "A tall, hard kind of grass that red pandas and giant pandas eat."
+    },
+    {
+      "term": "lichen",
+      "explanation": "A crusty plant-like growth on tree bark and rocks, often reddish or greenish."
+    },
+    {
+      "term": "curator",
+      "explanation": "A person at a zoo who takes care of the animals and knows all about them."
+    },
+    {
+      "term": "genes",
+      "explanation": "Tiny instructions inside living things that parents pass on to their babies."
+    },
+    {
+      "term": "species",
+      "explanation": "A group of animals or plants of the same kind that can have babies together."
+    }
+  ],
+  "questions": [
+    {
+      "question": "How many red panda cubs were born at the zoo?",
+      "options": [
+        "Ten",
+        "Two",
+        "Three",
+        "Five"
+      ],
+      "correct_answer": "Three"
+    },
+    {
+      "question": "Where is the zoo campus where the cubs were born?",
+      "options": [
+        "Front Royal, Virginia",
+        "Nepal",
+        "Washington, D.C.",
+        "New Zealand"
+      ],
+      "correct_answer": "Front Royal, Virginia"
+    },
+    {
+      "question": "Which mother had twins?",
+      "options": [
+        "Mow Mow",
+        "Keahi",
+        "Sequoia",
+        "Kordell"
+      ],
+      "correct_answer": "Sequoia"
+    },
+    {
+      "question": "How does Jessica Kordell describe the single cub?",
+      "options": [
+        "Quiet and shy",
+        "Big and bold",
+        "Feisty and huff-quacks at us",
+        "Sleepy and slow"
+      ],
+      "correct_answer": "Feisty and huff-quacks at us"
+    },
+    {
+      "question": "About how many red pandas live in the wild?",
+      "options": [
+        "About 100,000",
+        "About one million",
+        "Fewer than 100",
+        "Fewer than 10,000"
+      ],
+      "correct_answer": "Fewer than 10,000"
+    },
+    {
+      "question": "Why do red pandas have to eat so much bamboo?",
+      "options": [
+        "Because they share it with other animals",
+        "Because it makes their fur red",
+        "Because they can digest only about 24 percent of it",
+        "Because bamboo is hard to find"
+      ],
+      "correct_answer": "Because they can digest only about 24 percent of it"
+    }
+  ],
+  "background_read": [
+    "International Red Panda Day is celebrated each September to help people learn about these animals.",
+    "Red pandas live in the mountain forests of the Himalayas in Asia, and they are not close cousins of giant pandas — they are the only living members of their own animal family.",
+    "Zoos around the world join breeding programs to keep red panda families healthy and varied, because the wild population is small and shrinking."
+  ],
+  "Article_Structure": [
+    "WHO: Three red panda cubs at the Smithsonian's National Zoo — twins born May 29 and a single girl born June 11 — plus mothers Sequoia and Keahi.",
+    "WHAT: The zoo is celebrating the cubs on International Red Panda Day; the cubs are growing, moving around, and showing their personalities.",
+    "WHERE: The zoo's campus in Front Royal, Virginia; in the wild, red pandas live in the treetops of Nepal, India, Bhutan, Myanmar, and China.",
+    "WHY: The cubs pass their parents' genes to the next generation, which helps keep the endangered species going."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Zoo keepers",
+      "description": "They are excited that all three cubs are doing well, and they enjoy watching the twins' shy personalities and the single cub's feisty huff-quacks."
+    },
+    {
+      "perspective": "Conservationists",
+      "description": "They are glad for the births, but they point out that red pandas in the wild still lose their forest homes, so zoo cubs alone won't save the species."
+    },
+    {
+      "perspective": "Visitors and kids",
+      "description": "For families, the cubs are a fun reason to visit the zoo and a chance to learn why some animals need our help."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "Sat, 19 Sep 2026 08:00:00 -0400",
+  "source_name": "Popular Science",
+  "source_url": "https://www.popsci.com/environment/red-panda-day-smithsonian-national-zoo-new-cubs/"
+}

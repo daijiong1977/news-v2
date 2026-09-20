@@ -1,34 +1,37 @@
 {
   "articles": [
     {
-      "id": "2026-04-24-news-1",
-      "title": "Oops! Three Politicians Get Caught Betting on Themselves",
-      "summary": "Imagine betting on yourself to win a race — and then getting caught! That's what happened to three U.S. congressional candidates. They used a website called Kalshi, where people can bet on elections. But Kalshi has a rule: candidates can't bet on their own races. Now they've been fined and banned from the site for five years. Mark Moran from Virginia said he did it on purpose to show these betting sites have too much power. Matt Klein from Minnesota bet just $50 and said it was a mistake. Ezekiel Enriquez from Texas lost his race with less than 2% of the vote. Some people, like Congressman Mike Levin, think the fines are too small — he called it 'a…",
+      "id": "2026-09-20-news-1",
       "source": "PBS NewsHour",
-      "time_ago": "Thu, 23 Apr 2026 19:05:03 -0400",
-      "image_url": "/article_images/article_e70859ec15f4.webp",
+      "time_ago": "Sat, 19 Sep 2026 14:48:50 -0400",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 14:48:50 -0400",
+      "image_url": "/article_images/article_1e167e8d083b.webp",
       "category": "News",
-      "mined_at": "2026-04-24T01:01:41.723732+00:00"
+      "title": "Congo Races to Protect Health Workers as Ebola Outbreak Grows",
+      "summary": "Congo started giving Ebola vaccines to health workers in Bunia on Saturday. This outbreak is the country's deadliest ever, with 7,541 cases and 3,639 deaths. The vaccine, called Ervebo, was made for a different type of Ebola, so scientists are still testing how well it works here."
     },
     {
-      "id": "2026-04-24-news-2",
-      "title": "A Mind Reader Is Headlining the White House Dinner — and Trump Might Be Part of the Act!",
-      "summary": "Imagine a mind reader at the White House! This year, the big fancy dinner in Washington, D.C., where journalists and politicians hang out, won't have a comedian roasting the president. Instead, mentalist Oz Pearlman is the headliner. He's famous for guessing people's PIN numbers and thoughts on TV, and he came in third on America's Got Talent in 2015. Pearlman wants to bring people together, not roast them. President Donald Trump plans to attend for the first time as president, and Pearlman hinted Trump might be part of the show! 'Reading Donald Trump's mind is arguably the most impressive thing you could ever do,' he said. Pearlman has been planning this for 10 years. Will he actually read Trump's mind?…",
-      "source": "NPR World",
-      "time_ago": "Thu, 23 Apr 2026 12:46:53 -0400",
-      "image_url": "/article_images/article_c9fd806dc459.webp",
+      "id": "2026-09-20-news-2",
+      "source": "BBC News",
+      "time_ago": "Sat, 19 Sep 2026 23:00:27 GMT",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 23:00:27 GMT",
+      "image_url": "/article_images/article_7ffe8b5c7454.webp",
       "category": "News",
-      "mined_at": "2026-04-24T01:01:42.087792+00:00"
+      "title": "US and Denmark Reach Deal on Greenland After Trump's Threats",
+      "summary": "The US and Denmark announced a deal on Greenland's security on Saturday, after President Trump spent months threatening to take the island by force. The deal gives the US a say in Greenland's security, but Denmark keeps sovereignty. Leaders expect to sign it next week."
     },
     {
-      "id": "2026-04-24-news-3",
-      "title": "Iran Fires Back at Trump: 'We Are One Soul, Not Divided!'",
-      "summary": "Is Iran really split into two groups, or are they all one team? President Trump said Iran has 'moderates' who want peace and 'hardliners' who want to fight. But Iran's top leaders — the president, foreign minister, and parliament speaker — all posted the same message on social media: 'We are all one soul!' They say everyone is united behind their new Supreme Leader, Mojtaba Khamenei. This comes after a tough time: in February, the U.S. and Israel killed Iran's former leader, Ali Khamenei. Now the U.S. has a blockade around Iran's ports, and Iran closed the Strait of Hormuz, making oil prices go up. Trump says the blockade is 'airtight' and Iran's military is destroyed. Israel is waiting for…",
-      "source": "Al Jazeera",
-      "time_ago": "Thu, 23 Apr 2026 20:26:13 +0000",
-      "image_url": "/article_images/article_23d2604d763b.webp",
+      "id": "2026-09-20-news-3",
+      "source": "BBC News",
+      "time_ago": "Sat, 19 Sep 2026 21:01:56 GMT",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 21:01:56 GMT",
+      "image_url": "/article_images/article_f2c909c5378c.webp",
       "category": "News",
-      "mined_at": "2026-04-24T01:01:42.32737+00:00"
+      "title": "Trump Wants an 'AI Force' — and a Special AI Boss",
+      "summary": "President Trump says the U.S. will start an 'AI Force' and pick an AI tsar (a top boss for AI). He posted this on Saturday and says AI could grow to 25% of America's economy."
     }
   ]
 }

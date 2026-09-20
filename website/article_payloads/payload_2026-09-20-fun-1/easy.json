@@ -1,0 +1,123 @@
+{
+  "title": "Two Planets Fluffier Than Cotton Candy Found in Space",
+  "summary": "Imagine a planet so light and fluffy that it could float in a giant bathtub. Astronomers just found two of them! They are called super-puffs, and they are less dense than cotton candy. The planets are named TOI-791 b and TOI-791 c. They are about the size of Jupiter, the biggest planet in our solar system. But they are much, much lighter. They orbit a star that is like our Sun, but far away — about 1,113 light-years from Earth. That's so far that even a spaceship going super fast would take millions of years to get there. Scientists are excited because finding two super-puffs in the same system is very rare. \"Only a handful of these super-puffy planets are known,\" said Dr. George Dransfield, who led the study. The planets were first spotted by volunteers looking at data from a NASA space telescope. They noticed tiny dips in the star's brightness. That happens when a planet passes in front of the star. The team used telescopes around the world, including one in Antarctica, to learn more. Each time a planet crossed the star, it blocked light for more than 11 hours. That's the longest ever seen from the ground! Scientists still don't know how these fluffy planets form. They think they might have big balls of gas around small rocky cores. The team hopes to use the James Webb Space Telescope to solve the mystery.",
+  "why_it_matters": "Studying how strange planets form helps scientists understand where our own Earth came from — and today's space-loving kids could grow up to solve a mystery nobody has cracked yet.",
+  "image_url": "/article_images/article_b4582bafab6b.webp",
+  "keywords": [
+    {
+      "term": "super-puffs",
+      "explanation": "Planets that are very light and puffy for their size, like a ball of cotton candy."
+    },
+    {
+      "term": "dense",
+      "explanation": "How tightly stuff is packed into a space; these planets are less dense than cotton candy, so they are very airy."
+    },
+    {
+      "term": "orbit",
+      "explanation": "To travel in a big loop around a star or a planet."
+    },
+    {
+      "term": "light-years",
+      "explanation": "A way to measure huge space distances — the distance light travels in one whole year."
+    },
+    {
+      "term": "astronomers",
+      "explanation": "Scientists who study stars, planets and space."
+    },
+    {
+      "term": "volunteers",
+      "explanation": "People who help with a job without being paid for it."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What are the two newly found planets called?",
+      "options": [
+        "Super and Puff",
+        "Cotton and Candy",
+        "TOI-791 b and TOI-791 c",
+        "Jupiter b and Jupiter c"
+      ],
+      "correct_answer": "TOI-791 b and TOI-791 c"
+    },
+    {
+      "question": "How big are the two planets compared with Jupiter?",
+      "options": [
+        "Much smaller than Jupiter",
+        "About the size of Jupiter",
+        "Twice as big as Jupiter",
+        "Bigger than the Sun"
+      ],
+      "correct_answer": "About the size of Jupiter"
+    },
+    {
+      "question": "How far away from Earth are these planets?",
+      "options": [
+        "About 1,113 light-years",
+        "About 11 hours",
+        "About 30 seconds",
+        "About 700 kilometres"
+      ],
+      "correct_answer": "About 1,113 light-years"
+    },
+    {
+      "question": "Who first spotted the planets?",
+      "options": [
+        "Volunteers looking at NASA telescope data",
+        "A team in Antarctica",
+        "Dr. George Dransfield alone",
+        "The James Webb Space Telescope"
+      ],
+      "correct_answer": "Volunteers looking at NASA telescope data"
+    },
+    {
+      "question": "How long did each planet block light from its star?",
+      "options": [
+        "More than 11 days",
+        "A few seconds",
+        "About 30 minutes",
+        "More than 11 hours"
+      ],
+      "correct_answer": "More than 11 hours"
+    },
+    {
+      "question": "What do scientists still NOT know about the planets?",
+      "options": [
+        "How fluffy planets like these form",
+        "That they exist at all",
+        "Where the star is",
+        "How big they are"
+      ],
+      "correct_answer": "How fluffy planets like these form"
+    }
+  ],
+  "background_read": [
+    "Not long ago, scientists had never seen a planet circling another star; today they know of thousands of these faraway worlds, called exoplanets.",
+    "NASA (the U.S. space agency that builds rockets and space telescopes) has helped find many of them, and the James Webb Space Telescope (a huge telescope flying in space, built to study faraway planets) is now hunting for clues about their air and weather.",
+    "Antarctica (the freezing continent at the bottom of the world) sounds like a strange spot for a telescope, but its cold, dry air lets astronomers spot tiny changes in starlight."
+  ],
+  "Article_Structure": [
+    "WHO: Astronomers led by Dr. George Dransfield, helped by volunteers and telescopes around the world.",
+    "WHAT: They found two super-puff planets, TOI-791 b and TOI-791 c, that are less dense than cotton candy.",
+    "WHERE: Orbiting a Sun-like star about 1,113 light-years from Earth; the data came from a NASA space telescope and ground telescopes, including one in Antarctica.",
+    "WHY: Finding two super-puffs in one system is very rare, and scientists still don't know how these fluffy planets form."
+  ],
+  "perspectives": [
+    {
+      "perspective": "Excited space scientists",
+      "description": "They see two super-puffs in one system as a rare, lucky find that could help explain how planets are made."
+    },
+    {
+      "perspective": "Patient puzzle-solvers",
+      "description": "They point out that nobody yet knows how these fluffy planets form, so the James Webb Space Telescope is needed before anyone can celebrate answers."
+    },
+    {
+      "perspective": "Volunteer stargazers",
+      "description": "They show that ordinary people, not just scientists, can spot brand-new planets by looking carefully at telescope data."
+    }
+  ],
+  "mined_at": "2026-09-20T02:58:39+00:00",
+  "source_published_at": "",
+  "source_name": "DOGOnews",
+  "source_url": "https://www.dogonews.com/2026/9/16/these-giant-super-puff-planets-are-less-dense-than-cotton-candy"
+}

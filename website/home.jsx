@@ -91,7 +91,7 @@ function SignInNudge({ tweaks, onOpenUserPanel }) {
   };
 
   return (
-    <section style={{maxWidth:1180, margin:'14px auto 0', padding:'0 28px'}}>
+    <section style={{maxWidth:1180, margin:'14px auto 0', padding:'0 clamp(12px, 4vw, 28px)'}}>
       <div style={{
         display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
         background:'linear-gradient(135deg, #fff9ef 0%, #ffe9bb 100%)',
@@ -265,7 +265,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone,
   return (
     <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
       {/* Header */}
-      <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
+      <div style={{padding:'14px clamp(12px, 4vw, 28px)', borderBottom:`2px solid ${theme.chip}`}}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
           <KidsNewsLockup size={100}/>
         </div>
@@ -274,7 +274,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone,
       {/* Hero */}
       <div style={{
         background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-        padding:'32px 28px 28px', borderBottom:`2px solid ${theme.border}`,
+        padding:'32px clamp(12px, 4vw, 28px) 28px', borderBottom:`2px solid ${theme.border}`,
       }}>
         <div style={{maxWidth:760, margin:'0 auto', textAlign:'center'}}>
           <div style={{
@@ -302,7 +302,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone,
       </div>
 
       {/* Form */}
-      <div style={{maxWidth:720, margin:'0 auto', padding:'28px'}}>
+      <div style={{maxWidth:720, margin:'0 auto', padding:'clamp(14px, 4vw, 28px)'}}>
 
         <_OnbSection label="What's your name?" sub="So we can say hi every morning.">
           <input
@@ -712,7 +712,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
     const totalMins = finals.reduce((m, s) => m + (s.readMins || 0), 0);
     return (
       <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
-        <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
+        <div style={{padding:'14px clamp(12px, 4vw, 28px)', borderBottom:`2px solid ${theme.chip}`}}>
           <div style={{maxWidth:1180, margin:'0 auto'}}>
             <KidsNewsLockup size={66}/>
           </div>
@@ -720,7 +720,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 
         <div style={{
           background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-          padding:'30px 28px 24px', borderBottom:`2px solid ${theme.border}`, textAlign:'center',
+          padding:'30px clamp(12px, 4vw, 28px) 24px', borderBottom:`2px solid ${theme.border}`, textAlign:'center',
         }}>
           <div style={{
             fontSize:12, fontWeight:800, letterSpacing:'.12em',
@@ -745,7 +745,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
           </div>
         </div>
 
-        <div style={{maxWidth:1180, margin:'0 auto', padding:'28px'}}>
+        <div style={{maxWidth:1180, margin:'0 auto', padding:'clamp(14px, 4vw, 28px)'}}>
           <div style={{
             display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:18, marginBottom:28,
           }}>
@@ -788,7 +788,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 
             <button onClick={lockNow} style={{
               background:'#1b1230', color:'#fff', border:'none', borderRadius:16,
-              padding:'16px 28px', fontWeight:900, fontSize:17,
+              padding:'16px clamp(14px, 4vw, 28px)', fontWeight:900, fontSize:17,
               fontFamily:'Nunito, sans-serif', cursor:'pointer',
               boxShadow:'0 5px 0 rgba(27,18,48,0.18)',
             }}>▶ Start your {dailyGoal} minutes</button>
@@ -803,7 +803,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       {/* — Header strip — */}
       <div style={{
         background: theme.bg, borderBottom:`2px solid ${theme.chip}`,
-        padding:'14px 28px',
+        padding:'14px clamp(12px, 4vw, 28px)',
       }}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
           <KidsNewsLockup size={66}/>
@@ -813,7 +813,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       {/* — Hero band: date + step heading + tagline + clickable tracker — */}
       <div style={{
         background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-        padding:'24px 28px 22px', borderBottom:`2px solid ${theme.border}`,
+        padding:'24px clamp(12px, 4vw, 28px) 22px', borderBottom:`2px solid ${theme.border}`,
       }}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
           <div style={{
@@ -884,7 +884,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       </div>
 
       {/* — Big feature + 2 small compagnion cards — */}
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 28px'}}>
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 28px'}}>
         {featureCandidate && (
           <PickCard
             story={featureCandidate} variant="feature"
@@ -945,6 +945,27 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 //                              article whose steps[] is partial)
 //   · Done       ........... "🎉 All done — see you tomorrow"
 // ────────────────────────────────────────────────────────────────────
+// ── Viewport ───────────────────────────────────────────────────────────────
+// Every style in this app is an inline React style, and inline styles cannot
+// carry a media query. Sizes that only need to SCALE use clamp() directly;
+// layouts that must CHANGE shape (a row becoming a stack) read this hook.
+// 640px splits phones from everything else: iPhone 13 is 390 CSS px and a
+// 16 Pro Max is 440, so both land on the narrow side.
+const NARROW_BP = 640;
+function useIsNarrow(bp = NARROW_BP) {
+  const query = `(max-width: ${bp}px)`;
+  const [narrow, setNarrow] = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  React.useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = e => setNarrow(e.matches);
+    setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return narrow;
+}
+
 function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen, tweaks }) {
   if (!daily3 || daily3.length === 0) return null;
 
@@ -980,7 +1001,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
       position:'sticky', top: 0, zIndex: 25,
       background: 'rgba(255,249,239,0.96)', backdropFilter:'blur(8px)',
       borderBottom:`2px solid ${theme.chip}`,
-      padding:'26px 28px 24px',   // ~40% taller than the previous version
+      padding:'26px clamp(12px, 4vw, 28px) 24px',   // ~40% taller than the previous version
     }}>
       <div style={{maxWidth:1180, margin:'0 auto'}}>
         {/* Greeting row: "Hi {name}! 👋 · {date}" — moved up from the hero. */}
@@ -1050,6 +1071,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
 function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay, magicConsuming, magicLinkError }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
+  const narrow = useIsNarrow();
   const isZh = tweaks && tweaks.language === 'zh';
   // In zh mode we show the Chinese summary cards (language === 'zh'); otherwise
   // we show English cards at the selected level (Sprout => easy, Tree => middle).
@@ -1287,7 +1309,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
 
       {/* ——————————— ARCHIVE BANNER (when viewing an old day) ——————————— */}
       {isArchive && (
-        <section style={{maxWidth:1180, margin:'16px auto 0', padding:'0 28px'}}>
+        <section style={{maxWidth:1180, margin:'16px auto 0', padding:'0 clamp(12px, 4vw, 28px)'}}>
           <div style={{
             background:'#1b1230', color:'#fff', borderRadius:18,
             padding:'14px 20px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
@@ -1318,11 +1340,11 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
           below. The pickup-route gate + sticky-TodayBanner check `!isZh`
           for the same reason; this third surface was missed. */}
       {!isArchive && !isZh && (
-      <section style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 0'}}>
+      <section style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 0'}}>
         <div style={{
           background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
           borderRadius:28,
-          padding:'40px 48px',   // ~40% bigger than the previous 28×32
+          padding:'clamp(20px, 5vw, 40px) clamp(14px, 5vw, 48px)',  // ~40% bigger than the previous 28×32 on a laptop; on a 390px phone this and the section around it stacked to 184px of padding and left cards 234px wide
           position:'relative',
           overflow:'hidden',
           border:`2px solid ${theme.border}`,
@@ -1396,27 +1418,38 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
                   ) : (
                   <div style={{
                     background:'#fff', border:'2px solid #fff', borderRadius:18,
-                    padding:'18px 22px', display:'flex', gap:20, alignItems:'flex-start',
+                    padding: narrow ? '14px 16px' : '18px 22px',
+                    display:'flex', gap: narrow ? 12 : 20, alignItems:'flex-start',
+                    // 56 badge + 196 image + 36 actions + gaps + padding needs 392px.
+                    // A 390px phone gives this card ~280px, which squeezed the title
+                    // to zero width. On a phone the image takes its own line instead.
+                    flexWrap: narrow ? 'wrap' : 'nowrap',
                     boxShadow:'0 2px 0 rgba(27,18,48,0.08)',
                   }}>
                     <div style={{
-                      width:56, height:56, borderRadius:16, flexShrink:0,
+                      width: narrow ? 44 : 56, height: narrow ? 44 : 56,
+                      borderRadius:16, flexShrink:0,
                       background: catColor, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center',
-                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:26,
+                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize: narrow ? 20 : 26,
                     }}>{i+1}</div>
                     <div style={{
-                      width:196, height:196, borderRadius:16, flexShrink:0,
+                      width: narrow ? '100%' : 196, height: narrow ? 150 : 196,
+                      order: narrow ? -1 : 0,          // image first, on its own line
+                      borderRadius:16, flexShrink:0,
                       background:`url(${a.image}) center/cover, ${catColor}`,
                       border:`2px solid ${catColor}`,
                     }}/>
                     <button onClick={()=>onOpen(a.id)} style={{
-                      flex:1, minWidth:0, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0,
+                      flex:'1 1 140px', minWidth:0, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0,
                       display:'flex', flexDirection:'column', gap:8,
                     }}>
                       <div style={{
                         fontFamily:'Fraunces, serif', fontWeight:900,
-                        fontSize:24, color:'#1b1230', lineHeight:1.2,
-                        display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:2, overflow:'hidden',
+                        fontSize: narrow ? 19 : 24, color:'#1b1230', lineHeight:1.2,
+                        // 2 lines cut nearly every headline mid-word once the text
+                        // column is ~176px instead of the ~400px a laptop gives it.
+                        display:'-webkit-box', WebkitBoxOrient:'vertical',
+                        WebkitLineClamp: narrow ? 3 : 2, overflow:'hidden',
                       }}>
                         {a.title}
                       </div>
@@ -1468,7 +1501,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
       )}
 
       {/* ——————————— CATEGORY TABS ——————————— */}
-      <section style={{maxWidth:1180, margin: isArchive ? '24px auto 0' : '32px auto 0', padding:'0 28px', position:'relative'}}>
+      <section style={{maxWidth:1180, margin: isArchive ? '24px auto 0' : '32px auto 0', padding:'0 clamp(12px, 4vw, 28px)', position:'relative'}}>
         <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'center'}}>
           {CATEGORIES.map(c => (
             <CatTab key={c.id} label={c.label} emoji={c.emoji} color={c.color} bg={c.bg} active={cat===c.label} onClick={()=>setCat(c.label)} />
@@ -1492,7 +1525,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
       </section>
 
       {/* ——————————— ARTICLES GRID ——————————— */}
-      <section style={{maxWidth:1180, margin:'20px auto 0', padding:'0 28px 60px'}}>
+      <section style={{maxWidth:1180, margin:'20px auto 0', padding:'0 clamp(12px, 4vw, 28px) 60px'}}>
         {filtered.length === 0 ? (
           <div style={{textAlign:'center', padding:'40px 20px', color:'#9a8d7a', background:'#fff', borderRadius:16, border:'2px dashed #f0e8d8'}}>
             <div style={{fontSize:36, marginBottom:8}}>🌱</div>
@@ -1613,15 +1646,25 @@ function DatePopover({ onPick, onClose }) {
 function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, recentOpen, setRecentOpen, onOpenArticle, onOpenArchive, onOpenSearch }) {
   theme = theme || { bg:'#fff9ef', chip:'#f0e8d8' };
   tweaks = tweaks || {};
+  const narrow = useIsNarrow();
   return (
     <header style={{
       background: theme.bg,
       borderBottom: `2px solid ${theme.chip}`,
       position:'sticky', top:0, zIndex:30, backdropFilter:'blur(6px)',
     }}>
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'14px 28px', display:'flex', alignItems:'center', gap:16}}>
+      <div style={{
+        maxWidth:1180, margin:'0 auto',
+        // Fluid gutter: 28px on a laptop, 12px on a 390px phone. Hardcoding 28
+        // left a 390px screen only 334px of content and pushed this row to 826px.
+        padding:'14px clamp(12px, 4vw, 28px)',
+        display:'flex', alignItems:'center', gap:'clamp(8px, 2vw, 16px)',
+        // Without wrap this row is one 826px line on a phone: the whole page then
+        // scrolls sideways and iOS shrinks the text to fit.
+        flexWrap:'wrap', rowGap:10,
+      }}>
         {/* New brand lockup — kidsnews mark + wordmark + "a 21mins channel" */}
-        <KidsNewsLockup size={66}/>
+        <KidsNewsLockup size={narrow ? 48 : 66}/>
 
         <div style={{flex:1}}/>
 

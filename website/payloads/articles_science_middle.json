@@ -1,34 +1,37 @@
 {
   "articles": [
     {
-      "id": "2026-04-24-science-1",
-      "title": "Brain Secrets of SuperAgers: Why Some 80-Year-Olds Remember Like They're 50",
-      "summary": "Imagine being 80 years old with a memory as sharp as someone in their 50s. That's the reality for 'SuperAgers,' a group of remarkable seniors studied for over 25 years by researchers at Northwestern Medicine. These individuals, aged 80 and older, perform on memory tests as well as people 30 years younger, challenging the idea that mental decline is inevitable. Scientists discovered two key secrets in their brains: some SuperAgers are 'resistant,' lacking harmful proteins linked to Alzheimer's, while others are 'resilient,' having the proteins but still functioning normally. Their brains also have larger, healthier neurons in memory regions like the entorhinal cortex. Beyond biology, SuperAgers tend to be highly social and mentally active, building a 'cognitive reserve' that protects…",
-      "source": "ScienceDaily All",
-      "time_ago": "Thu, 23 Apr 2026 07:46:30 EDT",
-      "image_url": "/article_images/article_70eafbd186b1.webp",
+      "id": "2026-09-20-science-1",
+      "source": "ScienceDaily Strange & Offbeat",
+      "time_ago": "Wed, 16 Sep 2026 07:03:10 EDT",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Wed, 16 Sep 2026 07:03:10 EDT",
+      "image_url": "/article_images/article_ad8e3fd6c947.webp",
       "category": "Science",
-      "mined_at": "2026-04-24T01:01:42.570832+00:00"
+      "title": "Earth's Building Blocks Came From Its Own Neighborhood, Study Finds",
+      "summary": "A new study says Earth formed entirely from inner Solar System material — not from beyond Jupiter as many thought. Researchers were 'truly astonished.' The finding changes how we explain Earth's water."
     },
     {
-      "id": "2026-04-24-science-2",
-      "title": "Move Over, Chimps: This Cow Uses a Brush as a Tool — and Scientists Are Stunned",
-      "summary": "Meet Veronika, a Brown Swiss cow from Austria who is surprising scientists with a skill once thought unique to chimps: tool use. When she gets an itch, she picks up a long-handled brush with her tongue and scratches the exact spot. Even more amazing, she uses both ends — the hard bristles for her tough back and the soft handle for sensitive areas like her belly button. Animal cognition expert Antonio Osuna-Mascaró at the Messerli Research Institute in Vienna was stunned at first, but soon realized Veronika was deliberately choosing the right tool end. This makes her the first cow ever reported to use a tool, a finding published in Current Biology. Researchers think her life on a small farm…",
+      "id": "2026-09-20-science-2",
+      "source": "Popular Science",
+      "time_ago": "Sat, 19 Sep 2026 08:00:00 -0400",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 08:00:00 -0400",
+      "image_url": "/article_images/article_69d2463a5d55.webp",
+      "category": "Science",
+      "title": "National Zoo Celebrates Three New Red Panda Cubs",
+      "summary": "Three endangered red panda cubs were born this summer at the Smithsonian's National Zoo. One is 'feisty' and huff-quacks at keepers. Fewer than 10,000 red pandas remain in the wild."
+    },
+    {
+      "id": "2026-09-20-science-3",
       "source": "Science News Explores",
-      "time_ago": "Fri, 17 Apr 2026 10:30:00 +0000",
-      "image_url": "/article_images/article_4d246624b13b.webp",
+      "time_ago": "Wed, 16 Sep 2026 10:30:00 +0000",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Wed, 16 Sep 2026 10:30:00 +0000",
+      "image_url": "/article_images/article_be437b2a21fb.webp",
       "category": "Science",
-      "mined_at": "2026-04-24T01:01:42.840165+00:00"
-    },
-    {
-      "id": "2026-04-24-science-3",
-      "title": "Dirty Air Crisis: Nearly Half of US Kids Breathing Dangerous Pollution, Report Warns",
-      "summary": "Imagine nearly half of all kids in the U.S. breathing air that could hurt their lungs. That's what a new report from the American Lung Association warns. The report, released on April 22, 2026, looked at pollution from smog and soot across the country. It found that 129.1 million people are breathing unhealthy air — the highest number in six years. Why is this happening? Climate change plays a big role, with extreme heat, drought, and wildfires making pollution worse. Even smoke from Canada's 2023 wildfires drifted into the U.S. There's also a surprising new source: datacenters, which use lots of electricity and often run on fossil fuels. The report says communities of color are hit hardest, and that the…",
-      "source": "Guardian Environment",
-      "time_ago": "Wed, 22 Apr 2026 10:00:24 GMT",
-      "image_url": "/article_images/article_41611642a438.webp",
-      "category": "Science",
-      "mined_at": "2026-04-24T01:01:43.107567+00:00"
+      "title": "Orcas Turn Sunfish Into Piñatas, Scientists Discover",
+      "summary": "New footage shows orcas slamming into sunfish hard enough to make them explode. One orca holds the fish while another smashes it. Scientists think it may feed young orcas — or just be fun."
     }
   ]
 }

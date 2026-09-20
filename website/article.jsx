@@ -59,6 +59,7 @@ const KidStats = {
 window.KidStats = KidStats;
 
 function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, updateTweak }) {
+  const narrow = useIsNarrow();
   const baseArticle = ARTICLES.find(a => a.id === articleId) || ARTICLES[0];
   // Resume at the tab the user was last on for this article (issue #2).
   // Whitelist against the known stage ids so a stale localStorage value
@@ -331,18 +332,29 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
     <div style={{background:'#fff9ef', minHeight:'100vh'}}>
       {/* ——— Top bar ——— */}
       <div style={{background:'#fff9ef', borderBottom:'2px solid #f0e8d8', position:'sticky', top:0, zIndex:30}}>
-        <div style={{maxWidth:1180, margin:'0 auto', padding:'14px 28px', display:'flex', alignItems:'center', gap:14}}>
+        <div style={{maxWidth:1180, margin:'0 auto', padding:'14px clamp(12px, 4vw, 28px)', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap', rowGap:10}}>
           <button onClick={onBack} style={{
             background:'#fff', border:'2px solid #f0e8d8', borderRadius:14, padding:'8px 14px',
             fontWeight:800, fontSize:14, cursor:'pointer', color:'#1b1230',
             display:'inline-flex', alignItems:'center', gap:6,
           }}>← Back</button>
-          <div style={{display:'flex', alignItems:'center', gap:10}}>
-            <OhYeLogo size={48}/>
-            <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>{window.SITE_CONFIG?.brand || '21 minutes every day'}</div>
+          <div style={{display:'flex', alignItems:'center', gap:10, minWidth:0}}>
+            <OhYeLogo size={narrow ? 38 : 48}/>
+            {/* The lockup already spells the brand; on a phone the extra
+                wordmark just wrapped onto its own line beside itself. */}
+            {!narrow && (
+              <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>{window.SITE_CONFIG?.brand || '21 minutes every day'}</div>
+            )}
           </div>
           <div style={{flex:1}}/>
-          <div style={{display:'flex', alignItems:'center', gap:6}}>
+          <div style={{
+            display:'flex', alignItems:'center', gap:6,
+            // Five pills plus separators is ~590px wider than a phone. Rather than
+            // wrap them into stacked rows (which pushes the article off screen),
+            // let the strip scroll sideways on its own.
+            overflowX:'auto', WebkitOverflowScrolling:'touch',
+            maxWidth:'100%', paddingBottom:2, scrollbarWidth:'none',
+          }}>
             {stages.map((s, i) => {
               const curAP = (progress.articleProgress || {})[article.id] || null;
               const doneSteps = (curAP && curAP.steps) || [];
@@ -366,10 +378,10 @@ function ArticlePage({ articleId, onBack, onComplete, progress, setProgress, upd
         </div>
       </div>
 
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 60px'}}>
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 60px'}}>
 
         {/* ——— Title block ——— */}
-        <div style={{display:'grid', gridTemplateColumns:'1.1fr 1fr', gap:28, alignItems:'stretch', marginBottom:24}}>
+        <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1.1fr 1fr', gap: narrow ? 16 : 28, alignItems:'stretch', marginBottom:24}}>
           <div>
             <div style={{display:'flex', gap:8, marginBottom:14, flexWrap:'wrap'}}>
               <CatChip cat={article.category}/>
@@ -532,11 +544,12 @@ function pdfUrlForArticle(article) {
 
 // ——————— READ & WORDS TAB (combined) ———————
 function ReadAndWordsTab({ article, paragraphs, expanded, setExpanded, onFinish }) {
+  const narrow = useIsNarrow();
   const catColor = getCatColor(article.category);
   const [gameOpen, setGameOpen] = useStateA(false);
   return (
-    <div style={{display:'grid', gridTemplateColumns:'1.6fr 1fr', gap:24}}>
-      <div style={{background:'#fff', borderRadius:22, padding:'30px 34px', border:'2px solid #f0e8d8'}}>
+    <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1.6fr 1fr', gap: narrow ? 16 : 24}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'clamp(18px, 5vw, 30px) clamp(16px, 5vw, 34px)', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:18, paddingBottom:14, borderBottom:'2px dashed #f0e8d8'}}>
           <div style={{fontSize:26}}>📖</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:22, color:'#1b1230', margin:0}}>The Story</h2>
@@ -626,7 +639,7 @@ function WordMatchGame({ keywords, catColor, onClose }) {
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20,
     }}>
       <div onClick={e=>e.stopPropagation()} style={{
-        background:'#fff', borderRadius:22, padding:'26px 28px', maxWidth:560, width:'100%',
+        background:'#fff', borderRadius:22, padding:'26px clamp(12px, 4vw, 28px)', maxWidth:560, width:'100%',
         maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(27,18,48,0.3)',
       }}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
@@ -759,6 +772,7 @@ function KeywordCard({ kw, idx, expanded, onToggle }) {
 
 // ——————— ANALYZE TAB (Background + Structure, with article reference) ———————
 function AnalyzeTab({ article, paragraphs, onNext }) {
+  const narrow = useIsNarrow();
   const [articleOpen, setArticleOpen] = useStateA(false);
   const catColor = getCatColor(article.category);
 
@@ -825,9 +839,9 @@ function AnalyzeTab({ article, paragraphs, onNext }) {
   }
 
   return (
-    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
+    <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 1fr', gap: narrow ? 14 : 20}}>
       {/* Left: Background */}
-      <div style={{background:'#fff', borderRadius:22, padding:'26px 30px', border:'2px solid #f0e8d8'}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'clamp(16px, 4vw, 26px) clamp(14px, 5vw, 30px)', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
           <div style={{fontSize:26}}>🧭</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:20, color:'#1b1230', margin:0}}>Background you need</h2>
@@ -840,7 +854,7 @@ function AnalyzeTab({ article, paragraphs, onNext }) {
       </div>
 
       {/* Right: Structure (5W for easy, mind-tree for middle) */}
-      <div style={{background:'#fff', borderRadius:22, padding:'26px 30px', border:'2px solid #f0e8d8'}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'clamp(16px, 4vw, 26px) clamp(14px, 5vw, 30px)', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
           <div style={{fontSize:26}}>🔍</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:20, color:'#1b1230', margin:0}}>Break it down</h2>
@@ -906,6 +920,7 @@ function _mulberry32(seed) {
 }
 
 function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns, quizShow, setQuizShow, onFinish }) {
+  const narrow = useIsNarrow();
   // Retry counter — bumps each time the kid taps "🔁 Try again". The
   // first attempt (retryCount=0) keeps the LLM's original order; from
   // attempt 1 onward we deterministically shuffle BOTH the question
@@ -993,9 +1008,9 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
   }
 
   return (
-    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:24}}>
+    <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 1fr', gap: narrow ? 14 : 24}}>
       {/* Left: article reference (scrollable, sticky) */}
-      <div style={{background:'#fff', borderRadius:22, padding:'24px 28px', border:'2px solid #f0e8d8', position:'sticky', top:90, maxHeight:'calc(100vh - 110px)', overflow:'auto'}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'clamp(16px, 4vw, 24px) clamp(14px, 4vw, 28px)', border:'2px solid #f0e8d8', position:'sticky', top:90, maxHeight:'calc(100vh - 110px)', overflow:'auto'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14, paddingBottom:12, borderBottom:'2px dashed #f0e8d8'}}>
           <div style={{fontSize:22}}>📖</div>
           <div style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:17, color:'#1b1230'}}>Look back at the story</div>
@@ -1010,7 +1025,7 @@ function QuizTab({ article, paragraphs, quizIdx, setQuizIdx, quizAns, setQuizAns
       </div>
 
       {/* Right: quiz */}
-      <div style={{background:'#fff', borderRadius:22, padding:'28px 32px', border:'2px solid #f0e8d8'}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'clamp(16px, 4vw, 28px) clamp(14px, 5vw, 32px)', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
           <div style={{display:'flex', alignItems:'center', gap:10}}>
             <div style={{fontSize:24}}>🎯</div>
@@ -1100,6 +1115,7 @@ function ScorePills({ scores, color = '#9061f9' }) {
 // Side-by-side comparison: kid's draft (Round N) vs coach's polish.
 // Used both for the "current round" panel and for collapsed history rows.
 function RoundCompare({ round, n, total, defaultOpen = true }) {
+  const narrow = useIsNarrow();
   const [open, setOpen] = useStateA(defaultOpen);
   return (
     <div style={{background:open ? 'linear-gradient(135deg, #f0ebff, #fff9ef)' : '#fff', border:`2px solid ${open ? '#c9b8ff' : '#e5dcf5'}`, borderRadius:18, padding: open ? '22px 24px' : '14px 18px', marginBottom:14}}>
@@ -1114,7 +1130,7 @@ function RoundCompare({ round, n, total, defaultOpen = true }) {
       </button>
       {open && (
         <>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14}}>
+          <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 1fr', gap:14, marginBottom:14}}>
             <div style={{background:'#fff', border:'2px solid #f0e8d8', borderRadius:14, padding:'14px 16px'}}>
               <div style={{fontSize:11, fontWeight:800, color:'#6b5c80', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:6}}>
                 What you wrote
@@ -1144,6 +1160,7 @@ function RoundCompare({ round, n, total, defaultOpen = true }) {
 }
 
 function DiscussTab({ article, paragraphs, onDone, onSavedFinal }) {
+  const narrow = useIsNarrow();
   // Restore iteration history for THIS article — survives reloads.
   // Shape: { rounds: [{userText, aiResult, at}], currentDraft, savedFinal }
   const draftKey = `ohye_response_${article.storyId}_${article.level || 'unk'}`;
@@ -1247,8 +1264,8 @@ function DiscussTab({ article, paragraphs, onDone, onSavedFinal }) {
                    : `✨ Get feedback again (round ${rounds.length + 1})`;
 
   return (
-    <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:24}}>
-      <div style={{background:'#fff', borderRadius:22, padding:'28px 32px', border:'2px solid #f0e8d8'}}>
+    <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 320px', gap: narrow ? 16 : 24}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'clamp(16px, 4vw, 28px) clamp(14px, 5vw, 32px)', border:'2px solid #f0e8d8'}}>
         <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16}}>
           <div style={{fontSize:26}}>💭</div>
           <h2 style={{fontFamily:'Fraunces, serif', fontWeight:800, fontSize:22, color:'#1b1230', margin:0}}>Think & share</h2>

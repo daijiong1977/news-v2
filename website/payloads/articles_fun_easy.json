@@ -1,34 +1,37 @@
 {
   "articles": [
     {
-      "id": "2026-04-24-fun-1",
-      "title": "These Baby Birds Look Like Tiny Rock Stars!",
-      "summary": "Have you ever seen a baby bird that looks like it's in a punk band? Three egret chicks with spiky feathers that look like mohawks won a big photography contest. A veterinarian named Jacqueline Burke took the photo in New Jersey. The contest got over 17,000 pictures from 108 countries! Other winners include a woman in a black veil, a girl on a horse during a Navajo ceremony, and a chameleon. The photos are amazing and make you want to look closer.",
-      "source": "Smithsonian Arts",
+      "id": "2026-09-20-fun-1",
+      "source": "DOGOnews",
       "time_ago": "",
-      "image_url": "/article_images/article_59476443522b.webp",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "",
+      "image_url": "/article_images/article_b4582bafab6b.webp",
       "category": "Fun",
-      "mined_at": "2026-04-24T01:01:43.355802+00:00"
+      "title": "Two Planets Fluffier Than Cotton Candy Found in Space",
+      "summary": "Astronomers found two giant planets that are less dense than cotton candy. They are called TOI-791 b and c, and they orbit a star 1,113 light-years away. Only a few super-puff planets exist!"
     },
     {
-      "id": "2026-04-24-fun-2",
-      "title": "Peacocks Are Taking Over This California Town!",
-      "summary": "Imagine dozens of peacocks wandering through your yard, walking on your roof, and pecking at your car. That's what happens in Arcadia, California! A businessman brought peacocks there over 100 years ago. Now, some people love them and feed them, but others want them gone. A new short film called \"Our Neighbors, the Peacocks\" shows both sides. The birds are protected by law in Arcadia, so it's hard to move them. The film asks: can people and peacocks live together?",
-      "source": "Colossal",
-      "time_ago": "",
-      "image_url": "/article_images/article_e63024572fa4.webp",
+      "id": "2026-09-20-fun-2",
+      "source": "Live Science",
+      "time_ago": "Sat, 19 Sep 2026 14:00:00 +0000",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 14:00:00 +0000",
+      "image_url": "/article_images/article_88b8f259b36c.webp",
       "category": "Fun",
-      "mined_at": "2026-04-24T01:01:43.575543+00:00"
+      "title": "This Computer Runs on DNA and Fits in a Drop of Water",
+      "summary": "Scientists built a tiny computer made of DNA that can do math in a drop of water. It uses billions of molecules to solve problems, like 10 + 3, in about 30 seconds."
     },
     {
-      "id": "2026-04-24-fun-3",
-      "title": "Venice Art Show Jury Says: No Awards for Russia or Israel",
-      "summary": "The Venice Biennale is a huge art show where countries have their own pavilions, like mini embassies. This year, the jury that gives out awards said they won't consider Russia or Israel for prizes. Why? Because the International Criminal Court (ICC) has charged their leaders with crimes against humanity. Russia's President Putin and Israel's Prime Minister Netanyahu both have arrest warrants from the ICC. Many artists and thousands of people signed letters supporting this decision. The jury is all women.",
-      "source": "Hyperallergic",
-      "time_ago": "",
-      "image_url": "/article_images/article_3eccd52c6e4a.webp",
+      "id": "2026-09-20-fun-3",
+      "source": "Kotaku",
+      "time_ago": "Sat, 19 Sep 2026 19:52:51 +0000",
+      "mined_at": "2026-09-20T02:58:39+00:00",
+      "source_published_at": "Sat, 19 Sep 2026 19:52:51 +0000",
+      "image_url": "/article_images/article_0c9565b7e5c0.webp",
       "category": "Fun",
-      "mined_at": "2026-04-24T01:01:43.778406+00:00"
+      "title": "9-Year-Old's Minecraft Videos Cost Dad $100K and His Job",
+      "summary": "A 9-year-old boy spent over $100,000 on YouTube ads for his Minecraft channel. His dad lost his job and might lose their house. The story has over 3 million views."
     }
   ]
 }
