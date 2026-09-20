@@ -78,26 +78,39 @@ def _mode() -> str:
     return m if m in {"on", "shadow", "off"} else "on"
 
 
-def _build_client():
-    """Returns (client, questions) or (None, reason). Never raises."""
+def make_client():
+    """Returns (client, None) or (None, reason). Never raises. Shared by every
+    Jev stage so 'no key / SDK missing / init failed' is handled in one place."""
     if not os.environ.get("TYPESAFE_API_KEY"):
         return None, "TYPESAFE_API_KEY not set"
     try:
-        from typesafe_sdk import Noul, Score, TypeSafeClient
+        from typesafe_sdk import TypeSafeClient
     except Exception as e:  # noqa: BLE001 — optional dependency
         return None, f"typesafe_sdk unavailable: {e}"
     try:
+        # The SDK and its HTTP layer log every request at INFO — ~120 lines a run.
+        for noisy in ("typesafe_sdk", "httpx2", "httpx", "httpcore2", "httpcore"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+        return TypeSafeClient(timeout=CALL_TIMEOUT_S), None
+    except Exception as e:  # noqa: BLE001
+        return None, f"client init failed: {e}"
+
+
+def _build_client():
+    """Returns ((client, questions), None) or (None, reason). Never raises."""
+    client, why = make_client()
+    if client is None:
+        return None, why
+    try:
+        from typesafe_sdk import Noul, Score
         questions = {
             "shopping": Noul(instructions=SHOPPING_Q),
             "harm": Score(instructions=HARM_Q, criteria=HARM_LEVELS),
             "uk_domestic": Noul(instructions=UK_Q, criteria=UK_CRITERIA),
         }
-        # The SDK and its HTTP layer log every request at INFO — ~120 lines a run.
-        for noisy in ("typesafe_sdk", "httpx2", "httpx", "httpcore2", "httpcore"):
-            logging.getLogger(noisy).setLevel(logging.WARNING)
-        return (TypeSafeClient(timeout=CALL_TIMEOUT_S), questions), None
+        return (client, questions), None
     except Exception as e:  # noqa: BLE001
-        return None, f"client init failed: {e}"
+        return None, f"question build failed: {e}"
 
 
 def _score_one(client, questions, brief: dict) -> dict:

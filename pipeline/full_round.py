@@ -859,7 +859,8 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     return out
 
 
-def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict]) -> list[dict]:
+def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict],
+                           keep_order: bool = False) -> list[dict]:
     """Deep backfill pool (2026-07-08): the curator ranks only 5 per cat,
     so after verify/safety attrition a category could starve while
     probe-kept briefs sat unused — one thin category then aborted the
@@ -874,7 +875,9 @@ def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict]) -> list[dict]
     leftovers = [b for b in briefs
                  if (b.get("link") or b.get("title") or id(b)) not in used_keys]
     out: list[dict] = []
-    for i, b in enumerate(_interleave_by_source(leftovers), start=1):
+    # keep_order: the pool arrives Jev-ranked, so promote spares best-first.
+    ordered = leftovers if keep_order else _interleave_by_source(leftovers)
+    for i, b in enumerate(ordered, start=1):
         src = b.get("_source")
         if src is None:
             continue
@@ -1746,6 +1749,9 @@ def main_mega() -> None:
     # stays empty on RESUME runs (phase A skipped), which disables probe
     # stamping for that attempt — acceptable, resume is the rare path.
     picked_sources_by_cat: dict[str, list] = {}
+    # News has only 4 sources: 4 each = 16 mined, ~12 after the length gate, so
+    # it alone is supply-starved. Science/Fun already mine 2-2.5x what is used.
+    PHASE_A_PER_SOURCE = {"News": 6}
 
     def _phase_a_runner():
         t0 = time.monotonic()
@@ -1757,7 +1763,8 @@ def main_mega() -> None:
             # collapses a category to 2/3. Curator still narrows to 3.
             srcs = db_config.load_sources(cat_name, n=8)
             picked_sources_by_cat[cat_name] = srcs
-            out[cat_name] = phase_a_light(cat_name, srcs)
+            out[cat_name] = phase_a_light(
+                cat_name, srcs, max_per_source=PHASE_A_PER_SOURCE.get(cat_name, 4))
         # Drop briefs that ~match a story published in the last 3 days —
         # the mega path previously had NO past-run dedup at all.
         out = filter_past_duplicate_briefs(out)
@@ -1800,12 +1807,17 @@ def main_mega() -> None:
         log.info("  jev: %s · dropped %d · kept %d", report["jev"],
                  len(report["dropped"]), sum(len(b) for b in out.values()))
         return out
+    _pre_jev_sources = {b.get("_source_name") for bs in briefs_by_cat.values() for b in bs}
     try:
         briefs_by_cat = _load_or_run("stage1_jev", _stage1_jev_runner)
     except FileNotFoundError:
         # Resuming a run that started before this stage existed (or whose
         # stage1_jev save failed). The stage is optional: carry stage1 forward.
         log.warning("  [stage1_jev] no checkpoint for this run — skipping the pre-filter")
+    # A source whose briefs the Jev pre-filter dropped did deliver; that is an
+    # editorial outcome, not a fetch failure (see stamp_probe_outcomes below).
+    _jev_dropped = {n for n in _pre_jev_sources
+                    - {b.get("_source_name") for bs in briefs_by_cat.values() for b in bs} if n}
 
     # ---- Stage 1.5: body probe + length gate + per-cat cap ----
     # Fetch each surviving brief's body in parallel, drop if word_count
@@ -1816,6 +1828,12 @@ def main_mega() -> None:
     PROBE_MIN_WORDS = 350
     PROBE_MAX_WORDS = 1200
     PROBE_MAX_PER_CAT = 10
+    # With Jev ranking on, the probe keeps every length-valid brief and the
+    # jev_rank stage narrows the pool. If that stage cannot rank, it applies
+    # this same first-10 cut, so the legacy behaviour is reproduced exactly.
+    from . import jev_rank
+    rank_mode = jev_rank.mode()
+    probe_cap = PROBE_MAX_PER_CAT if rank_mode == "off" else 10_000
     PROBE_WORKERS = 8
 
     def _probe_one(brief: dict) -> dict:
@@ -1850,7 +1868,7 @@ def main_mega() -> None:
             with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
                 results = list(ex.map(_probe_one, briefs))
             kept, tally = _partition_probe_results(
-                results, PROBE_MIN_WORDS, PROBE_MAX_WORDS, PROBE_MAX_PER_CAT)
+                results, PROBE_MIN_WORDS, PROBE_MAX_WORDS, probe_cap)
             out[cat] = kept
             per_source[cat] = tally
             kept_total += len(kept)
@@ -1871,11 +1889,59 @@ def main_mega() -> None:
         return out
     briefs_by_cat = _load_or_run("phase_a_probe", _stage1_5_runner)
 
+    # stamp_probe_outcomes records probe_errors for a source that "produced zero
+    # briefs". It must judge that on what the probe produced — after ranking,
+    # briefs_by_cat is only the top 10 and a healthy source with no high scorer
+    # today would be booked as a fetch failure.
+    probe_pool_by_cat = {c: list(b) for c, b in briefs_by_cat.items()}
+    if _jev_dropped:
+        probe_pool_by_cat["_jev_prefiltered"] = [{"_source_name": n} for n in sorted(_jev_dropped)]
+
+    # ---- Stage 1.7: Jev ranks the probe pool (fail-open; see jev_rank.py) ----
+    def _legacy_cut(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
+        return {c: b[:PROBE_MAX_PER_CAT] for c, b in pool.items()}
+
+    def _jev_rank_runner():
+        t0 = time.monotonic()
+        if rank_mode == "off":
+            return _legacy_cut(briefs_by_cat)
+        log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
+        try:
+            ranked, report = jev_rank.rank_briefs(briefs_by_cat)
+            log.info("  jev: %s", report["jev"])
+            for cat, sent in report["sent"].items():
+                log.info("  [%s] %s: %s", cat,
+                         "would send" if rank_mode == "shadow" else "to curator",
+                         " | ".join(f"{x.get('pick') if x.get('pick') is not None else float('nan'):.2f} "
+                                    f"{(x.get('title') or '')[:42]}" for x in sent))
+            for d in report["skipped"]:
+                log.info("  [%s] passed over (%s): %s", d["cat"], d["why"], (d["title"] or "")[:70])
+            applied = ranked is not None and rank_mode == "on"
+            _set_phase("jev_rank", t0, mode=rank_mode, jev=report["jev"], applied=applied,
+                       pool={c: len(b) for c, b in briefs_by_cat.items()},
+                       pair_calls=report["pair_calls"], passed_over=len(report["skipped"]))
+            if applied:
+                return ranked
+        except Exception as e:  # noqa: BLE001 — an optional stage must never break the run
+            log.warning("  jev_rank stage failed (%s) — using the legacy cut", e)
+        for b in (b for bs in briefs_by_cat.values() for b in bs):
+            if "_jev_rank" in b:                  # shadow / failure: keep the evidence, not the effect
+                b["_jev_rank_shadow"] = b.pop("_jev_rank")
+        return _legacy_cut(briefs_by_cat)
+    try:
+        briefs_by_cat = _load_or_run("jev_rank", _jev_rank_runner)
+    except FileNotFoundError:
+        log.warning("  [jev_rank] no checkpoint for this run — using the legacy cut")
+        briefs_by_cat = _legacy_cut(briefs_by_cat)
+    # Derived from the data, so a resumed run takes the same path as the original.
+    jev_ranked = any("_jev_rank" in b for bs in briefs_by_cat.values() for b in bs)
+
     # ---- Stage 2: mega-curator (1 LLM call, 5 ranked per cat) ----
     def _stage2_runner():
         t0 = time.monotonic()
         log.info("=== MEGA Stage 2 — curator picks 5 ranked per cat ===")
-        ranked, _vet, _reasoning = mega_curate(briefs_by_cat)
+        curator_pool = jev_rank.for_curator(briefs_by_cat) if jev_ranked else briefs_by_cat
+        ranked, _vet, _reasoning = mega_curate(curator_pool)
         _set_phase("stage2_curator", t0,
                    picks={c: len(p) for c, p in ranked.items()})
         return ranked
@@ -1891,7 +1957,8 @@ def main_mega() -> None:
         # Stage-3 promotion can dig past the curator's 5 ranks instead of
         # starving the category.
         for cat, briefs in briefs_by_cat.items():
-            extra = _unpicked_probe_spares(briefs, ranked_by_cat.get(cat) or [])
+            extra = _unpicked_probe_spares(briefs, ranked_by_cat.get(cat) or [],
+                                           keep_order=jev_ranked)
             if extra:
                 out.setdefault(cat, []).extend(extra)
                 log.info("  [%s] +%d probe-pool spares for Stage-3 backfill",
@@ -2128,7 +2195,7 @@ def main_mega() -> None:
         shipped_names = {(s.get("source") and s["source"].name) or ""
                          for stories in final_stories_by_cat.values()
                          for s in stories}
-        stamp_probe_outcomes(picked_sources_by_cat, briefs_by_cat, shipped_names)
+        stamp_probe_outcomes(picked_sources_by_cat, probe_pool_by_cat, shipped_names)
     else:
         log.info("probe-stamp skipped (resume run — picked sources unknown)")
 
