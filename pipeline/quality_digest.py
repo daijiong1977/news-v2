@@ -93,7 +93,10 @@ LEVELS = ("easy", "middle")
 # `summary` (misleading; it's the body). Targets mirror the rewrite
 # prompts in pipeline/news_rss_core.py.
 BODY_TARGETS = {
-    "easy":   (200, 320),
+    # easy shortened 2026-09-20: a 231-word telomere piece lost a 10-year-old
+    # before the end of the scroll. Keep in sync with
+    # news_rss_core.WC_BANDS — these are the same gate, measured a day apart.
+    "easy":   (140, 270),
     "middle": (300, 410),
 }
 # Listing summary (short card blurb in articles_<cat>_<lvl>.json).

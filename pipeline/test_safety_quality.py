@@ -83,7 +83,7 @@ def test_forbidden_term_in_rewritten_body_rejects():
 
 
 def test_wordcount_flags_annotated():
-    short_easy = _article(sid=0, easy_words=150)   # below 200 easy floor
+    short_easy = _article(sid=0, easy_words=core.WC_BANDS["easy"][0] - 20)
     kept, _ = _with_fake_vet(
         _clean_scores(0),
         lambda: core.filter_safe_rewrites({"articles": [short_easy]}),
@@ -101,8 +101,22 @@ def test_wordcount_flags_annotated():
 
 
 def test_easy_band_aligned_with_digest_gate():
-    assert "170-210" not in core.TRI_VARIANT_REWRITER_PROMPT
-    assert "210-300" in core.TRI_VARIANT_REWRITER_PROMPT
+    """The easy word band is stated in four places: the rewriter prompt, the
+    repair targets, the generation-time QA band, and quality_digest's gate.
+    They drift silently — the prompt is prose, the rest are tuples — and the
+    symptom is a morning full of body_too_short tickets for bodies the
+    rewriter was told to write. Assert all four agree."""
+    from pipeline.quality_digest import BODY_TARGETS
+
+    for level in ("easy", "middle"):
+        t_lo, t_hi = core.WC_REPAIR_TARGETS[level]
+        b_lo, b_hi = core.WC_BANDS[level]
+        assert f"{t_lo}-{t_hi} words" in core.TRI_VARIANT_REWRITER_PROMPT, \
+            f"{level}: prompt does not state the repair target {t_lo}-{t_hi}"
+        assert b_lo < t_lo and t_hi < b_hi, \
+            f"{level}: QA band {b_lo}-{b_hi} must sit outside repair target {t_lo}-{t_hi}"
+        assert BODY_TARGETS[level] == core.WC_BANDS[level], \
+            f"{level}: quality_digest gate {BODY_TARGETS[level]} != WC_BANDS {core.WC_BANDS[level]}"
 
 
 # ── per-dimension safety thresholds (2026-07-08) ──

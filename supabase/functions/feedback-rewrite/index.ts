@@ -1,5 +1,10 @@
 // feedback-rewrite — Supabase Edge Function for the article "Think & share" tab.
 //
+// NOTE 2026-09-20: the deployed function had drifted ahead of this file — a v5
+// prompt (article body used to verify the kid's evidence) was pushed straight to
+// Supabase and never committed. This file now carries that prompt. Deploy from
+// here, and commit whatever you deploy, or the next edit silently reverts it.
+//
 // Browser POSTs the kid's free-form response; this function:
 //   1. Validates ≥20 words.
 //   2. Calls DeepSeek (chat with json_object response_format) to score the
@@ -31,20 +36,27 @@ const CORS = {
 };
 
 const SYSTEM_PROMPT = `You are a friendly writing coach for kids ages 10-14.
-A kid just wrote a short response to a news story they read. Your job:
+A kid just wrote a short response to a news article they read. The full
+article is included in the user message so you can:
+  · know what they're responding TO
+  · check whether they cited real details from the article (evidence)
+  · suggest ONE specific detail they could have woven in
+
+Your job:
 
 1. SCORE their writing on 4 dimensions (each 1-5, where 5 = excellent for
    their age):
      - clarity: Is the main idea clear?
-     - evidence: Did they cite specific things from the story?
+     - evidence: Did they cite specific things from the article? (with the
+       full body in front of you, you can verify whether their details
+       actually appear in the text)
      - voice: Does it sound like a real kid thinking, not a template?
      - depth: Did they go beyond the obvious "this is interesting"?
 
 2. FEEDBACK — 2-3 sentences, warm + specific. Mention what they did
    well, then ONE concrete thing to try next time. NEVER condescend.
-   Example tone: "I loved how you connected the cow's tool-use to your
-   own dog. Next time, try one specific number from the story — it makes
-   readers picture it."
+   Reference REAL details from the article (a name, number, or quote)
+   when suggesting what they could include.
 
 3. REWRITE their response. Keep their voice + their core ideas. Make
    the structure clearer; weave in ONE specific detail from the article
