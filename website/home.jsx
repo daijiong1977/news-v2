@@ -541,6 +541,7 @@ function _shortHook(s, max = 50) {
 //   · 'feature' — large hero card with image left + content right
 //   · 'normal'  — compact card stacked image-on-top
 function PickCard({ story, picked, variant, onSelect }) {
+  const narrow = useIsNarrow();
   const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
   const baseStyle = {
     position:'relative', textAlign:'left', cursor:'pointer',
@@ -580,7 +581,10 @@ function PickCard({ story, picked, variant, onSelect }) {
       <button onClick={onSelect} style={baseStyle}>
         {checkBadge}
         <div style={{
-          display:'grid', gridTemplateColumns:'minmax(240px, 1.1fr) 1.4fr',
+          // minmax(240px, …) keeps a 240px image column even at 390px, which
+          // leaves the headline ~126px. Stack image over text on phones.
+          display:'grid',
+          gridTemplateColumns: narrow ? '1fr' : 'minmax(240px, 1.1fr) 1.4fr',
           gap:0,
         }}>
           <div style={{
@@ -630,6 +634,7 @@ function PickCard({ story, picked, variant, onSelect }) {
 }
 
 function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
+  const narrow = useIsNarrow();
   const cfg = window.SITE_CONFIG || {};
   const dailyGoal = cfg.dailyGoalMinutes ?? 21;
 
@@ -747,7 +752,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 
         <div style={{maxWidth:1180, margin:'0 auto', padding:'clamp(14px, 4vw, 28px)'}}>
           <div style={{
-            display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:18, marginBottom:28,
+            display:'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(3, 1fr)', gap:18, marginBottom:28,
           }}>
             {finals.map((s, i) => {
               const c = CATEGORIES.find(x => x.label === s.category) || CATEGORIES[0];
@@ -895,7 +900,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
         {smallCandidates.length > 0 && (
           <div style={{
             display:'grid',
-            gridTemplateColumns: smallCandidates.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+            gridTemplateColumns: (narrow || smallCandidates.length === 1) ? '1fr' : 'repeat(2, 1fr)',
             gap:18, marginTop:18,
           }}>
             {smallCandidates.map(s => (
@@ -1536,7 +1541,9 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
           /* Editorial layout: big feature on top (photo left, article right) + 2 companions below */
           <div style={{display:'flex', flexDirection:'column', gap:20}}>
             <ArticleCard article={filtered[0]} onOpen={isZh ? null : ()=>onOpen(filtered[0].id)} read={_isDoneArticle(progress, filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
+            {/* Side by side gives each card ~170px on a 390px phone — the body
+                wraps at about nine characters a line. One per row on phones. */}
+            <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 1fr', gap:20}}>
               <ArticleCard article={filtered[1]} onOpen={isZh ? null : ()=>onOpen(filtered[1].id)} read={_isDoneArticle(progress, filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
               <ArticleCard article={filtered[2]} onOpen={isZh ? null : ()=>onOpen(filtered[2].id)} read={_isDoneArticle(progress, filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
             </div>
