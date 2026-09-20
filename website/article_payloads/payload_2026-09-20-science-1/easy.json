@@ -1,122 +1,122 @@
 {
   "title": "Earth Was Built From Its Own Backyard, Scientists Say",
   "summary": "Imagine baking a cake. For years, scientists thought some of the flour came from a store far, far away. Now a new study says: nope. Earth was baked from ingredients in its own neighborhood.\n\nEarth sits in the inner Solar System — the closer part, near the Sun. Some scientists thought 6 to 40 percent of Earth's building blocks drifted in from beyond Jupiter, way out in the cold. That idea helped explain where Earth's water came from.\n\nBut two scientists in Switzerland, Paolo Sossi and Dan Bower, checked the numbers again. They looked at isotopes in many meteorites. Isotopes are like sibling atoms — same element, but different weights. Think of identical twins where one is a little heavier.\n\nTheir result? Earth's material came entirely from the inner Solar System. Outer material is less than 2 percent of Earth's mass — maybe zero.\n\n\"We were truly astonished,\" Bower said.\n\nWhy does it matter? It means Earth's water was probably here all along, close to the Sun. And Jupiter may have acted like a giant wall, blocking stuff from drifting inward. Earth grew up in a quiet, steady neighborhood.",
-  "why_it_matters": "It changes the story of how Earth got its water — the thing every living creature, including you, needs to survive.",
+  "why_it_matters": "This explains where the water in your drinking glass and in every ocean may have come from — and it helps scientists figure out which faraway planets could have water and life too.",
   "image_url": "/article_images/article_ad8e3fd6c947.webp",
   "keywords": [
     {
+      "term": "Solar System",
+      "explanation": "the Sun and everything that travels around it, including Earth and the other planets"
+    },
+    {
       "term": "isotopes",
-      "explanation": "Atoms of the same element with different weights, like twins where one twin is a little heavier."
+      "explanation": "atoms of the same element that have slightly different weights, like twins where one is a bit heavier"
     },
     {
       "term": "meteorites",
-      "explanation": "Space rocks that fall to Earth; scientists study them to learn what the Solar System was made of."
-    },
-    {
-      "term": "element",
-      "explanation": "A basic kind of material, such as iron or oxygen, that everything is built from."
+      "explanation": "space rocks that fell down to Earth"
     },
     {
       "term": "mass",
-      "explanation": "How much stuff something is made of — basically how heavy it is."
+      "explanation": "how much material, or stuff, something is made of"
+    },
+    {
+      "term": "building blocks",
+      "explanation": "the pieces of material that came together to build Earth"
     },
     {
       "term": "astonished",
-      "explanation": "Very, very surprised."
-    },
-    {
-      "term": "Jupiter",
-      "explanation": "The biggest planet in our Solar System, which may have acted like a wall in this story."
+      "explanation": "very, very surprised"
     }
   ],
   "questions": [
     {
-      "question": "Where did Earth's building blocks come from, according to the new study?",
+      "question": "What did the new study say about where Earth's material came from?",
       "options": [
-        "From another galaxy",
-        "From far beyond Jupiter",
-        "From the inner Solar System near the Sun",
-        "From the Moon"
+        "From a store far, far away",
+        "Mostly from beyond Jupiter",
+        "Entirely from the inner Solar System",
+        "From the Sun itself"
       ],
-      "correct_answer": "From the inner Solar System near the Sun"
+      "correct_answer": "Entirely from the inner Solar System"
     },
     {
-      "question": "What did some scientists once think had drifted in from beyond Jupiter?",
+      "question": "Where does Earth sit in the Solar System?",
       "options": [
-        "All of Earth's water",
-        "Earth's Moon",
-        "Only a few meteorites",
-        "6 to 40 percent of Earth's building blocks"
+        "In the outer part, beyond Jupiter",
+        "Outside the Solar System",
+        "In the inner part, near the Sun",
+        "Right next to Jupiter"
       ],
-      "correct_answer": "6 to 40 percent of Earth's building blocks"
+      "correct_answer": "In the inner part, near the Sun"
     },
     {
-      "question": "In the story, isotopes are compared to what?",
+      "question": "Which country did the two scientists, Paolo Sossi and Dan Bower, work in?",
       "options": [
-        "Two kinds of meteorites",
-        "Identical twins where one is a little heavier",
-        "A store far away",
-        "Twin cakes"
+        "China",
+        "New Zealand",
+        "Sweden",
+        "Switzerland"
       ],
-      "correct_answer": "Identical twins where one is a little heavier"
+      "correct_answer": "Switzerland"
     },
     {
-      "question": "Who checked the numbers again?",
+      "question": "What are isotopes compared to in the article?",
       "options": [
-        "A team at NASA",
-        "Paolo Sossi and Marianne Nyegaard",
-        "Two scientists in Switzerland, Paolo Sossi and Dan Bower",
-        "Two scientists in Japan"
+        "Two completely different elements",
+        "Sibling atoms, like identical twins where one is a little heavier",
+        "Tiny planets near the Sun",
+        "Kinds of meteorites"
       ],
-      "correct_answer": "Two scientists in Switzerland, Paolo Sossi and Dan Bower"
+      "correct_answer": "Sibling atoms, like identical twins where one is a little heavier"
     },
     {
-      "question": "How much of Earth's mass is outer material, according to the result?",
+      "question": "According to the study, how much of Earth's mass could outer material be?",
       "options": [
-        "Exactly 10 percent",
-        "Less than 2 percent",
-        "6 to 40 percent",
-        "About 50 percent"
+        "About 24 percent",
+        "About half",
+        "Between 6 and 40 percent",
+        "Less than 2 percent, maybe zero"
       ],
-      "correct_answer": "Less than 2 percent"
+      "correct_answer": "Less than 2 percent, maybe zero"
     },
     {
-      "question": "What may Jupiter have acted like?",
+      "question": "What may Jupiter have acted like, according to the article?",
       "options": [
         "A second Sun",
-        "A store far away",
         "A giant wall blocking stuff from drifting inward",
-        "A big cake"
+        "A giant magnet pulling Earth closer",
+        "A store that sent flour to Earth"
       ],
       "correct_answer": "A giant wall blocking stuff from drifting inward"
     }
   ],
   "background_read": [
-    "Earth formed about 4.5 billion years ago out of a spinning cloud of dust and gas around the young Sun.",
-    "Meteorites are leftover space rocks from that time, so scientists test them to figure out what the Solar System was made of.",
-    "Jupiter is the biggest planet in the Solar System, and its strong gravity can push or pull smaller space rocks as they travel."
+    "Earth was born about 4.5 billion years ago, when dust and rock swirling around the young Sun stuck together and grew into a planet.",
+    "Jupiter (the biggest planet in our Solar System, much farther from the Sun than Earth) is so heavy that its gravity can pull space rocks toward it or push them away.",
+    "Scientists study meteorites (space rocks that landed on Earth) because they are leftovers from the time the planets were forming."
   ],
   "Article_Structure": [
-    "WHO: Two scientists in Switzerland — Paolo Sossi and Dan Bower — who checked the numbers again.",
-    "WHAT: A new study says Earth was built entirely from material in its own neighborhood, the inner Solar System.",
-    "WHERE: Earth, in the inner Solar System near the Sun; the scientists compared isotopes found in many meteorites.",
-    "WHY: It suggests Earth's water was probably here all along, and that Jupiter may have blocked outer material from drifting in."
+    "WHO: Two scientists in Switzerland, Paolo Sossi and Dan Bower, who checked the numbers again and studied isotopes in many meteorites.",
+    "WHAT: They found that Earth's building blocks came entirely from the inner Solar System, with outer material making up less than 2 percent of Earth's mass — maybe zero.",
+    "WHERE: Earth, in the inner Solar System near the Sun; the study looked at meteorites and at Jupiter's possible role as a barrier.",
+    "WHY: It suggests Earth's water was probably here all along, close to the Sun, and that Jupiter may have blocked material from drifting inward."
   ],
   "perspectives": [
     {
       "perspective": "The researchers",
-      "description": "Sossi and Bower say the isotopes show Earth came only from its own neighborhood, and Bower said the team was 'truly astonished' by the result."
+      "description": "Paolo Sossi and Dan Bower say they were 'truly astonished' — their numbers show Earth was built from nearby material, which is a simpler story than the old idea."
     },
     {
       "perspective": "Supporters of the older idea",
-      "description": "Some scientists had thought material from beyond Jupiter brought Earth's water, so they may want more proof before giving up that explanation."
+      "description": "Some scientists believed 6 to 40 percent of Earth came from beyond Jupiter, and that this helped explain Earth's water. They may want more meteorite samples before giving up that idea."
     },
     {
-      "perspective": "Future scientists and curious kids",
-      "description": "Either way, the study shows how science works: new measurements can change an idea people believed for years."
+      "perspective": "Neutral scientists",
+      "description": "Science works by checking new measurements against old ones. Many will want other teams to test the same numbers before calling the question settled."
     }
   ],
-  "mined_at": "2026-09-20T02:58:39+00:00",
+  "mined_at": "2026-09-20T03:57:41+00:00",
   "source_published_at": "Wed, 16 Sep 2026 07:03:10 EDT",
   "source_name": "ScienceDaily Strange & Offbeat",
   "source_url": "https://www.sciencedaily.com/releases/2026/09/260915232132.htm"

@@ -1,139 +1,139 @@
 {
   "title": "Orcas Turn Sunfish Into Piñatas, Scientists Discover",
   "summary": "Orcas are known for brutal hunting tactics — slapping stingrays, punting seals into the air, and otherwise playing with their food. Now scientists have documented something even stranger: orcas smashing sunfish like piñatas.\n\nIn 2024 and 2025, researchers watched this behavior in the Gulf of California. In both cases, one adult orca held a dead sharp-tail sunfish steady. A second orca then slammed into it with enough force to smash the fish to smithereens. The findings appeared July 23 in Frontiers in Ethology.\n\n\"I was absolutely gobsmacked,\" said Marianne Nyegaard, a marine biologist at Auckland Museum in New Zealand who wasn't involved in the study. \"I thought it was the coolest thing I had ever seen.\" She had seen a few social media videos of orcas battering sunfish, but the new paper does a deep dive into the behavior.\n\nNyegaard isn't surprised that orcas found a creative way to handle sharp-tail sunfish. Those massive fish can reach a few meters — about 10 feet — long. \"Orcas will do all sorts of things,\" she said. \"They are so clever at figuring out how to hunt and deal with a ton of different prey types.\"\n\nHunting is often a team sport for orcas. They band together to ambush blue whales and whale sharks, and they team up to make waves that knock penguins off ice.\n\nWhy pulverize a sunfish? Francesca Pancaldi, a marine biologist at Mexico's National Polytechnic Institute, says orcas most likely smash them into small pieces to help feed their young. After one of the explosions described in the paper, a young orca fed on the small bits.\n\nBut feeding may not be the only reason. \"Killer whales are highly social animals,\" Pancaldi said. A single activity can provide nutrition, help orcas bond, and offer a way for young orcas to learn how to hunt.",
-  "why_it_matters": "The story shows that animal intelligence is not only about tool use: what can look like violence or play may actually be learned, shared culture passed from adult orcas to calves, which raises hard questions about how humans manage — and how much we still don't understand — in the ocean.",
+  "why_it_matters": "The discovery shows that even a well-known predator still surprises scientists, and it strengthens the idea that orcas pass hunting techniques between generations like culture — which matters for how we protect populations whose survival depends on learned skills, not instinct alone.",
   "image_url": "/article_images/article_be437b2a21fb.webp",
   "keywords": [
     {
-      "term": "ethology",
-      "explanation": "The scientific study of how animals behave."
+      "term": "marine biologist",
+      "explanation": "a scientist who studies animals and plants that live in the ocean."
     },
     {
       "term": "gobsmacked",
-      "explanation": "A slang word meaning completely shocked or amazed."
-    },
-    {
-      "term": "piñata",
-      "explanation": "A decorated container full of treats that you hit until it bursts open — compared here to orcas smashing a sunfish."
-    },
-    {
-      "term": "smithereens",
-      "explanation": "Tiny broken fragments."
+      "explanation": "a slang word meaning completely shocked or amazed."
     },
     {
       "term": "pulverize",
-      "explanation": "To crush or smash something into tiny pieces or dust."
+      "explanation": "to crush something into tiny pieces or powder."
     },
     {
       "term": "ambush",
-      "explanation": "To make a surprise attack, often by waiting in hiding."
+      "explanation": "to attack suddenly by surprise."
+    },
+    {
+      "term": "smithereens",
+      "explanation": "informal word for tiny broken pieces."
+    },
+    {
+      "term": "social animals",
+      "explanation": "animals that live in groups and interact with each other a lot."
     }
   ],
   "questions": [
     {
-      "question": "What new orca behaviour did scientists document?",
+      "question": "What new behaviour did researchers document in orcas?",
       "options": [
-        "Orcas smashing sunfish like piñatas",
-        "Orcas singing to attract mates",
-        "Orcas building nests on the seafloor",
-        "Orcas hunting penguins on the ice"
+        "Burying sunfish in the sand",
+        "Pushing sunfish onto beaches",
+        "Smashing sunfish like piñatas",
+        "Singing to attract sunfish"
       ],
-      "correct_answer": "Orcas smashing sunfish like piñatas"
+      "correct_answer": "Smashing sunfish like piñatas"
     },
     {
-      "question": "Where were the two incidents observed?",
+      "question": "Where was the behaviour observed in 2024 and 2025?",
       "options": [
+        "The Gulf of Mexico",
+        "Auckland Harbour",
         "The Gulf of California",
-        "The coast of New Zealand",
-        "The Great Barrier Reef",
         "The North Sea"
       ],
       "correct_answer": "The Gulf of California"
     },
     {
-      "question": "How did the marine biologist Marianne Nyegaard react to the findings?",
+      "question": "In which journal did the findings appear?",
       "options": [
-        "She said the behaviour was boring",
-        "She was 'absolutely gobsmacked'",
-        "She said orcas never do anything unusual",
-        "She refused to comment"
+        "Nature Astronomy",
+        "Frontiers in Ethology",
+        "Popular Science",
+        "Marine Biology Letters"
       ],
-      "correct_answer": "She was 'absolutely gobsmacked'"
+      "correct_answer": "Frontiers in Ethology"
     },
     {
-      "question": "According to Francesca Pancaldi, what is the most likely reason orcas smash sunfish?",
+      "question": "How big can sharp-tail sunfish grow?",
       "options": [
-        "To cool down in warm water",
-        "To clean their teeth",
-        "To scare away other predators",
-        "To break them into small pieces that help feed their young"
-      ],
-      "correct_answer": "To break them into small pieces that help feed their young"
-    },
-    {
-      "question": "Besides feeding, what other reason does Pancaldi suggest for the behaviour?",
-      "options": [
-        "Killer whales are highly social, so the activity may help them bond and teach young orcas to hunt",
-        "It is a way to store food for the winter",
-        "It helps them stay hidden from boats",
-        "It makes the water clearer"
-      ],
-      "correct_answer": "Killer whales are highly social, so the activity may help them bond and teach young orcas to hunt"
-    },
-    {
-      "question": "How large can sharp-tail sunfish grow?",
-      "options": [
-        "About 100 feet long",
-        "About 1 foot long",
-        "A few meters — about 10 feet — long",
-        "About 10 inches long"
+        "About 30 metres long",
+        "About 1 metre long",
+        "A few centimetres long",
+        "A few meters — about 10 feet — long"
       ],
       "correct_answer": "A few meters — about 10 feet — long"
+    },
+    {
+      "question": "What is one likely reason orcas smash sunfish?",
+      "options": [
+        "To break the fish into small bits that young orcas can eat",
+        "To warn other orca groups away",
+        "Because sunfish taste unpleasant",
+        "To clean their teeth after hunting"
+      ],
+      "correct_answer": "To break the fish into small bits that young orcas can eat"
+    },
+    {
+      "question": "Besides feeding, what does Francesca Pancaldi suggest the activity may do?",
+      "options": [
+        "Help the orcas cool down in warm water",
+        "Keep the ocean clean of dead fish",
+        "Help orcas bond and let young ones learn how to hunt",
+        "Scare sharks away from the pod"
+      ],
+      "correct_answer": "Help orcas bond and let young ones learn how to hunt"
     }
   ],
   "background_read": [
-    "Orcas, also called killer whales, are the largest members of the dolphin family and live in every ocean from the tropics to the poles. Ethology — the scientific study of animal behaviour — is the field behind this paper, which appeared in the peer-reviewed journal Frontiers in Ethology.",
-    "The Gulf of California, also known as the Sea of Cortez, is the narrow sea between Mexico's Baja California peninsula and the mainland. It is one of the most biologically rich seas on Earth and a well-known home for whales, dolphins and other marine mammals.",
-    "Marianne Nyegaard works at Auckland Museum (a natural-history museum in New Zealand) and has studied sunfish for years, which is why her reaction carries weight.",
-    "Orcas live in separate populations called ecotypes that specialise in different prey — some eat fish, others hunt seals or whales — and their hunting techniques are passed from mother to calf, something scientists describe as animal culture.",
-    "Sunfish are the heaviest bony fish in the ocean, and in recent years a population of orcas off Spain and Portugal has been ramming and even sinking small boats, behaviour researchers connect to play or social learning rather than hunger."
+    "Orcas (also called killer whales — they are actually the largest members of the dolphin family) live in every ocean and hunt in tightly bonded family groups. Different populations specialise in different prey: some eat fish, others hunt seals, dolphins or even large whales. Biologists think these hunting habits are cultural, learned from older relatives rather than built in at birth.",
+    "The Gulf of California (the narrow sea between Mexico's mainland and the Baja California peninsula, also known as the Sea of Cortez) is one of the most species-rich stretches of water on Earth and a long-time natural laboratory for marine biologists. It is also a hotspot for sunfish.",
+    "Sharp-tail sunfish are huge, flat-bodied relatives of the ocean sunfish, the heaviest bony fish in the world. Ocean sunfish are famously covered in parasites and often lie near the surface so that seabirds can pick the parasites off. Marianne Nyegaard (a marine biologist at Auckland Museum in New Zealand, who identified a new sunfish species in 2017 after years of searching for it) is a leading expert on the group. Frontiers in Ethology, where the new paper appeared, is a journal devoted to the study of animal behaviour — a field that increasingly focuses on how animals learn skills from each other."
   ],
   "Article_Structure": [
-    "LEAD: orcas are already famous for brutal hunting tactics",
-    "  └─ slapping stingrays, punting seals into the air — and now 'smashing sunfish like piñatas'",
-    "NEW OBSERVATION: documented in the Gulf of California in 2024 and 2025",
-    "  ├─ one adult orca holds a dead sharp-tail sunfish steady",
-    "  └─ a second orca slams into it with enough force to smash it to smithereens",
-    "PUBLICATION: findings appeared on July 23 in Frontiers in Ethology",
-    "OUTSIDE EXPERT REACTION: Marianne Nyegaard, a marine biologist at Auckland Museum in New Zealand who was not involved in the study",
-    "  ├─ 'I was absolutely gobsmacked' — 'the coolest thing I had ever seen'",
-    "  └─ context: she had seen social-media clips, but the paper does a deep dive into the behaviour",
-    "WHY IT'S PLAUSIBLE: sharp-tail sunfish can reach about 10 feet long; 'Orcas will do all sorts of things' and are clever at handling many prey types",
-    "TEAM HUNTING CONTEXT: orcas ambush blue whales and whale sharks, and make waves to knock penguins off ice",
-    "WHY PULVERIZE A SUNFISH? two explanations from experts",
-    "  ├─ FEEDING: Francesca Pancaldi (Mexico's National Polytechnic Institute) says breaking the fish into small pieces helps feed their young — and after one 'explosion', a young orca fed on the bits",
-    "  └─ SOCIAL: 'Killer whales are highly social animals' — one activity can feed, bond and teach young orcas how to hunt",
-    "OPEN QUESTION: feeding, bonding and learning may all be true at once, so the behaviour's main purpose is still unsettled"
+    "LEAD: orcas are known for brutal, playful hunting tactics",
+    "  └─ specific: slapping stingrays, punting seals into the air",
+    "KEY EVENT: a newly documented behaviour — orcas smashing sunfish like piñatas",
+    "  ├─ WHEN: observed in 2024 and 2025",
+    "  ├─ WHERE: the Gulf of California",
+    "  └─ METHOD: one adult holds a dead sharp-tail sunfish while a second slams into it",
+    "PUBLICATION: appeared July 23 in Frontiers in Ethology",
+    "OUTSIDE EXPERT REACTION",
+    "  └─ Nyegaard (Auckland Museum): 'I was absolutely gobsmacked' — and not surprised, because orcas are clever with many prey types",
+    "CONTEXT: team hunting is normal for orcas",
+    "  ├─ ambushing blue whales and whale sharks",
+    "  └─ making waves that knock penguins off ice",
+    "WHY? — COMPETING EXPLANATIONS",
+    "  ├─ Pancaldi: pulverising the fish makes small pieces that young orcas can eat",
+    "  └─ also social: bonding, and a lesson in hunting for the young",
+    "EVIDENCE: after one explosion, a young orca fed on the small bits",
+    "OPEN QUESTION: how much is nutrition, how much is play or teaching?"
   ],
   "perspectives": [
     {
-      "perspective": "Positive — the researchers and marine scientists",
-      "description": "This is the first detailed scientific description of the behaviour, turning scattered social-media clips into real data. It highlights how flexible orcas are, and the vivid image of a sunfish 'piñata' draws public attention to a species few people think about."
+      "perspective": "Positive — evidence of animal culture",
+      "description": "The behaviour is a striking example of animals inventing new tactics and probably teaching them to their young. It also suggests orcas waste little: a sunfish that could be hard to bite into becomes bite-sized food for a calf. Each new documented behaviour helps researchers map how much orca groups differ from one another."
     },
     {
-      "perspective": "Critical — cautious scientists and welfare-minded observers",
-      "description": "Only two incidents were observed, which is a thin basis for conclusions about the behaviour's purpose; calling it 'bonding' or 'teaching' risks reading human motives into animals. Others question whether boats and observers change what orcas do, and note that a smashed sunfish is a dead fish either way."
+      "perspective": "Critical — too few observations to explain",
+      "description": "Only two cases are described, and calling it a piñata or 'play' risks reading human ideas into animal behaviour. The feeding-the-young explanation is a reasonable hypothesis, not proof — orcas may simply be practising a strike on a slow, harmless target. Scientists need many more sightings before claiming a pattern."
     },
     {
-      "perspective": "Neutral and analytical",
-      "description": "Orcas are cultural animals: different populations have different diets and inherited hunting techniques. Smashing a slow, large, energy-rich sunfish into bite-sized pieces may simply be an efficient way to turn an awkward meal into food a calf can eat."
+      "perspective": "Neutral — sunfish are easy targets",
+      "description": "Sunfish are slow, parasite-ridden and often float near the surface, which makes them unusually convenient objects for experiments in hunting. Orcas worldwide split into ecotypes with different diets and techniques, so a Gulf of California group handling a large, awkward prey item fits an existing pattern rather than breaking it."
     },
     {
-      "perspective": "Forward-looking",
-      "description": "Long-term monitoring, drones and reports from whale-watching boats could show whether this trick spreads to other orcas — the test of whether it is culture. If ocean conditions push sunfish and orcas into closer contact, such encounters could become more common."
+      "perspective": "Forward-looking — what to watch next",
+      "description": "Researchers will want drone footage and repeat observations to see whether the technique spreads through the pod or fades away. If it is cultural, it could appear in other orca groups too. Meanwhile, it raises a question for the Gulf of California: how much extra pressure do these smashings put on a sunfish population already living in a busy, warming sea?"
     }
   ],
-  "mined_at": "2026-09-20T02:58:39+00:00",
+  "mined_at": "2026-09-20T03:57:41+00:00",
   "source_published_at": "Wed, 16 Sep 2026 10:30:00 +0000",
   "source_name": "Science News Explores",
   "source_url": "https://www.snexplores.org/article/orca-explode-sunfish-pinata"
