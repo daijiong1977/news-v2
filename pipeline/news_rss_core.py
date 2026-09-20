@@ -374,7 +374,7 @@ def process_entry(entry: dict, min_words: int = MIN_WORDS_DEFAULT) -> dict:
 # ---------------------------------------------------------------------------
 
 def build_vet_prompt(pick_count: int) -> str:
-    return f"""You are a content reviewer + curator for a kids news site (readers ages 8-13, grades 3-8 — calibrate safety to the YOUNGEST reader, interest to a 12-year-old).
+    return f"""You are a content reviewer + curator for a kids news site (readers ages 10-14, grades 5-9 — calibrate safety to the YOUNGEST reader, interest to a 12-year-old).
 
 You will receive a numbered list of news articles (id 0..N-1), each with title + first paragraphs.
 
@@ -1031,17 +1031,17 @@ def evaluate_rewriter_safety(article_entry: dict) -> dict:
 
 
 SAFETY_VET_PROMPT = """You are an INDEPENDENT safety reviewer for a kids news site
-(readers ages 8-13, grades 3-8 — calibrate to the YOUNGEST reader). You did
+(readers ages 10-14, grades 5-9 — calibrate to the YOUNGEST reader). You did
 NOT write these articles; review them strictly, as if a cautious parent will
 read your scores.
 
 For each article you receive two rewritten variants:
   middle_en — grade 7-8 reader (age 12-14)
-  easy_en   — grade 3-4 reader (age ~9)
+  easy_en   — grade 4-5 reader (age ~10)
 
 Score 8 dimensions, each 0-5 (0=none, 5=severe), on the middle_en body:
   violence, sexual, substance, language, fear, adult_themes, distress, bias
-Then re-read easy_en imagining a 9-year-old and score fear and distress a
+Then re-read easy_en imagining a 10-year-old and score fear and distress a
 second time; for those two dims report the MAX of the two readings (the same
 facts land harder on a younger reader even in simpler words).
 

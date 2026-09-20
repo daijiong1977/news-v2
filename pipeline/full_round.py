@@ -172,7 +172,7 @@ def pick_all_winners_with_xcat_dedup(buckets_by_cat: dict[str, dict]) -> dict[st
 # ---------------------------------------------------------------------------
 
 CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a daily
-news site for kids ages 8-13. The pipeline mined a pre-vetted pool of
+news site for kids ages 10-14. The pipeline mined a pre-vetted pool of
 candidates across 3 categories. YOUR JOB: deliver EXACTLY 3 stories per
 category — News, Science, Fun — for a total of 9 stories.
 

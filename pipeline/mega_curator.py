@@ -21,7 +21,7 @@ log = logging.getLogger("mega-curator")
 
 
 MEGA_CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a
-daily news site for kids ages 8-13. The pipeline mined ~36 candidates from
+daily news site for kids ages 10-14. The pipeline mined ~36 candidates from
 9 RSS feeds (3 News + 3 Science + 3 Fun, up to 12 per cat), ran a
 forbidden-word safety filter, and now hands you the survivors.
 
