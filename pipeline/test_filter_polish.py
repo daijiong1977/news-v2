@@ -156,5 +156,49 @@ def _run_all():
     print(f"OK — {len(fns)} tests passed")
 
 
+
+def test_past_dedup_window_excludes_the_runs_own_date():
+    """A re-run must not treat its own earlier attempt as \"already published\".
+    Bug: docs/bugs/2026-09-20-past-dedup-self-poisons-reruns.md"""
+    from pipeline import full_round as fr
+
+    seen = {}
+
+    class FakeQuery:
+        def select(self, *a, **k):
+            return self
+
+        def gte(self, col, v):
+            seen["start"] = v
+            return self
+
+        def lt(self, col, v):
+            seen["end"] = v
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": [
+                {"category": "News", "source_title": "Fat Bear Week crowns a champion"},
+            ]})()
+
+    class FakeClient:
+        def table(self, name):
+            return FakeQuery()
+
+    import pipeline.supabase_io as sio
+    real = sio.client
+    sio.client = lambda: FakeClient()
+    try:
+        briefs = {"News": [
+            {"title": "Fat Bear Week crowns a champion", "link": "a"},   # matches the published one
+            {"title": "A brand new story about volcanoes", "link": "b"},
+        ]}
+        out = fr.filter_past_duplicate_briefs(briefs, run_date="2026-09-20")
+    finally:
+        sio.client = real
+
+    assert seen == {"start": "2026-09-17", "end": "2026-09-20"}, seen
+    assert [b["link"] for b in out["News"]] == ["b"]
+
 if __name__ == "__main__":
     _run_all()
