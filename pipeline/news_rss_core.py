@@ -824,9 +824,13 @@ What real kid reporters do:
 You will receive N source articles. For EACH, produce THREE variants:
 
 1. easy_en — English. READER IS A 10-YEAR-OLD (grade 4).
-   · body: 210-300 words (STRICT — count before returning).
-     Under 210 → add one more concrete detail or example from the
-     source. QA gates at 200; do not go below it.
+   · body: 150-250 words (STRICT — count before returning).
+     This is a SHORT read on purpose — a 10-year-old loses patience
+     before the scroll ends. Say the thing, give one vivid detail,
+     stop. Over 250 → cut the least essential paragraph, do not
+     compress every sentence into a list of facts.
+     Under 150 → add one more concrete detail or example from the
+     source. QA gates at 140; do not go below it.
    · Simple but not baby-talk; explain any hard word inline in plain English:
      "a ceasefire (when both sides agree to stop fighting for a while)"
    · Short, punchy sentences; lead with a hook — not a summary
@@ -1092,7 +1096,7 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
 # Word-count bands for generation-time measurement. Keep in sync with
 # quality_digest.BODY_TARGETS — those QA gates generate the
 # body_too_short / body_too_long tickets the morning after.
-WC_BANDS = {"easy": (200, 320), "middle": (300, 410)}
+WC_BANDS = {"easy": (140, 270), "middle": (300, 410)}
 
 
 def _wordcount_flags(art: dict) -> list[str]:
@@ -1108,7 +1112,7 @@ def _wordcount_flags(art: dict) -> list[str]:
 # Repair targets sit inside WC_BANDS with margin, so a repaired body
 # that drifts a few words on the second pass still lands inside the
 # QA band that _wordcount_flags / quality_digest enforce.
-WC_REPAIR_TARGETS = {"easy": (210, 300), "middle": (320, 380)}
+WC_REPAIR_TARGETS = {"easy": (150, 250), "middle": (320, 380)}
 
 WC_REPAIR_PROMPT = """You are a precise editor for a kids news site. You get ONE article
 body that is outside its required word band. Rewrite it to fit the band
@@ -1246,7 +1250,7 @@ body alone doesn't provide — historical context, real-world pattern, nuance.
 
 You will receive N articles (where N is given in the user message; usually 3,
 but could be 1, 2, or 3). Each article has two rewritten English bodies:
-  easy_en  — grade 4 / 10-year-old reader (~200 words)
+  easy_en  — grade 4-5 / 10-year-old reader (~200 words)
   middle_en — grade 7-8 / 12-14 year old reader (~320 words)
 
 For each of the 2N slots (N articles × {easy, middle}) produce:

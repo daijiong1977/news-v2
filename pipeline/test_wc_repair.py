@@ -60,6 +60,8 @@ def test_in_band_bodies_make_no_llm_calls(monkeypatch):
 def test_short_easy_body_expanded(monkeypatch):
     monkeypatch.setattr(core, "deepseek_call",
                         lambda *a, **k: {"body": " ".join(["x"] * 240)})
-    rr = {"articles": [_art(150, 350)]}
+    # Below the easy QA floor, whatever the band currently is.
+    too_short = core.WC_BANDS["easy"][0] - 20
+    rr = {"articles": [_art(too_short, 350)]}
     assert core.repair_wordcounts(rr) == 1
     assert len(rr["articles"][0]["easy_en"]["body"].split()) == 240
