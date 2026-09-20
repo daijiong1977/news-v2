@@ -7,7 +7,8 @@ Resume:   set env `RESUME_FROM=<stage>`. The pipeline loads the
           matching checkpoint at startup and skips earlier stages.
 
 Stages (in order):
-    phase_a, stage1, stage2_picks, verify, rewrite, stage3_safety,
+    phase_a, stage1, stage1_jev, phase_a_probe, stage2_picks, verify,
+    rewrite, stage3_safety,
     enrich, persist
 
 Source dataclass instances are dehydrated to (category, name) tuples
@@ -31,6 +32,7 @@ log = logging.getLogger("checkpoint")
 STAGES = (
     "phase_a",         # after RSS fetch (briefs_by_cat)
     "stage1",          # after forbidden filter
+    "stage1_jev",      # after Jev pre-filter (livestream / shopping / extreme content)
     "phase_a_probe",   # after body probe + length gate + per-cat cap
     "stage2_picks",    # after curator (ranked_by_cat)
     "verify",          # after body+image verify (stories_by_cat)

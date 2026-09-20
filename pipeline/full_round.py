@@ -1782,6 +1782,31 @@ def main_mega() -> None:
         return out
     briefs_by_cat = _load_or_run("stage1", _stage1_runner)
 
+    # ---- Stage 1.2: Jev pre-filter (fail-open; see jev_prefilter.py) ----
+    # Runs BEFORE the probe so its per-cat cap isn't spent on livestream
+    # pages, shopping guides or content that can never ship.
+    def _stage1_jev_runner():
+        from .jev_prefilter import prefilter_briefs
+        t0 = time.monotonic()
+        log.info("=== MEGA Stage 1.2 — Jev pre-filter ===")
+        out, report = prefilter_briefs(briefs_by_cat)
+        for d in report["dropped"]:
+            log.info("  [%s] drop (%s): %s", d["cat"], d["why"], (d["title"] or "")[:80])
+        for d in report["would_drop"]:
+            log.info("  [%s] shadow, would drop (%s): %s", d["cat"], d["why"], (d["title"] or "")[:80])
+        _set_phase("stage1_jev", t0, mode=report["mode"], jev=report["jev"],
+                   dropped=len(report["dropped"]), would_drop=len(report["would_drop"]),
+                   restored=report["restored"])
+        log.info("  jev: %s · dropped %d · kept %d", report["jev"],
+                 len(report["dropped"]), sum(len(b) for b in out.values()))
+        return out
+    try:
+        briefs_by_cat = _load_or_run("stage1_jev", _stage1_jev_runner)
+    except FileNotFoundError:
+        # Resuming a run that started before this stage existed (or whose
+        # stage1_jev save failed). The stage is optional: carry stage1 forward.
+        log.warning("  [stage1_jev] no checkpoint for this run — skipping the pre-filter")
+
     # ---- Stage 1.5: body probe + length gate + per-cat cap ----
     # Fetch each surviving brief's body in parallel, drop if word_count
     # is outside [PROBE_MIN_WORDS, PROBE_MAX_WORDS], then keep the first
