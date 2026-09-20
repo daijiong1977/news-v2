@@ -37,6 +37,9 @@ class Fake:
         if self.pairs_fail:
             raise RuntimeError("pair boom")
         a, b = state["headline_A"], state["headline_B"]
+        if "same_event" in questions:
+            same = "White House" in a and "White House" in b and "denied" in a and "denied" in b
+            return SimpleNamespace(answers={"same_event": SimpleNamespace(noul=0.9 if same else 0.05)})
         ans = {"same_story": SimpleNamespace(noul=0.9 if ("assisted dying" in a and "assisted dying" in b) else 0.05)}
         if "same_subject" in questions:
             ans["same_subject"] = SimpleNamespace(noul=0.9 if ("Trump" in a and "Trump" in b) else 0.05)
@@ -132,6 +135,27 @@ def test_cross_category_duplicate_goes_to_fun_not_news():
     assert any("Sheeran" in t for t in _sent(out, "Fun"))
     assert not any("Sheeran" in t for t in _sent(out, "News")) and len(_sent(out, "News")) == 5
     assert list(out) == ["News", "Fun"]                      # caller's category order preserved
+
+
+def test_already_published_is_not_sent_again_even_from_another_category_or_reworded():
+    recent = ["Ms. Rachel has entered her album era, and she is so happy about it",                  # ran as News
+              "Journalists report being denied White House access after Trump bans some outlets",
+              "Ed Sheeran concert set to go ahead after outcry over Gaza"]
+    fun = [_b("Ms. Rachel has entered her album era, and she is so happy about it", src="NPR Music", cat="Fun", pick=0.9)]
+    fun += [_b(t, src=f"F{i}", cat="Fun", pick=0.5) for i, t in enumerate(VOLCANO)]
+    news = [_b("CNN, MS NOW, Politico reporters denied access to White House following Trump ban", src="NPR", pick=0.9),
+            _b("Ed Sheeran admits mistakes as he addresses Macklemore controversy", src="BBC", pick=0.8)]
+    news += [_b(t, src=f"N{i}", pick=0.4) for i, t in enumerate(TRUMP[:4])]
+    fake = Fake()
+    for bs in (fun, news):
+        for b in bs:
+            fake.by_title[b["title"]] = b["_p"]
+    out, rep = jr.rank_briefs({"News": news, "Fun": fun}, client=fake, recent_titles=recent)
+    assert not any("Rachel" in t for t in _sent(out, "Fun"))                 # identical title, other category: code
+    assert not any("White House" in t for t in _sent(out, "News"))           # reworded: Jev
+    assert any("Sheeran admits" in t for t in _sent(out, "News"))            # a new development is still news
+    assert sum("same story as published" in d["why"] for d in rep["skipped"]) == 2
+    assert _titles(out["Fun"])[-1].startswith("Ms. Rachel")                  # demoted, not lost
 
 
 def test_thin_pool_relaxes_caps_but_never_sends_a_duplicate_story():

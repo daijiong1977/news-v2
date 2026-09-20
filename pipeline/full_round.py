@@ -859,6 +859,22 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     return out
 
 
+def _recent_published_titles(today: str, days: int = 3) -> list[str]:
+    """Source headlines published in the last `days` days, every category, EXCLUDING
+    today — a same-day re-run must not see its own earlier output as the past.
+    Fail-open: any DB error returns []."""
+    from datetime import date, timedelta
+    try:
+        from .supabase_io import client
+        start = (date.fromisoformat(today) - timedelta(days=days)).isoformat()
+        rows = client().table("redesign_stories").select("source_title") \
+            .gte("published_date", start).lt("published_date", today).execute().data or []
+        return sorted({r["source_title"] for r in rows if r.get("source_title")})
+    except Exception as e:  # noqa: BLE001
+        log.warning("recent-published lookup failed (non-fatal): %s", e)
+        return []
+
+
 def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict],
                            keep_order: bool = False) -> list[dict]:
     """Deep backfill pool (2026-07-08): the curator ranks only 5 per cat,
@@ -1850,8 +1866,9 @@ def main_mega() -> None:
     def _stage1_5_runner():
         from concurrent.futures import ThreadPoolExecutor
         t0 = time.monotonic()
-        log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %d) ===",
-                 PROBE_MIN_WORDS, PROBE_MAX_WORDS, PROBE_MAX_PER_CAT)
+        log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %s) ===",
+                 PROBE_MIN_WORDS, PROBE_MAX_WORDS,
+                 PROBE_MAX_PER_CAT if rank_mode == "off" else "none — Jev ranks the pool")
         out: dict[str, list[dict]] = {}
         kept_total = 0
         dropped_thin = 0
@@ -1907,7 +1924,8 @@ def main_mega() -> None:
             return _legacy_cut(briefs_by_cat)
         log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
         try:
-            ranked, report = jev_rank.rank_briefs(briefs_by_cat)
+            ranked, report = jev_rank.rank_briefs(
+                briefs_by_cat, recent_titles=_recent_published_titles(today))
             log.info("  jev: %s", report["jev"])
             for cat, sent in report["sent"].items():
                 log.info("  [%s] %s: %s", cat,

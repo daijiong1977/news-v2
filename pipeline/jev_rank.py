@@ -17,6 +17,9 @@ to see more than one brief is done here, code first:
   · near-identical headlines                      code (mega_curator.titles_same_story)
   · same story told in different words            Jev, asked only about pairs whose
     (within a category and across categories)     headlines share a content word
+  · already published in the last 3 days,          code, then Jev ("same single event?")
+    in ANY category                               — the legacy filter only compares inside
+                                                  one category at 80% title similarity
   · News: at most 3 of the 6 about one person     Jev, same gate. A CAP, not a ban: the
     or organisation                               curator owns "3 different subjects in the
                                                   top 3" and can only obey it if the 6 leave
@@ -84,6 +87,10 @@ WANT_LEVELS = [
     "The reader would tell a friend about it afterwards",
 ]
 SAME_STORY_Q = "Do these two headlines report on the same real-world event or the same ongoing story?"
+# Against already-published stories the question is narrower on purpose: a follow-up
+# with a new development ("...admits mistakes") is news; the same event reworded by
+# another outlet ("reporters denied access" / "journalists denied access") is not.
+SAME_EVENT_Q = "Do these two headlines report the same single event?"
 SAME_SUBJECT_Q = "Do both stories center on the same single person or the same single organization?"
 
 _STOP = frozenset("the a an and or of to in on for with from at by as is are was were be been it its this that "
@@ -109,7 +116,8 @@ def _questions():
     return ({"pick": Noul(instructions=PICK_Q, criteria=PICK_CRITERIA),
              "want": Score(instructions=WANT_Q, criteria=WANT_LEVELS)},
             {"same_story": Noul(instructions=SAME_STORY_Q)},
-            {"same_story": Noul(instructions=SAME_STORY_Q), "same_subject": Noul(instructions=SAME_SUBJECT_Q)})
+            {"same_story": Noul(instructions=SAME_STORY_Q), "same_subject": Noul(instructions=SAME_SUBJECT_Q)},
+            {"same_event": Noul(instructions=SAME_EVENT_Q)})
 
 
 def _score_one(client, q, cat: str, b: dict) -> dict:
@@ -130,10 +138,33 @@ class _Pairs:
     only when the headlines share a content word yet are not near-identical. A failed
     call answers None: it must never block a pick. Answers are cached per pair."""
 
-    def __init__(self, client, q_story, q_both, deadline: float):
-        self.client, self.q_story, self.q_both, self.deadline = client, q_story, q_both, deadline
+    def __init__(self, client, q_story, q_both, q_event, deadline: float):
+        self.client, self.q_story, self.q_both, self.q_event, self.deadline = client, q_story, q_both, q_event, deadline
         self.calls = self.errors = 0
         self._cache: dict[tuple[int, int, bool], str | None] = {}
+
+    def already_published(self, b: dict, recent_titles: list[str]) -> str | None:
+        """The published headline this brief repeats, or None. The legacy past-dup
+        filter compares within one category at 80% title similarity, so it misses a
+        story that moves category and one that another outlet reworded."""
+        title = b.get("title") or ""
+        toks = _tokens(title)
+        for past in recent_titles:
+            if titles_same_story(title, past):
+                return past
+            if len(toks & _tokens(past)) < 2 or time.monotonic() > self.deadline:
+                continue                                  # 2 shared words: far more pairs here than within a pool
+            self.calls += 1
+            try:
+                ans = self.client.system_one(state={"headline_A": past, "headline_B": title,
+                                                    "summary_B": _text(b)[1][:300]},
+                                             questions=self.q_event).answers
+                if float(ans["same_event"].noul) > SAME_MIN:
+                    return past
+            except Exception as e:  # noqa: BLE001
+                self.errors += 1
+                log.warning("  jev pair call failed: %s", e)
+        return None
 
     def relation(self, a: dict, b: dict, *, subject: bool) -> str | None:
         ta, tb = a.get("title") or "", b.get("title") or ""
@@ -163,7 +194,8 @@ class _Pairs:
         return None
 
 
-def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _Pairs) -> tuple[list[dict], list[tuple[dict, str]]]:
+def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _Pairs,
+            recent_titles: list[str]) -> tuple[list[dict], list[tuple[dict, str]]]:
     """Greedy top-TO_CURATOR under the cross-brief rules. Returns (chosen, skipped)."""
     news = cat == "News"
     chosen: list[dict] = []
@@ -172,7 +204,10 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
         if len(chosen) == TO_CURATOR:
             break
         why = None
-        if sum(c.get("_source_name") == b.get("_source_name") for c in chosen) >= MAX_PER_SOURCE:
+        past = pairs.already_published(b, recent_titles) if recent_titles else None
+        if past:
+            why = f"same story as published: {past[:60]}"
+        elif sum(c.get("_source_name") == b.get("_source_name") for c in chosen) >= MAX_PER_SOURCE:
             why = f"already {MAX_PER_SOURCE} from this source"
         else:
             rel = [pairs.relation(c, b, subject=news) for c in chosen]
@@ -202,7 +237,8 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
     return {cat: [b for b in bs if (b.get("_jev_rank") or {}).get("send")] for cat, bs in pool.items()}
 
 
-def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None) -> tuple[dict[str, list[dict]] | None, dict]:
+def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
+                recent_titles: list[str] | None = None) -> tuple[dict[str, list[dict]] | None, dict]:
     """Returns ({cat: briefs in rank order, at most POOL_KEEP}, report), or (None, report)
     when the ranking cannot be trusted. Briefs flagged `_jev_rank["send"]` go to the
     curator (use `for_curator`, never a positional slice: a thin pool sends fewer than
@@ -217,7 +253,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None) -> tuple[d
             if client is None:
                 report["jev"] = f"IGNORED ({why})"
                 return None, report
-        q_rank, q_story, q_both = _questions()
+        q_rank, q_story, q_both, q_event = _questions()
         flat = [(cat, b) for cat, briefs in briefs_by_cat.items() for b in briefs]
         if not flat:
             report["jev"] = "IGNORED (no briefs)"
@@ -244,14 +280,14 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None) -> tuple[d
             report["jev"] = f"IGNORED ({errors}/{len(flat)} calls failed)"
             return None, report
 
-        pairs = _Pairs(client, q_story, q_both, deadline=t0 + TIME_BUDGET_S)
+        pairs = _Pairs(client, q_story, q_both, q_event, deadline=t0 + TIME_BUDGET_S)
         out: dict[str, list[dict]] = {}
         taken: list[dict] = []
         order = [c for c in CROSS_CAT_ORDER if c in briefs_by_cat] + [c for c in briefs_by_cat if c not in CROSS_CAT_ORDER]
         for cat in order:
             # An unscored brief (its call failed) ranks last rather than being lost.
             ranked = sorted(briefs_by_cat[cat], key=lambda b: -(scores.get(id(b)) or {"pick": -1})["pick"])
-            chosen, skipped = _select(cat, ranked, taken, pairs)
+            chosen, skipped = _select(cat, ranked, taken, pairs, recent_titles or [])
             taken += chosen
             # Reserve order: unchosen by rank, with same-story duplicates last — a
             # duplicate must never reach the curator by filling a thin pool's slots.
