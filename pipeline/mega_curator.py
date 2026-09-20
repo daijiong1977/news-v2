@@ -21,17 +21,19 @@ log = logging.getLogger("mega-curator")
 
 
 MEGA_CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a
-daily news site for kids ages 10-14. The pipeline mined ~36 candidates from
-9 RSS feeds (3 News + 3 Science + 3 Fun, up to 12 per cat), ran a
-forbidden-word safety filter, and now hands you the survivors.
+daily news site for kids ages 10-14. The pipeline mined candidates from the
+day's RSS feeds, ran a forbidden-word filter, dropped shopping guides and
+content that can never ship, then ranked what was left and handed you the
+best few per category. Each category below states how many it has.
 
-YOUR JOB: rank 5 candidates per category (15 total), in order, ready for
+YOUR JOB: rank UP TO 5 candidates per category, in order, ready for
 rewriting. Ranks 1-4 are the rewrite pool. Rank 5 is the spare — only
 used if a rank-1..4 pick later fails the post-rewrite safety vet.
 
-OUTPUT CONTRACT (strict): exactly 5 ranked picks per category. Score
-ONLY the 15 picks inline — do NOT emit per-candidate vet for the full
-pool (that blows the token budget).
+OUTPUT CONTRACT (strict): rank EVERY candidate a category gives you, up to
+5. A category with 4 candidates gets exactly 4 ranked picks — never repeat a
+candidate id or invent one to reach 5. Score ONLY the picks inline — do NOT
+emit per-candidate vet for the full pool (that blows the token budget).
 
 ALGORITHM (internal, don't output intermediate work):
 
@@ -84,10 +86,10 @@ has the vet signal. Use SHORT integer scores, no totals/peaks, no prose.
        "safety":{"violence":N,"sexual":N,"substance":N,"language":N,
                  "fear":N,"adult_themes":N,"distress":N,"bias":N},
        "interest":{"importance":N,"fun_factor":N,"kid_appeal":N}},
-      ...5 entries ranked 1..5...
+      ...one entry per candidate, ranked 1..N, N<=5...
     ],
-    "Science": [...5 entries...],
-    "Fun":     [...5 entries...]
+    "Science": [...same shape...],
+    "Fun":     [...same shape...]
   },
   "reasoning": "1-3 sentences: cross-cat dups you caught, topic
                 diversity choices, cases where rank-1 isn't choice_1."
@@ -125,7 +127,8 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
     parts = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.", ""]
     for cat in ("News", "Science", "Fun"):
         lines = by_cat_lines.get(cat, [])
-        parts.append(f"=== {cat} ({len(lines)} candidates) ===")
+        parts.append(f"=== {cat} ({len(lines)} candidates — rank all of them, "
+                     f"up to 5) ===")
         if not lines:
             parts.append("  (none)")
         else:

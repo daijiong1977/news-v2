@@ -165,15 +165,24 @@ class _Pairs:
         self.client, self.q_story, self.q_both, self.q_event, self.deadline = client, q_story, q_both, q_event, deadline
         self.calls = self.errors = 0
         self._cache: dict[tuple[int, int, bool], str | None] = {}
+        self._published: dict[int, str | None] = {}
 
     def already_published(self, b: dict, recent_titles: list[str]) -> str | None:
         """The published headline this brief repeats, or None. The legacy past-dup
         filter compares within one category at 80% title similarity, so it misses a
-        story that moves category and one that another outlet reworded."""
+        story that moves category and one that another outlet reworded.
+
+        Cached per brief: _select asks up to three times per brief (main pass, then
+        each thin-pool fill), and without the cache every ask re-scanned the whole
+        recent list and re-sent the Jev calls it had already paid for."""
+        if id(b) in self._published:
+            return self._published[id(b)]
+        self._published[id(b)] = None                # provisional; overwritten on a hit
         title = b.get("title") or ""
         toks = _tokens(title)
         for past in recent_titles:
             if titles_same_story(title, past):
+                self._published[id(b)] = past
                 return past
             if len(toks & _tokens(past)) < 2 or time.monotonic() > self.deadline:
                 continue                                  # 2 shared words: far more pairs here than within a pool
@@ -183,11 +192,18 @@ class _Pairs:
                                                     "summary_B": _text(b)[1][:300]},
                                              questions=self.q_event).answers
                 if float(ans["same_event"].noul) > SAME_MIN:
+                    self._published[id(b)] = past
                     return past
             except Exception as e:  # noqa: BLE001
                 self.errors += 1
                 log.warning("  jev pair call failed: %s", e)
+                self.forget_published(b)
         return None
+
+    def forget_published(self, b: dict) -> None:
+        """Drop the cached answer for a brief whose call failed, so a retry is
+        still possible within the deadline."""
+        self._published.pop(id(b), None)
 
     def relation(self, a: dict, b: dict, *, subject: bool) -> str | None:
         ta, tb = a.get("title") or "", b.get("title") or ""
@@ -283,33 +299,40 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
                 log.info("  [%s] source cap yielded for %.2f: no comparable alternative left", cat, pick(b))
             chosen.append(b)
 
-    for b, why in list(capped):                            # over-represented but good
-        if len(chosen) >= TO_CURATOR:
-            break
-        over = sum(c.get("_source_name") == b.get("_source_name") for c in chosen) >= HARD_PER_SOURCE
-        if not over and not hard_reason(b):
+    def _fill(pool: list[tuple[dict, str]], limit: int, *, honour_ceiling: bool,
+              note=None) -> int:
+        """Promote deferred briefs until `limit`. A brief that now hits a HARD rule
+        (chosen has grown since the main pass) moves to `hard` with the real reason
+        instead of keeping its stale soft one — the run log is the only record of
+        why a brief did not ship."""
+        n = 0
+        for b, why in list(pool):
+            if len(chosen) >= limit:
+                break
+            if honour_ceiling and sum(
+                    c.get("_source_name") == b.get("_source_name") for c in chosen) >= HARD_PER_SOURCE:
+                continue
+            blocked = hard_reason(b)
+            if blocked:
+                pool.remove((b, why))
+                hard.append((b, blocked))
+                continue
             chosen.append(b)
-            capped.remove((b, why))
+            pool.remove((b, why))
+            n += 1
+            if note:
+                note(b)
+        return n
 
-    for b, why in list(capped):                            # a one-source day still needs MIN_SEND
-        if len(chosen) >= MIN_SEND:
-            break
-        if not hard_reason(b):
-            chosen.append(b)
-            capped.remove((b, why))
-            log.info("  [%s] over the per-source ceiling to reach %d briefs — thin pool", cat, MIN_SEND)
-
-    below = 0
-    for b, why in sorted(low, key=lambda t: -pick(t[0])):  # weak: only to keep the day alive
-        if len(chosen) >= MIN_SEND:
-            break
-        if hard_reason(b):
-            continue
-        chosen.append(b)
-        low.remove((b, why))
-        below += 1
-        log.warning("  [%s] sending %.2f, BELOW the floor of %.2f — thin pool: %s",
-                    cat, pick(b), floor, (b.get("title") or "")[:60])
+    _fill(capped, TO_CURATOR, honour_ceiling=True)         # over-represented but good
+    _fill(capped, MIN_SEND, honour_ceiling=False,          # a one-source day still needs MIN_SEND
+          note=lambda b: log.info("  [%s] over the per-source ceiling to reach %d briefs — thin pool",
+                                  cat, MIN_SEND))
+    low.sort(key=lambda t: -pick(t[0]))                    # weak: only to keep the day alive
+    below = _fill(low, MIN_SEND, honour_ceiling=False,
+                  note=lambda b: log.warning(
+                      "  [%s] sending %.2f, BELOW the floor of %.2f — thin pool: %s",
+                      cat, pick(b), floor, (b.get("title") or "")[:60]))
     return chosen, hard + capped + low, below
 
 
@@ -379,7 +402,6 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             rest = [b for b in rest if id(b) not in dup_ids] + [b for b in rest if id(b) in dup_ids]
             final = (chosen + rest)[:max(POOL_KEEP, len(chosen))]
             for pos, b in enumerate(final, start=1):
-                b.pop("_jev_pick", None)
                 b["_jev_rank"] = {**(scores.get(id(b)) or {}), "pos": pos, "send": pos <= len(chosen),
                                   "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
             out[cat] = final
@@ -387,9 +409,6 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                                     "source": b.get("_source_name"), "title": b.get("title")}
                                    for i, b in enumerate(chosen, start=1)]
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]
-        for bs in briefs_by_cat.values():                       # nothing half-annotated survives
-            for b in bs:
-                b.pop("_jev_pick", None)
         out = {cat: out[cat] for cat in briefs_by_cat}          # caller's category order
         report["pair_calls"] = pairs.calls
         report["jev"] = (f"{len(flat) - errors}/{len(flat)} scored, {pairs.calls} pair checks"
@@ -399,6 +418,12 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
         report["jev"] = f"IGNORED (unexpected error: {e})"
         return None, report
     finally:
+        # _jev_pick is scratch state for _select. On any exit — success, refusal or
+        # an exception mid-selection — it must not survive onto briefs the caller
+        # goes on to checkpoint.
+        for bs in briefs_by_cat.values():
+            for b in bs:
+                b.pop("_jev_pick", None)
         if own_client and client is not None:
             try:
                 client.close()
