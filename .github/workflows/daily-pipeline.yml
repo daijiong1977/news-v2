@@ -28,7 +28,7 @@ on:
     # admin edits the cron in the website's admin panel, that change
     # appears here as a `chore(cron): sync ...` commit and takes
     # effect from the NEXT day's run. No more 30-min polling.
-    - cron: "20 17 * * *"
+    - cron: "0 6 * * *"   # 02:00 America/New_York in summer time (01:00 after the November change)
 
 permissions:
   contents: read
