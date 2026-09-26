@@ -175,6 +175,51 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
             "category_fit": round(category_fit, 3)}
 
 
+def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[dict]:
+    """Score late RSS backfill before it can bypass the normal category gate.
+
+    Unlike the first-round Jev ranking, deep-dig is optional: if scoring is
+    unavailable or a call fails, keep the existing published story instead of
+    promoting an unclassified article into the wrong section.
+    """
+    if not briefs:
+        return []
+    own_client = client is None
+    if own_client:
+        client, why = make_client()
+        if client is None:
+            log.warning("  [%s] deep-dig category gate unavailable (%s); skipping %d briefs",
+                        cat, why, len(briefs))
+            return []
+    try:
+        q_rank = _questions()[0]
+        accepted: set[int] = set()
+        with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+            futs = {ex.submit(_score_one, client, q_rank, cat, b): b for b in briefs}
+            for fut in as_completed(futs):
+                b = futs[fut]
+                try:
+                    fit = fut.result()["category_fit"]
+                except Exception as e:  # noqa: BLE001 — unscored backfill is not safe to promote
+                    log.warning("  [%s] deep-dig category score failed for %s: %s",
+                                cat, (b.get("title") or "")[:60], e)
+                    continue
+                b["_jev_category_fit"] = fit
+                if fit >= CATEGORY_FIT_MIN:
+                    accepted.add(id(b))
+        log.info("  [%s] deep-dig category gate: %d/%d fit", cat, len(accepted), len(briefs))
+        return [b for b in briefs if id(b) in accepted]
+    except Exception as e:  # noqa: BLE001 — optional backfill must not break publication
+        log.warning("  [%s] deep-dig category gate failed (%s); skipping backfill", cat, e)
+        return []
+    finally:
+        if own_client:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 class _Pairs:
     """How two briefs relate: "story", "subject" or None. Code first — Jev is asked
     only when the headlines share a content word yet are not near-identical. A failed

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pipeline import full_round as fr
 from pipeline import news_rss_core as core
+from pipeline import jev_rank as jr
 
 
 class _Src:
@@ -75,6 +76,20 @@ def test_fetch_failure_is_non_fatal():
     finally:
         core.fetch_source_entries = orig
     assert [s["_winner_brief"]["link"] for s in spares] == ["/ok"]
+
+
+def test_deep_dig_spares_must_pass_category_gate():
+    spares = _with_feeds(
+        {"Mixed": _entries(("Science discovery", "/science"),
+                            ("Kids football final", "/sport"))},
+        lambda: fr._deep_dig_spares("Fun", [_Src("Mixed")], set()))
+    orig = jr.gate_deep_dig_category
+    jr.gate_deep_dig_category = lambda cat, briefs: [b for b in briefs if b["link"] == "/sport"]
+    try:
+        gated = fr._gate_deep_dig_spares("Fun", spares)
+    finally:
+        jr.gate_deep_dig_category = orig
+    assert [s["_winner_brief"]["link"] for s in gated] == ["/sport"]
 
 
 def _run_all():

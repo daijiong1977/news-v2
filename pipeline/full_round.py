@@ -959,6 +959,15 @@ def _deep_dig_spares(cat: str, sources, exclude_links: set,
             for i, b in enumerate(briefs, start=1)]
 
 
+def _gate_deep_dig_spares(cat: str, spares: list[dict]) -> list[dict]:
+    """Apply the same section-fit threshold as first-round ranking to new RSS items."""
+    from .jev_rank import gate_deep_dig_category
+
+    briefs = [s["_winner_brief"] for s in spares]
+    eligible = {id(b) for b in gate_deep_dig_category(cat, briefs)}
+    return [s for s in spares if id(s["_winner_brief"]) in eligible]
+
+
 def _split_publishable(final_stories_by_cat: dict,
                        min_per_cat: int = 2) -> tuple[list[str], list[str]]:
     """Partition categories into (fresh_ok, too_thin) for the pack step.
@@ -1340,9 +1349,20 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
         variants = variants_by_cat.get(category, {})
         for slot, s in enumerate(stories, start=1):
             art = s["winner"]
+            variant = variants.get(slot - 1) or variants.get(str(slot - 1)) or {}
             story_id = s.get("_story_id") or make_story_id(today, category, slot)
             vet = art.get("_vet_info") or {}
-            safety = vet.get("safety") or {}
+            # Mega's independent Stage-3 vet scores the rewritten body, not the
+            # source article. Persist that final decision when available so
+            # redesign_stories reflects the text children actually read.
+            final_eval = variant.get("_safety_eval") or {}
+            safety = final_eval.get("scores") or vet.get("safety") or {}
+            safety_total = (sum((safety.get(d) or 0) for d in
+                                ("violence", "sexual", "substance", "language",
+                                 "fear", "adult_themes", "distress", "bias"))
+                            if final_eval.get("scores") else safety.get("total"))
+            safety_verdict = ("SAFE" if final_eval.get("verdict") == "PASS"
+                              else safety.get("verdict"))
             interest = vet.get("interest") or {}
             src_host = urlparse(art.get("link") or "").netloc.replace("www.", "")
             row = {
@@ -1365,8 +1385,8 @@ def persist_to_supabase(stories_by_cat, variants_by_cat, today: str, run_id: str
                 "safety_adult_themes": safety.get("adult_themes"),
                 "safety_distress":   safety.get("distress"),
                 "safety_bias":       safety.get("bias"),
-                "safety_total":      safety.get("total"),
-                "safety_verdict":    safety.get("verdict"),
+                "safety_total":      safety_total,
+                "safety_verdict":    safety_verdict,
                 "interest_importance": interest.get("importance"),
                 "interest_fun_factor": interest.get("fun_factor"),
                 "interest_kid_appeal": interest.get("kid_appeal"),
@@ -2137,6 +2157,8 @@ def main_mega() -> None:
                     seen_links.add(((w.get("winner") or {}).get("link")) or "")
                 dig_pool = _deep_dig_spares(cat, picked_sources_by_cat[cat],
                                             seen_links, max_per_source=15)
+                if dig_pool:
+                    dig_pool = _gate_deep_dig_spares(cat, dig_pool)
                 if dig_pool:
                     before = len(survived_winners)
                     log.info("  [%s] short (%d/3) after spares — deep-digging "

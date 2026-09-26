@@ -85,6 +85,31 @@ def _distinct(bs):
     return len({b["_source_name"] for b in bs})
 
 
+def test_deep_dig_category_gate_rejects_wrong_section_and_unscored():
+    briefs = [_b("New telescope discovery", cat="Fun", pick=0.9),
+              _b("Kids win football final", cat="Fun", pick=0.8),
+              _b("Unscored feed item", cat="Fun", pick=0.7)]
+    fake = Fake(fail=("Unscored",))
+    for b in briefs:
+        fake.by_title[b["title"]] = b["_p"]
+    fake.fit_by_title = {"New telescope discovery": 0.15,
+                         "Kids win football final": 0.91}
+    kept = jr.gate_deep_dig_category("Fun", briefs, client=fake)
+    assert [b["title"] for b in kept] == ["Kids win football final"]
+    assert briefs[0]["_jev_category_fit"] == 0.15
+    assert "_jev_category_fit" not in briefs[2]
+
+
+def test_deep_dig_category_gate_fails_closed_when_jev_unavailable():
+    brief = _b("Unexpected science story", cat="Fun", pick=0.8)
+    old = jr.make_client
+    jr.make_client = lambda: (None, "test outage")
+    try:
+        assert jr.gate_deep_dig_category("Fun", [brief]) == []
+    finally:
+        jr.make_client = old
+
+
 def test_orders_by_pick_and_keeps_top_10():
     pool = [_b(f"Story {i:02d} alpha{i}", src=f"S{i % 5}", pick=0.55 + i / 100) for i in range(14)]
     (out, rep), _ = _run({"Science": pool})
