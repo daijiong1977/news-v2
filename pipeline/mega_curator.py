@@ -18,6 +18,7 @@ import re
 from datetime import datetime, timezone
 
 from .news_rss_core import deepseek_reasoner_call
+from .news_topics import topic_group
 
 log = logging.getLogger("mega-curator")
 
@@ -58,6 +59,11 @@ ALGORITHM (internal, don't output intermediate work):
      - Prefer high interest_peak (max of importance / fun / kid_appeal)
        AND low safety_total.
      - Prefer DIFFERENT topic clusters within a cat.
+     - For NEWS top 3, prefer three different `editorial_topic` labels
+       when qualified candidates allow it. This is a SOFT preference,
+       unlike same-event dedup: two different storms may both run when
+       there is no suitable different-topic alternative. Never confuse
+       editorial_topic with the named-person/org `subject` field.
      - HARD RULE — subject diversity in NEWS top 3: ranks 1, 2, 3 of
        the News category MUST each have a DIFFERENT `subject` (a
        non-empty subject may appear only ONCE in the News top 3). Do
@@ -114,7 +120,9 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             title = (brief.get("title") or "")[:240]
             summary = (brief.get("summary") or "")[:600]
             src_name = (brief.get("_source_name") or "?")
-            line = (f"  [id={cid}] src={src_name}\n"
+            topic = topic_group(brief) if cat == "News" else ""
+            topic_note = f" editorial_topic={topic}" if topic else ""
+            line = (f"  [id={cid}] src={src_name}{topic_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)
@@ -219,6 +227,7 @@ def mega_curate(
     # Subject cap runs AFTER source diversity and prefers a spare that
     # keeps 3 distinct sources, so it doesn't undo the source pass.
     out = _enforce_top3_subject_diversity(out)
+    out = _prefer_top3_topic_diversity(out)
 
     for cat, picks in out.items():
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),
@@ -458,6 +467,47 @@ def _enforce_top3_subject_diversity(
             picks[dup_idx]["rank"] = old_rank
             picks[spare_idx]["rank"] = new_rank
 
+    return ranked_by_cat
+
+
+def _prefer_top3_topic_diversity(ranked_by_cat: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """Prefer three News topics, but keep two distinct events if no spare fits.
+
+    Only confident Jev labels count. The curator's other requirements stay in
+    force: a swap must not reduce source diversity, and hard same-event dedup
+    has already run. The fourth/fifth picks remain available for safety refill.
+    """
+    from collections import Counter
+
+    picks = ranked_by_cat.get("News") or []
+    for _ in range(3):
+        top = picks[:3]
+        if len(top) < 3:
+            break
+        groups = [topic_group(p.get("brief") or {}) for p in top]
+        repeated = {group for group, n in Counter(g for g in groups if g).items() if n > 1}
+        if not repeated:
+            break
+        duplicate_idx = max(i for i, group in enumerate(groups) if group in repeated)
+        kept = [p for i, p in enumerate(top) if i != duplicate_idx]
+        kept_groups = {topic_group(p.get("brief") or {}) for p in kept}
+        old_sources = {p["source"].name for p in top}
+        spare_idx = next((j for j in range(3, len(picks))
+                          if (group := topic_group(picks[j].get("brief") or {}))
+                          and group not in kept_groups
+                          and len({p["source"].name for p in kept} | {picks[j]["source"].name})
+                          >= len(old_sources)), None)
+        if spare_idx is None:
+            log.info("  [News] topic diversity: %s repeats; no suitable different-topic spare",
+                     sorted(repeated))
+            break
+        old, new = picks[duplicate_idx], picks[spare_idx]
+        log.info("  [News] topic-diversity swap: rank%d/%s (%s) ↔ rank%d/%s (%s)",
+                 old["rank"], old["source"].name, topic_group(old.get("brief") or {}),
+                 new["rank"], new["source"].name, topic_group(new.get("brief") or {}))
+        old_rank, new_rank = old["rank"], new["rank"]
+        picks[duplicate_idx], picks[spare_idx] = new, old
+        picks[duplicate_idx]["rank"], picks[spare_idx]["rank"] = old_rank, new_rank
     return ranked_by_cat
 
 

@@ -989,6 +989,7 @@ def promote_spare_and_rewrite(
     used_titles: set[str] | None = None,
     used_briefs: list[dict] | None = None,
     used_event_groups: set[str] | None = None,
+    used_topic_groups: set[str] | None = None,
 ) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
@@ -1009,11 +1010,13 @@ def promote_spare_and_rewrite(
     from .news_rss_core import _fetch_and_enrich, verify_article_content
     from .jev_rank import CATEGORY_FIT_MIN
     from .mega_curator import briefs_same_event
+    from .news_topics import topic_group
 
     used = set(used_source_names or ())
     shipped_briefs = list(used_briefs or ())
     shipped_briefs.extend({"title": t} for t in (used_titles or ()) if t)
     shipped_groups = set(used_event_groups or ())
+    topics_used = set(used_topic_groups or ())
 
     def _try_one(spare: dict):
         if not spare.get("_unverified_spare"):
@@ -1060,30 +1063,23 @@ def promote_spare_and_rewrite(
             kept[0],
         )
 
-    # Two passes. Pass 1: skip spares whose source is already in `used`.
-    # Pass 2: fall back to all spares (degrade gracefully when there's
-    # nothing else to ship). We only consume spares that succeed; failed
-    # ones stay popped so we don't retry them.
-    deferred: list[dict] = []
-    while spares:
-        spare = spares.pop(0)
+    # News prefers a fresh editorial topic before source diversity, but
+    # neither is a hard gate. A failed verify/rewrite/vet consumes that spare;
+    # unattempted spares remain available for a second refill.
+    def _priority(spare: dict) -> tuple[int, int]:
+        brief = spare.get("_winner_brief") or {}
+        label = topic_group(brief) if cat == "News" else ""
+        repeats_topic = bool(topics_used) and (not label or label in topics_used)
         src_name = (spare.get("source") and spare["source"].name) or ""
-        if src_name in used:
-            deferred.append(spare)
-            continue
+        return int(repeats_topic), int(src_name in used)
+
+    for spare in sorted(spares, key=_priority):
+        spares.pop(next(i for i, candidate in enumerate(spares) if candidate is spare))
         story, art = _try_one(spare)
         if story is not None:
-            return story, art
-        # _try_one consumed this spare — move on (don't defer back).
-    # Pass 2: try the deferred (duplicate-source) spares.
-    for spare in deferred:
-        story, art = _try_one(spare)
-        if story is not None:
-            log.info(
-                "  [%s] diversity-fallback: no new-source spare survived; "
-                "promoting %s (already in top 3)",
-                cat, (spare.get("source") and spare["source"].name) or "?",
-            )
+            if _priority(spare)[1]:
+                log.info("  [%s] diversity-fallback: promoting repeated source %s",
+                         cat, (spare.get("source") and spare["source"].name) or "?")
             return story, art
     return None, None
 
@@ -2019,9 +2015,20 @@ def main_mega() -> None:
         return {c: b[:PROBE_MAX_PER_CAT] for c, b in pool.items()}
 
     def _jev_rank_runner():
+        from .news_topics import tag_news_topics
+
+        def _with_topics(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
+            topic_t0 = time.monotonic()
+            report = tag_news_topics(pool.get("News") or [])
+            if pool.get("News"):
+                log.info("  [News] Jev topic groups: %d tagged, %d uncertain, %d failed",
+                         report["tagged"], report["uncertain"], report["failed"])
+                _set_phase("news_topics", topic_t0, **report)
+            return pool
+
         t0 = time.monotonic()
         if rank_mode == "off":
-            return _legacy_cut(briefs_by_cat)
+            return _with_topics(_legacy_cut(briefs_by_cat))
         log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
         try:
             ranked, report = jev_rank.rank_briefs(
@@ -2044,13 +2051,13 @@ def main_mega() -> None:
                        pair_calls=report["pair_calls"], passed_over=len(report["skipped"]),
                        below_floor=report.get("below_floor", {}))
             if applied:
-                return ranked
+                return _with_topics(ranked)
         except Exception as e:  # noqa: BLE001 — an optional stage must never break the run
             log.warning("  jev_rank stage failed (%s) — using the legacy cut", e)
         for b in (b for bs in briefs_by_cat.values() for b in bs):
             if "_jev_rank" in b:                  # shadow / failure: keep the evidence, not the effect
                 b["_jev_rank_shadow"] = b.pop("_jev_rank")
-        return _legacy_cut(briefs_by_cat)
+        return _with_topics(_legacy_cut(briefs_by_cat))
     try:
         briefs_by_cat = _load_or_run("jev_rank", _jev_rank_runner)
     except FileNotFoundError:
@@ -2158,6 +2165,17 @@ def main_mega() -> None:
                 if i in kept_by_sid:
                     survived_winners.append(w)
                     survived_articles.append(kept_by_sid[i])
+            if cat == "News" and len(survived_winners) > 3:
+                # Safety may remove a diverse pick and move rank 4 into the
+                # published three. Reapply the soft topic preference to the
+                # already-safe rewrites without making another model call.
+                from .mega_curator import _prefer_top3_topic_diversity
+                indexed = [{"rank": i + 1, "source": w["source"],
+                            "brief": w.get("_brief") or {}, "index": i}
+                           for i, w in enumerate(survived_winners)]
+                ordered = _prefer_top3_topic_diversity({"News": indexed})["News"]
+                survived_winners = [survived_winners[p["index"]] for p in ordered]
+                survived_articles = [survived_articles[p["index"]] for p in ordered]
             spare_pool = [s for s in stories_by_cat.get(cat, [])
                           if s.get("_unverified_spare")]
             promotions = 0
@@ -2182,10 +2200,13 @@ def main_mega() -> None:
                         (b.get("_event_group") or "").strip()
                         for b in used_briefs if (b.get("_event_group") or "").strip()
                     }
+                    from .news_topics import topic_group
+                    used_topic_groups = {topic_group(b) for b in used_briefs if topic_group(b)}
                     pw, pa = promote_spare_and_rewrite(
                         cat, pool, used_source_names=used_names,
                         used_titles=used_titles, used_briefs=used_briefs,
-                        used_event_groups=used_event_groups)
+                        used_event_groups=used_event_groups,
+                        used_topic_groups=used_topic_groups)
                     if not pw:
                         break
                     survived_winners.append(pw)
@@ -2212,6 +2233,9 @@ def main_mega() -> None:
                                             seen_links, max_per_source=15)
                 if dig_pool:
                     dig_pool = _gate_deep_dig_spares(cat, dig_pool)
+                    if cat == "News" and dig_pool:
+                        from .news_topics import tag_news_topics
+                        tag_news_topics([s.get("_winner_brief") or {} for s in dig_pool])
                 if dig_pool:
                     before = len(survived_winners)
                     log.info("  [%s] short (%d/3) after spares — deep-digging "
