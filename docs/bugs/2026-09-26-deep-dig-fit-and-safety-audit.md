@@ -25,8 +25,10 @@ decision on the rewritten variant, not the source article.
 ## Fix
 
 - `pipeline/jev_rank.py` — score deep-dig briefs with the existing Jev section
-  question and threshold. Unscored backfill is skipped; the established
-  previous-day carry-over remains available.
+  question and threshold. Borderline scores (0.60–0.69) are also compared
+  against the other two sections; the intended section must lead by at least
+  0.05. Unscored backfill is skipped; the established previous-day carry-over
+  remains available.
 - `pipeline/full_round.py` — gate deep-dig spares before promotion and persist
   final rewritten-body safety scores and verdict when present. Legacy runs
   continue using their original vet fields.
@@ -38,6 +40,8 @@ decision on the rewritten variant, not the source article.
   as Fun.
 - A published `redesign_stories` safety row describes the final child-facing
   rewrite and Stage-3 decision when those results exist.
+- Jev's short-form classification may narrow the candidate pool, but does not
+  replace the independent full-text child-safety review of final articles.
 
 ## Pinning test
 

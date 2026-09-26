@@ -67,6 +67,8 @@ HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
 MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
 POOL_KEEP = 10              # top 6 + 4 reserve spares, in rank order
 CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
+DEEP_DIG_BORDERLINE_MAX = 0.70  # only uncertain late backfill pays for cross-section checks
+DEEP_DIG_FIT_MARGIN = 0.05     # target must beat the best alternative, not merely pass 0.60
 
 # Minimum `pick` to be sent to the curator without comment. Calibrated on 100
 # stories labelled blind for this audience (jev-probes/data/gold_labels.py):
@@ -194,6 +196,7 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
     try:
         q_rank = _questions()[0]
         accepted: set[int] = set()
+        borderline: list[dict] = []
         with ThreadPoolExecutor(max_workers=WORKERS) as ex:
             futs = {ex.submit(_score_one, client, q_rank, cat, b): b for b in briefs}
             for fut in as_completed(futs):
@@ -205,8 +208,36 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
                                 cat, (b.get("title") or "")[:60], e)
                     continue
                 b["_jev_category_fit"] = fit
-                if fit >= CATEGORY_FIT_MIN:
+                if fit >= DEEP_DIG_BORDERLINE_MAX:
                     accepted.add(id(b))
+                elif fit >= CATEGORY_FIT_MIN:
+                    borderline.append(b)
+        # A single-section score of 0.60-0.69 can be a false positive: in the
+        # 2026-09-26 audit, a hurricane scored 0.61 for Science but 0.84 for
+        # News. Ask Jev about the two alternatives only in this grey zone.
+        if borderline:
+            alternatives = [other for other in ("News", "Science", "Fun") if other != cat]
+            other_scores: dict[int, dict[str, float]] = {id(b): {} for b in borderline}
+            with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+                futs = {ex.submit(_score_one, client, q_rank, other, b): (b, other)
+                        for b in borderline for other in alternatives}
+                for fut in as_completed(futs):
+                    b, other = futs[fut]
+                    try:
+                        other_scores[id(b)][other] = fut.result()["category_fit"]
+                    except Exception as e:  # noqa: BLE001 — uncertain backfill fails closed
+                        log.warning("  [%s] deep-dig cross-section score failed for %s: %s",
+                                    cat, (b.get("title") or "")[:60], e)
+            for b in borderline:
+                scores = other_scores[id(b)]
+                b["_jev_other_category_fit"] = scores
+                if (len(scores) == len(alternatives)
+                        and b["_jev_category_fit"] >= max(scores.values()) + DEEP_DIG_FIT_MARGIN):
+                    accepted.add(id(b))
+                else:
+                    log.info("  [%s] deep-dig borderline fit %.2f not clearly ahead of %s: %s",
+                             cat, b["_jev_category_fit"], scores,
+                             (b.get("title") or "")[:60])
         log.info("  [%s] deep-dig category gate: %d/%d fit", cat, len(accepted), len(briefs))
         return [b for b in briefs if id(b) in accepted]
     except Exception as e:  # noqa: BLE001 — optional backfill must not break publication

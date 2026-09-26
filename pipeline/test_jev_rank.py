@@ -37,7 +37,9 @@ class Fake:
             return SimpleNamespace(answers={
                 "pick": SimpleNamespace(noul=self.by_title[t]),
                 "want": SimpleNamespace(score=2.0),
-                "category_fit": SimpleNamespace(noul=self.fit_by_title.get(t, 0.95)),
+                "category_fit": SimpleNamespace(
+                    noul=self.fit_by_title.get((t, state["story"]["section"]),
+                                               self.fit_by_title.get(t, 0.95))),
             })
         self.pair_calls += 1
         if self.pairs_fail:
@@ -108,6 +110,25 @@ def test_deep_dig_category_gate_fails_closed_when_jev_unavailable():
         assert jr.gate_deep_dig_category("Fun", [brief]) == []
     finally:
         jr.make_client = old
+
+
+def test_deep_dig_borderline_checks_other_sections():
+    hurricane = _b("Hurricane approaching Hawaii", cat="Science", pick=0.8)
+    sports = _b("Kids win a close football final", cat="Fun", pick=0.8)
+    fake = Fake()
+    fake.by_title = {b["title"]: b["_p"] for b in (hurricane, sports)}
+    fake.fit_by_title = {
+        (hurricane["title"], "Science"): 0.61,
+        (hurricane["title"], "News"): 0.84,
+        (hurricane["title"], "Fun"): 0.10,
+        (sports["title"], "Fun"): 0.66,
+        (sports["title"], "News"): 0.14,
+        (sports["title"], "Science"): 0.20,
+    }
+    assert jr.gate_deep_dig_category("Science", [hurricane], client=fake) == []
+    assert hurricane["_jev_other_category_fit"]["News"] == 0.84
+    assert jr.gate_deep_dig_category("Fun", [sports], client=fake) == [sports]
+    assert sports["_jev_other_category_fit"]["Science"] == 0.20
 
 
 def test_orders_by_pick_and_keeps_top_10():
