@@ -42,8 +42,30 @@ short body expanded).
 
 - `pytest pipeline/test_wc_repair.py pipeline/test_safety_quality.py`
   → 13 passed (new pass + existing Stage 3 suite unaffected).
-- Watch the next daily runs for `wc-repair` log lines and a drop in
-  `word-count flag` warnings / digest body_too_long tickets.
+- First real run (34927289853, 2026-09-15): pass fired 10 times,
+  repaired only **2**. Run succeeded and published; 7 of 18 published
+  variants were still out of band. See follow-up below.
+
+## Follow-up — v1 could not expand (fixed same day)
+
+The v1 repair prompt told the model to expand a too-short body "with
+details already present in the text", and the repair call never
+received the source article. With no material to add, the model
+returned the input verbatim — 5 of the 7 misses came back at exactly
+their original length (192→192, 254→254, 257→257, 265→265, 462→462).
+Today's dominant failure mode was too SHORT (5 of 7), not too long.
+
+v2 changes:
+- `_wc_repair_user_msg()` splits SHORTEN and EXPAND into separate
+  framings, and states "returning it unchanged is a failure".
+- `repair_wordcounts(rewrite_result, sources_by_id)` — the EXPAND path
+  now receives the original source article (1200-word excerpt) so
+  added details are real and sourced; `filter_safe_rewrites` threads it
+  from `_winners` (mega path) and from `art` (spare-promotion path).
+- Tests: 3 more cases (expand carries SOURCE ARTICLE, shrink does not,
+  missing source doesn't crash) → 21 passed across the touched suites.
+  The 1 pre-existing failure (`test_cadence_calibrate`) and 3 `test_feed`
+  collection errors are present on clean main too.
 
 ## Lessons
 
