@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -1719,6 +1720,58 @@ def main() -> None:
 
 # ─── Mega orchestrator (PIPELINE_VARIANT=mega) ─────────────────────────
 
+def enrich_survivors(stories_by_cat: dict, variants_by_cat: dict, *,
+                     max_workers: int = 2, enrich_fn=None) -> tuple[dict, list[str], list[tuple], dict]:
+    """Enrich independent categories with at most two concurrent model calls.
+
+    Each category still runs easy then middle serially inside detail_enrich,
+    preserving its proven 3-slot output contract. A failed category does not
+    discard results from the others; the caller retains the existing abort
+    policy after every future has completed.
+    """
+    if max_workers not in (1, 2):
+        raise ValueError("enrich max_workers must be 1 or 2")
+    enrich_fn = enrich_fn or detail_enrich
+    out: dict[str, dict] = {cat: {} for cat in stories_by_cat}
+    failures: list[str] = []
+    partial: list[tuple[str, int, int]] = []
+    per_category: dict[str, float] = {}
+    jobs = []
+    for cat, stories in stories_by_cat.items():
+        if not stories:
+            continue
+        variants = variants_by_cat[cat]
+        articles = [variants[i] if i in variants else variants[str(i)]
+                    for i in range(len(stories))]
+        jobs.append((cat, articles))
+    if not jobs:
+        return out, failures, partial, per_category
+
+    def _one(cat: str, articles: list[dict]):
+        started = time.monotonic()
+        result = enrich_fn({"articles": articles})
+        return result.get("details") or {}, time.monotonic() - started
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(jobs))) as ex:
+        futures = {ex.submit(_one, cat, articles): (cat, len(articles) * 2)
+                   for cat, articles in jobs}
+        for fut in as_completed(futures):
+            cat, expected = futures[fut]
+            try:
+                details, seconds = fut.result()
+            except Exception as e:  # noqa: BLE001 — match the serial path's per-category failure handling
+                log.error("  [%s] enrich failed: %s", cat, e)
+                failures.append(f"{cat}: {e}")
+                continue
+            out[cat] = details
+            per_category[cat] = round(seconds, 1)
+            if len(details) < expected:
+                log.warning("  [%s] enrich returned %d slots, expected %d",
+                            cat, len(details), expected)
+                partial.append((cat, len(details), expected))
+    return out, failures, partial, per_category
+
+
 def main_mega() -> None:
     """Mega-pipeline path: light Phase A → forbidden filter → mega-curator
     → body verify → rewrite-with-safety → Stage 3 Python filter → enrich.
@@ -2203,26 +2256,20 @@ def main_mega() -> None:
     def _enrich_runner():
         t0 = time.monotonic()
         log.info("=== MEGA Phase D — enrich 9 survivors only ===")
-        out: dict[str, dict] = {}
-        for cat, stories in final_stories_by_cat.items():
-            if not stories:
-                out[cat] = {}
-                continue
-            articles = [final_variants_by_cat[cat][i] for i in range(len(stories))]
-            try:
-                enrich = detail_enrich({"articles": articles})
-                details = enrich.get("details") or {}
-                expected = len(articles) * 2
-                if len(details) < expected:
-                    log.warning("  [%s] enrich returned %d slots, expected %d",
-                                cat, len(details), expected)
-                    telemetry["warnings"].append(
-                        f"{cat}: partial enrich ({len(details)}/{expected})")
-                out[cat] = details
-            except Exception as e:  # noqa: BLE001
-                log.error("  [%s] enrich failed: %s", cat, e)
-                enrich_failures.append(f"{cat}: {e}")
-        _set_phase("enrich", t0)
+        try:
+            workers = max(1, min(2, int(os.environ.get("ENRICH_WORKERS", "2"))))
+        except ValueError:
+            log.warning("invalid ENRICH_WORKERS; using 2")
+            workers = 2
+        log.info("  enrich concurrency: %d categor%s", workers,
+                 "y" if workers == 1 else "ies")
+        out, failures, partial, per_category = enrich_survivors(
+            final_stories_by_cat, final_variants_by_cat, max_workers=workers)
+        enrich_failures.extend(failures)
+        telemetry["warnings"].extend(
+            f"{cat}: partial enrich ({got}/{expected})"
+            for cat, got, expected in partial)
+        _set_phase("enrich", t0, workers=workers, per_category=per_category)
         return out
     final_details_by_cat = _load_or_run("enrich", _enrich_runner)
     failures = enrich_failures

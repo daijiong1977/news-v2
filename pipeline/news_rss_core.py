@@ -23,6 +23,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlparse
 
 import feedparser
@@ -454,11 +455,19 @@ CALL_STATS: dict[str, int] = {
     "reasoner_transport_retries": 0, "reasoner_repaired": 0,
     "reasoner_truncated": 0,
 }
+_CALL_STATS_LOCK = Lock()
+
+
+def _bump_call_stat(name: str) -> None:
+    """Keep call telemetry accurate when categories enrich concurrently."""
+    with _CALL_STATS_LOCK:
+        CALL_STATS[name] += 1
 
 
 def reset_call_stats() -> None:
-    for k in CALL_STATS:
-        CALL_STATS[k] = 0
+    with _CALL_STATS_LOCK:
+        for k in CALL_STATS:
+            CALL_STATS[k] = 0
 
 
 def _retry_sleep_for(err: Exception, attempt: int) -> float:
@@ -600,7 +609,7 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
             res = _deepseek_post(payload, timeout=120, api_key=api_key, endpoint=endpoint)
             if res.parsed is not None:
                 if res.repair_kind:
-                    CALL_STATS["chat_repaired"] += 1
+                    _bump_call_stat("chat_repaired")
                 return res.parsed
             if res.finish_reason == "length":
                 raise RuntimeError(
@@ -608,7 +617,7 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
                     "repair failed — caller should reduce payload"
                 )
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
-            CALL_STATS["chat_retries"] += 1
+            _bump_call_stat("chat_retries")
             # Log the raw content snippet so we can see what the model
             # actually emitted. Without this, "JSON parse failed" is
             # an opaque signal — we can't tell if the model returned
@@ -626,7 +635,7 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
                 time.sleep(_retry_sleep_for(last_err, attempt))
         except requests.RequestException as e:
             last_err = e
-            CALL_STATS["chat_retries"] += 1
+            _bump_call_stat("chat_retries")
             wait = _retry_sleep_for(e, attempt)
             log.warning("chat attempt %d/%d on %s failed (%s): waiting %.1fs",
                         attempt, max_attempts, model, type(e).__name__, wait)
@@ -657,7 +666,7 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
     If the primary IS already Flash, just use full max_attempts on it
     (no fallback-to-self loop)."""
     api_key, endpoint, model = _resolve_chat_provider()
-    CALL_STATS["chat_calls"] += 1
+    _bump_call_stat("chat_calls")
     fallback = "deepseek-v4-flash"
     primary_is_flash = "flash" in model.lower()
 
@@ -1573,18 +1582,18 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
             res = _deepseek_post(payload, timeout=300, api_key=api_key, endpoint=endpoint)
             if res.parsed is not None:
                 if res.repair_kind:
-                    CALL_STATS["reasoner_repaired"] += 1
+                    _bump_call_stat("reasoner_repaired")
                     log.info("reasoner: parse OK after repair on %s (%s, finish=%s)",
                              model, res.repair_kind, res.finish_reason)
                 return res.parsed
             if res.finish_reason == "length":
-                CALL_STATS["reasoner_truncated"] += 1
+                _bump_call_stat("reasoner_truncated")
                 raise RuntimeError(
                     f"reasoner output truncated (max_tokens={max_tokens} hit); "
                     "split-batch fallback in caller will shrink the payload"
                 )
             content_attempts += 1
-            CALL_STATS["reasoner_content_retries"] += 1
+            _bump_call_stat("reasoner_content_retries")
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
             # Log raw content snippet so we can see WHY the JSON parse
             # failed — same instrumentation as chat-call path.
@@ -1604,7 +1613,7 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
             time.sleep(_retry_sleep_for(last_err, content_attempts))
         except requests.RequestException as e:
             transport_attempts += 1
-            CALL_STATS["reasoner_transport_retries"] += 1
+            _bump_call_stat("reasoner_transport_retries")
             last_err = e
             wait = _retry_sleep_for(e, transport_attempts)
             log.warning("reasoner transport attempt %d/%d on %s failed (%s): waiting %.1fs",
@@ -1631,7 +1640,7 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 65536,
     Truncation always raises immediately — caller's split-batch
     shrinks the payload."""
     api_key, endpoint, model = _resolve_reasoner_provider()
-    CALL_STATS["reasoner_calls"] += 1
+    _bump_call_stat("reasoner_calls")
     fallback = "deepseek-v4-flash"
     primary_is_flash = "flash" in model.lower()
 
