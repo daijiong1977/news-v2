@@ -1,5 +1,5 @@
 -- supabase/seeds/2026-05-04-cadence-seed.sql
--- 39 sources across News (7) + Science (11) + Fun (21).
+-- 39 sources across News (7) + Science (15) + Fun (17).
 -- ON CONFLICT (name) DO UPDATE — many rows already exist; this brings
 -- them to spec values without duplicating.
 -- UNIQUE(name) constraint comes from Task 1's migration.
@@ -76,7 +76,7 @@ ON CONFLICT (name) DO UPDATE SET
   is_backup=EXCLUDED.is_backup,
   state=EXCLUDED.state;
 
--- Fun (21)
+-- Fun-origin batch (17 Fun + 4 science/technology sources reclassified to Science)
 INSERT INTO redesign_source_configs
   (category, name, rss_url, feed_kind, feed_config, flow, max_to_vet,
    min_body_words, priority, cadence_days, enabled, is_backup, state)
@@ -84,7 +84,7 @@ VALUES
   ('Fun', 'DOGOnews', 'https://www.dogonews.com/', 'html_list',
    '{"article_selector": "article a[href*=\"/2026\"], article a[href*=\"/2025\"]", "exclude_pattern": "#comment"}',
    'full', 10, 200, 1, 1, true, false, 'live'),
-  ('Fun', 'NG Kids — Space', 'https://kids.nationalgeographic.com/space/', 'html_list',
+  ('Science', 'NG Kids — Space', 'https://kids.nationalgeographic.com/space/', 'html_list',
    '{"article_selector": "a[href*=\"/space/\"][href*=\"/article/\"]"}',
    'full', 10, 200, 2, 7, true, false, 'live'),
   ('Fun', 'NG Kids — Geography', 'https://kids.nationalgeographic.com/geography/', 'html_list',
@@ -96,9 +96,9 @@ VALUES
    'rss', NULL, 'full', 10, 300, 1, 2, true, false, 'live'),
   ('Fun', 'Wired Gear',  'https://www.wired.com/feed/category/gear/latest/rss',
    'rss', NULL, 'full', 10, 300, 1, 2, true, false, 'live'),
-  ('Fun', 'Popular Mechanics', 'https://www.popularmechanics.com/rss/all.xml',
+  ('Science', 'Popular Mechanics', 'https://www.popularmechanics.com/rss/all.xml',
    'rss', NULL, 'full', 10, 300, 2, 2, true, false, 'live'),
-  ('Fun', 'MIT News',    'https://news.mit.edu/rss/feed',
+  ('Science', 'MIT News',    'https://news.mit.edu/rss/feed',
    'rss', NULL, 'full', 10, 300, 3, 7, true, false, 'live'),
   ('Fun', 'Variety',     'https://variety.com/feed/',
    'rss', NULL, 'full', 10, 300, 1, 3, true, false, 'live'),
@@ -114,7 +114,7 @@ VALUES
    'rss', NULL, 'full', 10, 300, 1, 7, true, false, 'live'),
   ('Fun', 'Smithsonian History', 'https://www.smithsonianmag.com/rss/history/',
    'rss', NULL, 'full', 10, 300, 1, 7, true, false, 'live'),
-  ('Fun', 'Live Science','https://www.livescience.com/feeds/all',
+  ('Science', 'Live Science','https://www.livescience.com/feeds/all',
    'rss', NULL, 'full', 10, 300, 2, 1, true, false, 'live'),
   ('Fun', 'Colossal',    'https://www.thisiscolossal.com/feed/',
    'rss', NULL, 'full', 10, 300, 2, 7, true, false, 'live'),

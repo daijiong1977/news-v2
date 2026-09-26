@@ -24,6 +24,7 @@ class Fake:
         self.fail, self.delay, self.pairs_fail, self.rank_calls, self.pair_calls = fail, delay, pairs_fail, 0, 0
         self.event_calls = 0
         self.by_title: dict[str, float] = {}
+        self.fit_by_title: dict[str, float] = {}
 
     def system_one(self, state, questions):
         if self.delay:
@@ -33,7 +34,11 @@ class Fake:
             t = state["story"]["headline"]
             if any(f in t for f in self.fail):
                 raise RuntimeError("boom")
-            return SimpleNamespace(answers={"pick": SimpleNamespace(noul=self.by_title[t]), "want": SimpleNamespace(score=2.0)})
+            return SimpleNamespace(answers={
+                "pick": SimpleNamespace(noul=self.by_title[t]),
+                "want": SimpleNamespace(score=2.0),
+                "category_fit": SimpleNamespace(noul=self.fit_by_title.get(t, 0.95)),
+            })
         self.pair_calls += 1
         if self.pairs_fail:
             raise RuntimeError("pair boom")
@@ -183,6 +188,53 @@ def test_below_floor_is_held_back_until_the_pool_is_thin():
     (out, rep), _ = _run({"Science": strong[:2] + weak})
     sent = _sent(out, "Science")
     assert len(sent) == jr.MIN_SEND and rep["below_floor"]["Science"] == jr.MIN_SEND - 2
+
+
+def test_wrong_section_story_is_hard_blocked_and_not_a_spare():
+    """A science discovery must not ship as Fun, even on a thin day."""
+    science_in_fun = _b(
+        "Interstellar comet may reveal clues to life",
+        src="Live Science", cat="Fun", pick=0.99,
+    )
+    fun = [_b(f"Young musician wins contest {i}", src=f"F{i}", cat="Fun", pick=0.8 - i / 100)
+           for i in range(4)]
+    fake = Fake()
+    for b in [science_in_fun] + fun:
+        fake.by_title[b["title"]] = b["_p"]
+    fake.fit_by_title[science_in_fun["title"]] = 0.05
+    out, rep = jr.rank_briefs({"Fun": [science_in_fun] + fun}, client=fake)
+    assert science_in_fun["title"] not in _sent(out, "Fun")
+    assert science_in_fun["_jev_category_fit"] == 0.05
+    assert any("category fit" in d["why"] for d in rep["skipped"])
+
+
+def test_news_event_family_is_grouped_before_curator():
+    """The live 2026-09-25 Trump-Xi failure becomes one event group."""
+    summit = [
+        _b("US and China must act together, Xi says as Trump hosts state dinner",
+           src="BBC", pick=0.95),
+        _b("AI, trade, Iran and Taiwan top agenda at Trump-Xi summit",
+           src="PBS", pick=0.94),
+        _b("Xi got Trump's red carpet welcome but not everything he wanted",
+           src="BBC2", pick=0.93),
+    ]
+    for b in summit:
+        b["summary"] = "Xi and Trump met at the White House during China's state visit to discuss trade."
+    other_titles = [
+        "Hurricane approaches Hawaii with heavy rain",
+        "Supreme Court pauses Missouri voting map change",
+        "Iran offers to reopen key oil waterway",
+        "New museum opens in Nairobi",
+        "Farmers test drought resistant wheat",
+    ]
+    other = [_b(t, src=f"N{i}", pick=0.8 - i / 100)
+             for i, t in enumerate(other_titles)]
+    (out, rep), _ = _run({"News": summit + other})
+    sent_summit = [b for b in jr.for_curator(out)["News"] if "Xi" in b["title"]]
+    assert len(sent_summit) == 1
+    groups = {b.get("_event_group") for b in summit}
+    assert len(groups) == 1 and None not in groups
+    assert sum("same story" in d["why"] for d in rep["skipped"]) >= 2
 
 
 def test_news_floor_is_lower_than_science():

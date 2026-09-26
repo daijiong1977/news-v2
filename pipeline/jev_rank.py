@@ -54,7 +54,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .jev_prefilter import MAX_ERROR_RATE, WORKERS, make_client
-from .mega_curator import titles_same_story
+from .mega_curator import briefs_same_event, join_event_group, titles_same_story
 
 log = logging.getLogger("jev-rank")
 
@@ -66,6 +66,7 @@ CAP_YIELD_GAP = 0.10        # a 3rd from one source beats an alternative this mu
 HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
 MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
 POOL_KEEP = 10              # top 6 + 4 reserve spares, in rank order
+CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
 
 # Minimum `pick` to be sent to the curator without comment. Calibrated on 100
 # stories labelled blind for this audience (jev-probes/data/gold_labels.py):
@@ -109,7 +110,16 @@ WANT_LEVELS = [
     "The reader would pick it from a list of headlines",
     "The reader would tell a friend about it afterwards",
 ]
-SAME_STORY_Q = "Do these two headlines report on the same real-world event or the same ongoing story?"
+CATEGORY_FIT_Q = "Does this story belong in the named section?"
+CATEGORY_FIT_CRITERIA = {
+    "true": "News=current affairs; Science=discoveries, nature, space, medicine, engineering or research; "
+            "Fun=sports, music, movies, games, arts, kid achievements, history or amusing human-interest. "
+            "A science discovery is Science even when it is surprising or fun.",
+    "false": "The story primarily belongs in another section. In particular, astronomy, dinosaurs, fossils, "
+             "animal research and technology research do not belong in Fun.",
+}
+SAME_STORY_Q = "Do these headlines cover the same real-world event family or stages/angles of one ongoing event " \
+               "that a daily editor should combine into one article?"
 # Against already-published stories the question is narrower on purpose: a follow-up
 # with a new development ("...admits mistakes") is news; the same event reworded by
 # another outlet ("reporters denied access" / "journalists denied access") is not.
@@ -137,7 +147,9 @@ def _tokens(title: str) -> set[str]:
 def _questions():
     from typesafe_sdk import Noul, Score
     return ({"pick": Noul(instructions=PICK_Q, criteria=PICK_CRITERIA),
-             "want": Score(instructions=WANT_Q, criteria=WANT_LEVELS)},
+             "want": Score(instructions=WANT_Q, criteria=WANT_LEVELS),
+             "category_fit": Noul(instructions=CATEGORY_FIT_Q,
+                                  criteria=CATEGORY_FIT_CRITERIA)},
             {"same_story": Noul(instructions=SAME_STORY_Q)},
             {"same_story": Noul(instructions=SAME_STORY_Q), "same_subject": Noul(instructions=SAME_SUBJECT_Q)},
             {"same_event": Noul(instructions=SAME_EVENT_Q)})
@@ -151,9 +163,16 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
                          "outlet": b.get("_source_name") or ""}},
         questions=q).answers
     pick, want = float(ans["pick"].noul), float(ans["want"].score)
-    if not (math.isfinite(pick) and 0 <= pick <= 1 and math.isfinite(want) and 0 <= want <= len(WANT_LEVELS) - 1):
-        raise ValueError(f"jev returned out-of-range answers: pick={pick} want={want}")
-    return {"pick": round(pick, 3), "want": round(want, 2)}
+    category_fit = float(ans["category_fit"].noul)
+    if not (math.isfinite(pick) and 0 <= pick <= 1
+            and math.isfinite(want) and 0 <= want <= len(WANT_LEVELS) - 1
+            and math.isfinite(category_fit) and 0 <= category_fit <= 1):
+        raise ValueError(
+            f"jev returned out-of-range answers: pick={pick} want={want} "
+            f"category_fit={category_fit}"
+        )
+    return {"pick": round(pick, 3), "want": round(want, 2),
+            "category_fit": round(category_fit, 3)}
 
 
 class _Pairs:
@@ -207,7 +226,9 @@ class _Pairs:
 
     def relation(self, a: dict, b: dict, *, subject: bool) -> str | None:
         ta, tb = a.get("title") or "", b.get("title") or ""
-        if (a.get("link") and a.get("link") == b.get("link")) or titles_same_story(ta, tb):
+        if ((a.get("link") and a.get("link") == b.get("link"))
+                or briefs_same_event(a, b)):
+            join_event_group(a, b)
             return "story"
         if not (_tokens(ta) & _tokens(tb)) or time.monotonic() > self.deadline:
             return None
@@ -224,6 +245,7 @@ class _Pairs:
                 state={"headline_A": ha, "summary_A": sa[:300], "headline_B": hb, "summary_B": sb[:300]},
                 questions=self.q_both if subject else self.q_story).answers
             if float(ans["same_story"].noul) > SAME_MIN:
+                join_event_group(a, b)
                 return "story"
             if subject and float(ans["same_subject"].noul) > SAME_MIN:
                 return "subject"
@@ -260,6 +282,9 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
     low: list[tuple[dict, str]] = []
 
     def hard_reason(b: dict) -> str | None:
+        fit = float(b.get("_jev_category_fit", 1.0))
+        if fit < CATEGORY_FIT_MIN:
+            return f"category fit {fit:.2f} is below {CATEGORY_FIT_MIN:.2f}"
         past = pairs.already_published(b, recent_titles) if recent_titles else None
         if past:
             return f"same story as published: {past[:60]}"
@@ -391,6 +416,8 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             # An unscored brief (its call failed) ranks last rather than being lost.
             for b in briefs_by_cat[cat]:
                 b["_jev_pick"] = (scores.get(id(b)) or {}).get("pick", -1.0)
+                b["_jev_category_fit"] = (scores.get(id(b)) or {}).get(
+                    "category_fit", 1.0)
             ranked = sorted(briefs_by_cat[cat], key=lambda b: -b["_jev_pick"])
             chosen, skipped, below = _select(cat, ranked, taken, pairs, recent_titles or [])
             report["below_floor"][cat] = below

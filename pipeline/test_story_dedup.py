@@ -23,9 +23,9 @@ class _Src:
     def __init__(self, name): self.name = name
 
 
-def _pick(rank, src, title, cluster="", subject=""):
+def _pick(rank, src, title, cluster="", subject="", summary=""):
     return {"rank": rank, "id": rank, "source": _Src(src),
-            "brief": {"title": title, "_source_name": src},
+            "brief": {"title": title, "summary": summary, "_source_name": src},
             "vet": {"cluster_id": cluster, "subject": subject}}
 
 
@@ -44,6 +44,31 @@ def test_titles_same_story_detects_near_duplicate():
         "The biggest steam locomotive whistle-stops across the U.S.",
         "Justice Department subpoenas New York Times reporters") is False
     assert mc.titles_same_story("", "anything") is False
+
+
+def test_event_family_groups_different_stages_of_one_visit():
+    summary = "Xi and Trump met at the White House during China's state visit to discuss trade."
+    briefs = [
+        {"title": "US and China must act together, Xi says as Trump hosts state dinner",
+         "summary": summary},
+        {"title": "AI, trade, Iran and Taiwan top agenda at Trump-Xi summit",
+         "summary": summary},
+        {"title": "Xi got Trump's red carpet welcome but not everything he wanted",
+         "summary": summary},
+    ]
+    assert mc.briefs_same_event(briefs[0], briefs[1])
+    assert mc.briefs_same_event(briefs[0], briefs[2])
+    group = mc.join_event_group(briefs[0], briefs[1])
+    mc.join_event_group(briefs[0], briefs[2])
+    assert {b.get("_event_group") for b in briefs} == {group}
+
+
+def test_one_recurring_person_does_not_merge_unrelated_events():
+    budget = {"title": "Donald Trump signs the annual budget bill",
+              "summary": "The president approved federal spending after a vote in Congress."}
+    summit = {"title": "Donald Trump meets Xi Jinping at trade summit",
+              "summary": "The US and Chinese leaders discussed tariffs during a state visit."}
+    assert not mc.briefs_same_event(budget, summit)
 
 
 # ── the reported bug: same cluster_id, both shipped ──
@@ -77,6 +102,22 @@ def test_near_duplicate_title_dropped_even_with_diff_cluster():
                    cluster="ca_fire_b")]     # LLM gave a different cluster_id
     out = mc._dedupe_ranked_stories({"News": picks})["News"]
     assert len(out) == 1 and out[0]["rank"] == 1
+
+
+def test_event_family_dropped_even_when_titles_are_worded_differently():
+    summary = "Xi and Trump met at the White House during China's state visit to discuss trade."
+    picks = [
+        _pick(1, "BBC", "US and China must act together, Xi says as Trump hosts state dinner",
+              cluster="dinner", summary=summary),
+        _pick(2, "PBS", "AI, trade, Iran and Taiwan top agenda at Trump-Xi summit",
+              cluster="summit", summary=summary),
+        _pick(3, "Reuters", "Xi got Trump's red carpet welcome but not everything he wanted",
+              cluster="welcome", summary=summary),
+        _pick(4, "NPR", "Hurricane approaches Hawaii with heavy rain", cluster="storm"),
+    ]
+    out = mc._dedupe_ranked_stories({"News": picks})["News"]
+    assert len(out) == 2
+    assert sum("Xi" in p["brief"]["title"] for p in out) == 1
 
 
 # ── News subject cap across the WHOLE list (not just top 3) ──

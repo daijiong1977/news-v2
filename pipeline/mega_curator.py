@@ -11,8 +11,10 @@ Returns a dict suitable for downstream stages:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
 from .news_rss_core import deepseek_reasoner_call
@@ -226,7 +228,6 @@ def mega_curate(
 
 def _story_tokens(title: str) -> set[str]:
     """Content words (≥3 chars) of a headline, for overlap comparison."""
-    import re
     s = re.sub(r"[^\w\s]", " ", (title or "").lower())
     return {w for w in s.split() if len(w) >= 3}
 
@@ -240,6 +241,93 @@ def titles_same_story(a: str, b: str, thresh: float = 0.7) -> bool:
     if not ta or not tb:
         return False
     return len(ta & tb) / min(len(ta), len(tb)) >= thresh
+
+
+_EVENT_STOP = {
+    "the", "and", "for", "from", "with", "into", "after", "before", "over",
+    "says", "said", "say", "new", "news", "today", "could", "would", "will",
+    "what", "why", "how", "this", "that", "these", "those", "one", "two",
+    "big", "first", "latest", "leader", "leaders", "president", "government",
+}
+_EVENT_CUES = {
+    "visit", "visits", "visited", "meeting", "meet", "meets", "summit", "talk",
+    "talks", "dinner", "welcome", "welcomes", "deal", "truce", "conference",
+    "trial", "ruling", "election", "launch", "landfall", "strike", "storm",
+}
+
+
+def _event_words(text: str) -> set[str]:
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'’-]*", text or "")
+    return {
+        re.sub(r"(?:'s|’s)$", "", w.lower())
+        for w in words
+        if len(w) >= 3 and w.lower() not in _EVENT_STOP
+    }
+
+
+def _event_entities(title: str) -> set[str]:
+    """Headline actor tokens for the deterministic event-family guard.
+
+    Two shared actors are required below. A single recurring person is a
+    subject, not an event, so unrelated stories about that person stay apart.
+    """
+    # A whitespace-connected proper-name span is one actor ("Donald Trump"),
+    # while a hyphen separates actors ("Trump-Xi"). This prevents two unrelated
+    # Trump stories from looking like they share two entities: Donald + Trump.
+    text = (title or "").replace("-", " | ")
+    spans = re.findall(
+        r"\b(?:[A-Z]{2,}|[A-Z][a-z]+)(?:['’]s)?"
+        r"(?:\s+(?:[A-Z]{2,}|[A-Z][a-z]+)(?:['’]s)?)*\b",
+        text,
+    )
+    entities: set[str] = set()
+    for span in spans:
+        words = [re.sub(r"(?:'s|’s)$", "", w.lower())
+                 for w in span.split()]
+        words = [w for w in words if len(w) >= 2 and w not in _EVENT_STOP]
+        if words:
+            entities.add(" ".join(words))
+    return entities
+
+
+def briefs_same_event(a: dict, b: dict, title_thresh: float = 0.7) -> bool:
+    """True when two briefs belong to one daily-news event family.
+
+    Besides near-identical headlines, this catches different stages or angles
+    of one event (state dinner, summit agenda, red-carpet outcome). It requires
+    two shared headline actors plus context or event language, limiting false
+    positives between unrelated stories about one recurring public figure.
+    """
+    ga = (a.get("_event_group") or "").strip()
+    gb = (b.get("_event_group") or "").strip()
+    if ga and gb and ga == gb:
+        return True
+
+    ta, tb = a.get("title") or "", b.get("title") or ""
+    if titles_same_story(ta, tb, title_thresh):
+        return True
+
+    shared_entities = _event_entities(ta) & _event_entities(tb)
+    if len(shared_entities) < 2:
+        return False
+
+    wa = _event_words(f"{ta} {a.get('summary') or ''}")
+    wb = _event_words(f"{tb} {b.get('summary') or ''}")
+    contextual_overlap = len(wa & wb) / max(1, min(len(wa), len(wb)))
+    title_cues_a = _event_words(ta) & _EVENT_CUES
+    title_cues_b = _event_words(tb) & _EVENT_CUES
+    return contextual_overlap >= 0.18 or bool(title_cues_a and title_cues_b)
+
+
+def join_event_group(anchor: dict, duplicate: dict) -> str:
+    """Attach one stable event id to two briefs and return it."""
+    group = (anchor.get("_event_group") or duplicate.get("_event_group") or "").strip()
+    if not group:
+        basis = " ".join(sorted(_event_words(anchor.get("title") or "")))
+        group = "evt_" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
+    anchor["_event_group"] = group
+    duplicate["_event_group"] = group
+    return group
 
 
 def _dedupe_ranked_stories(
@@ -263,7 +351,7 @@ def _dedupe_ranked_stories(
     for cat, picks in ranked_by_cat.items():
         seen_clusters: set[str] = set()
         seen_subjects: set[str] = set()
-        kept_titles: list[str] = []
+        kept_briefs: list[dict] = []
         kept: list[dict] = []
         for p in sorted(picks, key=lambda x: int(x.get("rank") or 99)):
             vet = p.get("vet") or {}
@@ -275,8 +363,15 @@ def _dedupe_ranked_stories(
                 why = f"cluster={cl}"
             elif cat in subject_cap_categories and subj and subj in seen_subjects:
                 why = f"subject={subj}"
-            elif any(titles_same_story(title, t, title_thresh) for t in kept_titles):
-                why = "title~dup"
+            else:
+                matched = next(
+                    (kb for kb in kept_briefs
+                     if briefs_same_event(p.get("brief") or {}, kb, title_thresh)),
+                    None,
+                )
+                if matched is not None:
+                    join_event_group(matched, p.get("brief") or {})
+                    why = "event-family~dup"
             if why:
                 log.info("  [%s] story-dedup drop rank%s (%s): %s",
                          cat, p.get("rank"), why, title[:60])
@@ -285,7 +380,7 @@ def _dedupe_ranked_stories(
                 seen_clusters.add(cl)
             if subj:
                 seen_subjects.add(subj)
-            kept_titles.append(title)
+            kept_briefs.append(p.get("brief") or {})
             kept.append(p)
         for i, p in enumerate(kept, start=1):
             p["rank"] = i

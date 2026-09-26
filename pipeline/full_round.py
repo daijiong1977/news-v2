@@ -895,8 +895,12 @@ def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict],
     for r in ranked:
         b = r.get("brief") or {}
         used_keys.add(b.get("link") or b.get("title") or id(b))
-    leftovers = [b for b in briefs
-                 if (b.get("link") or b.get("title") or id(b)) not in used_keys]
+    from .jev_rank import CATEGORY_FIT_MIN
+    leftovers = [
+        b for b in briefs
+        if (b.get("link") or b.get("title") or id(b)) not in used_keys
+        and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
+    ]
     out: list[dict] = []
     # keep_order: the pool arrives Jev-ranked, so promote spares best-first.
     ordered = leftovers if keep_order else _interleave_by_source(leftovers)
@@ -973,6 +977,8 @@ def promote_spare_and_rewrite(
     spares: list[dict],
     used_source_names: set[str] | None = None,
     used_titles: set[str] | None = None,
+    used_briefs: list[dict] | None = None,
+    used_event_groups: set[str] | None = None,
 ) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
@@ -991,17 +997,27 @@ def promote_spare_and_rewrite(
     that _dedupe_ranked_stories just removed upstream.
     """
     from .news_rss_core import _fetch_and_enrich, verify_article_content
-    from .mega_curator import titles_same_story
+    from .jev_rank import CATEGORY_FIT_MIN
+    from .mega_curator import briefs_same_event
 
     used = set(used_source_names or ())
-    shipped_titles = list(used_titles or ())
+    shipped_briefs = list(used_briefs or ())
+    shipped_briefs.extend({"title": t} for t in (used_titles or ()) if t)
+    shipped_groups = set(used_event_groups or ())
 
     def _try_one(spare: dict):
         if not spare.get("_unverified_spare"):
             return None, None
         brief = spare.get("_winner_brief") or {}
         spare_title = (brief.get("title") or "") if isinstance(brief, dict) else ""
-        if any(titles_same_story(spare_title, t) for t in shipped_titles):
+        fit = float(brief.get("_jev_category_fit", 1.0))
+        if fit < CATEGORY_FIT_MIN:
+            log.info("  [%s] spare rank %s skipped — category fit %.2f: %s",
+                     cat, spare.get("_rank"), fit, spare_title[:60])
+            return None, None
+        spare_group = (brief.get("_event_group") or "").strip()
+        if ((spare_group and spare_group in shipped_groups)
+                or any(briefs_same_event(brief, shipped) for shipped in shipped_briefs)):
             log.info("  [%s] spare rank %s skipped — same story as a shipped "
                      "pick: %s", cat, spare.get("_rank"), spare_title[:60])
             return None, None
@@ -1029,6 +1045,7 @@ def promote_spare_and_rewrite(
                 "winner_slot": f"rank_{spare.get('_rank')}",
                 "_rank": spare.get("_rank"),
                 "_curator_id": spare.get("_curator_id"),
+                "_brief": brief,
             },
             kept[0],
         )
@@ -2083,9 +2100,19 @@ def main_mega() -> None:
                                   if w.get("source")}
                     used_titles = {(w.get("winner") or {}).get("title") or ""
                                    for w in survived_winners}
+                    used_briefs = [
+                        w.get("_brief") or w.get("_winner_brief")
+                        or w.get("winner") or {}
+                        for w in survived_winners
+                    ]
+                    used_event_groups = {
+                        (b.get("_event_group") or "").strip()
+                        for b in used_briefs if (b.get("_event_group") or "").strip()
+                    }
                     pw, pa = promote_spare_and_rewrite(
                         cat, pool, used_source_names=used_names,
-                        used_titles=used_titles)
+                        used_titles=used_titles, used_briefs=used_briefs,
+                        used_event_groups=used_event_groups)
                     if not pw:
                         break
                     survived_winners.append(pw)

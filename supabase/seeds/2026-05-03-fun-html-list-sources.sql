@@ -1,11 +1,12 @@
--- Seed the 3 html_list candidates from sourcefinder into Fun category.
+-- Seed the 3 html_list candidates from sourcefinder. NG Kids — Space belongs
+-- to Science; DOGOnews and NG Kids — Geography remain Fun.
 --
 -- Inserted with enabled=false so they're staged but stay OUT of the
 -- pipeline rotation until PR #17 (feed_kind dispatcher) is merged
 -- and deployed. After merge, flip them on with:
 --
 --   UPDATE redesign_source_configs SET enabled = true
---   WHERE category = 'Fun' AND feed_kind = 'html_list';
+--   WHERE name IN ('DOGOnews', 'NG Kids — Space', 'NG Kids — Geography');
 --
 -- Empirical wordcounts (per docs/HANDOVER-from-sourcefinder-html_list.md):
 --   - DOGOnews: ~334 wc avg
@@ -25,7 +26,7 @@ VALUES
      false, false, 'live',
      'html_list source from sourcefinder 2026-05-03; flip enabled=true after PR #17 deploy'),
 
-    ('Fun', 'NG Kids — Space',
+    ('Science', 'NG Kids — Space',
      'https://kids.nationalgeographic.com/space/',
      'html_list',
      '{"article_selector": "a[href*=\"/space/\"][href*=\"/article/\"]"}',
@@ -55,4 +56,4 @@ VALUES
 -- + "[DOGOnews]  entries: N" with N >= 3. If green, flip the other two:
 --
 --   UPDATE redesign_source_configs SET enabled = true
---   WHERE category = 'Fun' AND feed_kind = 'html_list';
+--   WHERE name IN ('DOGOnews', 'NG Kids — Space', 'NG Kids — Geography');
