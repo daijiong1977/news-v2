@@ -58,6 +58,7 @@ from .mega_curator import briefs_same_event, join_event_group, titles_same_story
 from .editorial_policy import publisher_key, editorial_exclusion, SCIENCE_MIN_PUBLISHERS
 from .editorial_policy import low_fun_value, important_news, explicit_section
 from .editorial_policy import SECTION_POLICY
+from .news_topics import topic_group
 
 log = logging.getLogger("jev-rank")
 
@@ -68,6 +69,7 @@ MAX_PER_SOURCE = 2          # within the shortlist; Science groups by publisher,
 MIN_DISTINCT_SOURCES = 3    # what the curator's top-3 rule needs to be satisfiable at all
 CAP_YIELD_GAP = 0.10        # a 3rd from one source beats an alternative this much worse
 HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
+TOPIC_SWAP_MAX_PICK_GAP = 0.10  # variety may not displace a much stronger brief
 MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
 # All scored briefs remain in the checkpoint catalog for Stage-3 refill.
 CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
@@ -534,7 +536,68 @@ def _select(cat: str, ranked: list[dict], pairs: _Pairs,
 
 
 def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
-    return {cat: [b for b in bs if (b.get("_jev_rank") or {}).get("send")] for cat, bs in pool.items()}
+    """Send the ranked shortlist, using qualified reserves to broaden topics.
+
+    Topic labels arrive after ranking. This is only a soft preference: keep the
+    shortlist size, source breadth and important-News coverage, and never use
+    an unscored or below-floor reserve just to manufacture a new topic.
+    The original full catalog remains intact for Stage 3 refill.
+    """
+    result = {}
+    for cat, catalog in pool.items():
+        selected = [b for b in catalog if (b.get("_jev_rank") or {}).get("send")]
+        if not selected:
+            result[cat] = []
+            continue
+        reserves = [b for b in catalog if not (b.get("_jev_rank") or {}).get("send")]
+        source = lambda b: (publisher_key(b.get("_source")) or b.get("_source_name")) \
+            if cat == "Science" else b.get("_source_name")
+        pick = lambda b: float((b.get("_jev_rank") or {}).get("editorial_pick") or -1)
+        distinct_sources = lambda bs: len({source(b) for b in bs})
+        for _ in range(len(selected)):
+            groups = {topic_group(b) for b in selected} - {""}
+            repeated = {g for g in groups if sum(topic_group(b) == g for b in selected) > 1}
+            if not repeated:
+                break
+            old_source_count = distinct_sources(selected)
+            important_count = sum(important_news(b) for b in selected) if cat == "News" else 0
+            options = []
+            for new in reserves:
+                new_group = topic_group(new)
+                rank = new.get("_jev_rank") or {}
+                if (not new_group or new_group in groups
+                        or pick(new) < FLOOR.get(cat, DEFAULT_FLOOR)
+                        or float(rank.get("category_fit", 0)) < CATEGORY_FIT_MIN):
+                    continue
+                for i, old in enumerate(selected):
+                    if topic_group(old) not in repeated or pick(old) - pick(new) > TOPIC_SWAP_MAX_PICK_GAP:
+                        continue
+                    trial = selected[:i] + [new] + selected[i + 1:]
+                    if distinct_sources(trial) < old_source_count:
+                        continue
+                    if cat == "News" and sum(important_news(b) for b in trial) < important_count:
+                        continue
+                    if sum(source(b) == source(new) for b in trial) > HARD_PER_SOURCE:
+                        continue
+                    options.append((pick(new) - pick(old), -i, i, old, new))
+            if not options:
+                break
+            _, _, i, old, new = max(options, key=lambda x: x[:2])
+            selected[i] = new
+            reserves.remove(new)
+            reserves.append(old)
+            log.info("  [%s] curator topic swap: %s (%s, %.2f) → %s (%s, %.2f)",
+                     cat, (old.get("title") or "")[:55], topic_group(old), pick(old),
+                     (new.get("title") or "")[:55], topic_group(new), pick(new))
+        result[cat] = selected
+        log.info("  [%s] curator shortlist: %d briefs, %d known topics (%s)",
+                 cat, len(selected), len({topic_group(b) for b in selected} - {""}),
+                 ", ".join(topic_group(b) or "unknown" for b in selected))
+        for b in selected:
+            log.info("  [%s] curator brief: %s | %s | %.2f | %s", cat,
+                     topic_group(b) or "unknown", b.get("_source_name") or "unknown",
+                     pick(b), (b.get("title") or "")[:90])
+    return result
 
 
 def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,

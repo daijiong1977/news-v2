@@ -98,6 +98,62 @@ def _distinct(bs):
     return len({b["_source_name"] for b in bs})
 
 
+def _topic_brief(title, group, pick, source, send, *, important=False):
+    brief = _b(title, src=source, pick=pick)
+    brief["_jev_topic_group"] = group
+    brief["_jev_rank"] = {"send": send, "editorial_pick": pick,
+                          "category_fit": 0.95, "floor": jr.FLOOR["News"],
+                          "section_value": 3 if important else 2}
+    return brief
+
+
+def test_curator_shortlist_uses_comparable_new_topic_from_full_catalog():
+    pool = [
+        _topic_brief("Diplomacy A", "international_relations", .80, "A", True, important=True),
+        _topic_brief("Diplomacy B", "international_relations", .74, "B", True),
+        _topic_brief("Weather A", "severe_weather", .73, "C", True),
+        _topic_brief("Weather B", "severe_weather", .69, "D", True),
+        _topic_brief("Civic AI", "technology_business", .68, "E", True),
+        _topic_brief("Weather C", "severe_weather", .66, "F", True),
+        _topic_brief("Health", "public_health", .64, "G", False),
+    ]
+    original = list(pool)
+    sent = jr.for_curator({"News": pool})["News"]
+    assert len(sent) == 6
+    assert "Health" in _titles(sent)
+    assert len({b["_jev_topic_group"] for b in sent}) == 4
+    assert "Diplomacy A" in _titles(sent)
+    assert pool == original  # the full refill catalog remains unchanged
+
+
+def test_curator_topic_variety_does_not_sacrifice_quality_or_source_diversity():
+    pool = [
+        _topic_brief("Important A", "international_relations", .80, "A", True, important=True),
+        _topic_brief("Diplomacy B", "international_relations", .75, "B", True),
+        _topic_brief("Diplomacy C", "international_relations", .70, "C", True),
+        _topic_brief("Weather A", "severe_weather", .69, "D", True),
+        _topic_brief("Weather B", "severe_weather", .68, "E", True),
+        _topic_brief("Weather C", "severe_weather", .67, "F", True),
+        _topic_brief("Low quality topic", "public_health", .42, "G", False),
+        _topic_brief("Too weak", "us_politics", .35, "H", False),
+        _topic_brief("Same source topic", "transport_infrastructure", .66, "A", False),
+    ]
+    sent = jr.for_curator({"News": pool})["News"]
+    assert _titles(sent) == _titles(pool[:6])
+
+
+def test_curator_ignores_unknown_topic_instead_of_treating_it_as_a_catalog():
+    pool = [
+        _topic_brief("Diplomacy A", "international_relations", .80, "A", True),
+        _topic_brief("Diplomacy B", "international_relations", .75, "B", True),
+        _topic_brief("Unknown", "other", .73, "C", True),
+        _topic_brief("New group", "public_health", .72, "D", False),
+    ]
+    sent = jr.for_curator({"News": pool})["News"]
+    assert "New group" in _titles(sent)
+    assert "Unknown" in _titles(sent)
+
+
 def test_deep_dig_category_gate_rejects_wrong_section_and_unscored():
     briefs = [_b("New telescope discovery", cat="Fun", pick=0.9),
               _b("Kids win football final", cat="Fun", pick=0.8),
