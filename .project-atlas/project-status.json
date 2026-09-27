@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-27T08:17:14-04:00",
+  "updated_at": "2026-09-27T11:41:32-04:00",
   "branches": [
     {
       "name": "main",
@@ -11,13 +11,8 @@
       "status": "production"
     },
     {
-      "name": "codex/published-event-guard",
-      "purpose": "PR #71：七天同栏目事件查重、完整候选目录补稿及题材组优先。",
-      "status": "review"
-    },
-    {
-      "name": "codex/jev-filtering-guide",
-      "purpose": "PR #70：可供其他内容项目复用的 JEV 分步筛选指南。",
+      "name": "codex/project-atlas-handoff",
+      "purpose": "维护项目交接规则和随代码提交的 Atlas 状态报告；PR 合并前不影响生产流水线。",
       "status": "review"
     }
   ],
@@ -28,7 +23,8 @@
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "reported_live_not_reverified_in_this_change"
+      "status": "public_homepage_http_200_verified",
+      "verified_at": "2026-09-27T11:40:00-04:00"
     }
   ],
   "files": [
@@ -61,6 +57,16 @@
       "path": "docs/editorial-category-routing.md",
       "purpose": "News、Science、Fun 分类与题材组调参说明。",
       "location": "repo"
+    },
+    {
+      "path": "AGENTS.md",
+      "purpose": "生产 PR 优先及每次项目更改后的 Atlas 报告交接规则。",
+      "location": "repo"
+    },
+    {
+      "path": ".project-atlas/project-status.json",
+      "purpose": "与项目代码同版提交的用途、分支、部署、关键文件和历史心得报告。",
+      "location": "repo"
     }
   ],
   "lessons": [
@@ -75,6 +81,18 @@
       "title": "补稿要保留完整候选目录并先选不同题材组",
       "note": "原先 JEV 评分后只保留前十篇备用，正文和安全淘汰后可能找不到本来已采集的候选。主编输入可保持上限，但 Stage 3 应使用已去重的完整目录，先找不同题材组，再回退到同组最佳稿；每篇仍需通过历史和独立儿童安全审核。",
       "source_ref": "docs/bugs/2026-09-27-storm-repeat-history-gate.md"
+    },
+    {
+      "date": "2026-09-27",
+      "title": "栏目分类要按公共影响而非科技关键词",
+      "note": "数据中心、政府 AI 使用等公共事务属于 News；机器人和趣味发明属于 Fun。战争与死亡事实可以中性呈现，但最终儿童正文仍须经过独立全文安全复核。",
+      "source_ref": "docs/editorial-category-routing.md"
+    },
+    {
+      "date": "2026-09-27",
+      "title": "项目状态须随源代码留存并分层核验同步",
+      "note": "状态 JSON 与项目更改同版推送；本机报告 API、Brain GitHub main 和 Atlas 网站是不同同步阶段，不能把本机 API 成功当作远端发布。",
+      "source_ref": "AGENTS.md"
     }
   ]
 }
