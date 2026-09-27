@@ -38,6 +38,57 @@ def test_keeps_original_when_repair_still_out_of_band(monkeypatch):
     assert len(rr["articles"][0]["middle_en"]["body"].split()) == 724
 
 
+def test_accepts_repair_inside_digest_tolerance(monkeypatch):
+    """A 285-word repair is below the ideal band but clears the ±15% QA gate."""
+    monkeypatch.setattr(core, "deepseek_call",
+                        lambda *a, **k: {"body": " ".join(["x"] * 285)})
+    rr = {"articles": [_art(250, 203)]}
+    assert core.repair_wordcounts(rr) == 1
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 285
+
+
+def test_second_deepseek_edit_uses_failed_count_and_original_source(monkeypatch):
+    prompts = []
+    lengths = iter((240, 350))
+
+    def fake_call(system, user, **kwargs):
+        prompts.append(user)
+        return {"body": " ".join(["x"] * next(lengths))}
+
+    monkeypatch.setattr(core, "deepseek_call", fake_call)
+    rr = {"articles": [_art(250, 203)]}
+    assert core.repair_wordcounts(rr, {0: {"body": "SOURCE_MARKER " * 500}}) == 1
+    assert len(prompts) == 2
+    assert "240 words" in prompts[1] and "SOURCE_MARKER" in prompts[1]
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 350
+
+
+def test_second_edit_can_shorten_after_first_still_too_long(monkeypatch):
+    lengths = iter((501, 370))
+    calls = []
+
+    def fake(system, user, **kwargs):
+        calls.append((system, user))
+        return {"body": " ".join(["x"] * next(lengths))}
+
+    monkeypatch.setattr(core, "deepseek_call", fake)
+    rr = {"articles": [_art(250, 503)]}
+    assert core.repair_wordcounts(rr) == 1
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 370
+    assert len(calls) == 2
+    assert calls[1][0] == core.WC_REPAIR_REWRITE_PROMPT
+    assert "501 words" in calls[1][1] and "ORIGINAL BODY" in calls[1][1]
+
+
+def test_retry_cannot_replace_qa_acceptable_draft_with_worse_one(monkeypatch):
+    lengths = iter((285, 240))
+    monkeypatch.setattr(core, "deepseek_call", lambda *a, **k: {
+        "body": " ".join(["x"] * next(lengths))})
+    rr = {"articles": [_art(250, 203)]}
+    assert core.repair_wordcounts(rr) == 1
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 285
+
+
 def test_keeps_original_when_call_raises(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("transport down")
@@ -65,3 +116,46 @@ def test_short_easy_body_expanded(monkeypatch):
     rr = {"articles": [_art(too_short, 350)]}
     assert core.repair_wordcounts(rr) == 1
     assert len(rr["articles"][0]["easy_en"]["body"].split()) == 240
+
+
+# --- source-article threading (the 2026-09-15 echo-back regression) ---
+
+def test_expand_prompt_carries_source_article(monkeypatch):
+    """Too-short bodies must get the SOURCE article as raw material —
+    without it the model echoed the input back unchanged."""
+    calls = []
+
+    def fake_call(system, user, max_tokens, temperature=0.2, **kw):
+        calls.append(user)
+        return {"body": " ".join(["x"] * 350)}
+
+    monkeypatch.setattr(core, "deepseek_call", fake_call)
+    rr = {"articles": [_art(250, 254)]}          # middle too short
+    srcs = {0: {"body": "SOURCE_MATERIAL_MARKER " + " ".join(["s"] * 50)}}
+    assert core.repair_wordcounts(rr, srcs) == 1
+    assert "EXPAND" in calls[0]
+    assert "SOURCE ARTICLE" in calls[0]
+    assert "SOURCE_MATERIAL_MARKER" in calls[0]
+
+
+def test_shrink_prompt_has_no_source_section(monkeypatch):
+    calls = []
+
+    def fake_call(system, user, max_tokens, temperature=0.2, **kw):
+        calls.append(user)
+        return {"body": " ".join(["x"] * 350)}
+
+    monkeypatch.setattr(core, "deepseek_call", fake_call)
+    rr = {"articles": [_art(250, 724)]}          # middle too long
+    srcs = {0: {"body": "SOURCE_MATERIAL_MARKER"}}
+    assert core.repair_wordcounts(rr, srcs) == 1
+    assert "SHORTEN" in calls[0]
+    assert "SOURCE ARTICLE" not in calls[0]
+
+
+def test_expand_without_source_still_attempts(monkeypatch):
+    """Missing source (e.g. the spare-promotion path) must not crash."""
+    monkeypatch.setattr(core, "deepseek_call",
+                        lambda *a, **k: {"body": " ".join(["x"] * 350)})
+    rr = {"articles": [_art(250, 254)]}
+    assert core.repair_wordcounts(rr, None) == 1

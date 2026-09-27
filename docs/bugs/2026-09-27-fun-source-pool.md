@@ -1,8 +1,8 @@
 # 2026-09-27 — Fun first-round source-pool trial
 
-**Severity:** low  
-**Area:** pipeline  
-**Status:** proposed  
+**Severity:** low
+**Area:** pipeline
+**Status:** proposed
 **Keywords:** Fun, sources, source diversity, Jev, first round, RSS
 
 ## Symptom and evidence
