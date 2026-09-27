@@ -37,6 +37,46 @@ def test_body_autofix_uses_source_and_accepts_qa_band(monkeypatch):
     assert "SOURCE_MARKER" in prompts[0]
 
 
+def test_body_autofix_retries_with_failed_count(monkeypatch):
+    prompts = []
+    lengths = iter((240, 350))
+
+    def fake(system, prompt, **kwargs):
+        prompts.append(prompt)
+        return {"body": "word " * next(lengths)}
+
+    monkeypatch.setattr(af, "_deepseek_call", fake)
+    payload = {"summary": "old " * 203, "keywords": []}
+    ok, _, detail = af._fix_body(
+        payload, "middle", 300, 410, "short", "SOURCE_MARKER " * 600)
+    assert ok and detail["in_ideal"]
+    assert len(prompts) == 2 and "240 words" in prompts[1]
+    assert "SOURCE_MARKER" in prompts[1]
+    assert _count(payload["summary"]) == 350
+
+
+def _count(text):
+    return len(text.split())
+
+
+def test_body_autofix_retry_shortens_long_draft(monkeypatch):
+    lengths = iter((501, 370))
+    monkeypatch.setattr(af, "_deepseek_call", lambda *a, **k: {
+        "body": "word " * next(lengths)})
+    payload = {"summary": "old " * 503, "keywords": []}
+    ok, _, detail = af._fix_body(payload, "middle", 300, 410, "long")
+    assert ok and detail["wc_after"] == 370
+
+
+def test_body_autofix_keeps_first_qa_draft_if_retry_worse(monkeypatch):
+    lengths = iter((285, 240))
+    monkeypatch.setattr(af, "_deepseek_call", lambda *a, **k: {
+        "body": "word " * next(lengths)})
+    payload = {"summary": "old " * 203, "keywords": []}
+    ok, _, detail = af._fix_body(payload, "middle", 300, 410, "short", "source " * 600)
+    assert ok and detail["wc_after"] == 285 and not detail["in_ideal"]
+
+
 def test_autofix_does_not_upload_when_safety_review_fails(monkeypatch):
     row = {"id": 1, "published_date": "2026-09-25", "story_id": "2026-09-25-news-1",
            "level": "middle", "problem_type": "body_too_long", "attempts": 0}

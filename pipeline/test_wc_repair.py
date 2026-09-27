@@ -47,6 +47,40 @@ def test_accepts_repair_inside_digest_tolerance(monkeypatch):
     assert len(rr["articles"][0]["middle_en"]["body"].split()) == 285
 
 
+def test_second_deepseek_edit_uses_failed_count_and_original_source(monkeypatch):
+    prompts = []
+    lengths = iter((240, 350))
+
+    def fake_call(system, user, **kwargs):
+        prompts.append(user)
+        return {"body": " ".join(["x"] * next(lengths))}
+
+    monkeypatch.setattr(core, "deepseek_call", fake_call)
+    rr = {"articles": [_art(250, 203)]}
+    assert core.repair_wordcounts(rr, {0: {"body": "SOURCE_MARKER " * 500}}) == 1
+    assert len(prompts) == 2
+    assert "240 words" in prompts[1] and "SOURCE_MARKER" in prompts[1]
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 350
+
+
+def test_second_edit_can_shorten_after_first_still_too_long(monkeypatch):
+    lengths = iter((501, 370))
+    monkeypatch.setattr(core, "deepseek_call", lambda *a, **k: {
+        "body": " ".join(["x"] * next(lengths))})
+    rr = {"articles": [_art(250, 503)]}
+    assert core.repair_wordcounts(rr) == 1
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 370
+
+
+def test_retry_cannot_replace_qa_acceptable_draft_with_worse_one(monkeypatch):
+    lengths = iter((285, 240))
+    monkeypatch.setattr(core, "deepseek_call", lambda *a, **k: {
+        "body": " ".join(["x"] * next(lengths))})
+    rr = {"articles": [_art(250, 203)]}
+    assert core.repair_wordcounts(rr) == 1
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 285
+
+
 def test_keeps_original_when_call_raises(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("transport down")

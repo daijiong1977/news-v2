@@ -26,17 +26,21 @@ still show the seven bodies out of the digest's 300–410 ±15% band.
 ## Fix
 
 1. Carry the source article into short-body repair (the previously open
-   PR #47 fix), and accept a repaired body only when it clears the *same*
-   ±15% QA tolerance used by the digest. An article still outside that
-   tolerance is not publishable; Stage 3 can use an independently vetted
-   spare. No mechanical truncation or unsourced padding is used.
+   PR #47 fix). If the first DeepSeek edit still misses the ideal band,
+   make one bounded follow-up call with the failed word count, starting
+   again from the original body/source. Choose the closest candidate
+   that clears the *same* ±15% QA tolerance used by the digest. An
+   article still outside that tolerance is not publishable; Stage 3 can
+   use an independently vetted spare. No mechanical truncation or
+   unsourced padding is used.
 2. Re-order already-vetted Stage-3 survivors to use three sources when
    possible. If three stories survive but only two sources remain, try a
    different-source spare through the normal body, category and child-safety
    gates. If none passes, publish the safer two-source set and log an
    explicit degradation; source diversity does not override child safety.
 3. Auto-fix scans the same *number* of archived days as the digest lookback,
-   never today's static website bundle. It accepts a replacement only if
+   never today's static website bundle. Body fixes use at most two
+   DeepSeek edits and accept a replacement only if
    length and keywords pass, the forbidden-term backstop is clear, and an
    independent reviewer scores the complete easy+middle text as safe.
    Missing source text (for expansion), missing counterpart, or reviewer
@@ -47,7 +51,7 @@ still show the seven bodies out of the digest's 300–410 ±15% band.
 
 ## Verification and operational follow-up
 
-- Offline regression suite: 189 passed (excluding feed/live-provider suites
+- Offline regression suite: see PR test result (excluding feed/live-provider suites
   that require external credentials or have pre-existing collection issues).
 - A live full pipeline run has **not** yet used this branch. Do not infer
   production success from unit tests.

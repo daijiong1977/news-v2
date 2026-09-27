@@ -1131,6 +1131,11 @@ def _wc_within_qa(level: str, count: int) -> bool:
     return lo * (1 - WC_QA_SLACK) <= count <= hi * (1 + WC_QA_SLACK)
 
 
+def _wc_distance(count: int, lo: int, hi: int) -> int:
+    """Distance to the ideal band; zero means the draft is on target."""
+    return max(lo - count, count - hi, 0)
+
+
 def _wordcount_flags(art: dict) -> list[str]:
     flags = []
     for level, (lo, hi) in WC_BANDS.items():
@@ -1201,10 +1206,13 @@ def _wc_repair_user_msg(level: str, body: str, wc: int,
 
 def repair_wordcounts(rewrite_result: dict,
                       sources_by_id: dict | None = None) -> int:
-    """One targeted repair call per body outside WC_BANDS, mutating the
-    rewrite in place. ONE attempt per variant (project regen policy);
-    the repaired text is applied only when it clears the published-content
-    QA tolerance; failures are rejected by filter_safe_rewrites.
+    """Up to two targeted DeepSeek edits per out-of-band body.
+
+    The second call runs only when the first still misses the ideal band.
+    It receives the actual failed word count and edits from the ORIGINAL
+    body/source, not from an unverified draft. The best candidate within
+    the published-content QA tolerance is applied; failures are rejected
+    by filter_safe_rewrites.
     Runs BEFORE the independent safety vet so the vet scores the text
     that ships. Returns the number of bodies repaired.
 
@@ -1222,27 +1230,49 @@ def repair_wordcounts(rewrite_result: dict,
             wc = len(body.split())
             if not wc or lo <= wc <= hi:
                 continue
-            user = _wc_repair_user_msg(
+            base_user = _wc_repair_user_msg(
                 level, body, wc, (lo, hi), WC_REPAIR_TARGETS[level],
                 source_body)
-            try:
-                res = deepseek_call(WC_REPAIR_PROMPT, user,
-                                    max_tokens=2000, temperature=0.3)
-            except Exception as e:  # noqa: BLE001
-                log.warning("  wc-repair [%s/%s]: call failed (%s) — keeping original",
-                            art.get("source_id"), level, e)
-                continue
-            new_body = ((res or {}).get("body") or "").strip()
-            new_wc = len(new_body.split())
-            if new_body and _wc_within_qa(level, new_wc):
-                var["body"] = new_body
+            best_body = body if _wc_within_qa(level, wc) else ""
+            best_wc = wc if best_body else 0
+            last_wc: int | None = None
+            for attempt in (1, 2):
+                user = base_user
+                if attempt == 2:
+                    previous = (f"{last_wc} words" if last_wc is not None
+                                else "no valid body")
+                    user = (f"RETRY: the first edit produced {previous}; it did not "
+                            f"meet the ideal {lo}-{hi}-word band. Start from the "
+                            f"original body below. Aim near the middle of "
+                            f"{WC_REPAIR_TARGETS[level][0]}-"
+                            f"{WC_REPAIR_TARGETS[level][1]} words. Count before "
+                            f"answering.\n\n{base_user}")
+                try:
+                    res = deepseek_call(WC_REPAIR_PROMPT, user,
+                                        max_tokens=2000, temperature=0.3)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("  wc-repair [%s/%s] attempt %d failed (%s)",
+                                art.get("source_id"), level, attempt, e)
+                    continue
+                new_body = ((res or {}).get("body") or "").strip()
+                last_wc = len(new_body.split())
+                if new_body and _wc_within_qa(level, last_wc):
+                    if not best_body or _wc_distance(last_wc, lo, hi) < _wc_distance(best_wc, lo, hi):
+                        best_body, best_wc = new_body, last_wc
+                if new_body and lo <= last_wc <= hi:
+                    break
+                log.warning("  wc-repair [%s/%s] attempt %d returned %dw "
+                            "(ideal %d-%d, QA ±15%%)",
+                            art.get("source_id"), level, attempt, last_wc, lo, hi)
+            if best_body and best_body != body:
+                var["body"] = best_body
                 fixed += 1
                 log.info("  wc-repair [%s/%s]: %dw → %dw (band %d-%d)",
-                         art.get("source_id"), level, wc, new_wc, lo, hi)
-            else:
-                log.warning("  wc-repair [%s/%s]: repair returned %dw, "
-                            "still outside %d-%d — keeping original %dw",
-                            art.get("source_id"), level, new_wc, lo, hi, wc)
+                         art.get("source_id"), level, wc, best_wc, lo, hi)
+            elif not best_body:
+                log.warning("  wc-repair [%s/%s]: no QA-safe length after two edits; "
+                            "keeping original %dw for Stage-3 rejection",
+                            art.get("source_id"), level, wc)
     return fixed
 
 

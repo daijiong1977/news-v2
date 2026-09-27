@@ -53,6 +53,7 @@ details already present in the text", and the repair call never
 received the source article. With no material to add, the model
 returned the input verbatim — 5 of the 7 misses came back at exactly
 their original length (192→192, 254→254, 257→257, 265→265, 462→462).
+
 Today's dominant failure mode was too SHORT (5 of 7), not too long.
 
 v2 changes:
@@ -66,6 +67,19 @@ v2 changes:
   missing source doesn't crash) → 21 passed across the touched suites.
   The 1 pre-existing failure (`test_cadence_calibrate`) and 3 `test_feed`
   collection errors are present on clean main too.
+
+## Follow-up — 2026-09-26 bounded second edit
+
+The September 24–26 digest showed that one targeted call still missed
+the length band often enough to publish defects. The owner requested
+putting a still-too-long/short body through DeepSeek once more. The
+current pass therefore makes at most two calls for an out-of-band
+variant. The second call states the first output's actual word count
+and starts again from the original body and source, not the unverified
+draft. It keeps the closest candidate within the digest's QA tolerance;
+if neither clears that tolerance, Stage 3 rejects the article and tries
+a safe spare. The independent full-text safety vet still runs only after
+the final body is chosen, so it reviews the text that may ship.
 
 ## Lessons
 

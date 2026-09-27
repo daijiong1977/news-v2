@@ -7,7 +7,7 @@ just call DeepSeek (text shape transforms) or the og:image extractor
 needed.
 
 Per the project policy:
-  body_too_long / body_too_short  → ONE DeepSeek regen attempt; require
+  body_too_long / body_too_short  → up to TWO DeepSeek edits; require
                                     the QA band and independent safety vet
   keyword_miss                    → ONE DeepSeek attempt: weave the
                                     keyword OR drop it if it's a junk
@@ -119,8 +119,7 @@ Hard rules:
 
 def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
               direction: str, source_body: str = "") -> tuple[bool, str, dict]:
-    """One DeepSeek attempt to rewrite payload['summary'] (the body) into
-    the target range. Returns (ok, summary_msg, detail)."""
+    """At most two DeepSeek edits of the original body; never save an off-band draft."""
     body = payload.get("summary") or ""
     keyword_terms = [
         (k.get("term") if isinstance(k, dict) else str(k))
@@ -128,9 +127,10 @@ def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
     ]
     keyword_terms = [k for k in keyword_terms if k]
 
+    aim_lo, aim_hi = target_lo + 20, target_hi - 30
     user_prompt = (
-        f"Rewrite this article body to be {target_lo}-{target_hi} words "
-        f"(±15% slack OK).\n"
+        f"Rewrite this article body to be {aim_lo}-{aim_hi} words "
+        f"(ideal allowed band {target_lo}-{target_hi}). Count before returning.\n"
         f"Direction: it was previously TOO {direction.upper()} "
         f"({_word_count(body)} words).\n\n"
         f"Keywords (must all stay findable in the body):\n"
@@ -142,29 +142,52 @@ def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
             return (False, "source article unavailable for safe expansion", {})
         user_prompt += ("\nSOURCE ARTICLE — add only concrete details found here:\n"
                         + " ".join(source_body.split()[:1200]))
-    try:
-        out = _deepseek_call(_BODY_REWRITE_SYSTEM, user_prompt, max_tokens=1400)
-    except Exception as e:
-        return (False, f"DeepSeek call failed: {e}", {"error": str(e)})
-
-    new_body = (out.get("body") or "").strip()
-    if not new_body:
-        return (False, "DeepSeek returned empty body", {"raw": str(out)[:200]})
-
-    new_wc = _word_count(new_body)
-    in_target = target_lo * (1 - WC_SLACK) <= new_wc <= target_hi * (1 + WC_SLACK)
-    if not in_target:
-        return (False, f"rewrite still outside QA band: {new_wc} words",
-                {"wc_before": _word_count(body), "wc_after": new_wc,
+    best_body = ""
+    best_wc = 0
+    last_wc: int | None = None
+    last_error = ""
+    for attempt in (1, 2):
+        prompt = user_prompt
+        if attempt == 2:
+            previous = f"{last_wc} words" if last_wc is not None else "no valid body"
+            prompt = (f"RETRY: first edit produced {previous}, not the ideal "
+                      f"{target_lo}-{target_hi} words. Start from the ORIGINAL "
+                      f"body below. Aim for {aim_lo}-{aim_hi} words; do not "
+                      f"reuse an unverified first draft.\n\n{user_prompt}")
+        try:
+            out = _deepseek_call(_BODY_REWRITE_SYSTEM, prompt, max_tokens=1400)
+        except Exception as e:  # noqa: BLE001
+            last_error = f"DeepSeek call failed: {e}"
+            continue
+        new_body = (((out or {}).get("body")) or "").strip()
+        last_wc = _word_count(new_body)
+        if not new_body:
+            last_error = "DeepSeek returned empty body"
+            continue
+        if not all(_keyword_in_body(k, new_body) for k in keyword_terms):
+            last_error = "rewrite dropped a required keyword"
+            continue
+        in_qa = (target_lo * (1 - WC_SLACK)
+                 <= last_wc <= target_hi * (1 + WC_SLACK))
+        if in_qa:
+            distance = max(target_lo - last_wc, last_wc - target_hi, 0)
+            best_distance = max(target_lo - best_wc, best_wc - target_hi, 0)
+            if not best_body or distance < best_distance:
+                best_body, best_wc = new_body, last_wc
+        if target_lo <= last_wc <= target_hi:
+            break
+        last_error = f"rewrite still outside ideal band: {last_wc} words"
+    if not best_body:
+        return (False, last_error or "no rewrite cleared the QA band",
+                {"wc_before": _word_count(body), "wc_after": last_wc,
                  "in_target": False})
-    if not all(_keyword_in_body(k, new_body) for k in keyword_terms):
-        return (False, "rewrite dropped a required keyword", {"wc_after": new_wc})
-    payload["summary"] = new_body
+    payload["summary"] = best_body
     return (True,
-            f"body rewritten: {_word_count(body)} → {new_wc} words "
+            f"body rewritten: {_word_count(body)} → {best_wc} words "
             f"(target {target_lo}-{target_hi})",
-            {"wc_before": _word_count(body), "wc_after": new_wc,
-             "in_target": True})
+            {"wc_before": _word_count(body), "wc_after": best_wc,
+             "in_target": True,
+             "in_ideal": target_lo <= best_wc <= target_hi})
 
 
 def _safe_rewrite_for_storage(date_iso: str, sid: str, level: str,
