@@ -14,16 +14,16 @@ Physics and chemistry are existing topic labels, not guaranteed daily slots.
 
 College recruiting, verbal commitments, recruiting rankings and transfer-portal
 announcements are excluded editorial types, not merely sports stories without
-a ranking bonus. The shared rule also covers spares and carry-over. Actual
+a ranking bonus. The shared rule also covers spares and legacy carry-over. Actual
 college competition and records remain eligible.
 
 ## Order of decisions
 
 1. RSS collection and existing forbidden-word/preview checks build the candidate pool.
 2. `pipeline/editorial_routing.py` asks Jev which section best fits each probed brief. It moves a brief only when the selected section differs from its feed section **and confidence is at least 0.90**. Uncertain answers and errors retain the feed section. `JEV_ROUTE=on|shadow|off` controls move, observe-only, or bypass; default is `on`.
-3. The early seven-day cross-section filter in `pipeline/full_round.py` drops exact-repeat source URLs (ignoring RSS tracking parameters) and high-similarity titles before paying for body fetch or Jev calls. `pipeline/jev_rank.py` then scores each candidate in its *resulting* section, enforces its 0.60 category-fit floor, checks likely same-event pairs and published stories in **all sections over the previous 7 days**, then narrows the pool. That event check is separate from topic diversity: two angles/stages of one event must combine or one must go; two unrelated storms may both run if the edition needs them.
+3. Per the September 27 policy update, dedup compares **within the same section only**: News against News, Science against Science, and Fun against Fun. Each seven-day history normally contains 21 stories. The early filter in `pipeline/full_round.py` drops repeat source URLs and high-similarity titles from that section; `pipeline/jev_rank.py` scores routed candidates, applies its 0.60 category-fit floor and removes detected duplicate events while forming the full candidate catalog. `publication_history.py` then checks potential fresh publication candidates against their entire same-section history without a keyword-overlap gate, including spares and checkpoint resumes. If fewer than three fresh stories survive, Stage 3 searches the full catalog, preferring a different known topic group; only when no qualified alternative survives does it take the best remaining same or unknown group article. Refill does not run another same-day model comparison. When today's supply is exhausted, qualified fresh content can ship short; the mega path does not add yesterday's stories. Same-event dedup is separate from soft topic variety: two independent storms may still run if no eligible alternate topic exists after backfill.
 4. `pipeline/news_topics.py` asks Jev for a topic label for the remaining pool. Confidence below 0.70, an error, or `other` leaves the story ungrouped. Labels never reject a brief.
-5. `pipeline/mega_curator.py` uses labels to prefer three different topics in each section when suitable alternatives exist. It preserves hard same-event and source-diversity rules. Stage-3 candidate promotion in `pipeline/full_round.py` also prefers a fresh topic, but can use a repeated topic rather than leave a slot empty.
+5. `pipeline/mega_curator.py` uses labels to prefer three different topics in each section when suitable alternatives exist. Stage 3 retains the full scored candidate catalog: promotion in `pipeline/full_round.py` tries a fresh known topic first, then the best repeated or unknown topic. Every promoted story still passes the independent safety filter.
 6. Full-text verification, rewrite, and the **independent full-text child-safety audit** still run. Routing, ranking and topic labels must not replace or weaken that audit.
 
 ## Category and topic map
@@ -71,7 +71,7 @@ The mega-curator sees the high `sports_priority` annotation and uses the same pr
 
 ## Validation and operations
 
-Run `./.venv/bin/python -m pytest -q pipeline/test_editorial_routing.py pipeline/test_news_topics.py` for routing and grouping, then the relevant full pipeline tests. Inspect run telemetry for `section_route`, `jev_rank`, `editorial_topics`, `enrich`, safety rejects and per-section counts. Spot-check every move and the published first three in each section for cross-section event duplicates, topic repetition and genuine category fit. Jev calls cost tokens and time, so compare phase durations and counts with a baseline before widening the probe pool or adding extra calls. A manual dated run can use the workflow's `run_date` input; make sure it is the intended US editorial date when UTC has already crossed midnight.
+Run `./.venv/bin/python -m pytest -q pipeline/test_editorial_routing.py pipeline/test_news_topics.py pipeline/test_publication_history.py` for routing, grouping and the history guard, then the relevant full pipeline tests. Inspect telemetry for `section_route`, `jev_rank`, `editorial_topics`, `publication_history`, `enrich`, safety rejects and per-section counts. Spot-check each section against its own seven-day history, along with topic repetition and genuine category fit. Jev calls cost tokens and time; compare actual phase durations and usage with a baseline. Observe the next natural scheduled run after merge unless a manual run is explicitly requested.
 
 For future changes to this live project, create a branch and PR, test and review it, then merge into `main` only with the requested approval. The workflow can be dispatched on a branch for validation; that is not a merge.
 # Jev 栏目价值与送审量（PR #69 后续调整）

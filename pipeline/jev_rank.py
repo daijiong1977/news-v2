@@ -20,9 +20,9 @@ to see more than one brief is done here, code first:
                                                   MIN_DISTINCT_SOURCES still holds
   · near-identical headlines                      code (mega_curator.titles_same_story)
   · same story told in different words            Jev, asked only about pairs whose
-    (within a category and across categories)     headlines share a content word
+    (within the same category)                   headlines share a content word
   · already published in the last 7 days,          code, then Jev ("same single event?")
-    in ANY category                               — the legacy filter only compares inside
+    in the same category                          — the legacy filter only compares inside
                                                   one category at 80% title similarity
   · News: at most 3 of the 6 about one person     Jev, same gate. A CAP, not a ban: the
     or organisation                               curator owns "3 different subjects in the
@@ -69,7 +69,7 @@ MIN_DISTINCT_SOURCES = 3    # what the curator's top-3 rule needs to be satisfia
 CAP_YIELD_GAP = 0.10        # a 3rd from one source beats an alternative this much worse
 HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
 MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
-POOL_KEEP = 10              # up to 6/6/7 sent; remaining entries are reserve spares
+# All scored briefs remain in the checkpoint catalog for Stage-3 refill.
 CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
 DEEP_DIG_BORDERLINE_MAX = 0.70  # only uncertain late backfill pays for cross-section checks
 DEEP_DIG_FIT_MARGIN = 0.05     # target must beat the best alternative, not merely pass 0.60
@@ -90,7 +90,7 @@ FLOOR = {"News": 0.40, "Science": 0.50, "Fun": 0.50}
 DEFAULT_FLOOR = 0.45
 TIME_BUDGET_S = 90.0
 SAME_MIN = 0.50
-CROSS_CAT_ORDER = ("Fun", "Science", "News")   # earlier category keeps a shared story
+CROSS_CAT_ORDER = ("Fun", "Science", "News")   # processing order only; section pools are independent
 
 AUDIENCE = {
     "who": "Children aged 10 to 14 living in the United States, reading a daily news site made for them.",
@@ -347,8 +347,8 @@ class _Pairs:
             if titles_same_story(title, past):
                 self._published[id(b)] = past
                 return past
-            if len(toks & _tokens(past)) < 2 or time.monotonic() > self.deadline:
-                continue                                  # 2 shared words: far more pairs here than within a pool
+            if not (toks & _tokens(past)) or time.monotonic() > self.deadline:
+                continue  # cheap early check; final publication review has no lexical gate
             self.calls += 1
             self.published_calls += 1
             try:
@@ -405,12 +405,12 @@ class _Pairs:
         return None
 
 
-def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _Pairs,
+def _select(cat: str, ranked: list[dict], pairs: _Pairs,
             recent_titles: list[str]) -> tuple[list[dict], list[tuple[dict, str]], int]:
     """Greedy top-TO_CURATOR. Returns (chosen, skipped, n_sent_below_floor).
 
     Hard rules never yield: already published, same story as something already
-    chosen or taken by another category.
+    chosen in this category.
 
     Soft rules yield when the pool is thin, in this order:
       · the per-source and per-subject caps fill up to TO_CURATOR — those briefs
@@ -450,8 +450,7 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
             return f"same story as published: {past[:60]}"
         if any(pairs.relation(c, b, subject=False) == "story" for c in chosen):
             return "same story as a higher-ranked pick"
-        other = next((c for c in taken_elsewhere if pairs.relation(c, b, subject=False) == "story"), None)
-        return f"same story as a {other.get('_category') or 'other'} pick" if other is not None else None
+        return None
 
     def cap_may_yield(b: dict, rest: list[dict]) -> bool:
         """True when a 3rd brief from one source is worth more than what replacing it
@@ -526,8 +525,8 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
 
 
 def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
-                recent_titles: list[str] | None = None) -> tuple[dict[str, list[dict]] | None, dict]:
-    """Returns ({cat: briefs in rank order, at most POOL_KEEP}, report), or (None, report)
+                recent_titles: dict[str, list[str]] | None = None) -> tuple[dict[str, list[dict]] | None, dict]:
+    """Returns ({cat: full ranked catalog}, report), or (None, report)
     when the ranking cannot be trusted. Briefs flagged `_jev_rank["send"]` go to the
     curator (use `for_curator`, never a positional slice: a thin pool sends fewer than
     TO_CURATOR); the rest are Stage 3 spares in rank order. Never raises, never mutates
@@ -574,7 +573,6 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
 
         pairs = _Pairs(client, q_story, q_both, q_event, deadline=t0 + TIME_BUDGET_S)
         out: dict[str, list[dict]] = {}
-        taken: list[dict] = []
         order = [c for c in CROSS_CAT_ORDER if c in briefs_by_cat] + [c for c in briefs_by_cat if c not in CROSS_CAT_ORDER]
         for cat in order:
             # An unscored brief (its call failed) ranks last rather than being lost.
@@ -584,18 +582,29 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                     "category_fit", 1.0)
                 b["_jev_rank"] = {**(scores.get(id(b)) or {}), "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
             ranked = sorted(briefs_by_cat[cat], key=lambda b: -b["_jev_pick"])
-            chosen, skipped, below = _select(cat, ranked, taken, pairs, recent_titles or [])
+            chosen, skipped, below = _select(cat, ranked, pairs, (recent_titles or {}).get(cat, []))
             report["below_floor"][cat] = below
-            taken += chosen
             # Reserve order: unchosen by rank, with same-story duplicates last — a
             # duplicate must never reach the curator by filling a thin pool's slots.
             dup_ids = {id(b) for b, why in skipped if "same story" in why}
             rest = [b for b in ranked if not any(b is c for c in chosen)
-                    and not editorial_exclusion(b) and not (cat == "Fun" and low_fun_value(b))]
-            rest = [b for b in rest if id(b) not in dup_ids] + [b for b in rest if id(b) in dup_ids]
-            final = (chosen + rest)[:max(POOL_KEEP, len(chosen))]
+                    and not editorial_exclusion(b) and not (cat == "Fun" and low_fun_value(b))
+                    and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
+                    and not pairs._published.get(id(b)) and id(b) not in dup_ids]
+            # The old reserve kept known duplicate events at the end. Build
+            # one unique catalog up front so refill can select by topic/rank
+            # without paying for another same-day model review per candidate.
+            final = []
+            for b in chosen + rest:
+                if any(pairs.relation(earlier, b, subject=False) == "story"
+                       for earlier in final):
+                    report["skipped"].append({"cat": cat, "title": b.get("title"),
+                                              "why": "same story in candidate catalog"})
+                    continue
+                final.append(b)
+            chosen_ids = {id(b) for b in chosen}
             for pos, b in enumerate(final, start=1):
-                b["_jev_rank"] = {**(scores.get(id(b)) or {}), "pos": pos, "send": pos <= len(chosen),
+                b["_jev_rank"] = {**(scores.get(id(b)) or {}), "pos": pos, "send": id(b) in chosen_ids,
                                   "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
             out[cat] = final
             report["sent"][cat] = [{"pos": i, "pick": (scores.get(id(b)) or {}).get("editorial_pick"),
@@ -603,7 +612,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                                     "sports_priority": (scores.get(id(b)) or {}).get("sports_priority"),
                                     "section_value": (scores.get(id(b)) or {}).get("section_value"),
                                     "source": b.get("_source_name"), "title": b.get("title")}
-                                   for i, b in enumerate(chosen, start=1)]
+                                   for i, b in enumerate((b for b in final if id(b) in chosen_ids), start=1)]
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]
         out = {cat: out[cat] for cat in briefs_by_cat}          # caller's category order
         report["pair_calls"] = pairs.calls

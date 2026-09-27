@@ -34,6 +34,9 @@ from . import db_config
 from .editorial_policy import (editorial_exclusion, publisher_key,
                                prefer_science_publishers, SCIENCE_MIN_PUBLISHERS)
 from .editorial_policy import low_fun_value, important_news, prefer_important_news
+from .editorial_policy import prefer_final_editorial_diversity
+from .publication_history import (PublicationHistoryGuard, HistoryReviewBudget,
+                                  winner_brief, assert_history_clear)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("full-round")
@@ -670,7 +673,7 @@ def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
     """Mega-path counterpart of filter_past_duplicates (which only the
     legacy path calls): drop briefs whose URL matches exactly (ignoring
     tracking parameters) or whose title ≥threshold-matches a story
-    any category published in the `days` days BEFORE this run's date. A
+    the same category published in the `days` days BEFORE this run's date. A
     sticky top-of-feed item on a cadence-1 source would otherwise be eligible
     to republish on consecutive days. Fail-open: any DB error keeps all briefs.
 
@@ -684,19 +687,19 @@ def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
     start = (date.fromisoformat(end) - timedelta(days=days)).isoformat()
     try:
         r = client().table("redesign_stories").select(
-            "source_title,source_url"
+            "source_title,source_url,category"
         ).gte("published_date", start).lt("published_date", end).eq(
             "archived", False).execute()
-        past_titles = sorted({row["source_title"] for row in (r.data or [])
-                              if row.get("source_title")})
-        past_urls = {_canonical_source_url(row.get("source_url") or "")
-                     for row in (r.data or []) if row.get("source_url")}
     except Exception as e:  # noqa: BLE001
         log.warning("brief past-dedup skipped — query failed: %s", e)
         return briefs_by_cat
 
     out: dict[str, list[dict]] = {}
     for cat, briefs in briefs_by_cat.items():
+        history = [row for row in (r.data or []) if row.get("category") == cat]
+        past_titles = sorted({row["source_title"] for row in history if row.get("source_title")})
+        past_urls = {_canonical_source_url(row.get("source_url") or "")
+                     for row in history if row.get("source_url")}
         kept, dropped = _drop_dup_briefs(briefs, past_titles, threshold,
                                          past_urls=past_urls)
         for b in dropped:
@@ -915,8 +918,8 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     return out
 
 
-def _recent_published_titles(today: str, days: int = 7) -> list[str]:
-    """Source headlines published in the last `days` days, every category, EXCLUDING
+def _recent_published_titles(today: str, days: int = 7, *, category: str) -> list[str]:
+    """Source headlines published in the last `days` days, same category, EXCLUDING
     today — a same-day re-run must not see its own earlier output as the past.
     Fail-open: any DB error returns []."""
     from datetime import date, timedelta
@@ -924,6 +927,7 @@ def _recent_published_titles(today: str, days: int = 7) -> list[str]:
         from .supabase_io import client
         start = (date.fromisoformat(today) - timedelta(days=days)).isoformat()
         rows = client().table("redesign_stories").select("source_title") \
+            .eq("category", category) \
             .gte("published_date", start).lt("published_date", today) \
             .eq("archived", False).execute().data or []
         return sorted({r["source_title"] for r in rows if r.get("source_title")})
@@ -979,8 +983,7 @@ def _deep_dig_spares(cat: str, sources, exclude_links: set,
     links, interleave across sources, and wrap each as an unverified
     Stage-3 spare. Each still passes body/image verify + safety vet +
     title-dedup in promote_spare_and_rewrite — this only widens the
-    candidate net with fresh same-day stories; it does not lower gates.
-    Runs BEFORE the pack-time carry-over from yesterday's bundle."""
+    candidate net with fresh same-day stories; it does not lower gates."""
     from .news_rss_core import fetch_source_entries
     seen = set(exclude_links or ())
     briefs: list[dict] = []
@@ -1066,16 +1069,17 @@ def promote_spare_and_rewrite(
     require_new_source: bool = False,
     used_publishers: set[str] | None = None,
     require_new_publisher: bool = False,
+    require_new_topic: bool = False,
+    history_guard=None,
 ) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
     on success or (None, None) if no spare survives verify+rewrite+vet.
 
     `used_source_names` is the set of source.name strings already in
-    the surviving top 3. The function tries spares from a NEW source
-    first; if none pass verify+vet, it falls back to repeated sources
-    unless `require_new_source` is set. This preserves source diversity
-    without sacrificing the three-story minimum or bypassing safety.
+    the surviving top 3. The function prefers another topic group, then
+    follows the ranked candidate order. A repeated source is eligible
+    unless `require_new_source` is set for a diversity-only pass.
 
     `used_titles` are the headlines already shipping — a probe-pool spare
     (no cluster_id) whose title matches one is the same wire story from a
@@ -1117,7 +1121,7 @@ def promote_spare_and_rewrite(
         rank = brief.get("_jev_rank") or {}
         pick = rank.get("editorial_pick")
         floor = rank.get("floor")
-        if (require_new_source or require_new_publisher) and pick is not None and floor is not None \
+        if (require_new_source or require_new_publisher or require_new_topic) and pick is not None and floor is not None \
                 and float(pick) < float(floor):
             log.info("  [%s] spare rank %s skipped — editorial pick %.2f below %.2f",
                      cat, spare.get("_rank"), float(pick), float(floor))
@@ -1127,6 +1131,8 @@ def promote_spare_and_rewrite(
                 or any(briefs_same_event(brief, shipped) for shipped in shipped_briefs)):
             log.info("  [%s] spare rank %s skipped — same story as a shipped "
                      "pick: %s", cat, spare.get("_rank"), spare_title[:60])
+            return None, None
+        if history_guard is not None and not history_guard.allows(brief):
             return None, None
         cached = brief.get("_probe_art") if isinstance(brief, dict) else None
         art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
@@ -1159,18 +1165,20 @@ def promote_spare_and_rewrite(
             kept[0],
         )
 
-    # A fresh editorial topic takes precedence over a fresh source, matching
-    # the section's topic-first selection rule. Within the same topic tier,
-    # try a new source first. Failed candidates are consumed; unattempted
-    # spares remain available for the optional diversity-only pass.
-    def _priority(spare: dict) -> tuple[int, int]:
+    # Try another known topic group first. Within each tier, keep the
+    # pre-ranked catalog order so the strongest remaining article wins.
+    # Failed candidates are consumed; unattempted ones remain available.
+    def _priority(spare: dict) -> int:
         brief = spare.get("_winner_brief") or {}
         label = topic_group(brief)
         repeats_topic = bool(topics_used) and (not label or label in topics_used)
-        src_name = (spare.get("source") and spare["source"].name) or ""
-        return int(repeats_topic), int(src_name in used)
+        return int(repeats_topic)
 
     for spare in sorted(spares, key=_priority):
+        if require_new_topic:
+            topic = topic_group(spare.get("_winner_brief") or {})
+            if not topic or topic in topics_used:
+                continue
         if require_new_publisher and (not publisher_key(spare.get("source"))
                                       or publisher_key(spare.get("source")) in publishers_used):
             continue
@@ -1179,7 +1187,7 @@ def promote_spare_and_rewrite(
         spares.pop(next(i for i, candidate in enumerate(spares) if candidate is spare))
         story, art = _try_one(spare)
         if story is not None:
-            if _priority(spare)[1]:
+            if ((spare.get("source") and spare["source"].name) or "") in used:
                 log.info("  [%s] diversity-fallback: promoting repeated source %s",
                          cat, (spare.get("source") and spare["source"].name) or "?")
             return story, art
@@ -1978,7 +1986,7 @@ def main_mega() -> None:
             picked_sources_by_cat[cat_name] = srcs
             out[cat_name] = phase_a_light(
                 cat_name, srcs, max_per_source=PHASE_A_PER_SOURCE.get(cat_name, 4))
-        # Drop briefs that ~match a story published in any section in the last
+        # Drop briefs that ~match a story published in the same section in the last
         # 7 days —
         # the mega path previously had NO past-run dedup at all.
         out = filter_past_duplicate_briefs(out, run_date=today)
@@ -2042,12 +2050,11 @@ def main_mega() -> None:
     PROBE_MIN_WORDS = 350
     PROBE_MAX_WORDS = 1200
     PROBE_MAX_PER_CAT = 10
-    # With Jev ranking on, the probe keeps every length-valid brief and the
-    # jev_rank stage narrows the pool. If that stage cannot rank, it applies
-    # this same first-10 cut, so the legacy behaviour is reproduced exactly.
+    # Keep the full probed catalog so Stage 3 can continue searching after
+    # safety or event rejections; only curator input remains capped.
     from . import jev_rank
     rank_mode = jev_rank.mode()
-    probe_cap = PROBE_MAX_PER_CAT if rank_mode == "off" else 10_000
+    probe_cap = 10_000
     PROBE_WORKERS = 8
 
     def _probe_one(brief: dict) -> dict:
@@ -2066,7 +2073,7 @@ def main_mega() -> None:
         t0 = time.monotonic()
         log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %s) ===",
                  PROBE_MIN_WORDS, PROBE_MAX_WORDS,
-                 PROBE_MAX_PER_CAT if rank_mode == "off" else "none — Jev ranks the pool")
+                 "none — curator input is capped later")
         out: dict[str, list[dict]] = {}
         kept_total = 0
         dropped_thin = 0
@@ -2114,7 +2121,7 @@ def main_mega() -> None:
 
     # ---- Stage 1.7: Jev ranks the probe pool (fail-open; see jev_rank.py) ----
     def _legacy_cut(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
-        return {c: b[:PROBE_MAX_PER_CAT] for c, b in pool.items()}
+        return pool
 
     def _jev_rank_runner():
         from .editorial_routing import route_briefs
@@ -2147,7 +2154,8 @@ def main_mega() -> None:
         log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
         try:
             ranked, report = jev_rank.rank_briefs(
-                rank_input, recent_titles=_recent_published_titles(today))
+                rank_input, recent_titles={cat: _recent_published_titles(today, category=cat)
+                                           for cat in rank_input})
             log.info("  jev: %s", report["jev"])
             for cat, sent in report["sent"].items():
                 log.info("  [%s] %s: %s", cat,
@@ -2188,7 +2196,8 @@ def main_mega() -> None:
     def _stage2_runner():
         t0 = time.monotonic()
         log.info("=== MEGA Stage 2 — curator picks 5 ranked per cat ===")
-        curator_pool = jev_rank.for_curator(briefs_by_cat) if jev_ranked else briefs_by_cat
+        curator_pool = (jev_rank.for_curator(briefs_by_cat) if jev_ranked else
+                        {cat: briefs[:PROBE_MAX_PER_CAT] for cat, briefs in briefs_by_cat.items()})
         ranked, _vet, _reasoning = mega_curate(curator_pool)
         _set_phase("stage2_curator", t0,
                    picks={c: len(p) for c, p in ranked.items()})
@@ -2254,6 +2263,15 @@ def main_mega() -> None:
         return out
     rewrites_by_cat: dict[str, dict] = _load_or_run("rewrite", _rewrite_runner)
 
+    publication_guards = {}
+    publication_review_budget = HistoryReviewBudget()
+
+    def _history_guard(category):
+        if category not in publication_guards:
+            publication_guards[category] = PublicationHistoryGuard.load(
+                today, category, budget=publication_review_budget)
+        return publication_guards[category]
+
     # ---- Stage 3: Python safety filter on rewritten bodies ----
     def _safety_runner():
         t0 = time.monotonic()
@@ -2267,6 +2285,8 @@ def main_mega() -> None:
             excluded_ids = {i for i, w in enumerate(winners)
                             if editorial_exclusion(w.get("winner") or {})
                             or (cat == "Fun" and low_fun_value(w.get("_brief") or {}))}
+            excluded_ids.update(i for i, w in enumerate(winners)
+                                if i not in excluded_ids and not _history_guard(cat).allows(winner_brief(w)))
             if excluded_ids:
                 log.info("  [%s] excluding %d editorially ineligible rewrites (checkpoint guard)",
                          cat, len(excluded_ids))
@@ -2335,7 +2355,8 @@ def main_mega() -> None:
                         cat, pool, used_source_names=used_names,
                         used_titles=used_titles, used_briefs=used_briefs,
                         used_event_groups=used_event_groups,
-                        used_topic_groups=used_topic_groups)
+                        used_topic_groups=used_topic_groups,
+                        history_guard=_history_guard(cat))
                     if not pw:
                         break
                     survived_winners.append(pw)
@@ -2343,6 +2364,27 @@ def main_mega() -> None:
                     promotions += 1
 
             _drain(spare_pool)
+
+            def _topics():
+                from .news_topics import topic_group
+                return {topic_group(winner_brief(w)) for w in survived_winners} - {""}
+
+            def _needs_topics():
+                return len(survived_winners) >= 3 and 0 < len(_topics()) < 3
+
+            def _improve_topics(pool):
+                nonlocal promotions
+                while _needs_topics() and pool:
+                    pw, pa = promote_spare_and_rewrite(
+                        cat, pool, used_briefs=[winner_brief(w) for w in survived_winners],
+                        used_source_names={w["source"].name for w in survived_winners},
+                        used_topic_groups=_topics(), require_new_topic=True,
+                        history_guard=_history_guard(cat))
+                    if not pw:
+                        break
+                    survived_winners.append(pw)
+                    survived_articles.append(pa)
+                    promotions += 1
 
             # A safety rejection can leave three publishable stories but only
             # two sources. The ordinary refill runs only when the story count
@@ -2369,17 +2411,18 @@ def main_mega() -> None:
                     require_new_source=True,
                     used_publishers={publisher_key(w.get("source")) for w in survived_winners},
                     require_new_publisher=needs_publisher,
+                    history_guard=_history_guard(cat),
                 )
                 if pw:
                     survived_winners.append(pw)
                     survived_articles.append(pa)
                     promotions += 1
 
-            # Still short? Dig DEEPER into today's same sources (items
-            # 5..15 of each feed) BEFORE falling back to yesterday's
-            # carry-over at pack time. Fresh same-day content is preferred.
+            _improve_topics(spare_pool)
+
+            # Short on count or topics? Try deeper items in today's feeds.
             dug = 0
-            if len(survived_winners) < 3 and picked_sources_by_cat.get(cat):
+            if (len(survived_winners) < 3 or _needs_topics()) and picked_sources_by_cat.get(cat):
                 seen_links: set[str] = set()
                 for r in (ranked_by_cat.get(cat) or []):
                     seen_links.add(((r.get("brief") or {}).get("link")) or "")
@@ -2398,9 +2441,10 @@ def main_mega() -> None:
                         tag_topics(cat, [s.get("_winner_brief") or {} for s in dig_pool])
                 if dig_pool:
                     before = len(survived_winners)
-                    log.info("  [%s] short (%d/3) after spares — deep-digging "
+                    log.info("  [%s] short on count or topic variety (%d candidates) — deep-digging "
                              "%d more feed items", cat, before, len(dig_pool))
                     _drain(dig_pool)
+                    _improve_topics(dig_pool)
                     dug = len(survived_winners) - before
 
             survived_winners, survived_articles = _prefer_final_source_diversity(
@@ -2414,8 +2458,18 @@ def main_mega() -> None:
                            else prefer_important_news(choices))
                 survived_winners = [x["winner"] for x in choices]
                 survived_articles = [x["article"] for x in choices]
+            choices = prefer_final_editorial_diversity(cat, [
+                {"source": w.get("source"), "brief": winner_brief(w), "winner": w, "article": a}
+                for w, a in zip(survived_winners, survived_articles)])
+            survived_winners = [x["winner"] for x in choices]
+            survived_articles = [x["article"] for x in choices]
             final_stories[cat] = survived_winners[:3]
             final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+            from .news_topics import topic_group
+            final_topics = {topic_group(winner_brief(w)) for w in final_stories[cat]} - {""}
+            if len(final_topics) < len(final_stories[cat]):
+                telemetry["warnings"].append(
+                    f"{cat}: only {len(final_topics)} known distinct final topics after safe replacements")
             if cat == "News" and not any(important_news(
                     w.get("_brief") or w.get("_winner_brief") or {}) for w in final_stories[cat]):
                 telemetry["warnings"].append("News: no qualified high-importance story in final selection")
@@ -2438,9 +2492,8 @@ def main_mega() -> None:
                     f"{cat}: Stage 3 promoted {promotions} safe spare(s)"
                     + (f" ({dug} via deep-dig into today's feeds)" if dug else ""))
             if len(survived_winners) < 3:
-                telemetry["warnings"].append(
-                    f"{cat}: only {len(survived_winners)} stories shipped after Stage 3"
-                    " (deep-dig exhausted; pack will carry over from yesterday)")
+                log.info("  [%s] %d fresh stories after catalog and feed search",
+                         cat, len(survived_winners))
             log.info("  [%s] final: %d published from %d safe candidates "
                      "(%d rejected, %d promoted, %d deep-dug)",
                      cat, len(final_stories[cat]), len(survived_winners),
@@ -2455,6 +2508,13 @@ def main_mega() -> None:
     safety_bundle = _load_or_run("stage3_safety", _safety_runner)
     final_stories_by_cat = safety_bundle["final_stories_by_cat"]
     final_variants_by_cat = safety_bundle["final_variants_by_cat"]
+    # Checkpoint resumes and late promotions get the same lexical-gate-free audit.
+    try:
+        for cat, stories in final_stories_by_cat.items():
+            assert_history_clear({cat: stories}, _history_guard(cat))
+    finally:
+        telemetry["publication_history"] = {cat: guard.report()
+                                            for cat, guard in publication_guards.items()}
 
     # Process images for any newly promoted spares (their image hasn't
     # been processed yet — verify_picks_lazy only ran image-fetch on the
@@ -2546,11 +2606,7 @@ def main_mega() -> None:
     log.info("=== PACK + UPLOAD ZIP ===")
     upload_ok = False
     upload_err: str | None = None
-    # min_per_cat=1: a 1-2-story category still publishes fresh — pack
-    # tops it up to 3 with carried-over stories from the previous bundle
-    # (owner rule 2026-07-08: a category always ships 3 — other sources
-    # first, then borrow from the previous day). Only a 0-story category
-    # keeps the previous live content wholesale.
+    # A 1-2-story category still publishes its qualified fresh articles.
     ok_cats, thin_cats = _split_publishable(final_stories_by_cat, min_per_cat=1)
     short_cats = [c for c in ok_cats
                   if len(final_stories_by_cat.get(c) or []) < 3]
@@ -2567,9 +2623,8 @@ def main_mega() -> None:
             log.warning("degraded publish — %s keep live content; "
                         "publishing fresh %s via merge", thin_cats, ok_cats)
         if short_cats:
-            telemetry["warnings"].append(
-                f"top-up publish — {', '.join(short_cats)} shipped <3 fresh; "
-                "pack carries previous-bundle stories over to fill 3")
+            log.info("pack will publish fresh catalog survivors for %s", short_cats)
+        os.environ["PACK_FRESH_CATALOG_ONLY"] = "1"
         if thin_cats:
             os.environ["PACK_MERGE_CATEGORIES"] = ",".join(ok_cats)
         elif partial_cats:

@@ -142,11 +142,11 @@ def test_deep_dig_borderline_checks_other_sections():
     assert sports["_jev_other_category_fit"]["Science"] == 0.20
 
 
-def test_orders_by_pick_and_keeps_top_10():
+def test_orders_by_pick_and_keeps_full_catalog_for_refill():
     pool = [_b(f"Story {i:02d} alpha{i}", src=f"S{i % 5}", pick=0.55 + i / 100) for i in range(14)]
     (out, rep), _ = _run({"Science": pool})
-    assert len(out["Science"]) == jr.POOL_KEEP
-    assert [b["_jev_rank"]["pos"] for b in out["Science"]] == list(range(1, 11))
+    assert len(out["Science"]) == len(pool)
+    assert [b["_jev_rank"]["pos"] for b in out["Science"]] == list(range(1, len(pool) + 1))
     assert len(_sent(out, "Science")) == jr.TO_CURATOR == len(rep["sent"]["Science"])
     reserve = [b["_jev_rank"]["pick"] for b in out["Science"] if not b["_jev_rank"]["send"]]
     assert reserve == sorted(reserve, reverse=True)
@@ -208,8 +208,8 @@ def test_reworded_duplicate_is_caught_by_jev():
     (out, rep), fake = _run({"News": pool})
     assert sum("assisted dying" in t for t in _sent(out, "News")) == 1
     assert fake.pair_calls >= 1 and any("same story" in d["why"] for d in rep["skipped"])
-    # the duplicate is not lost: it sits at the very end of the reserve
-    assert _titles(out["News"])[-1] == "An extraordinary result - why MPs rejected the assisted dying bill"
+    # The known duplicate must not return from the refill catalog.
+    assert "An extraordinary result - why MPs rejected the assisted dying bill" not in _titles(out["News"])
 
 
 def test_news_subject_is_capped_not_banned():
@@ -227,18 +227,18 @@ def test_subject_rule_is_news_only():
     assert sum("Trump" in t for t in _sent(out, "Fun")) == 6
 
 
-def test_cross_category_duplicate_goes_to_fun_not_news():
+def test_current_candidate_pools_do_not_compare_across_sections():
     news = [_b("Ed Sheeran concert goes ahead after assisted dying row", src="AJ", pick=0.9)] + \
            [_b(f"World event summit{i}", src=f"N{i}", pick=0.62) for i in range(5)]
     fun = [_b("Ed Sheeran breaks silence on assisted dying tour row", src="RS", cat="Fun", pick=0.7)] + \
           [_b(f"Game release title{i}", src=f"F{i}", cat="Fun", pick=0.62) for i in range(5)]
     (out, rep), _ = _run({"News": news, "Fun": fun})
     assert any("Sheeran" in t for t in _sent(out, "Fun"))
-    assert not any("Sheeran" in t for t in _sent(out, "News")) and len(_sent(out, "News")) == 5
+    assert any("Sheeran" in t for t in _sent(out, "News")) and len(_sent(out, "News")) == 6
     assert list(out) == ["News", "Fun"]                      # caller's category order preserved
 
 
-def test_already_published_is_not_sent_again_even_from_another_category_or_reworded():
+def test_same_section_history_blocks_rewordings_but_ignores_other_sections():
     recent = ["Ms. Rachel has entered her album era, and she is so happy about it",                  # ran as News
               "Journalists report being denied White House access after Trump bans some outlets",
               "Ed Sheeran concert set to go ahead after outcry over Gaza"]
@@ -251,15 +251,15 @@ def test_already_published_is_not_sent_again_even_from_another_category_or_rewor
     for bs in (fun, news):
         for b in bs:
             fake.by_title[b["title"]] = b["_p"]
-    out, rep = jr.rank_briefs({"News": news, "Fun": fun}, client=fake, recent_titles=recent)
-    assert not any("Rachel" in t for t in _sent(out, "Fun"))                 # identical title, other category: code
+    out, rep = jr.rank_briefs({"News": news, "Fun": fun}, client=fake, recent_titles={"News": recent, "Fun": []})
+    assert any("Rachel" in t for t in _sent(out, "Fun"))                     # News history is not Fun history
     assert not any("White House" in t for t in _sent(out, "News"))           # reworded: Jev
     assert any("Sheeran admits" in t for t in _sent(out, "News"))            # a new development is still news
-    assert sum("same story as published" in d["why"] for d in rep["skipped"]) == 2
-    assert _titles(out["Fun"])[-1].startswith("Ms. Rachel")                  # demoted, not lost
+    assert sum("same story as published" in d["why"] for d in rep["skipped"]) == 1
+    assert not any("White House" in t for t in _titles(out["News"]))        # cannot return as a spare
 
 
-def test_fat_bear_cross_category_event_check_is_measured():
+def test_fat_bear_same_category_event_check_is_measured():
     old = "Alaska's salmon-feasting bears face off in biggest Fat Bear Week ever"
     new = _b("Fat bear week celebrates its twelfth year", cat="Fun", pick=0.8)
     fake = Fake()
@@ -428,7 +428,7 @@ def test_already_published_is_asked_once_per_brief():
     fake = Fake()
     for b in pool:
         fake.by_title[b["title"]] = b["_p"]
-    out, rep = jr.rank_briefs({"News": pool}, client=fake, recent_titles=recent)
+    out, rep = jr.rank_briefs({"News": pool}, client=fake, recent_titles={"News": recent})
     assert not any("assisted dying" in t for t in _sent(out, "News"))   # it was published
     # One recent title, one brief that shares words with it: one ask, not one per pass.
     # One recent title shares >=2 content words with exactly one brief. _select asks

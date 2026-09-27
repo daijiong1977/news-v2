@@ -14,7 +14,7 @@ def test_section_specific_curator_capacity(cat, expected):
     pool = [_b(f"Headline{i} event{i} discovery{i}", src=f"Outlet{i}", cat=cat, pick=.8) for i in range(12)]
     (out, _), _ = _run({cat: pool})
     assert len(jr.for_curator(out)[cat]) == expected
-    assert len(out[cat]) == 10
+    assert len(out[cat]) == len(pool)  # full scored catalog stays available for refill
 
 
 def test_low_fun_not_resurrected_by_thin_pool_or_reserves_or_deep_dig():

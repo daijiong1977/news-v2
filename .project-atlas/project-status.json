@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "project_id": "kids-news-website",
+  "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
+  "repo_url": "https://github.com/daijiong1977/news-v2",
+  "updated_at": "2026-09-27T08:17:14-04:00",
+  "branches": [
+    {
+      "name": "main",
+      "purpose": "当前生产流水线；由合并后的 PR 更新。",
+      "status": "production"
+    },
+    {
+      "name": "codex/published-event-guard",
+      "purpose": "PR #71：七天同栏目事件查重、完整候选目录补稿及题材组优先。",
+      "status": "review"
+    },
+    {
+      "name": "codex/jev-filtering-guide",
+      "purpose": "PR #70：可供其他内容项目复用的 JEV 分步筛选指南。",
+      "status": "review"
+    }
+  ],
+  "deployments": [
+    {
+      "environment": "production",
+      "provider": "Supabase Storage → kidsnews-v2 → Vercel",
+      "url": "https://kidsnews.21mins.com",
+      "audience": "儿童读者和家长",
+      "branch": "main",
+      "status": "reported_live_not_reverified_in_this_change"
+    }
+  ],
+  "files": [
+    {
+      "path": "pipeline/full_round.py",
+      "purpose": "每日采集、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/jev_rank.py",
+      "purpose": "JEV 评分、同事件筛选和完整候选目录。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_history.py",
+      "purpose": "过去七天同栏目发布事件的最终复核。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/pack_and_upload.py",
+      "purpose": "打包、验证和上传每日网站内容。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-27-storm-repeat-history-gate.md",
+      "purpose": "暴雨重复的根因、修复边界和验证记录。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/editorial-category-routing.md",
+      "purpose": "News、Science、Fun 分类与题材组调参说明。",
+      "location": "repo"
+    }
+  ],
+  "lessons": [
+    {
+      "date": "2026-09-27",
+      "title": "同事件不能只靠标题共同词筛选",
+      "note": "CBC 与 BBC 对同一场美国东北暴雨的标题只共享 flooding；早期两个共同词门槛漏过了这对文章。最终发布复核要检查本栏目完整七天历史。",
+      "source_ref": "docs/bugs/2026-09-27-storm-repeat-history-gate.md"
+    },
+    {
+      "date": "2026-09-27",
+      "title": "补稿要保留完整候选目录并先选不同题材组",
+      "note": "原先 JEV 评分后只保留前十篇备用，正文和安全淘汰后可能找不到本来已采集的候选。主编输入可保持上限，但 Stage 3 应使用已去重的完整目录，先找不同题材组，再回退到同组最佳稿；每篇仍需通过历史和独立儿童安全审核。",
+      "source_ref": "docs/bugs/2026-09-27-storm-repeat-history-gate.md"
+    }
+  ]
+}

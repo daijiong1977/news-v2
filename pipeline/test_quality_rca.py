@@ -157,7 +157,7 @@ def test_new_source_spare_gets_normal_safety_gate(monkeypatch):
     assert checked == ["Swimming record at world championships"]
 
 
-def test_refill_tries_new_source_when_topic_preference_is_equal(monkeypatch):
+def test_refill_uses_best_ranked_candidate_when_topic_preference_is_equal(monkeypatch):
     from pipeline import news_rss_core as core
 
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
@@ -181,8 +181,8 @@ def test_refill_tries_new_source_when_topic_preference_is_equal(monkeypatch):
     winner, _ = fr.promote_spare_and_rewrite(
         "Fun", pool, used_source_names={"A", "B"},
         used_topic_groups={"swimming"})
-    assert winner["source"].name == "C"
-    assert attempted == ["Tennis final"]
+    assert winner["source"].name == "A"
+    assert attempted == ["Swimming final"]
 
 
 def test_diversity_only_replacement_respects_editorial_floor(monkeypatch):

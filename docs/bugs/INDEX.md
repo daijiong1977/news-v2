@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-09-27 | high | pipeline | [storm-repeat-history-gate](2026-09-27-storm-repeat-history-gate.md) | Two-token history shortcut skipped the CBC/BBC storm pair; post-safety refill repeated the weather topic. | dedup, history, Jev, severe-weather, backfill |
 | 2026-09-27 | medium | pipeline | [publisher-diversity-and-recruitment](2026-09-27-publisher-diversity-and-recruitment.md) | Three ScienceDaily feeds counted as three publishers; a college commitment won a Fun swimming slot. | publisher, ScienceDaily, recruitment, Fun, carry-over |
 | 2026-09-27 | low | pipeline | [fun-source-pool](2026-09-27-fun-source-pool.md) | Fun only sampled eight of 14 enabled feeds before Jev; trial widens the first round to ten without changing publication gates. | Fun, source-pool, Jev, RSS, diversity |
 | 2026-09-26 | high | pipeline | [quality-digest-issues](2026-09-26-quality-digest-issues.md) | Seven published bodies outside the QA band and two categories with only 2/3 sources; repair failures still shipped, auto-fix accepted unsafe/unfit rewrites, and its scan missed older days. | word-count, source-diversity, independent-vet, autofix, archive |
