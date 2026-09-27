@@ -35,6 +35,17 @@ from . import db_config
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("full-round")
 
+# Wider, metadata-first sampling for Fun gives Jev more independent sports,
+# music and culture candidates. Keep News/Science at their existing limit;
+# News has only four enabled feeds, and downstream curator/rewrite caps do not
+# change. Tune here after comparing source funnel and run-time telemetry.
+PHASE_A_SOURCE_LIMITS = {"Fun": 10}
+PHASE_A_DEFAULT_SOURCE_LIMIT = 8
+
+
+def phase_a_source_limit(category: str) -> int:
+    return PHASE_A_SOURCE_LIMITS.get(category, PHASE_A_DEFAULT_SOURCE_LIMIT)
+
 
 # -------------------------------------------------------------------
 # 1) Aggregate 3 categories
@@ -1929,10 +1940,9 @@ def main_mega() -> None:
         log.info("=== MEGA Phase A* (light feed fetch) ===")
         out = {}
         for cat_name in cat_names:
-            # n=8 (was default 3): briefs are metadata-only, so a wider
-            # pool costs almost nothing and one dead/stale feed no longer
-            # collapses a category to 2/3. Curator still narrows to 3.
-            srcs = db_config.load_sources(cat_name, n=8)
+            # Fun samples ten feeds before Jev ranks the viable articles;
+            # News and Science retain eight. Downstream selection caps stay fixed.
+            srcs = db_config.load_sources(cat_name, n=phase_a_source_limit(cat_name))
             picked_sources_by_cat[cat_name] = srcs
             out[cat_name] = phase_a_light(
                 cat_name, srcs, max_per_source=PHASE_A_PER_SOURCE.get(cat_name, 4))

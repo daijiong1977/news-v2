@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-09-27 | low | pipeline | [fun-source-pool](2026-09-27-fun-source-pool.md) | Fun only sampled eight of 14 enabled feeds before Jev; trial widens the first round to ten without changing publication gates. | Fun, source-pool, Jev, RSS, diversity |
 | 2026-09-26 | high | pipeline | [quality-digest-issues](2026-09-26-quality-digest-issues.md) | Seven published bodies outside the QA band and two categories with only 2/3 sources; repair failures still shipped, auto-fix accepted unsafe/unfit rewrites, and its scan missed older days. | word-count, source-diversity, independent-vet, autofix, archive |
 | 2026-09-27 | medium | pipeline | [cbc-world-rss-timeout](2026-09-27-cbc-world-rss-timeout.md) | CBC World feed hung in direct feedparser URL fetch; bounded HTTP fetch and staged fifth News publisher. | CBC, News, RSS, timeout, source-diversity |
 | 2026-09-26 | medium | pipeline | [cross-category-seven-day-event-dedup](2026-09-26-cross-category-seven-day-event-dedup.md) | Fat Bear Week shipped as News then Fun seven days apart; fix = seven-day cross-category title/event lookback with Jev call/token telemetry. | cross-category, seven-day, event, duplicate, Jev, Fat Bear |
