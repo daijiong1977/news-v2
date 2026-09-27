@@ -71,14 +71,19 @@ def test_new_taxonomy_routes_animals_ai_and_technology_without_losing_entries():
               "New chemical reaction", "A distant star"]
     pool = {"Science": [{"title": t} for t in [titles[0], *titles[2:]]],
             "News": [{"title": titles[1]}], "Fun": []}
-    answers = {t: ("Fun" if i < 3 else "Science", .99) for i, t in enumerate(titles)}
+    answers = {"Sea spider species discovered": ("Science", .99),
+               "New AI school rules": ("Fun", .99),
+               "A new robot": ("Fun", .99),
+               "New chemical reaction": ("Science", .99),
+               "A distant star": ("Science", .99)}
     out, report = routing.route_briefs(pool, client=PolicyFake(answers), route_mode="on")
-    assert {b["title"] for b in out["Fun"]} == set(titles[:3])
-    assert {b["title"] for b in out["Science"]} == set(titles[3:])
+    assert {b["title"] for b in out["Fun"]} == set(titles[1:3])
+    assert {b["title"] for b in out["Science"]} == {titles[0], titles[3], titles[4]}
     assert sum(map(len, out.values())) == 5
-    assert len(report["moved"]) == 3
+    assert len(report["moved"]) == 2
     # Assert the downstream fit gate uses exactly the same policy.
     assert all(SECTION_POLICY in v for v in jev_rank.CATEGORY_FIT_CRITERIA.values())
     assert {"animal_events", "technology", "artificial_intelligence"} <= set(news_topics.FUN_TOPIC_CRITERIA)
+    assert news_topics.topic_group({"_jev_topic_group": "biology_ecology"}) == "biology_ecology"
     assert "engineering_technology" not in news_topics.SCIENCE_TOPIC_CRITERIA
     assert news_topics.topic_group({"_jev_topic_group": "engineering_technology"}) == "engineering_technology"

@@ -17,9 +17,9 @@ log = logging.getLogger("editorial-routing")
 SECTIONS = ("News", "Science", "Fun")
 MIN_MOVE_CONFIDENCE = 0.90
 SECTION_CRITERIA = {
-    "News": "Other current affairs: government, elections, diplomacy, conflict, severe weather, infrastructure disruptions, public health; animal/technology/AI-centered stories go to Fun",
-    "Science": "Physics, chemistry, astronomy, Earth/climate, plant/human biology, medicine and archaeology; animal research and technology/AI go to Fun",
-    "Fun": "All animal, technology and AI stories (including research and policy), plus sports, music, movies, games, arts, contests, kid achievements and history",
+    "News": "Other current affairs: government, elections, diplomacy, conflict, severe weather, infrastructure disruptions and public health; technology/AI stories go to Fun",
+    "Science": "Physics, chemistry, astronomy, Earth/climate, biology including animal research/species/ecology, medicine and archaeology; technology/AI stories go to Fun",
+    "Fun": "Technology and AI stories including research and policy, plus animal happenings/entertainment (not biology or animal research), sports, music, movies, games, arts, contests, kid achievements and history",
 }
 SECTION_INSTRUCTIONS = (
     "Choose the best section for a US kids news site. Judge the actual story, "

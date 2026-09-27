@@ -26,10 +26,10 @@ SCIENCE_TOPIC_CRITERIA = {
     "astronomy_space": "Astronomy, the moon, planets, stars, galaxies or space missions",
     "physics": "Physics, forces, energy, particles, light or fundamental physical laws",
     "chemistry_materials": "Chemistry, molecules, reactions, materials or new substances",
-    "biology_ecology": "Plant, human or ecosystem research not primarily about animals; animal research goes to Fun",
+    "biology_ecology": "Animal and plant biology, animal behavior, new species, ecosystems, evolution or biological research",
     "earth_climate": "Geology, oceans, weather science, Earth systems or climate research",
     "medicine_health": "Medical research, human biology, disease mechanisms or treatments",
-    "fossils_archaeology": "Archaeology, human history or plant fossils; dinosaurs and animal fossils go to Fun",
+    "fossils_archaeology": "Fossils, dinosaurs, archaeology or ancient-life discoveries",
     "other": "Science story that fits none of the groups above",
 }
 FUN_TOPIC_CRITERIA = {
@@ -40,7 +40,7 @@ FUN_TOPIC_CRITERIA = {
     "film_tv": "Movies, television, shows, actors or animation",
     "games": "Video games, board games, puzzles or play",
     "arts_books": "Books, art, theatre, comics or creative projects",
-    "animal_events": "All animal stories: new species, animal research, behavior, dinosaurs, animal fossils, pets, wildlife, conservation and animal policy",
+    "animal_events": "Pets, animal contests, unusual animal activities or amusing wildlife events such as Fat Bear Week; biology and animal research stay in Science",
     "technology": "Technology, engineering applications, robotics, inventions, devices, software or technology policy/business; AI uses artificial_intelligence",
     "artificial_intelligence": "AI research, applications, models, AI in schools, AI policy or AI business; choose this over technology when AI is central",
     "history_culture": "History, cultural traditions, museums or heritage",
@@ -92,7 +92,8 @@ def tag_topics(category: str, briefs: list[dict], client=None) -> dict:
             f"Choose the PRIMARY editorial topic for this {category} brief. "
             "Different events on the same broad topic share a label; this is "
             "not a same-event or child-safety judgment. Choose exactly one "
-            "label. All animal stories including research use Fun animal_events. "
+            "label. Animal research/new species/behavior/ecology use Science biology_ecology; "
+            "Fat Bear Week and non-scientific animal happenings use Fun animal_events. "
             "Technology uses Fun technology; AI uses Fun artificial_intelligence. "
             "Within Fun, swimming and tennis are separate from other_sports."
         )

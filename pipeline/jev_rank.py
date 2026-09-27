@@ -148,8 +148,8 @@ SECTION_VALUE_LEVELS = {
     "Fun": [
         "No child-facing enjoyment: recruiting, roster paperwork, adult industry or commercial news",
         "Sports/entertainment label only; routine commitments, rankings of recruits or adult business detail",
-        "An accessible entertaining or curiosity-building animal, technology, AI or cultural story a child might enjoy",
-        "A genuinely engaging animal discovery, technology/AI advance, new sporting result, playful idea or creative achievement",
+        "An accessible entertaining technology/AI, animal-happening or cultural story a child might enjoy",
+        "A genuinely engaging technology/AI advance, amusing animal event, new sporting result, playful idea or creative achievement",
         "A delightful or remarkable event children would eagerly share; a landmark result for young fans",
     ],
 }

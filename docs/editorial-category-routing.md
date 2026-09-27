@@ -31,12 +31,21 @@ college competition and records remain eligible.
 | Section | Intended stories | Jev topic labels |
 | --- | --- | --- |
 | News | Government, diplomacy, conflict, severe weather, infrastructure and public-health events | `us_politics`, `international_relations`, `war_security`, `severe_weather`, `transport_infrastructure`, `public_health`, `science_environment`, `community`, `technology_business`, `sports`, `entertainment`, `other` |
-| Science | Physics, chemistry, astronomy, Earth/climate, plant/human biology, medicine and archaeology | `astronomy_space`, `physics`, `chemistry_materials`, `biology_ecology`, `earth_climate`, `medicine_health`, `fossils_archaeology`, `other` |
-| Fun | All animal, technology and AI stories, plus sports, music, screen entertainment, games, arts, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `technology`, `artificial_intelligence`, `history_culture`, `kids_community`, `other` |
+| Science | Physics, chemistry, astronomy, Earth/climate, biology (including animal research), medicine and archaeology | `astronomy_space`, `physics`, `chemistry_materials`, `biology_ecology`, `earth_climate`, `medicine_health`, `fossils_archaeology`, `other` |
+| Fun | Technology and AI stories; non-scientific animal happenings; sports, music, screen entertainment, games, arts, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `technology`, `artificial_intelligence`, `history_culture`, `kids_community`, `other` |
 
-Examples: Fat Bear Week AND a study of bears are Fun `animal_events`; AI in schools is Fun `artificial_intelligence`; a new telescope instrument is Fun `technology`, while a star discovery using a telescope remains Science `astronomy_space`. A threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. News labels remain for uncertain/borderline feed items, but confident routing moves animal/technology/AI-centered stories to Fun, including policy and research.
+Examples: Fat Bear Week is Fun `animal_events`; a biology study of bears or a newly discovered animal species is Science `biology_ecology`. AI in schools is Fun `artificial_intelligence`; a new telescope instrument is Fun `technology`, while a star discovery using a telescope remains Science `astronomy_space`. A threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. News labels remain for uncertain/borderline feed items; confident routing moves technology/AI stories and non-scientific animal happenings to Fun.
 
-用户更新（9/26）：动物、Tech、AI 统一放到兴趣栏，不再区分「动物趣闻」和「动物研究」。共享定义位于 `editorial_policy.SECTION_POLICY`，同时用于 Jev 路由、栏目适配（含 deep-dig）和主编。`animal_events` 保留旧名称避免破坏历史标签；新增 `technology`、`artificial_intelligence`。旧 `engineering_technology` 仅兼容历史 checkpoint。按主旨判断，提到 AI 工具不意味着一篇化学稿自动变成 AI 新闻。仍保留 0.90 路由置信度和故障回退；不保证每篇都成功识别。趣味评分承认动物/技术的探索价值，但购物、招募、低儿童相关性与安全规则不放宽。需从采集重新运行验证，旧 checkpoint 不会自动重新分栏；本次不迁移来源表或历史已发布稿。
+用户更新（9/26）：Tech 与 AI 放 Fun；生物学研究、新物种、动物行为、恐龙/动物化石和生态研究保留 Science。动物趣闻、宠物、比赛和有趣的野生动物活动归 Fun。共享定义位于 `editorial_policy.SECTION_POLICY`，同时用于 Jev 路由、栏目适配（含 deep-dig）和主编。`animal_events` 保留旧名称避免破坏历史标签；新增 `technology`、`artificial_intelligence`。旧 `engineering_technology` 仅兼容历史 checkpoint。按主旨判断，提到 AI 工具不意味着一篇化学稿自动变成 AI 新闻。仍保留 0.90 路由置信度和故障回退；不保证每篇都成功识别。购物、招募、低儿童相关性与安全规则不放宽。需从采集重新运行验证，旧 checkpoint 不会自动重新分栏；本次不迁移来源表或历史已发布稿。
+
+### Science → Fun 来源候选（9/17–9/26 feed 快照）
+
+- **Popular Science（source 121，当前启用）**：RSS 返回 58 条。包含 Fat Bear Week、动物趣闻、奇特动物动态和消费科技，能补 Fun 题材；也混有生物发现与购物指南，因此建议转入 Fun 后继续按单篇分栏/禁购物规则筛选。
+- **ScienceDaily Top Technology（source 6，当前启用）**：36 条，但近期包括大量 LHC、量子物理、行星、天文等研究。来源名里的 Technology 不代表整条 feed 都属于 Fun，建议留在 Science，由逐稿路由处理明确的 AI/机器人/设备稿。
+- **MIT Technology Review（source 110，当前停用）**：feed 可读，但样本含 Pentagon AI 测谎器、边境监控、器官移植等成人政策主题；暂不建议为了填 Fun 而启用。
+- **IEEE Spectrum（source 338，当前停用）**：本次 RSS 请求返回 HTTP 403，暂不能作为可用供稿源。
+
+因此当前有证据支持的源级调整只有 Popular Science 一条；若希望至少两条，宜再找一条活跃、专门且可抓取的 AI/Tech feed，不建议把 science-heavy 的整条 feed 一起搬走。生产来源表尚未改动。
 
 Fun sports are split by sport, not by the broad `sports` label: a swimming race and a tennis match can both appear among the three published Fun articles if they are different events and pass all other gates. Diving and water polo belong to `other_sports`. This remains a preference, not a quota: no swimming story is invented or forced into an edition without a suitable candidate. SwimSwam is an enabled Fun feed in the live source registry (two-day cadence); BBC Tennis is also enabled (daily cadence). Source selection can skip either feed on a particular day.
 

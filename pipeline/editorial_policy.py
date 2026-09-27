@@ -14,9 +14,10 @@ SCIENCE_MIN_PUBLISHERS = 2
 
 # One taxonomy shared by routing and downstream category-fit scoring.
 SECTION_POLICY = (
-    "Editorial policy: animal-related stories belong in Fun, including animal research, "
-    "new species, dinosaurs, animal fossils, behavior, conservation and animal policy. "
-    "Technology and AI stories also belong in Fun, including robotics, inventions, "
+    "Editorial policy: animal science belongs in Science, including biology, animal research, "
+    "new species, dinosaurs, animal fossils, behavior and ecology. Non-scientific animal "
+    "stories such as pets, animal events and amusing wildlife activity belong in Fun. "
+    "Technology and AI stories belong in Fun, including robotics, inventions, "
     "software, devices, engineering applications, AI research, AI in schools, "
     "technology business and regulation. These Fun assignments take precedence over "
     "the source feed and over the usual research=Science or policy=News convention. "
@@ -24,7 +25,7 @@ SECTION_POLICY = (
     "AI tool remains chemistry; a star discovery using a telescope remains astronomy; "
     "a new telescope instrument is technology. Science retains physics, chemistry, "
     "astronomy, Earth/climate science, plant/human biology, medicine and archaeology "
-    "when animals, technology or AI are not the central subject. News retains other "
+    "when animals are the scientific subject. News retains other "
     "current affairs. Fun also includes sports, music, film, games, arts, history and "
     "children's achievements. Classification never grants safety or publication approval."
 )
