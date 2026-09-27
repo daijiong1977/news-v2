@@ -129,3 +129,11 @@ def test_fun_does_not_drop_second_tennis_story_without_alternative():
     out = mc._prefer_top3_topic_diversity({"Fun": picks})["Fun"]
     assert [p["brief"]["title"] for p in out[:3]] == [
         "Swim race", "Tennis final", "Another tennis final"]
+
+
+def test_curator_sees_major_fun_sport_priority():
+    brief = {"title": "Swimmer breaks world record", "summary": "A new record today",
+             "_source_name": "SwimSwam", "_jev_topic_group": "swimming",
+             "_jev_rank": {"sports_priority": 4}}
+    message, _ = mc._build_mega_curator_input({"News": [], "Science": [], "Fun": [brief]})
+    assert "editorial_topic=swimming sports_priority=4" in message

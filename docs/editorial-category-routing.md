@@ -23,6 +23,17 @@ Examples: Fat Bear Week is a Fun `animal_events` story; a study of bears is Scie
 
 Fun sports are split by sport, not by the broad `sports` label: a swimming race and a tennis match can both appear among the three published Fun articles if they are different events and pass all other gates. Diving and water polo belong to `other_sports`. This remains a preference, not a quota: no swimming story is invented or forced into an edition without a suitable candidate. SwimSwam is an enabled Fun feed in the live source registry (two-day cadence); BBC Tennis is also enabled (daily cadence). Source selection can skip either feed on a particular day.
 
+### Swimming and tennis news value
+
+For Fun briefs only, the existing per-brief Jev ranking call also scores `sports_priority` (0-4). This adds **no extra API call**. Scores 0-2 do not change the rank; score 3 adds 0.10 and score 4 adds 0.18 to the editorial pick score (capped at 1.0). The raw pick and priority are both retained in `_jev_rank` for inspection. The bonus is soft: source and same-event rules still apply, and category fit plus independent full-text safety still gate publication.
+
+- **4 — highest:** a newly broken world swimming record; Olympic or World Championship title; a Grand Slam champion or final result; or a comparable fresh landmark by a swimming/tennis star.
+- **3 — high:** a major international meet, consequential Grand Slam round, national record, or a concrete new star achievement.
+- **2 — normal:** a timely but ordinary result or meaningful update.
+- **0-1 — no boost:** college recruiting, routine training/profile pieces, an old match repackaged as a new interview, or other sports/non-sports. A famous athlete's name alone is not a new development.
+
+The mega-curator sees the high `sports_priority` annotation and uses the same preference when ranking the final Fun candidates. It is not a required daily swimming/tennis slot. Tune `SPORTS_PRIORITY_LEVELS` and `SPORTS_PRIORITY_BONUS` in `pipeline/jev_rank.py` and the Fun ranking instruction in `pipeline/mega_curator.py`; compare real high/low examples before changing the bonus. If the raw Jev rank stage is disabled or unavailable, the curator still has the prose preference but no numeric bonus.
+
 ## Where to tune
 
 - Section definitions and 0.90 move threshold: `SECTION_CRITERIA`, `SECTION_INSTRUCTIONS`, `MIN_MOVE_CONFIDENCE` in `pipeline/editorial_routing.py`. Increase the threshold if false moves appear; use `JEV_ROUTE=shadow` to collect proposals without moving stories, or `off` for immediate rollback.

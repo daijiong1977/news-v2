@@ -91,7 +91,7 @@ CROSS_CAT_ORDER = ("Fun", "Science", "News")   # earlier category keeps a shared
 AUDIENCE = {
     "who": "Children aged 10 to 14 living in the United States, reading a daily news site made for them.",
     "they_choose": "Stories they can picture and retell: animals, space, dinosaurs and fossils, records and firsts, "
-                   "sport and athletes they follow, games, films and characters made for their age, "
+                   "major swimming and tennis results and athletes they follow, games, films and characters made for their age, "
                    "kids doing remarkable things, weird science.",
     "they_skip": "Stories that need adult background: legislative procedure, party finance, sanctions, markets, "
                  "product shopping advice, adult film and art criticism, and the local politics of other countries.",
@@ -112,6 +112,20 @@ WANT_LEVELS = [
     "The reader would pick it from a list of headlines",
     "The reader would tell a friend about it afterwards",
 ]
+SPORTS_PRIORITY_Q = (
+    "For a CURRENT Fun story, how significant is its NEW swimming or tennis development "
+    "to young fans? Score the actual new event, not just a famous name, an old match "
+    "recounted in a fresh interview, or a headline using the word 'record'. "
+    "Other sports and non-sports score 0."
+)
+SPORTS_PRIORITY_LEVELS = [
+    "Not a new swimming or tennis development",
+    "Routine swim or tennis item, recruitment, training, profile or old-event recap",
+    "Timely swim or tennis result or concrete update about a notable athlete",
+    "Major international meet or Grand Slam key round, national record, or major new star achievement",
+    "World record broken, Olympic/World Championship title, Grand Slam champion/final result, or comparable landmark",
+]
+SPORTS_PRIORITY_BONUS = {3: 0.10, 4: 0.18}  # modest, soft Fun ranking preference
 CATEGORY_FIT_Q = "Does this story belong in the named section?"
 CATEGORY_FIT_CRITERIA = {
     "true": "News=current affairs; Science=discoveries, nature, space, medicine, engineering or research; "
@@ -166,15 +180,21 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
         questions=q).answers
     pick, want = float(ans["pick"].noul), float(ans["want"].score)
     category_fit = float(ans["category_fit"].noul)
+    sports_priority = float(getattr(ans.get("sports_priority"), "score", 0) or 0)
     if not (math.isfinite(pick) and 0 <= pick <= 1
             and math.isfinite(want) and 0 <= want <= len(WANT_LEVELS) - 1
-            and math.isfinite(category_fit) and 0 <= category_fit <= 1):
+            and math.isfinite(category_fit) and 0 <= category_fit <= 1
+            and math.isfinite(sports_priority) and 0 <= sports_priority <= 4):
         raise ValueError(
             f"jev returned out-of-range answers: pick={pick} want={want} "
-            f"category_fit={category_fit}"
+            f"category_fit={category_fit} sports_priority={sports_priority}"
         )
+    priority_band = min(4, max(0, int(sports_priority + 0.5)))
+    bonus = SPORTS_PRIORITY_BONUS.get(priority_band, 0) if cat == "Fun" else 0
     return {"pick": round(pick, 3), "want": round(want, 2),
-            "category_fit": round(category_fit, 3)}
+            "category_fit": round(category_fit, 3),
+            "sports_priority": round(sports_priority, 2) if cat == "Fun" else 0,
+            "editorial_pick": round(min(1.0, pick + bonus), 3)}
 
 
 def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[dict]:
@@ -467,6 +487,9 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                 report["jev"] = f"IGNORED ({why})"
                 return None, report
         q_rank, q_story, q_both, q_event = _questions()
+        from typesafe_sdk import Score
+        q_fun = {**q_rank, "sports_priority": Score(
+            instructions=SPORTS_PRIORITY_Q, criteria=SPORTS_PRIORITY_LEVELS)}
         flat = [(cat, b) for cat, briefs in briefs_by_cat.items() for b in briefs]
         if not flat:
             report["jev"] = "IGNORED (no briefs)"
@@ -476,7 +499,8 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
         errors = 0
         ex = ThreadPoolExecutor(max_workers=WORKERS)
         try:
-            futs = {ex.submit(_score_one, client, q_rank, cat, b): b for cat, b in flat}
+            futs = {ex.submit(_score_one, client, q_fun if cat == "Fun" else q_rank, cat, b): b
+                    for cat, b in flat}
             try:
                 for fut in as_completed(futs, timeout=TIME_BUDGET_S):
                     try:
@@ -500,7 +524,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
         for cat in order:
             # An unscored brief (its call failed) ranks last rather than being lost.
             for b in briefs_by_cat[cat]:
-                b["_jev_pick"] = (scores.get(id(b)) or {}).get("pick", -1.0)
+                b["_jev_pick"] = (scores.get(id(b)) or {}).get("editorial_pick", -1.0)
                 b["_jev_category_fit"] = (scores.get(id(b)) or {}).get(
                     "category_fit", 1.0)
             ranked = sorted(briefs_by_cat[cat], key=lambda b: -b["_jev_pick"])
@@ -517,7 +541,9 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                 b["_jev_rank"] = {**(scores.get(id(b)) or {}), "pos": pos, "send": pos <= len(chosen),
                                   "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
             out[cat] = final
-            report["sent"][cat] = [{"pos": i, "pick": (scores.get(id(b)) or {}).get("pick"),
+            report["sent"][cat] = [{"pos": i, "pick": (scores.get(id(b)) or {}).get("editorial_pick"),
+                                    "raw_pick": (scores.get(id(b)) or {}).get("pick"),
+                                    "sports_priority": (scores.get(id(b)) or {}).get("sports_priority"),
                                     "source": b.get("_source_name"), "title": b.get("title")}
                                    for i, b in enumerate(chosen, start=1)]
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]

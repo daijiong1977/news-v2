@@ -58,6 +58,13 @@ ALGORITHM (internal, don't output intermediate work):
   3. PICK 5 PER CAT, RANKED:
      - Prefer high interest_peak (max of importance / fun / kid_appeal)
        AND low safety_total.
+     - In FUN, give strong preference to a FRESH major swimming or tennis
+       development: a world record, Olympics/World Championship title,
+       Grand Slam champion/final result, or a concrete new achievement by a
+       swimmer or tennis star. A famous name alone, a routine meet, college
+       recruitment, or a new interview about an old match is not equivalent.
+       This is a soft editorial preference, never a safety exception or a
+       required sports quota.
      - Prefer DIFFERENT topic clusters within a cat.
      - For EACH CATEGORY's top 3, prefer three different `editorial_topic` labels
        when qualified candidates allow it. This is a SOFT preference,
@@ -122,7 +129,10 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             src_name = (brief.get("_source_name") or "?")
             topic = topic_group(brief)
             topic_note = f" editorial_topic={topic}" if topic else ""
-            line = (f"  [id={cid}] src={src_name}{topic_note}\n"
+            sport_score = (brief.get("_jev_rank") or {}).get("sports_priority", 0)
+            sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
+                          else "")
+            line = (f"  [id={cid}] src={src_name}{topic_note}{sport_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)
