@@ -3,17 +3,12 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-27T12:58:43-04:00",
+  "updated_at": "2026-09-27T13:04:06-04:00",
   "branches": [
     {
       "name": "main",
       "purpose": "当前生产流水线；由合并后的 PR 更新。",
       "status": "production"
-    },
-    {
-      "name": "codex/project-atlas-handoff",
-      "purpose": "维护项目交接规则和随代码提交的 Atlas 状态报告；PR 合并前不影响生产流水线。",
-      "status": "review"
     }
   ],
   "deployments": [
@@ -94,7 +89,7 @@
     },
     {
       "path": "/Users/jiong/myprojects/news-v2-fun-source-pool",
-      "purpose": "news-v2 独立工作树；当前项目交接 PR #74 的工作目录。",
+      "purpose": "news-v2 项目交接 PR #74 使用过的独立工作树；不作为长期生产分支。",
       "location": "local"
     },
     {
@@ -148,6 +143,12 @@
       "date": "2026-09-27",
       "title": "项目代码来源与新闻内容来源必须分开登记",
       "note": "kids-news-website 一个项目下包含 news-v2 源码仓、kidsnews-v2 部署仓及各自本机 checkout；新闻 RSS/HTML 来源另在 Supabase 表中。历史 news、kidsnews、kidsnews-v2-snapshot 路径已不存在，不应登记为现用目录；旧项目保留 news-legacy、kidsnews-legacy 的稳定 ID。",
+      "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-27",
+      "title": "main 是唯一长期入口，旧分支不能盲目合并",
+      "note": "只有开放 PR #74 需要合并；其他远端历史分支即使未被 Git 识别为 main 的祖先，也不等于有待上线修复。逐一核对独有提交、PR 状态及工作树占用后再归档或删除。",
       "source_ref": "PROJECT-OPERATIONS.md"
     }
   ]

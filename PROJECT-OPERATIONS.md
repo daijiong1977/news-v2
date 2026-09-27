@@ -1,6 +1,6 @@
 # Kids News 项目地图与交接（2026-09-27）
 
-本文按本次核对的 Git 远端、工作树、工作流和代码记录**当前结构**。历史设计见 `docs/PROJECT-OVERVIEW.md`；其中仍有“kidsnews-v2 尚未创建”“30 分钟轮询”等过期描述，不能用来判断现在是否上线。运行数、来源表和分支会变化；下表的 SHA/数量是核对时的快照，不是永久配置。
+本文按本次核对的 Git 远端、工作树、工作流和代码记录项目结构。历史设计见 `docs/PROJECT-OVERVIEW.md`；其中仍有“kidsnews-v2 尚未创建”“30 分钟轮询”等过期描述，不能用来判断现在是否上线。运行数、来源表和分支会变化；下表的 SHA/数量、PR #74 未合并状态都是 **2026-09-27 合并前快照**，不是永久配置。长期工作入口只有 `main`；功能分支只是临时 PR 载体。
 
 项目清单的唯一现用归属是 Atlas/Brain ID **`kids-news-website`**。下文的“项目来源”指仓库和本机目录，**不是** Supabase 中供新闻采集用的 RSS/HTML 来源，也不是 AI Providers。两个 GitHub 仓库和它们的本机 checkout 应在同一项目下列出，但保留“源码”“部署同步”“历史工作树”的不同角色；不能把两个 Git 仓库合成一个仓库。
 
@@ -29,11 +29,11 @@
 | 分支 / 工作树 | 用途与状态 |
 | --- | --- |
 | `news-v2` 的 `origin/main` | 当前生产流水线代码；更改先走功能分支、测试、PR，再由获授权者合并。2026-09-27 核对 SHA `e44cdc9`，已包含新闻质量和邮件安全的已合并修复 |
-| `news-v2` 的 `codex/project-atlas-handoff` | 当前文档和 `.project-atlas/project-status.json` 交接工作；唯一查到的开放 PR 是 #74，未合并时不代表生产代码或生产文档已更新 |
+| `news-v2` 的 `codex/project-atlas-handoff` | 本次文档和 `.project-atlas/project-status.json` 交接使用的临时分支；合并前唯一开放 PR 是 #74，合并后不应继续作为日常工作入口 |
 | `kidsnews-v2` 的 `origin/main` | 部署仓的同步分支；远端只查到这一条分支，暂无开放 PR；同步 bot 的内容提交与 `news-v2` 的代码提交是不同 SHA |
 | 本机其他 `news-v2` checkout：`codex/science-fun-groups-routing`、`codex/cbc-news-source`、`codex/quality-digest-rca` | 历史/专项工作树。后两者的 HEAD 已是当前 `origin/main` 的祖先；`science-fun-groups-routing` 的 HEAD 不是祖先、也没有开放 PR。不能把本机分支名或“未合并祖先”直接解释为正在部署的功能 |
 
-`news-v2` 远端仍保留许多旧专题分支（本次列出 60 个远端引用），**分支存在、未被 Git 识别为 `main` 的祖先，都不等于正在开发或等待合并**。本次通过 GitHub PR 列表确认只有 #74 开放；每次交接先重查 `git fetch origin`、`git branch -r`、`gh pr list --state open` 和 `git worktree list`。避免在其他会话的脏工作树上提交或清理。不要直接 push 生产 `main`。
+`news-v2` 远端仍保留许多旧专题分支（合并前列出 60 个远端引用），**分支存在、未被 Git 识别为 `main` 的祖先，都不等于正在开发或等待合并**。合并前 GitHub PR 列表仅有 #74 开放；每次交接先重查 `git fetch origin`、`git branch -r`、`gh pr list --state open` 和 `git worktree list`。`main` 是唯一长期工作入口；历史分支只作归档标识，待逐一核对独有提交和工作树占用后才能删除，不能把它们无差别合入生产。避免在其他会话的脏工作树上提交或清理。不要直接 push 生产 `main`。
 
 ## 3. 当前算法：从来源到发布
 

@@ -3,6 +3,7 @@
 ## Production changes
 
 - `news-v2` is a live content pipeline. Make changes on a feature branch, run relevant checks, and create a pull request before merging into `main`. Do not push directly to `main` or merge without the user's approval or explicit exception.
+- `main` is the only long-lived working branch. Feature branches are temporary PR vehicles; after a PR is merged and its worktree is no longer needed, retire the branch/worktree safely. Never mass-merge or delete old branches based only on their names; first check open PRs, unique commits, and whether another task uses their worktree.
 - `kidsnews-v2` is the separate website deployment repository. A successful pipeline or report API call does not by itself prove that the public site has updated.
 
 ## Project Atlas report after every project change
