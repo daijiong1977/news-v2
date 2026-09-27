@@ -1123,6 +1123,12 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
 # quality_digest.BODY_TARGETS — those QA gates generate the
 # body_too_short / body_too_long tickets the morning after.
 WC_BANDS = {"easy": (140, 270), "middle": (300, 410)}
+WC_QA_SLACK = 0.15  # Same tolerance used by the post-publication digest.
+
+
+def _wc_within_qa(level: str, count: int) -> bool:
+    lo, hi = WC_BANDS[level]
+    return lo * (1 - WC_QA_SLACK) <= count <= hi * (1 + WC_QA_SLACK)
 
 
 def _wordcount_flags(art: dict) -> list[str]:
@@ -1197,8 +1203,8 @@ def repair_wordcounts(rewrite_result: dict,
                       sources_by_id: dict | None = None) -> int:
     """One targeted repair call per body outside WC_BANDS, mutating the
     rewrite in place. ONE attempt per variant (project regen policy);
-    the repaired text is applied only when it lands inside the band, so
-    a failed repair degrades to the old behavior (flag + digest ticket).
+    the repaired text is applied only when it clears the published-content
+    QA tolerance; failures are rejected by filter_safe_rewrites.
     Runs BEFORE the independent safety vet so the vet scores the text
     that ships. Returns the number of bodies repaired.
 
@@ -1228,7 +1234,7 @@ def repair_wordcounts(rewrite_result: dict,
                 continue
             new_body = ((res or {}).get("body") or "").strip()
             new_wc = len(new_body.split())
-            if new_body and lo <= new_wc <= hi:
+            if new_body and _wc_within_qa(level, new_wc):
                 var["body"] = new_body
                 fixed += 1
                 log.info("  wc-repair [%s/%s]: %dw → %dw (band %d-%d)",
@@ -1255,8 +1261,8 @@ def filter_safe_rewrites(
          body-only self-harm mention passed every gate).
       3. The existing strict any_dim>=3 threshold on the winning scores.
 
-    Also annotates `_wc_flags` when a body falls outside the QA word bands —
-    surfacing at generation time what quality_digest would ticket tomorrow.
+    Rejects bodies outside the digest's QA tolerance after repair, instead
+    of publishing a known defect. The caller may try a safe spare.
     Returns articles annotated with `_safety_eval`.
     Bug: docs/bugs/2026-07-08-safety-quality.md"""
     from .forbidden_filter import is_forbidden
@@ -1309,7 +1315,15 @@ def filter_safe_rewrites(
         else:
             ev = evaluate_rewriter_safety(art)
 
-        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags}
+        qa_flags = []
+        for level in WC_BANDS:
+            wc = len(((art.get(f"{level}_en") or {}).get("body") or "").split())
+            if not _wc_within_qa(level, wc):
+                qa_flags.append(f"{level}: {wc}w outside digest tolerance")
+        if qa_flags and ev["verdict"] == "PASS":
+            ev = {**ev, "verdict": "REJECT", "reason": "word-count QA: " + "; ".join(qa_flags)}
+        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags,
+               "_wc_qa_flags": qa_flags}
         if ev["verdict"] == "PASS":
             kept.append(ann)
         else:

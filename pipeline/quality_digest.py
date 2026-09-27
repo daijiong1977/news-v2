@@ -926,7 +926,8 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
                 issue_lines.append(
                     f'<li><strong>{d["date"]} · {cat.upper()}</strong>: '
                     f'only {block["distinct_source_count"]}/3 distinct sources. '
-                    '<em>Fix:</em> add more sources to this category in admin → Sources, or rerun pipeline.</li>'
+                    '<em>Check:</em> review eligible candidates and Stage-3 safety results; '
+                    'a third source is used only when its article passes all gates.</li>'
                 )
             for story in block["stories"]:
                 for level in LEVELS:
@@ -945,7 +946,7 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
                     fixes: list[str] = []
                     if not m.get("body_ok"):
                         issues.append(f'body {m["body_wc"]} words (target {m["body_target"]})')
-                        fixes.append('🛠️ Fix on the panel will re-rewrite body to fit')
+                        fixes.append('🛠️ Fix will apply only after length and independent safety checks')
                     if not m.get("summary_ok"):
                         issues.append(f'summary {m["summary_wc"]} words (target {m["summary_target"]})')
                         fixes.append('listing-summary trim runs automatically next pipeline')

@@ -38,6 +38,15 @@ def test_keeps_original_when_repair_still_out_of_band(monkeypatch):
     assert len(rr["articles"][0]["middle_en"]["body"].split()) == 724
 
 
+def test_accepts_repair_inside_digest_tolerance(monkeypatch):
+    """A 285-word repair is below the ideal band but clears the ±15% QA gate."""
+    monkeypatch.setattr(core, "deepseek_call",
+                        lambda *a, **k: {"body": " ".join(["x"] * 285)})
+    rr = {"articles": [_art(250, 203)]}
+    assert core.repair_wordcounts(rr) == 1
+    assert len(rr["articles"][0]["middle_en"]["body"].split()) == 285
+
+
 def test_keeps_original_when_call_raises(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("transport down")

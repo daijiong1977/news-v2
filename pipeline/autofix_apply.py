@@ -7,8 +7,8 @@ just call DeepSeek (text shape transforms) or the og:image extractor
 needed.
 
 Per the project policy:
-  body_too_long / body_too_short  → ONE DeepSeek regen attempt, accept
-                                    whatever comes back, log final wc
+  body_too_long / body_too_short  → ONE DeepSeek regen attempt; require
+                                    the QA band and independent safety vet
   keyword_miss                    → ONE DeepSeek attempt: weave the
                                     keyword OR drop it if it's a junk
                                     artifact
@@ -39,7 +39,7 @@ from typing import Any
 from urllib import error, request
 
 from pipeline.quality_digest import (
-    BODY_TARGETS, WC_SLACK, _fetch_json, _word_count,
+    BODY_TARGETS, WC_SLACK, _fetch_json, _word_count, _keyword_in_body,
 )
 from pipeline.feedback_triage import _deepseek_call
 
@@ -118,7 +118,7 @@ Hard rules:
 
 
 def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
-              direction: str) -> tuple[bool, str, dict]:
+              direction: str, source_body: str = "") -> tuple[bool, str, dict]:
     """One DeepSeek attempt to rewrite payload['summary'] (the body) into
     the target range. Returns (ok, summary_msg, detail)."""
     body = payload.get("summary") or ""
@@ -137,6 +137,11 @@ def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
         + "\n".join(f"- {k}" for k in keyword_terms) + "\n\n"
         f"Original body:\n{body}\n"
     )
+    if direction == "short":
+        if not source_body:
+            return (False, "source article unavailable for safe expansion", {})
+        user_prompt += ("\nSOURCE ARTICLE — add only concrete details found here:\n"
+                        + " ".join(source_body.split()[:1200]))
     try:
         out = _deepseek_call(_BODY_REWRITE_SYSTEM, user_prompt, max_tokens=1400)
     except Exception as e:
@@ -146,14 +151,49 @@ def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
     if not new_body:
         return (False, "DeepSeek returned empty body", {"raw": str(out)[:200]})
 
-    # Soft check — even if it's still off, we accept (per policy).
     new_wc = _word_count(new_body)
+    in_target = target_lo * (1 - WC_SLACK) <= new_wc <= target_hi * (1 + WC_SLACK)
+    if not in_target:
+        return (False, f"rewrite still outside QA band: {new_wc} words",
+                {"wc_before": _word_count(body), "wc_after": new_wc,
+                 "in_target": False})
+    if not all(_keyword_in_body(k, new_body) for k in keyword_terms):
+        return (False, "rewrite dropped a required keyword", {"wc_after": new_wc})
     payload["summary"] = new_body
     return (True,
             f"body rewritten: {_word_count(body)} → {new_wc} words "
             f"(target {target_lo}-{target_hi})",
             {"wc_before": _word_count(body), "wc_after": new_wc,
-             "in_target": target_lo * (1 - WC_SLACK) <= new_wc <= target_hi * (1 + WC_SLACK)})
+             "in_target": True})
+
+
+def _safe_rewrite_for_storage(date_iso: str, sid: str, level: str,
+                              new_body: str) -> tuple[bool, str]:
+    """Fail closed: published-body edits get a NEW independent full-text vet."""
+    from pipeline.forbidden_filter import is_forbidden
+    from pipeline.news_rss_core import independent_safety_vet, evaluate_rewriter_safety
+
+    bad, pattern = is_forbidden(new_body)
+    if bad:
+        return False, f"forbidden term in revised body: {pattern}"
+    other_level = "easy" if level == "middle" else "middle"
+    other_url, _ = _payload_url(date_iso, sid, other_level)
+    other = _fetch_json(other_url)
+    if not other or not (other.get("summary") or "").strip():
+        return False, "counterpart article unavailable for independent safety review"
+    bodies = {level: new_body, other_level: other["summary"]}
+    try:
+        scored = independent_safety_vet([{
+            "source_id": 0,
+            "easy_en": {"body": bodies["easy"]},
+            "middle_en": {"body": bodies["middle"]},
+        }])
+    except Exception as exc:  # noqa: BLE001
+        return False, f"independent safety review failed: {exc}"
+    if 0 not in scored:
+        return False, "independent safety review returned no valid verdict"
+    verdict = evaluate_rewriter_safety({"safety": scored[0]})
+    return verdict["verdict"] == "PASS", verdict["reason"]
 
 
 _KEYWORD_FIX_SYSTEM = """You fix keyword-coverage issues in kid news article bodies.
@@ -194,6 +234,10 @@ def _fix_keyword(payload: dict, missed: list[str]) -> tuple[bool, str, dict]:
         new_body = (out.get("body") or "").strip()
         if not new_body:
             return (False, "weave returned empty body", {})
+        required = [(k.get("term") if isinstance(k, dict) else str(k))
+                    for k in (payload.get("keywords") or [])]
+        if not all(_keyword_in_body(term, new_body) for term in required if term):
+            return (False, "weave output still misses a required keyword", {})
         payload["summary"] = new_body
         return (True, f"wove {len(missed)} keyword(s) into body",
                 {"action": "weave", "wc_after": _word_count(new_body)})
@@ -208,6 +252,8 @@ def _fix_keyword(payload: dict, missed: list[str]) -> tuple[bool, str, dict]:
             else:
                 kept.append(k)
         payload["keywords"] = kept
+        if not removed:
+            return (False, "drop output did not match any keyword", {})
         return (True, f"dropped {len(removed)} junk keyword(s): {removed}",
                 {"action": "drop", "removed": removed})
     return (False, f"unrecognised action: {action!r}", {"raw": str(out)[:200]})
@@ -313,9 +359,19 @@ def process_row(row: dict, dry_run: bool) -> dict:
             return _escalate(row, f"unknown level {level!r}", {})
         lo, hi = BODY_TARGETS[level]
         direction = "long" if ptype == "body_too_long" else "short"
-        ok, msg, det = _fix_body(payload, level, lo, hi, direction)
+        source_body = ""
+        if direction == "short":
+            from pipeline.news_rss_core import process_entry
+            source_url = payload.get("source_url") or ""
+            if source_url:
+                source_body = process_entry({"link": source_url}, min_words=0).get("body") or ""
+        ok, msg, det = _fix_body(payload, level, lo, hi, direction, source_body)
         if not ok:
             return _escalate(row, msg, det)
+        safe, reason = _safe_rewrite_for_storage(pdate, sid, level, payload["summary"])
+        if not safe:
+            return _escalate(row, f"revised body failed safety gate: {reason}", det)
+        det["independent_safety_review"] = reason
         if not _upload_payload_json(pdate, sub_path, payload):
             return _escalate(row, "Storage upload failed after rewrite",
                              {"sub_path": sub_path, **det})
@@ -328,6 +384,15 @@ def process_row(row: dict, dry_run: bool) -> dict:
         ok, msg, det = _fix_keyword(payload, missed)
         if not ok:
             return _escalate(row, msg, det)
+        if det.get("action") == "weave":
+            lo, hi = BODY_TARGETS[level]
+            wc = _word_count(payload["summary"])
+            if not lo * (1 - WC_SLACK) <= wc <= hi * (1 + WC_SLACK):
+                return _escalate(row, f"keyword rewrite outside QA band: {wc} words", det)
+            safe, reason = _safe_rewrite_for_storage(pdate, sid, level, payload["summary"])
+            if not safe:
+                return _escalate(row, f"keyword rewrite failed safety gate: {reason}", det)
+            det["independent_safety_review"] = reason
         if not _upload_payload_json(pdate, sub_path, payload):
             return _escalate(row, "Storage upload failed after keyword fix",
                              {"sub_path": sub_path, **det})

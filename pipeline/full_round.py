@@ -1004,6 +1004,28 @@ def _split_publishable(final_stories_by_cat: dict,
     return ok, thin
 
 
+def _prefer_final_source_diversity(
+    winners: list[dict], articles: list[dict], limit: int = 3,
+) -> tuple[list[dict], list[dict]]:
+    """Keep the safest ranked order while filling the first three with unique sources.
+
+    Stage 3 can reject a diverse pick and expose a duplicate source at rank 4.
+    Reorder only already-vetted, already-verified articles; never manufacture
+    diversity by bypassing the safety or category-fit gates.
+    """
+    paired = list(zip(winners, articles))
+    chosen: list[tuple[dict, dict]] = []
+    seen: set[str] = set()
+    for pair in paired:
+        name = (pair[0].get("source") and pair[0]["source"].name) or ""
+        if name and name not in seen and len(chosen) < limit:
+            chosen.append(pair)
+            seen.add(name)
+    chosen_ids = {id(pair[0]) for pair in chosen}
+    ordered = chosen + [pair for pair in paired if id(pair[0]) not in chosen_ids]
+    return [p[0] for p in ordered], [p[1] for p in ordered]
+
+
 def promote_spare_and_rewrite(
     cat: str,
     spares: list[dict],
@@ -1012,6 +1034,7 @@ def promote_spare_and_rewrite(
     used_briefs: list[dict] | None = None,
     used_event_groups: set[str] | None = None,
     used_topic_groups: set[str] | None = None,
+    require_new_source: bool = False,
 ) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
@@ -1096,6 +1119,8 @@ def promote_spare_and_rewrite(
         return int(repeats_topic), int(src_name in used)
 
     for spare in sorted(spares, key=_priority):
+        if require_new_source and ((spare.get("source") and spare["source"].name) or "") in used:
+            continue
         spares.pop(next(i for i, candidate in enumerate(spares) if candidate is spare))
         story, art = _try_one(spare)
         if story is not None:
@@ -2258,6 +2283,31 @@ def main_mega() -> None:
 
             _drain(spare_pool)
 
+            # A safety rejection can leave three publishable stories but only
+            # two sources. The ordinary refill runs only when the story count
+            # is short, so try a *new-source* spare here as well. This is a
+            # preference, not a license to ship an unvetted or wrong-section
+            # article merely to satisfy the digest's 3/3 source metric.
+            if len(survived_winners) >= 3 and len({
+                w["source"].name for w in survived_winners if w.get("source")
+            }) < 3 and spare_pool:
+                used_names = {w["source"].name for w in survived_winners if w.get("source")}
+                used_briefs = [w.get("_brief") or w.get("_winner_brief")
+                               or w.get("winner") or {} for w in survived_winners]
+                from .news_topics import topic_group
+                pw, pa = promote_spare_and_rewrite(
+                    cat, spare_pool, used_source_names=used_names,
+                    used_briefs=used_briefs,
+                    used_event_groups={(b.get("_event_group") or "").strip()
+                                       for b in used_briefs if b.get("_event_group")},
+                    used_topic_groups={topic_group(b) for b in used_briefs if topic_group(b)},
+                    require_new_source=True,
+                )
+                if pw:
+                    survived_winners.append(pw)
+                    survived_articles.append(pa)
+                    promotions += 1
+
             # Still short? Dig DEEPER into today's same sources (items
             # 5..15 of each feed) BEFORE falling back to yesterday's
             # carry-over at pack time. Fresh same-day content is preferred.
@@ -2286,8 +2336,16 @@ def main_mega() -> None:
                     _drain(dig_pool)
                     dug = len(survived_winners) - before
 
+            survived_winners, survived_articles = _prefer_final_source_diversity(
+                survived_winners, survived_articles)
             final_stories[cat] = survived_winners[:3]
             final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+            if len(final_stories[cat]) >= 3:
+                unique_sources = len({w["source"].name for w in final_stories[cat]
+                                      if w.get("source")})
+                if unique_sources < 3:
+                    telemetry["warnings"].append(
+                        f"{cat}: only {unique_sources}/3 distinct safe sources available")
             for w in final_stories[cat]:
                 name = w["source"].name if w.get("source") else "?"
                 cs.setdefault(name, {"shipped": 0, "safety_rejected": 0})["shipped"] += 1
