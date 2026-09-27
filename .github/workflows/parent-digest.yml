@@ -41,6 +41,7 @@ jobs:
         env:
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           FN_TOKEN:    ${{ secrets.SUPABASE_FUNCTION_TOKEN }}
+          SEND_EMAIL_SECRET: ${{ secrets.SEND_EMAIL_SECRET }}
         run: |
           if [ -z "${PROJECT_REF}" ] || [ -z "${FN_TOKEN}" ]; then
             echo "::warning::SUPABASE_PROJECT_REF or SUPABASE_FUNCTION_TOKEN not set — skipping (no-op)."
@@ -52,6 +53,7 @@ jobs:
           STATUS=$(curl -s -o /tmp/digest_out.json -w "%{http_code}" \
             -X POST "${URL}" \
             -H "Authorization: Bearer ${FN_TOKEN}" \
+            -H "x-internal-secret: ${SEND_EMAIL_SECRET}" \
             -H "Content-Type: application/json" \
             -d '{"force":"${{ github.event.inputs.force }}"}')
           echo "HTTP ${STATUS}"

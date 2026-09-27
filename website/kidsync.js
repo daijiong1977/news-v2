@@ -359,8 +359,8 @@
     },
 
     // ── Magic link via email ───────────────────────────────────────
-    // Kid (or parent) types any email; we ask the server for a token,
-    // then post the link to send-email-v2. Returns true on success.
+    // Kid (or parent) types an email. The server issues and mails the token;
+    // the browser never receives it or controls the message body/recipient.
     requestMagicLink: function (email) {
       var to = (email || '').trim().toLowerCase();
       if (!to || to.indexOf('@') < 1) {
@@ -371,41 +371,16 @@
         // Pass THIS device's client_id so the email binds to the device that
         // holds the reading history — not whatever device taps the link (often
         // an empty phone). See docs/bugs/2026-07-08-magic-link-binds-clicking-device.md
-        return sb.rpc('issue_magic_link', { p_email: to, p_client_id: clientId() || null }).then(function (res) {
-          if (res && res.error) throw new Error(res.error.message);
-          var token = res && res.data;
-          if (!token) throw new Error('No token returned.');
-          var link = window.location.origin + window.location.pathname + '?magic=' + encodeURIComponent(token);
-          var html = '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#fff9ef;padding:24px;color:#1b1230;">'
-            + '<h2 style="font-family:Georgia,serif;margin:0 0 12px;font-weight:900;">Sign in to kidsnews</h2>'
-            + '<p style="font-size:14px;color:#3a2a4a;line-height:1.5;">'
-            + 'Tap the button below to sync your reading streak to this email. After this, you can come back from any browser.'
-            + '</p>'
-            + '<div style="margin:18px 0;"><a href="' + link + '" '
-            + 'style="display:inline-block;background:#1b1230;color:#ffc83d;font-family:Nunito,sans-serif;font-weight:900;'
-            + 'font-size:15px;padding:14px 22px;border-radius:14px;text-decoration:none;border:2px solid #1b1230;">'
-            + '✨ Sync this email to kidsnews</a></div>'
-            + '<p style="font-size:12px;color:#9a8d7a;line-height:1.5;">'
-            + 'This link is single-use and expires in 30 minutes. If you didn\'t ask for this, ignore this email.'
-            + '</p></div>';
-          var text = 'Sign in to kidsnews\n\nTap to sync this email to your reading streak:\n' + link
-            + '\n\n(Single-use, expires in 30 minutes. Ignore if you didn\'t ask for this.)';
-          return fetch(SUPABASE_URL + '/functions/v1/send-email-v2', {
+        return fetch(SUPABASE_URL + '/functions/v1/request-magic-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to_email: to,
-              subject: 'Your kidsnews sign-in link',
-              html: html, message: text,
-              from_name: 'kidsnews',
-            }),
+            body: JSON.stringify({ email: to, client_id: clientId() || null }),
           }).then(function (r) {
             return r.json().then(function (data) {
               if (data && data.success) return true;
-              throw new Error((data && data.error) || ('send-email-v2 ' + r.status));
+              throw new Error((data && data.error) || ('Could not send sign-in link (' + r.status + ')'));
             });
           });
-        });
       });
     },
 

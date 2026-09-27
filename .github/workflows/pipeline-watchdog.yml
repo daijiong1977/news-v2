@@ -33,6 +33,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      SEND_EMAIL_SECRET: ${{ secrets.SEND_EMAIL_SECRET }}
       UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
       UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
       UPSTREAM_HTML_URL: ${{ github.event.workflow_run.html_url }}
@@ -89,6 +90,7 @@ jobs:
               echo "→ sending to $to"
               curl -fsS -X POST "$SUPABASE_URL/functions/v1/send-email-v2" \
                 -H "Content-Type: application/json" \
+                -H "x-internal-secret: $SEND_EMAIL_SECRET" \
                 -d "$(python3 -c "import json,sys,os; print(json.dumps({'to_email': '$to', 'subject': '$SUBJECT', 'html': '''$HTML''', 'from_name': 'Kids News Pipeline'}))")" \
                 || echo "::warning::email to $to failed"
           done
