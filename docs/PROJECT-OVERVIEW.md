@@ -1,6 +1,8 @@
-# Kids News (news-v2) — 全项目设计文档
+# Kids News (news-v2) — 历史设计文档
 
-> **目的**：让任何人（包括没有此 session 上下文的 Claude / 未来的你）一份文档读完就能完整理解这个项目：怎么跑、出问题怎么修、bug 系统怎么用。本文档是 source of truth；session 丢了不影响。
+> 当前仓库、工作树、分支、部署链与 2026-09-27 选稿规则以根目录 [`PROJECT-OPERATIONS.md`](../PROJECT-OPERATIONS.md) 为准。本文仍保留早期设计背景，其中的“source of truth”、来源数、轮询时间和部分部署说明已经过时，不应作为当前运行依据。
+
+> **目的**：保留早期全项目设计与问题处理背景。当前生产结构和规则请先看根目录 `PROJECT-OPERATIONS.md`，再从代码与运行日志核实。
 >
 > **最后更新**：2026-04-29
 > **状态**：v1.0 — 项目主要功能上线，feedback + autofix 闭环工作
