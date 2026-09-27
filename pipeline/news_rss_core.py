@@ -1143,6 +1143,17 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
 # quality_digest.BODY_TARGETS — those QA gates generate the
 # body_too_short / body_too_long tickets the morning after.
 WC_BANDS = {"easy": (140, 270), "middle": (300, 410)}
+WC_QA_SLACK = 0.15  # Same tolerance used by the post-publication digest.
+
+
+def _wc_within_qa(level: str, count: int) -> bool:
+    lo, hi = WC_BANDS[level]
+    return lo * (1 - WC_QA_SLACK) <= count <= hi * (1 + WC_QA_SLACK)
+
+
+def _wc_distance(count: int, lo: int, hi: int) -> int:
+    """Distance to the ideal band; zero means the draft is on target."""
+    return max(lo - count, count - hi, 0)
 
 
 def _wordcount_flags(art: dict) -> list[str]:
@@ -1160,61 +1171,160 @@ def _wordcount_flags(art: dict) -> list[str]:
 # QA band that _wordcount_flags / quality_digest enforce.
 WC_REPAIR_TARGETS = {"easy": (150, 250), "middle": (320, 380)}
 
-WC_REPAIR_PROMPT = """You are a precise editor for a kids news site. You get ONE article
-body that is outside its required word band. Rewrite it to fit the band
-EXACTLY — count words before returning. Keep the same facts, names,
-numbers, and quotes, the kid-reporter voice, and the hook opening.
-Too long → cut padding and merge repetitive sentences. Too short →
-expand only with details already present in the text. NEVER invent.
+WC_REPAIR_PROMPT = """You are a precise copy editor for a kids news site. You receive ONE
+article body whose length is outside the required band, and you rewrite
+it to hit the target length.
 
-Return ONLY valid JSON (no markdown fences): {"body": "..."}"""
+HARD RULES:
+  · Return a body inside the stated word range. Count the words before
+    you answer.
+  · The input is ALREADY out of band, so returning it unchanged is a
+    failure — the length MUST change.
+  · Keep every fact you RETAIN accurate. You may omit secondary facts,
+    names, numbers, quotes, and whole paragraphs when shortening; the
+    central news event and essential context must remain. Never invent.
+    When expanding, take extra concrete details ONLY from the SOURCE
+    ARTICLE section below.
+  · Keep the kid-reporter voice and the hook opening. Do not add a
+    headline, preamble, or commentary about your edit.
+
+Return ONLY valid JSON (no markdown fences): {"body": "<rewritten body>"}"""
+
+WC_REPAIR_REWRITE_PROMPT = """You are a kids-news editor writing a NEW, concise
+version of an overlong article. This is not a line edit: select only the
+central event, the essential explanation, and why it matters. Discard
+secondary examples, tangents, repeated background, and extra quotations.
+You may omit facts but must not change or invent any fact you retain.
+Write complete, engaging paragraphs for ages 12-14. Count the words.
+Return ONLY valid JSON: {"body": "<new concise article>"}"""
 
 
-def repair_wordcounts(rewrite_result: dict) -> int:
-    """One targeted repair call per body outside WC_BANDS, mutating the
-    rewrite in place. ONE attempt per variant (project regen policy);
-    the repaired text is applied only when it lands inside the band, so
-    a failed repair degrades to the old behavior (flag + digest ticket).
+def _wc_repair_user_msg(level: str, body: str, wc: int,
+                        band: tuple[int, int], target: tuple[int, int],
+                        source_body: str = "") -> str:
+    """Shrink and expand are different jobs and need different framing.
+
+    The first version of this pass used one generic message telling the
+    model to expand "with details already present in the text" — which
+    is impossible, so it echoed the input back verbatim (5 of 7 misses
+    in verification run 34927289853 were too-SHORT bodies returned at
+    exactly their original length). Expansion needs the SOURCE article
+    as raw material."""
+    lo, hi = band
+    t_lo, t_hi = target
+    reader = ("a 10-year-old (grade 4)" if level == "easy"
+              else "a middle schooler (grade 7-8)")
+    head = f"Reader: {reader}.\n"
+    if wc > hi:
+        minimum_cut = max(1, wc - t_hi)
+        return (f"{head}TASK: SHORTEN this body from {wc} words to "
+                f"{t_lo}-{t_hi} words (hard maximum {hi}).\n"
+                f"REMOVE AT LEAST {minimum_cut} words. Delete whole secondary "
+                "sentences or paragraphs, not just adjectives. Keep the hook, "
+                "main event and essential explanation. Secondary examples, "
+                "background details and quotes may be omitted entirely. "
+                "Never cut mid-thought or add facts.\n\n"
+                f"BODY TO SHORTEN ({wc} words):\n{body}")
+    msg = (f"{head}TASK: EXPAND this body from {wc} words to "
+           f"{t_lo}-{t_hi} words (hard minimum {lo}).\n"
+           "Add concrete details, names, numbers, or a short quote taken "
+           "from the\nSOURCE ARTICLE below. Do not pad with filler and do "
+           "not restate what\nthe body already says.\n\n"
+           f"BODY TO EXPAND ({wc} words):\n{body}")
+    if source_body:
+        excerpt = " ".join(source_body.split()[:1200])
+        msg += ("\n\nSOURCE ARTICLE (take the extra details from here; "
+                f"never invent):\n{excerpt}")
+    return msg
+
+
+def repair_wordcounts(rewrite_result: dict,
+                      sources_by_id: dict | None = None) -> int:
+    """Up to two targeted DeepSeek edits per out-of-band body.
+
+    The second call runs only when the first still misses the ideal band.
+    It receives the actual failed word count and edits from the ORIGINAL
+    body/source, not from an unverified draft. The best candidate within
+    the published-content QA tolerance is applied; failures are rejected
+    by filter_safe_rewrites.
     Runs BEFORE the independent safety vet so the vet scores the text
     that ships. Returns the number of bodies repaired.
+
+    `sources_by_id` maps source_id → the original source article dict;
+    its `body` is handed to the model when a variant needs EXPANDING.
     Bug: docs/bugs/2026-09-15-middle-body-wordcount-repair.md"""
     fixed = 0
+    sources_by_id = sources_by_id or {}
     for art in rewrite_result.get("articles") or []:
+        src = sources_by_id.get(art.get("source_id")) or {}
+        source_body = (src.get("body") or "") if isinstance(src, dict) else ""
         for level, (lo, hi) in WC_BANDS.items():
             var = art.get(f"{level}_en") or {}
             body = var.get("body") or ""
             wc = len(body.split())
             if not wc or lo <= wc <= hi:
                 continue
-            t_lo, t_hi = WC_REPAIR_TARGETS[level]
-            reader = ("a 10-year-old (grade 4)" if level == "easy"
-                      else "a middle schooler (grade 7-8)")
-            user = (f"Reader: {reader}.\n"
-                    f"Required band: {t_lo}-{t_hi} words (hard limits "
-                    f"{lo}-{hi}). Current length: {wc} words.\n\n"
-                    f"Article body:\n{body}")
-            try:
-                res = deepseek_call(WC_REPAIR_PROMPT, user,
-                                    max_tokens=2000, temperature=0.3)
-            except Exception as e:  # noqa: BLE001
-                log.warning("  wc-repair [%s/%s]: call failed (%s) — keeping original",
-                            art.get("source_id"), level, e)
-                continue
-            new_body = ((res or {}).get("body") or "").strip()
-            new_wc = len(new_body.split())
-            if new_body and lo <= new_wc <= hi:
-                var["body"] = new_body
+            base_user = _wc_repair_user_msg(
+                level, body, wc, (lo, hi), WC_REPAIR_TARGETS[level],
+                source_body)
+            best_body = body if _wc_within_qa(level, wc) else ""
+            best_wc = wc if best_body else 0
+            last_wc: int | None = None
+            for attempt in (1, 2):
+                user = base_user
+                system = WC_REPAIR_PROMPT
+                if attempt == 2:
+                    previous = (f"{last_wc} words" if last_wc is not None
+                                else "no valid body")
+                    user = (f"RETRY: the first edit produced {previous}; it did not "
+                            f"meet the ideal {lo}-{hi}-word band. Start from the "
+                            f"original body below. Aim near the middle of "
+                            f"{WC_REPAIR_TARGETS[level][0]}-"
+                            f"{WC_REPAIR_TARGETS[level][1]} words. Count before "
+                            f"answering.\n\n{base_user}")
+                    if wc > hi:
+                        system = WC_REPAIR_REWRITE_PROMPT
+                        user = (f"The previous edit was {previous}, still too long. "
+                                f"Write a NEW {WC_REPAIR_TARGETS[level][0]}-"
+                                f"{WC_REPAIR_TARGETS[level][1]}-word article "
+                                f"from the original below. Omit at least "
+                                f"{max(1, wc - WC_REPAIR_TARGETS[level][1])} "
+                                f"words worth of secondary details; do not "
+                                f"follow its paragraph structure sentence by "
+                                f"sentence.\n\nORIGINAL BODY:\n{body}")
+                try:
+                    res = deepseek_call(system, user,
+                                        max_tokens=2000, temperature=0.3)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("  wc-repair [%s/%s] attempt %d failed (%s)",
+                                art.get("source_id"), level, attempt, e)
+                    continue
+                new_body = ((res or {}).get("body") or "").strip()
+                last_wc = len(new_body.split())
+                if new_body and _wc_within_qa(level, last_wc):
+                    if not best_body or _wc_distance(last_wc, lo, hi) < _wc_distance(best_wc, lo, hi):
+                        best_body, best_wc = new_body, last_wc
+                if new_body and lo <= last_wc <= hi:
+                    break
+                log.warning("  wc-repair [%s/%s] attempt %d returned %dw "
+                            "(ideal %d-%d, QA ±15%%)",
+                            art.get("source_id"), level, attempt, last_wc, lo, hi)
+            if best_body and best_body != body:
+                var["body"] = best_body
                 fixed += 1
                 log.info("  wc-repair [%s/%s]: %dw → %dw (band %d-%d)",
-                         art.get("source_id"), level, wc, new_wc, lo, hi)
-            else:
-                log.warning("  wc-repair [%s/%s]: repair returned %dw, "
-                            "still outside %d-%d — keeping original %dw",
-                            art.get("source_id"), level, new_wc, lo, hi, wc)
+                         art.get("source_id"), level, wc, best_wc, lo, hi)
+            elif not best_body:
+                log.warning("  wc-repair [%s/%s]: no QA-safe length after two edits; "
+                            "keeping original %dw for Stage-3 rejection",
+                            art.get("source_id"), level, wc)
     return fixed
 
 
-def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
+def filter_safe_rewrites(
+    rewrite_result: dict,
+    sources_by_id: dict | None = None,
+) -> tuple[list[dict], list[dict]]:
     """Split rewriter articles into (kept, rejected) by Stage 3 safety.
 
     Gates per article, in order:
@@ -1226,8 +1336,8 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
          body-only self-harm mention passed every gate).
       3. The existing strict any_dim>=3 threshold on the winning scores.
 
-    Also annotates `_wc_flags` when a body falls outside the QA word bands —
-    surfacing at generation time what quality_digest would ticket tomorrow.
+    Rejects bodies outside the digest's QA tolerance after repair, instead
+    of publishing a known defect. The caller may try a safe spare.
     Returns articles annotated with `_safety_eval`.
     Bug: docs/bugs/2026-07-08-safety-quality.md"""
     from .forbidden_filter import is_forbidden
@@ -1238,7 +1348,7 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
     # that actually ships. The rewriter prompt's hard caps are advisory to
     # the model; this pass is the deterministic enforcement.
     try:
-        repair_wordcounts(rewrite_result)
+        repair_wordcounts(rewrite_result, sources_by_id)
     except Exception as e:  # noqa: BLE001
         log.warning("  Stage 3: wc-repair pass failed (%s) — continuing", e)
 
@@ -1280,7 +1390,15 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
         else:
             ev = evaluate_rewriter_safety(art)
 
-        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags}
+        qa_flags = []
+        for level in WC_BANDS:
+            wc = len(((art.get(f"{level}_en") or {}).get("body") or "").split())
+            if not _wc_within_qa(level, wc):
+                qa_flags.append(f"{level}: {wc}w outside digest tolerance")
+        if qa_flags and ev["verdict"] == "PASS":
+            ev = {**ev, "verdict": "REJECT", "reason": "word-count QA: " + "; ".join(qa_flags)}
+        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags,
+               "_wc_qa_flags": qa_flags}
         if ev["verdict"] == "PASS":
             kept.append(ann)
         else:

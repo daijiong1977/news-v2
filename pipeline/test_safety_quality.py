@@ -113,7 +113,8 @@ def test_forbidden_term_in_rewritten_body_rejects():
     assert "forbidden" in rejected[0]["_safety_eval"]["reason"].lower()
 
 
-def test_wordcount_flags_annotated():
+def test_wordcount_flags_annotated(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
     short_easy = _article(sid=0, easy_words=core.WC_BANDS["easy"][0] - 20)
     kept, _ = _with_fake_vet(
         _clean_scores(0),
@@ -131,13 +132,27 @@ def test_wordcount_flags_annotated():
     assert not (kept2[0].get("_wc_flags") or [])
 
 
+def test_outside_digest_tolerance_rejected_after_failed_repair(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
+    art = _article(sid=0, middle_words=203)
+    kept, rejected = _with_fake_vet(
+        _clean_scores(0),
+        lambda: core.filter_safe_rewrites({"articles": [art]}),
+    )
+    assert not kept
+    assert len(rejected) == 1
+    assert "word-count QA" in rejected[0]["_safety_eval"]["reason"]
+
+
 def test_easy_band_aligned_with_digest_gate():
     """The easy word band is stated in four places: the rewriter prompt, the
     repair targets, the generation-time QA band, and quality_digest's gate.
     They drift silently — the prompt is prose, the rest are tuples — and the
     symptom is a morning full of body_too_short tickets for bodies the
     rewriter was told to write. Assert all four agree."""
-    from pipeline.quality_digest import BODY_TARGETS
+    from pipeline.quality_digest import BODY_TARGETS, WC_SLACK
+
+    assert core.WC_QA_SLACK == WC_SLACK
 
     for level in ("easy", "middle"):
         t_lo, t_hi = core.WC_REPAIR_TARGETS[level]
