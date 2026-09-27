@@ -10,6 +10,7 @@
 //   · request-magic-link (kid sign-in)         · send-recovery-code
 //   · send-parent-digest                         · send-digest
 //   · quality_digest.py                          · pipeline-watchdog.yml
+//   · AI News and podcast server jobs use the existing service-role bearer
 // The browser no longer calls this directly.
 //
 // ROLLOUT NOTE: deploy this LAST (after every caller passes the secret) — see
@@ -18,7 +19,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
-import { timingSafeEqual } from "../_shared/email_security.ts";
+import { relayAuthorized } from "../_shared/email_security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,7 @@ const corsHeaders = {
 };
 
 const SEND_EMAIL_SECRET = Deno.env.get("SEND_EMAIL_SECRET") || "";
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 function htmlToText(html: string): string {
   return html
@@ -52,7 +54,9 @@ Deno.serve(async (req: Request) => {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!timingSafeEqual(req.headers.get("x-internal-secret") || "", SEND_EMAIL_SECRET)) {
+    const bearer = req.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1] || "";
+    if (!relayAuthorized(req.headers.get("x-internal-secret") || "", bearer,
+                         SEND_EMAIL_SECRET, SERVICE_ROLE_KEY)) {
       return new Response(JSON.stringify({ error: "forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

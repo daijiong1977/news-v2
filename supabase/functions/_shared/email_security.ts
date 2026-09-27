@@ -13,3 +13,8 @@ export function timingSafeEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+export function relayAuthorized(internalHeader: string, bearer: string,
+                                internalSecret: string, serviceRoleKey: string): boolean {
+  return timingSafeEqual(internalHeader, internalSecret) || timingSafeEqual(bearer, serviceRoleKey);
+}

@@ -17,9 +17,14 @@ key. These are real security issues, not a news-quality preference.
   be chosen by the browser.
 - The anonymous parent-dashboard "email this device's full report to any
   address" button is removed per owner choice. Scheduled digest remains.
-- `send-digest` and `send-email-v2` require `x-internal-secret`, backed by one
+- `send-digest` requires `x-internal-secret`; `send-email-v2` accepts that
+  header or a service-role bearer. The new header is backed by one
   64-character random `SEND_EMAIL_SECRET` in Supabase and GitHub Actions.
   Quality digest, parent digest, and pipeline watchdog supply this header.
+  The relay also accepts the existing Supabase service-role bearer from the
+  AI News and podcast **server** jobs; those credentials are already secret,
+  and this avoids breaking their notifications. Anonymous/publishable-key
+  browser calls remain forbidden.
 - After the new site is live, a database migration revokes `issue_magic_link`
   from PUBLIC, anon and authenticated. Only service_role may receive a raw
   token. The migration must not run before the site changes.
