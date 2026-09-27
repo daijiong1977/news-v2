@@ -7,13 +7,19 @@ source-diversity defects across September 24–26. Public Storage payloads
 still show the seven bodies out of the digest's 300–410 ±15% band.
 
 - September 25 News: BBC, PBS, BBC. Run 36106439452 rejected three initial
-  News rewrites on child-safety grounds and promoted two spares. The final
-  selection did not re-optimize for three distinct sources.
+  News rewrites on child-safety grounds (PBS distress, Al Jazeera fear/distress,
+  BBC forbidden wording) and promoted two spares. That day's probed News
+  pool had only BBC, PBS and Al Jazeera; the sole third-source story was
+  rejected by the independent full-text review. Three sources were therefore
+  not safely achievable from the probed pool, even with re-ordering.
 - September 25 Fun: Live Science, Live Science, NG Kids — Space. The same
   run probed 19 viable items across several feeds, but the curator's top
   five had only two sources. It logged that no third-source spare existed
   *inside that five*; Stage 3 did not try the wider spare pool because the
-  story count was already three.
+  story count was already three. The wider pool contained /Film, Smithsonian
+  History and SwimSwam, but those specific articles were not independently
+  verified or safety-reviewed. Their existence is not proof a safe third
+  source could have shipped.
 - The September 25 run repeatedly logged word-count repair output still
   outside 300–410 (for example 203→283, 246→260 and 534→534). The old
   repair kept the original and Stage 3 merely logged a flag, then published.
@@ -34,9 +40,12 @@ still show the seven bodies out of the digest's 300–410 ±15% band.
    use an independently vetted spare. No mechanical truncation or
    unsourced padding is used.
 2. Re-order already-vetted Stage-3 survivors to use three sources when
-   possible. If three stories survive but only two sources remain, try a
-   different-source spare through the normal body, category and child-safety
-   gates. If none passes, publish the safer two-source set and log an
+   possible. During a shortfall, prefer a new topic and then a new source
+   within that topic tier. If three stories survive but only two sources
+   remain, try a
+   different-source spare through the normal body, category, editorial-floor
+   and child-safety gates. A below-floor optional replacement cannot displace
+   a safe story. If none passes, publish the safer two-source set and log an
    explicit degradation; source diversity does not override child safety.
 3. Auto-fix scans the same *number* of archived days as the digest lookback,
    never today's static website bundle. Body fixes use at most two

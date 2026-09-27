@@ -1042,10 +1042,9 @@ def promote_spare_and_rewrite(
 
     `used_source_names` is the set of source.name strings already in
     the surviving top 3. The function tries spares from a NEW source
-    first; if none of the new-source spares pass verify+vet, it falls
-    back to spares whose source repeats. This preserves source
-    diversity through Stage 3 promotion while still letting the bundle
-    fill its 3 slots when alternatives are exhausted.
+    first; if none pass verify+vet, it falls back to repeated sources
+    unless `require_new_source` is set. This preserves source diversity
+    without sacrificing the three-story minimum or bypassing safety.
 
     `used_titles` are the headlines already shipping — a probe-pool spare
     (no cluster_id) whose title matches one is the same wire story from a
@@ -1072,6 +1071,18 @@ def promote_spare_and_rewrite(
         if fit < CATEGORY_FIT_MIN:
             log.info("  [%s] spare rank %s skipped — category fit %.2f: %s",
                      cat, spare.get("_rank"), fit, spare_title[:60])
+            return None, None
+        # A diversity-only replacement is optional. Never displace a safe
+        # published candidate with a Jev-scored brief below the editorial
+        # floor merely to turn a 2/3 source metric into 3/3. In a thin
+        # category the ordinary refill may still use that brief.
+        rank = brief.get("_jev_rank") or {}
+        pick = rank.get("editorial_pick")
+        floor = rank.get("floor")
+        if require_new_source and pick is not None and floor is not None \
+                and float(pick) < float(floor):
+            log.info("  [%s] spare rank %s skipped — editorial pick %.2f below %.2f",
+                     cat, spare.get("_rank"), float(pick), float(floor))
             return None, None
         spare_group = (brief.get("_event_group") or "").strip()
         if ((spare_group and spare_group in shipped_groups)
@@ -1108,9 +1119,10 @@ def promote_spare_and_rewrite(
             kept[0],
         )
 
-    # Each section prefers a fresh editorial topic before source diversity, but
-    # neither is a hard gate. A failed verify/rewrite/vet consumes that spare;
-    # unattempted spares remain available for a second refill.
+    # A fresh editorial topic takes precedence over a fresh source, matching
+    # the section's topic-first selection rule. Within the same topic tier,
+    # try a new source first. Failed candidates are consumed; unattempted
+    # spares remain available for the optional diversity-only pass.
     def _priority(spare: dict) -> tuple[int, int]:
         brief = spare.get("_winner_brief") or {}
         label = topic_group(brief)

@@ -155,3 +155,63 @@ def test_new_source_spare_gets_normal_safety_gate(monkeypatch):
         "Fun", pool, used_source_names={"A", "B"}, require_new_source=True)
     assert winner["source"].name == "C" and article["source_id"] == 0
     assert checked == ["Swimming record at world championships"]
+
+
+def test_refill_tries_new_source_when_topic_preference_is_equal(monkeypatch):
+    from pipeline import news_rss_core as core
+
+    monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    attempted = []
+
+    def rewrite(articles, category):
+        attempted.append(articles[0][1]["title"])
+        return {"articles": [{"source_id": 0}]}
+
+    monkeypatch.setattr(fr, "tri_variant_rewrite", rewrite)
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+        result["articles"], []))
+    pool = [
+        {"_unverified_spare": True, "source": SimpleNamespace(name="A"),
+         "_winner_brief": {"title": "Swimming final", "_jev_topic_group": "swimming",
+                           "_probe_art": {"title": "Swimming final"}}},
+        {"_unverified_spare": True, "source": SimpleNamespace(name="C"),
+         "_winner_brief": {"title": "Tennis final", "_jev_topic_group": "swimming",
+                           "_probe_art": {"title": "Tennis final"}}},
+    ]
+    winner, _ = fr.promote_spare_and_rewrite(
+        "Fun", pool, used_source_names={"A", "B"},
+        used_topic_groups={"swimming"})
+    assert winner["source"].name == "C"
+    assert attempted == ["Tennis final"]
+
+
+def test_diversity_only_replacement_respects_editorial_floor(monkeypatch):
+    from pipeline import news_rss_core as core
+
+    monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    monkeypatch.setattr(fr, "tri_variant_rewrite", lambda *a, **k: (
+        _ for _ in ()).throw(AssertionError("low-quality optional spare must not be rewritten")))
+    pool = [{"_unverified_spare": True, "source": SimpleNamespace(name="C"),
+             "_winner_brief": {"title": "Weak third-source option",
+                               "_jev_rank": {"editorial_pick": 0.2, "floor": 0.5},
+                               "_probe_art": {"title": "Weak third-source option"}}}]
+    winner, article = fr.promote_spare_and_rewrite(
+        "Fun", pool, used_source_names={"A", "B"}, require_new_source=True)
+    assert winner is None and article is None
+
+
+def test_short_category_can_still_use_below_floor_spare(monkeypatch):
+    from pipeline import news_rss_core as core
+
+    monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
+        "articles": [{"source_id": 0}]})
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+        result["articles"], []))
+    pool = [{"_unverified_spare": True, "source": SimpleNamespace(name="C"),
+             "_winner_brief": {"title": "Thin-day fallback",
+                               "_jev_rank": {"editorial_pick": 0.2, "floor": 0.5},
+                               "_probe_art": {"title": "Thin-day fallback"}}}]
+    winner, article = fr.promote_spare_and_rewrite(
+        "Fun", pool, used_source_names={"A", "B"})
+    assert winner["source"].name == "C" and article["source_id"] == 0
