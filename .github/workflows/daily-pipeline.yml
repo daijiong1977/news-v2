@@ -58,6 +58,8 @@ jobs:
       TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
       # on | shadow | off — repo variable, so it can be flipped without a commit.
       JEV_PREFILTER: ${{ vars.JEV_PREFILTER || 'on' }}
+      # on | shadow | off — high-confidence News/Science/Fun routing.
+      JEV_ROUTE: ${{ vars.JEV_ROUTE || 'on' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       # NOTE: the effective variant is resolved by the cron_check step

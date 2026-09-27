@@ -1064,12 +1064,12 @@ def promote_spare_and_rewrite(
             kept[0],
         )
 
-    # News prefers a fresh editorial topic before source diversity, but
+    # Each section prefers a fresh editorial topic before source diversity, but
     # neither is a hard gate. A failed verify/rewrite/vet consumes that spare;
     # unattempted spares remain available for a second refill.
     def _priority(spare: dict) -> tuple[int, int]:
         brief = spare.get("_winner_brief") or {}
-        label = topic_group(brief) if cat == "News" else ""
+        label = topic_group(brief)
         repeats_topic = bool(topics_used) and (not label or label in topics_used)
         src_name = (spare.get("source") and spare["source"].name) or ""
         return int(repeats_topic), int(src_name in used)
@@ -2017,24 +2017,37 @@ def main_mega() -> None:
         return {c: b[:PROBE_MAX_PER_CAT] for c, b in pool.items()}
 
     def _jev_rank_runner():
-        from .news_topics import tag_news_topics
+        from .editorial_routing import route_briefs
+        from .news_topics import tag_topics
 
         def _with_topics(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
             topic_t0 = time.monotonic()
-            report = tag_news_topics(pool.get("News") or [])
-            if pool.get("News"):
-                log.info("  [News] Jev topic groups: %d tagged, %d uncertain, %d failed",
-                         report["tagged"], report["uncertain"], report["failed"])
-                _set_phase("news_topics", topic_t0, **report)
+            reports = {}
+            for cat, briefs in pool.items():
+                reports[cat] = tag_topics(cat, briefs)
+                if briefs:
+                    report = reports[cat]
+                    log.info("  [%s] Jev topic groups: %d tagged, %d uncertain, %d failed",
+                             cat, report["tagged"], report["uncertain"], report["failed"])
+            _set_phase("editorial_topics", topic_t0, per_category=reports)
             return pool
 
         t0 = time.monotonic()
+        route_t0 = time.monotonic()
+        rank_input, route_report = route_briefs(briefs_by_cat)
+        for move in route_report["moved"]:
+            log.info("  section route [%s→%s] %.2f: %s",
+                     move["from"], move["to"], move["confidence"],
+                     move["title"][:70])
+        _set_phase("section_route", route_t0, mode=route_report["mode"],
+                   scored=route_report["scored"], uncertain=route_report["uncertain"],
+                   failed=route_report["failed"], moved=len(route_report["moved"]))
         if rank_mode == "off":
-            return _with_topics(_legacy_cut(briefs_by_cat))
+            return _with_topics(_legacy_cut(rank_input))
         log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
         try:
             ranked, report = jev_rank.rank_briefs(
-                briefs_by_cat, recent_titles=_recent_published_titles(today))
+                rank_input, recent_titles=_recent_published_titles(today))
             log.info("  jev: %s", report["jev"])
             for cat, sent in report["sent"].items():
                 log.info("  [%s] %s: %s", cat,
@@ -2049,7 +2062,7 @@ def main_mega() -> None:
                                 "— thin pool, consider adding sources", cat, n)
             applied = ranked is not None and rank_mode == "on"
             _set_phase("jev_rank", t0, mode=rank_mode, jev=report["jev"], applied=applied,
-                       pool={c: len(b) for c, b in briefs_by_cat.items()},
+                       pool={c: len(b) for c, b in rank_input.items()},
                        pair_calls=report["pair_calls"], passed_over=len(report["skipped"]),
                        past_event_calls=report["past_event_calls"],
                        past_event_input_tokens=report["past_event_input_tokens"],
@@ -2059,10 +2072,10 @@ def main_mega() -> None:
                 return _with_topics(ranked)
         except Exception as e:  # noqa: BLE001 — an optional stage must never break the run
             log.warning("  jev_rank stage failed (%s) — using the legacy cut", e)
-        for b in (b for bs in briefs_by_cat.values() for b in bs):
+        for b in (b for bs in rank_input.values() for b in bs):
             if "_jev_rank" in b:                  # shadow / failure: keep the evidence, not the effect
                 b["_jev_rank_shadow"] = b.pop("_jev_rank")
-        return _with_topics(_legacy_cut(briefs_by_cat))
+        return _with_topics(_legacy_cut(rank_input))
     try:
         briefs_by_cat = _load_or_run("jev_rank", _jev_rank_runner)
     except FileNotFoundError:
@@ -2170,7 +2183,7 @@ def main_mega() -> None:
                 if i in kept_by_sid:
                     survived_winners.append(w)
                     survived_articles.append(kept_by_sid[i])
-            if cat == "News" and len(survived_winners) > 3:
+            if len(survived_winners) > 3:
                 # Safety may remove a diverse pick and move rank 4 into the
                 # published three. Reapply the soft topic preference to the
                 # already-safe rewrites without making another model call.
@@ -2178,7 +2191,7 @@ def main_mega() -> None:
                 indexed = [{"rank": i + 1, "source": w["source"],
                             "brief": w.get("_brief") or {}, "index": i}
                            for i, w in enumerate(survived_winners)]
-                ordered = _prefer_top3_topic_diversity({"News": indexed})["News"]
+                ordered = _prefer_top3_topic_diversity({cat: indexed})[cat]
                 survived_winners = [survived_winners[p["index"]] for p in ordered]
                 survived_articles = [survived_articles[p["index"]] for p in ordered]
             spare_pool = [s for s in stories_by_cat.get(cat, [])
@@ -2238,9 +2251,9 @@ def main_mega() -> None:
                                             seen_links, max_per_source=15)
                 if dig_pool:
                     dig_pool = _gate_deep_dig_spares(cat, dig_pool)
-                    if cat == "News" and dig_pool:
-                        from .news_topics import tag_news_topics
-                        tag_news_topics([s.get("_winner_brief") or {} for s in dig_pool])
+                    if dig_pool:
+                        from .news_topics import tag_topics
+                        tag_topics(cat, [s.get("_winner_brief") or {} for s in dig_pool])
                 if dig_pool:
                     before = len(survived_winners)
                     log.info("  [%s] short (%d/3) after spares — deep-digging "

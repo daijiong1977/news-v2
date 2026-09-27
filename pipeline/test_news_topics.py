@@ -85,3 +85,24 @@ def test_stage3_spare_prefers_new_topic_and_keeps_unattempted(monkeypatch):
     assert winner["winner"]["title"] == "International summit"
     assert attempts == ["International summit"]
     assert [s["_winner_brief"]["title"] for s in pool] == ["Another storm"]
+
+
+def test_science_and_fun_soft_topic_swaps():
+    science = [_pick(1, "Moon mission", "astronomy_space", "A"),
+               _pick(2, "Star map", "astronomy_space", "B"),
+               _pick(3, "New frog", "biology_ecology", "C"),
+               _pick(4, "New molecule", "chemistry_materials", "D")]
+    fun = [_pick(1, "Soccer match", "sports", "A"),
+           _pick(2, "Tennis match", "sports", "B"),
+           _pick(3, "New song", "music", "C"),
+           _pick(4, "Fat Bear Week", "animal_events", "D")]
+    out = mc._prefer_top3_topic_diversity({"Science": science, "Fun": fun})
+    assert {nt.topic_group(p["brief"]) for p in out["Science"][:3]} == {
+        "astronomy_space", "biology_ecology", "chemistry_materials"}
+    assert {nt.topic_group(p["brief"]) for p in out["Fun"][:3]} == {
+        "sports", "music", "animal_events"}
+
+
+def test_science_and_fun_topic_labels_are_recognized():
+    assert nt.topic_group({"_jev_topic_group": "physics"}) == "physics"
+    assert nt.topic_group({"_jev_topic_group": "animal_events"}) == "animal_events"
