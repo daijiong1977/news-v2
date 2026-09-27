@@ -142,11 +142,11 @@ def test_deep_dig_borderline_checks_other_sections():
     assert sports["_jev_other_category_fit"]["Science"] == 0.20
 
 
-def test_orders_by_pick_and_keeps_top_10():
+def test_orders_by_pick_and_keeps_full_catalog_for_refill():
     pool = [_b(f"Story {i:02d} alpha{i}", src=f"S{i % 5}", pick=0.55 + i / 100) for i in range(14)]
     (out, rep), _ = _run({"Science": pool})
-    assert len(out["Science"]) == jr.POOL_KEEP
-    assert [b["_jev_rank"]["pos"] for b in out["Science"]] == list(range(1, 11))
+    assert len(out["Science"]) == len(pool)
+    assert [b["_jev_rank"]["pos"] for b in out["Science"]] == list(range(1, len(pool) + 1))
     assert len(_sent(out, "Science")) == jr.TO_CURATOR == len(rep["sent"]["Science"])
     reserve = [b["_jev_rank"]["pick"] for b in out["Science"] if not b["_jev_rank"]["send"]]
     assert reserve == sorted(reserve, reverse=True)
@@ -208,8 +208,8 @@ def test_reworded_duplicate_is_caught_by_jev():
     (out, rep), fake = _run({"News": pool})
     assert sum("assisted dying" in t for t in _sent(out, "News")) == 1
     assert fake.pair_calls >= 1 and any("same story" in d["why"] for d in rep["skipped"])
-    # the duplicate is not lost: it sits at the very end of the reserve
-    assert _titles(out["News"])[-1] == "An extraordinary result - why MPs rejected the assisted dying bill"
+    # The known duplicate must not return from the refill catalog.
+    assert "An extraordinary result - why MPs rejected the assisted dying bill" not in _titles(out["News"])
 
 
 def test_news_subject_is_capped_not_banned():

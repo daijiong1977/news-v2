@@ -46,6 +46,29 @@ def test_plan_env_restricts_fresh_set():
     assert keep == {"science", "fun"}
 
 
+def test_mega_short_section_never_borrows_old_stories():
+    fresh, short, keep = pk._derive_pack_plan(
+        {"news": 2, "science": 3, "fun": 3})
+    assert fresh == {"news", "science", "fun"}
+    assert short == {"news"} and keep == set()
+    assert not pk._needs_live_bundle(keep, short, fresh_catalog_only=True)
+    assert pk._needs_live_bundle(keep, short, fresh_catalog_only=False)
+    assert pk._needs_live_bundle({"fun"}, short, fresh_catalog_only=True)
+
+
+def test_one_fresh_story_per_section_is_a_valid_bundle(tmp_path):
+    for cat in pk.CATS:
+        sid = f"fresh-{cat}"
+        _seed(tmp_path, cat, [(sid, f"{sid}.webp")])
+        detail = {"summary": "A useful child friendly report. " * 12,
+                  "questions": [{}, {}, {}], "background_read": [{}],
+                  "Article_Structure": [{}, {}, {}]}
+        for level in ("easy", "middle"):
+            (tmp_path / "article_payloads" / f"payload_{sid}" / f"{level}.json").write_text(
+                json.dumps(detail))
+    pk.validate_bundle("2026-09-27", content_root=tmp_path)
+
+
 # ── 2. carry-over top-up ──
 
 def _listing(ids_imgs):

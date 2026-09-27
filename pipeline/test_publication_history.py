@@ -81,11 +81,9 @@ def test_checkpoint_resume_cannot_bypass_history_review():
         assert_history_clear({"News": [{"winner": {"title": CURRENT}}]}, guard)
 
 
-def test_short_new_edition_cannot_be_filled_with_yesterdays_stories():
+def test_short_new_edition_is_allowed_for_title_reviewed_pack_topup():
     guard = PublicationHistoryGuard([])
-    with pytest.raises(RuntimeError, match="refusing historical carry-over"):
-        assert_history_clear({"News": [{"winner": {"title": "A genuinely new story"}}]},
-                             guard, minimum_per_section=3)
+    assert_history_clear({"News": [{"winner": {"title": "A genuinely new story"}}]}, guard)
 
 
 @pytest.mark.parametrize("probability,status", [(.01, "clear"), (.99, "duplicate"), (.5, "unverified")])
@@ -122,6 +120,65 @@ def test_history_blocked_spare_never_reaches_rewrite(monkeypatch):
              "_winner_brief": {"title": CURRENT}}
     guard = PublicationHistoryGuard([ROW], client=Reviewer())
     assert fr.promote_spare_and_rewrite("News", [spare], history_guard=guard) == (None, None)
+
+
+def test_refill_tries_other_catalog_without_same_day_model_call(monkeypatch):
+    from pipeline import news_rss_core as core
+
+    monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
+        "articles": [{"source_id": 0}]})
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+        result["articles"], []))
+    monkeypatch.setattr("pipeline.publication_history.make_client",
+                        lambda: pytest.fail("different catalog needed no same-day model call"))
+    source = SimpleNamespace(name="NPR")
+    pool = [
+        {"_unverified_spare": True, "source": source,
+         "_winner_brief": {"title": "Another weather story",
+                           "_jev_topic_group": "severe_weather",
+                           "_probe_art": {"title": "Another weather story"}}},
+        {"_unverified_spare": True, "source": source,
+         "_winner_brief": {"title": "Students build a new playground",
+                           "_jev_topic_group": "community",
+                           "_probe_art": {"title": "Students build a new playground"}}},
+    ]
+    existing = [{"title": "New York flood", "_jev_topic_group": "severe_weather"},
+                {"title": "Bangkok flood", "_jev_topic_group": "severe_weather"}]
+    winner, _ = fr.promote_spare_and_rewrite(
+        "News", pool, used_briefs=existing,
+        used_topic_groups={"severe_weather"}, history_guard=PublicationHistoryGuard([]))
+    assert winner["winner"]["title"] == "Students build a new playground"
+    assert [s["_winner_brief"]["title"] for s in pool] == ["Another weather story"]
+
+
+def test_same_catalog_refill_uses_best_remaining_catalog_pick(monkeypatch):
+    from pipeline import news_rss_core as core
+
+    monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    rewritten = []
+    monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: (
+        rewritten.append(articles[0][1]["title"]) or {"articles": [{"source_id": 0}]}))
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+        result["articles"], []))
+
+    monkeypatch.setattr("pipeline.publication_history.make_client",
+                        lambda: pytest.fail("catalog refill needed no same-day model call"))
+    source = SimpleNamespace(name="CBC")
+    titles = ["New Jersey begins storm recovery", "Bangkok roads submerged as flood disaster declared"]
+    pool = [{"_unverified_spare": True, "source": source,
+             "_winner_brief": {"title": title, "_jev_topic_group": "severe_weather",
+                               "_probe_art": {"title": title}}}
+            for title in titles]
+    existing = [{"title": CURRENT, "_jev_topic_group": "severe_weather"},
+                {"title": "Politics in Europe", "_jev_topic_group": "international_relations"}]
+    winner, _ = fr.promote_spare_and_rewrite(
+        "News", pool, used_briefs=existing,
+        used_topic_groups={"severe_weather", "international_relations"},
+        history_guard=PublicationHistoryGuard([]))
+    assert winner["winner"]["title"] == titles[0]
+    assert rewritten == [titles[0]]
+    assert [s["_winner_brief"]["title"] for s in pool] == [titles[1]]
 
 
 def choice(title, topic, publisher):

@@ -69,7 +69,7 @@ MIN_DISTINCT_SOURCES = 3    # what the curator's top-3 rule needs to be satisfia
 CAP_YIELD_GAP = 0.10        # a 3rd from one source beats an alternative this much worse
 HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
 MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
-POOL_KEEP = 10              # up to 6/6/7 sent; remaining entries are reserve spares
+# All scored briefs remain in the checkpoint catalog for Stage-3 refill.
 CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
 DEEP_DIG_BORDERLINE_MAX = 0.70  # only uncertain late backfill pays for cross-section checks
 DEEP_DIG_FIT_MARGIN = 0.05     # target must beat the best alternative, not merely pass 0.60
@@ -526,7 +526,7 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
 
 def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                 recent_titles: dict[str, list[str]] | None = None) -> tuple[dict[str, list[dict]] | None, dict]:
-    """Returns ({cat: briefs in rank order, at most POOL_KEEP}, report), or (None, report)
+    """Returns ({cat: full ranked catalog}, report), or (None, report)
     when the ranking cannot be trusted. Briefs flagged `_jev_rank["send"]` go to the
     curator (use `for_curator`, never a positional slice: a thin pool sends fewer than
     TO_CURATOR); the rest are Stage 3 spares in rank order. Never raises, never mutates
@@ -589,11 +589,22 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             dup_ids = {id(b) for b, why in skipped if "same story" in why}
             rest = [b for b in ranked if not any(b is c for c in chosen)
                     and not editorial_exclusion(b) and not (cat == "Fun" and low_fun_value(b))
-                    and not pairs._published.get(id(b))]
-            rest = [b for b in rest if id(b) not in dup_ids] + [b for b in rest if id(b) in dup_ids]
-            final = (chosen + rest)[:max(POOL_KEEP, len(chosen))]
+                    and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
+                    and not pairs._published.get(id(b)) and id(b) not in dup_ids]
+            # The old reserve kept known duplicate events at the end. Build
+            # one unique catalog up front so refill can select by topic/rank
+            # without paying for another same-day model review per candidate.
+            final = []
+            for b in chosen + rest:
+                if any(pairs.relation(earlier, b, subject=False) == "story"
+                       for earlier in final):
+                    report["skipped"].append({"cat": cat, "title": b.get("title"),
+                                              "why": "same story in candidate catalog"})
+                    continue
+                final.append(b)
+            chosen_ids = {id(b) for b in chosen}
             for pos, b in enumerate(final, start=1):
-                b["_jev_rank"] = {**(scores.get(id(b)) or {}), "pos": pos, "send": pos <= len(chosen),
+                b["_jev_rank"] = {**(scores.get(id(b)) or {}), "pos": pos, "send": id(b) in chosen_ids,
                                   "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
             out[cat] = final
             report["sent"][cat] = [{"pos": i, "pick": (scores.get(id(b)) or {}).get("editorial_pick"),
@@ -601,7 +612,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                                     "sports_priority": (scores.get(id(b)) or {}).get("sports_priority"),
                                     "section_value": (scores.get(id(b)) or {}).get("section_value"),
                                     "source": b.get("_source_name"), "title": b.get("title")}
-                                   for i, b in enumerate(chosen, start=1)]
+                                   for i, b in enumerate((b for b in final if id(b) in chosen_ids), start=1)]
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]
         out = {cat: out[cat] for cat in briefs_by_cat}          # caller's category order
         report["pair_calls"] = pairs.calls

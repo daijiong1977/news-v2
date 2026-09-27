@@ -112,8 +112,8 @@ def validate_bundle(today: str, content_root: Path | None = None) -> None:
     from .editorial_policy import editorial_exclusion
     errs: list[str] = []
 
-    # Listing files — 2 or 3 per cat/lvl acceptable (ideal=3; 2 after
-    # cross-source dup drops when all backups are exhausted). <2 is fatal.
+    # One to three stories per section. The mega pipeline exhausts today's
+    # candidate catalog before handing any short section to packaging.
     payloads = root / "payloads"
     short_cats: set[str] = set()  # cats that shipped <3
     for cat in CATS:
@@ -125,8 +125,8 @@ def validate_bundle(today: str, content_root: Path | None = None) -> None:
             try:
                 doc = json.loads(p.read_text())
                 arts = doc.get("articles") or []
-                if len(arts) < 2:
-                    errs.append(f"{p.name}: {len(arts)} articles (need ≥2)")
+                if len(arts) < 1:
+                    errs.append(f"{p.name}: no articles")
                 elif len(arts) < 3:
                     short_cats.add(f"{cat}/{lvl}")
                 for a in arts:
@@ -137,7 +137,7 @@ def validate_bundle(today: str, content_root: Path | None = None) -> None:
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{p.name}: parse error {e}")
     if short_cats:
-        log.warning("Shipping with <3 articles in: %s", sorted(short_cats))
+        log.info("Shipping available reviewed articles in: %s", sorted(short_cats))
 
     # Detail payloads (easy + middle only; cn has no detail page) — iterate
     # actual story IDs from the middle listing so 2-article cats validate
@@ -417,6 +417,12 @@ def _derive_pack_plan(local_counts: dict[str, int],
     short = {c for c in fresh if local_counts.get(c, 0) < 3}
     keep_old = set(CATS) - fresh
     return fresh, short, keep_old
+
+
+def _needs_live_bundle(keep_old: set[str], short: set[str],
+                       fresh_catalog_only: bool) -> bool:
+    """Mega runs merge missing sections but do not top up from old stories."""
+    return bool(keep_old or (short and not fresh_catalog_only))
 
 
 def _topup_thin_categories(final_root: Path, old_root: Path,
@@ -707,6 +713,7 @@ def main() -> None:
     # publish — a bad merge refuses to upload and the site keeps its
     # current bundle.
     merge_env = (os.environ.get("PACK_MERGE_CATEGORIES") or "").strip()
+    fresh_catalog_only = os.environ.get("PACK_FRESH_CATALOG_ONLY") == "1"
     merge_cats = {c.strip().lower() for c in merge_env.split(",") if c.strip()}
     if merge_cats:
         if republish:
@@ -732,18 +739,18 @@ def main() -> None:
         if not fresh:
             raise SystemExit("no fresh category content on disk — "
                              "nothing to publish")
-        if keep_old or short:
+        if _needs_live_bundle(keep_old, short, fresh_catalog_only):
             import tempfile
             old_root = Path(tempfile.mkdtemp(prefix="pack_old_"))
             try:
                 blob = sb.storage.from_(BUCKET).download("latest.zip")
             except Exception as e:  # noqa: BLE001
-                if keep_old or any(local_counts.get(c, 0) < 2 for c in fresh):
+                if keep_old:
                     # Can't ship a bundle with a category-shaped hole.
                     raise SystemExit(
                         f"pack needs the live latest.zip for merge/top-up: {e}")
-                log.warning("top-up skipped — no previous bundle (%s); "
-                            "shipping %s with <3 articles", e, sorted(short))
+                log.info("top-up unavailable — no previous bundle (%s); "
+                         "shipping available fresh content for %s", e, sorted(short))
             else:
                 with zipfile.ZipFile(BytesIO(blob)) as zf:
                     for info in zf.infolist():
@@ -757,7 +764,8 @@ def main() -> None:
                     if (old_root / d).is_dir():
                         shutil.copytree(old_root / d, merge_root / d)
                 _overlay_fresh_categories(merge_root, WEB, fresh)
-                carried = _topup_thin_categories(merge_root, old_root)
+                carried = ({} if fresh_catalog_only else
+                           _topup_thin_categories(merge_root, old_root))
                 if keep_old:
                     log.warning("pack: %s keep previous live content",
                                 sorted(keep_old))

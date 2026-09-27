@@ -182,17 +182,12 @@ def winner_brief(winner):
             **(winner.get("_brief") or winner.get("_winner_brief") or {})}
 
 
-def assert_history_clear(stories_by_cat, guard, *, minimum_per_section=0):
+def assert_history_clear(stories_by_cat, guard):
     """Run even after a safety checkpoint resume, before emit/persist/upload."""
     blocked = [f"{cat}: {winner_brief(w).get('title', '')}"
                for cat, stories in stories_by_cat.items() for w in stories
                if not guard.allows(winner_brief(w))]
     if blocked:
         raise RuntimeError("Publication history gate blocked: " + " | ".join(blocked))
-    short = [f"{cat}: {len(stories)}/{minimum_per_section}" for cat, stories in stories_by_cat.items()
-             if len(stories) < minimum_per_section]
-    if short:
-        # Packaging would otherwise silently top up from yesterday's edition,
-        # undoing the freshly enforced seven-day history requirement.
-        raise RuntimeError("Fresh edition incomplete after history/safety review; "
-                           "refusing historical carry-over: " + " | ".join(short))
+    # A thin fresh section can continue to packaging after the full catalog
+    # and today's deeper feed candidates have been exhausted.

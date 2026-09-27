@@ -266,7 +266,9 @@ Jev 相关墙钟约 4.1+9.0+1.5=14.6 秒，约占主体 4%。因此首要性能�
 | 正文原文长度门槛 | 同文件 `PROBE_MIN_WORDS`、`PROBE_MAX_WORDS`；Mega 不按每源 `min_body_words` 控制这一关 |
 | Jev 预筛与 8 条保底 | [jev_prefilter.py](../pipeline/jev_prefilter.py) 的阈值和 `MIN_KEEP_PER_CAT` |
 | 分栏路由 | [editorial_routing.py](../pipeline/editorial_routing.py)；`JEV_ROUTE` |
-| top-10 / 送主编 6 / 薄池 4 / 来源限制 / 体育加分 | [jev_rank.py](../pipeline/jev_rank.py) 的 `POOL_KEEP`、`TO_CURATOR`、`MIN_SEND`、`MAX_PER_SOURCE`、`FLOOR`、`SPORTS_PRIORITY_*` |
+| 送主编 6/6/7 / 完整候选目录补稿 / 薄池 4 / 来源限制 / 体育加分 | [jev_rank.py](../pipeline/jev_rank.py) 的 `TO_CURATOR_BY_CATEGORY`、`MIN_SEND`、`MAX_PER_SOURCE`、`FLOOR`、`SPORTS_PRIORITY_*`；补稿在 [full_round.py](../pipeline/full_round.py) |
+
+2026-09-27 更新：上面的 top-10 数字保留为 9 月 26 日的历史基线。后续修复取消了前十名备用截断；JEV 已评分、经过目录内同事件筛选的候选会保留给 Stage 3 补稿，主编输入仍受 6/6/7 上限约束。补稿先找不同题材组，找不到合格稿才按原排名使用同组最佳候选；补稿不另做同日模型比较。候选全部用尽仍不足三篇时，mega 流程发布合格的新稿，不从前一版成品补旧稿。
 | 题材分类 | [news_topics.py](../pipeline/news_topics.py)；配套 [分类与题材调参说明](editorial-category-routing.md) |
 | 主编最多 5 篇、题材/来源/subject 重排 | [mega_curator.py](../pipeline/mega_curator.py)；prompt 与代码必须一起核对 |
 | 首批改写 4、备用补位、deep-dig 15、最终 3 | [full_round.py](../pipeline/full_round.py) 的 `verify_picks_lazy`、`promote_spare_and_rewrite`、`_deep_dig_spares`、`_safety_runner` |
