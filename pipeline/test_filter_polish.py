@@ -246,5 +246,37 @@ def test_past_dedup_matches_across_categories_and_seven_days():
     assert seen == {"start": "2026-09-19", "end": "2026-09-26",
                     "archived": False}
 
+
+def test_past_dedup_catches_same_url_with_different_bbc_rss_title(monkeypatch):
+    from pipeline import full_round as fr
+    import pipeline.supabase_io as sio
+
+    class FakeQuery:
+        def select(self, columns):
+            assert "source_url" in columns
+            return self
+        def gte(self, *args): return self
+        def lt(self, *args): return self
+        def eq(self, *args): return self
+        def execute(self):
+            return type("R", (), {"data": [{
+                "source_title": "Alcaraz on late finishes and Laver Cup return",
+                "source_url": "https://www.bbc.co.uk/sport/tennis/articles/cmvgy73zvwx1o?at_medium=RSS",
+            }]})()
+
+    class FakeClient:
+        def table(self, name): return FakeQuery()
+
+    monkeypatch.setattr(sio, "client", lambda: FakeClient())
+    pool = {"Fun": [
+        {"title": "I suffered but I enjoyed after defeat",
+         "link": "https://www.bbc.co.uk/sport/tennis/articles/cmvgy73zvwx1o?at_campaign=rss"},
+        {"title": "Fresh swim race", "link": "https://swimswam.com/race-123"},
+    ]}
+    out = fr.filter_past_duplicate_briefs(pool, run_date="2026-09-26")
+    assert [b["title"] for b in out["Fun"]] == ["Fresh swim race"]
+    assert fr._canonical_source_url("https://example.org/story?id=2") != fr._canonical_source_url(
+        "https://example.org/story?id=3")
+
 if __name__ == "__main__":
     _run_all()

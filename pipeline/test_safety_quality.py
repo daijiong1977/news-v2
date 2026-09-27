@@ -69,6 +69,37 @@ def test_independent_vet_failure_falls_back_to_self_scores():
     assert len(kept) == 1 and rejected == []
 
 
+def test_one_malformed_vet_row_retries_without_discarding_other_rows(monkeypatch):
+    first = _clean_scores(0, fear=2)
+    first["scores"]["1"] = {d: 0 for d in core.SAFETY_DIMS}
+    first["scores"]["1"]["fear"] = None
+    calls = []
+
+    def fake(system, user, max_tokens, **kw):
+        calls.append(user)
+        return first if len(calls) == 1 else _clean_scores(1, fear=1)
+
+    monkeypatch.setattr(core, "deepseek_call", fake)
+    articles = [_article(sid=0), _article(sid=1)]
+    kept, rejected = core.filter_safe_rewrites({"articles": articles})
+    assert len(calls) == 2 and "source_id=1" in calls[1]
+    assert rejected == []
+    assert [a["safety"]["fear"] for a in kept] == [2, 1]
+    assert all(a["_independent_vet_status"] == "scored" for a in kept)
+
+
+def test_malformed_retry_falls_back_only_for_that_article(monkeypatch):
+    first = _clean_scores(0, fear=2)
+    first["scores"]["1"] = {d: 0 for d in core.SAFETY_DIMS}
+    first["scores"]["1"]["fear"] = None
+    monkeypatch.setattr(core, "deepseek_call", lambda *args, **kwargs: first)
+    kept, rejected = core.filter_safe_rewrites({"articles": [_article(0), _article(1)]})
+    assert rejected == []
+    assert [a["_independent_vet_status"] for a in kept] == ["scored", "fallback"]
+    assert kept[0]["safety"]["fear"] == 2
+    assert kept[1]["safety"]["fear"] == 0
+
+
 def test_forbidden_term_in_rewritten_body_rejects():
     # Independent vet returns clean scores, but the rewritten middle body
     # carries a self-harm term → deterministic backstop REJECTs.

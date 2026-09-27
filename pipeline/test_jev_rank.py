@@ -25,6 +25,7 @@ class Fake:
         self.event_calls = 0
         self.by_title: dict[str, float] = {}
         self.fit_by_title: dict[str, float] = {}
+        self.sports_priority_by_title: dict[str, float] = {}
 
     def system_one(self, state, questions):
         if self.delay:
@@ -34,13 +35,17 @@ class Fake:
             t = state["story"]["headline"]
             if any(f in t for f in self.fail):
                 raise RuntimeError("boom")
-            return SimpleNamespace(answers={
+            answers = {
                 "pick": SimpleNamespace(noul=self.by_title[t]),
                 "want": SimpleNamespace(score=2.0),
                 "category_fit": SimpleNamespace(
                     noul=self.fit_by_title.get((t, state["story"]["section"]),
                                                self.fit_by_title.get(t, 0.95))),
-            })
+            }
+            if "sports_priority" in questions:
+                answers["sports_priority"] = SimpleNamespace(
+                    score=self.sports_priority_by_title.get(t, 0))
+            return SimpleNamespace(answers=answers)
         self.pair_calls += 1
         if self.pairs_fail:
             raise RuntimeError("pair boom")
@@ -142,6 +147,35 @@ def test_orders_by_pick_and_keeps_top_10():
     assert len(_sent(out, "Science")) == jr.TO_CURATOR == len(rep["sent"]["Science"])
     reserve = [b["_jev_rank"]["pick"] for b in out["Science"] if not b["_jev_rank"]["send"]]
     assert reserve == sorted(reserve, reverse=True)
+
+
+def test_major_swimming_and_tennis_news_get_soft_priority_without_extra_calls():
+    ordinary = _b("Singer rehearses a routine song", src="Music", cat="Fun", pick=0.65)
+    swim = _b("Swimmer breaks world record at championships", src="SwimSwam", cat="Fun", pick=0.55)
+    tennis = _b("Tennis star wins US Open final", src="BBC Tennis", cat="Fun", pick=0.56)
+    fake = Fake()
+    fake.by_title = {b["title"]: b["_p"] for b in (ordinary, swim, tennis)}
+    fake.sports_priority_by_title = {swim["title"]: 4, tennis["title"]: 4}
+    out, report = jr.rank_briefs({"Fun": [ordinary, swim, tennis]}, client=fake)
+    assert fake.rank_calls == 3  # extra judgment in the same per-brief call
+    assert _titles(out["Fun"][:3]) == [tennis["title"], swim["title"], ordinary["title"]]
+    assert tennis["_jev_rank"]["editorial_pick"] == 0.74
+    assert swim["_jev_rank"]["sports_priority"] == 4
+    assert report["sent"]["Fun"][0]["raw_pick"] == 0.56
+
+
+def test_old_tennis_recap_and_wrong_section_do_not_gain_priority():
+    recap = _b("Tennis star recalls match from last month", src="BBC", cat="Fun", pick=0.60)
+    major = _b("Swimmer breaks world record", src="SwimSwam", cat="Fun", pick=0.52)
+    wrong = _b("Scientists discover a new atom", src="Science", cat="Fun", pick=0.95)
+    fake = Fake()
+    fake.by_title = {b["title"]: b["_p"] for b in (recap, major, wrong)}
+    fake.sports_priority_by_title = {recap["title"]: 1, major["title"]: 4}
+    fake.fit_by_title[wrong["title"]] = 0.1
+    out, _ = jr.rank_briefs({"Fun": [recap, major, wrong]}, client=fake)
+    assert major["_jev_rank"]["editorial_pick"] == 0.70
+    assert recap["_jev_rank"]["editorial_pick"] == 0.60
+    assert wrong["title"] not in _sent(out, "Fun")
 
 
 def test_one_source_never_takes_more_than_the_hard_ceiling():
