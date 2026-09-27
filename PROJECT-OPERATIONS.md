@@ -2,6 +2,8 @@
 
 本文按本次核对的 Git 远端、工作树、工作流和代码记录**当前结构**。历史设计见 `docs/PROJECT-OVERVIEW.md`；其中仍有“kidsnews-v2 尚未创建”“30 分钟轮询”等过期描述，不能用来判断现在是否上线。运行数、来源表和分支会变化；下表的 SHA/数量是核对时的快照，不是永久配置。
 
+项目清单的唯一现用归属是 Atlas/Brain ID **`kids-news-website`**。下文的“项目来源”指仓库和本机目录，**不是** Supabase 中供新闻采集用的 RSS/HTML 来源，也不是 AI Providers。两个 GitHub 仓库和它们的本机 checkout 应在同一项目下列出，但保留“源码”“部署同步”“历史工作树”的不同角色；不能把两个 Git 仓库合成一个仓库。
+
 ## 1. 仓库、目录和同步链
 
 | 位置 | 职责 | 本次核对 |
@@ -19,6 +21,8 @@
 当前 YAML 中 Daily pipeline 的定时触发为每天 **07:00 UTC**（纽约夏令时 03:00；冬令时不是同一个本地钟点），管理员配置还可能停用当次定时或改变运行 variant；手动运行不受这个停用门槛约束。Quality digest 由 Daily 完成事件触发，目标是在原流水线触发后约 92 分钟检查；Parent digest 每天 10:00 UTC 触发，函数再决定哪些家长到期。同步仓的兜底 cron 为每两小时的第 15 分。旧注释提到“30 分钟轮询”“固定睡 1 小时”等均不应盖过当前 YAML 的实际配置。
 
 本机 `website/` 是打包素材与模板；部署仓远端 `site/` 是同步结果，不能把两者当成互相独立、需要手工双向合并的源码。`newdesign/` 和旧版设计说明是历史参考。旧 `news`、`kidsnews`、`kidsnews-v2-snapshot` 不在本次核对的上述工作目录中；不要仅凭名字推断它们仍参与生产。
+
+本次重新检查 `/Users/jiong/myprojects/`：`news`、`kidsnews`、`kidsnews-v2-snapshot` 三个旧路径均**不存在**，不应列成当前可打开的工作目录。`news-v2-cbc-source`、`news-v2-quality-rca` 是同一个 `news-v2` Git 仓库的历史工作树，不是新项目或独立 GitHub 仓库。Brain 已有独立的历史项目 ID `news-legacy`、`kidsnews-legacy`（投入级别 Archived）；它们与当前项目相关，但不应悄悄改写成现用部署。是否把旧项目的**显示名称**统一加 `-legacy`，应在 Project List / Brain 中确认后处理，不能靠重命名磁盘目录或改稳定 ID 实现。
 
 ## 2. 分支与 PR：哪些才是当前工作
 

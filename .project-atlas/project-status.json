@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-27T12:51:15-04:00",
+  "updated_at": "2026-09-27T12:58:43-04:00",
   "branches": [
     {
       "name": "main",
@@ -81,6 +81,36 @@
       "path": "PROJECT-OPERATIONS.md",
       "purpose": "已核对的 Git 仓库、本机工作树、同步链、分支、算法、历史坑与复用边界。",
       "location": "repo"
+    },
+    {
+      "path": "https://github.com/daijiong1977/kidsnews-v2",
+      "purpose": "同属 kids-news-website 的独立部署仓库；origin/main 从 Supabase latest.zip 同步 site/ 并供 Vercel 发布，不是第二套选稿源码。",
+      "location": "url"
+    },
+    {
+      "path": "/Users/jiong/myprojects/news-v2",
+      "purpose": "news-v2 本机主 checkout；本次停在旧专题分支，不能代替远端生产 main 判断。",
+      "location": "local"
+    },
+    {
+      "path": "/Users/jiong/myprojects/news-v2-fun-source-pool",
+      "purpose": "news-v2 独立工作树；当前项目交接 PR #74 的工作目录。",
+      "location": "local"
+    },
+    {
+      "path": "/Users/jiong/myprojects/news-v2-cbc-source",
+      "purpose": "news-v2 的历史 CBC 专项工作树，不是独立项目或部署来源。",
+      "location": "local"
+    },
+    {
+      "path": "/Users/jiong/myprojects/news-v2-quality-rca",
+      "purpose": "news-v2 的历史质量问题专项工作树，不是独立项目或部署来源。",
+      "location": "local"
+    },
+    {
+      "path": "/Users/jiong/myprojects/kidsnews-v2",
+      "purpose": "kidsnews-v2 部署仓的本机 checkout；本次落后远端且有未提交修改，勿直接覆盖。",
+      "location": "local"
     }
   ],
   "lessons": [
@@ -112,6 +142,12 @@
       "date": "2026-09-27",
       "title": "分清源码、部署仓与本机旧工作树",
       "note": "news-v2 的 origin/main 才是生产流水线代码；kidsnews-v2 的 origin/main 是独立的站点同步提交。本机主 checkout 可能停在旧分支或远远落后，工作流成功、部署仓提交和公开网站更新也须分别核验。当前同步链、分支角色与代码门禁见项目根目录总览。",
+      "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-27",
+      "title": "项目代码来源与新闻内容来源必须分开登记",
+      "note": "kids-news-website 一个项目下包含 news-v2 源码仓、kidsnews-v2 部署仓及各自本机 checkout；新闻 RSS/HTML 来源另在 Supabase 表中。历史 news、kidsnews、kidsnews-v2-snapshot 路径已不存在，不应登记为现用目录；旧项目保留 news-legacy、kidsnews-legacy 的稳定 ID。",
       "source_ref": "PROJECT-OPERATIONS.md"
     }
   ]
