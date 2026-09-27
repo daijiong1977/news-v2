@@ -23,8 +23,10 @@ key. These are real security issues, not a news-quality preference.
   Quality digest, parent digest, and pipeline watchdog supply this header.
   The relay also accepts the existing Supabase service-role bearer from the
   AI News and podcast **server** jobs; those credentials are already secret,
-  and this avoids breaking their notifications. Anonymous/publishable-key
-  browser calls remain forbidden.
+  and this avoids breaking their notifications. Because Supabase may have
+  multiple valid service-role keys, an unmatched server bearer is verified
+  against the project's Auth admin endpoint before mail is accepted.
+  Anonymous/publishable-key browser calls remain forbidden.
 - After the new site is live, a database migration revokes `issue_magic_link`
   from PUBLIC, anon and authenticated. Only service_role may receive a raw
   token. The migration must not run before the site changes.

@@ -19,7 +19,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
-import { relayAuthorized } from "../_shared/email_security.ts";
+import { relayAuthorized, validServiceBearer } from "../_shared/email_security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +28,7 @@ const corsHeaders = {
 
 const SEND_EMAIL_SECRET = Deno.env.get("SEND_EMAIL_SECRET") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 
 function htmlToText(html: string): string {
   return html
@@ -56,7 +57,8 @@ Deno.serve(async (req: Request) => {
     }
     const bearer = req.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1] || "";
     if (!relayAuthorized(req.headers.get("x-internal-secret") || "", bearer,
-                         SEND_EMAIL_SECRET, SERVICE_ROLE_KEY)) {
+                         SEND_EMAIL_SECRET, SERVICE_ROLE_KEY)
+        && !await validServiceBearer(bearer, SUPABASE_URL)) {
       return new Response(JSON.stringify({ error: "forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
