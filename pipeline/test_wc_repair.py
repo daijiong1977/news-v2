@@ -65,11 +65,19 @@ def test_second_deepseek_edit_uses_failed_count_and_original_source(monkeypatch)
 
 def test_second_edit_can_shorten_after_first_still_too_long(monkeypatch):
     lengths = iter((501, 370))
-    monkeypatch.setattr(core, "deepseek_call", lambda *a, **k: {
-        "body": " ".join(["x"] * next(lengths))})
+    calls = []
+
+    def fake(system, user, **kwargs):
+        calls.append((system, user))
+        return {"body": " ".join(["x"] * next(lengths))}
+
+    monkeypatch.setattr(core, "deepseek_call", fake)
     rr = {"articles": [_art(250, 503)]}
     assert core.repair_wordcounts(rr) == 1
     assert len(rr["articles"][0]["middle_en"]["body"].split()) == 370
+    assert len(calls) == 2
+    assert calls[1][0] == core.WC_REPAIR_REWRITE_PROMPT
+    assert "501 words" in calls[1][1] and "ORIGINAL BODY" in calls[1][1]
 
 
 def test_retry_cannot_replace_qa_acceptable_draft_with_worse_one(monkeypatch):

@@ -111,7 +111,9 @@ Hard rules:
 - Preserve every keyword listed in the input — each one must remain
   findable in your output (case-insensitive, word-boundary).
 - Match the requested word count target (you have ±15% slack).
-- Keep the same facts, names, dates. Do NOT invent details.
+- Keep every fact you RETAIN accurate. When shortening, you may omit
+  secondary details, names, dates, quotes and entire background paragraphs;
+  keep the central news event and essential context. Do NOT invent.
 - Voice: warm, age-appropriate (8-12 year olds), short sentences.
 - No headings, no bullet lists — flowing paragraphs only.
 """
@@ -137,6 +139,11 @@ def _fix_body(payload: dict, level: str, target_lo: int, target_hi: int,
         + "\n".join(f"- {k}" for k in keyword_terms) + "\n\n"
         f"Original body:\n{body}\n"
     )
+    if direction == "long":
+        user_prompt = (f"REMOVE AT LEAST {max(1, _word_count(body) - aim_hi)} words. "
+                       "Delete whole secondary sentences or paragraphs, not "
+                       "just adjectives; keep the core event and context.\n\n"
+                       + user_prompt)
     if direction == "short":
         if not source_body:
             return (False, "source article unavailable for safe expansion", {})

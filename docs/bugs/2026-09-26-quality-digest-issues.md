@@ -53,6 +53,16 @@ still show the seven bodies out of the digest's 300–410 ±15% band.
 
 - Offline regression suite: see PR test result (excluding feed/live-provider suites
   that require external credentials or have pre-existing collection issues).
+- Read-only live DeepSeek probe on four affected middle-level bodies (no
+  published object was changed): Fun-2 246→315 (1 edit), News-1 203→334
+  (1 edit), Science-3 484→360 (1 edit), and the extreme Science-2
+  660→448→273 (2 edits). All four final bodies cleared the digest's
+  ±15% QA tolerance and the independent child-safety vet returned PASS.
+  Three of four hit the narrower 300–410 ideal band. A separate run of
+  Science-2 returned 660→495→340, showing model variance; a successful
+  QA check is not a guarantee of the ideal range or factual accuracy.
+  Probe command: `python -m scripts.probe_wordcount_repair --env-file
+  /path/to/.env <story-id> ...`.
 - A live full pipeline run has **not** yet used this branch. Do not infer
   production success from unit tests.
 - Historical payloads are unchanged by the code PR. After review/merge,

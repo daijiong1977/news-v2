@@ -1160,13 +1160,23 @@ HARD RULES:
     you answer.
   · The input is ALREADY out of band, so returning it unchanged is a
     failure — the length MUST change.
-  · Keep every fact, name, number, and quote accurate. Never invent.
-    When expanding, take the extra concrete details ONLY from the
-    SOURCE ARTICLE section below.
+  · Keep every fact you RETAIN accurate. You may omit secondary facts,
+    names, numbers, quotes, and whole paragraphs when shortening; the
+    central news event and essential context must remain. Never invent.
+    When expanding, take extra concrete details ONLY from the SOURCE
+    ARTICLE section below.
   · Keep the kid-reporter voice and the hook opening. Do not add a
     headline, preamble, or commentary about your edit.
 
 Return ONLY valid JSON (no markdown fences): {"body": "<rewritten body>"}"""
+
+WC_REPAIR_REWRITE_PROMPT = """You are a kids-news editor writing a NEW, concise
+version of an overlong article. This is not a line edit: select only the
+central event, the essential explanation, and why it matters. Discard
+secondary examples, tangents, repeated background, and extra quotations.
+You may omit facts but must not change or invent any fact you retain.
+Write complete, engaging paragraphs for ages 12-14. Count the words.
+Return ONLY valid JSON: {"body": "<new concise article>"}"""
 
 
 def _wc_repair_user_msg(level: str, body: str, wc: int,
@@ -1186,10 +1196,14 @@ def _wc_repair_user_msg(level: str, body: str, wc: int,
               else "a middle schooler (grade 7-8)")
     head = f"Reader: {reader}.\n"
     if wc > hi:
+        minimum_cut = max(1, wc - t_hi)
         return (f"{head}TASK: SHORTEN this body from {wc} words to "
                 f"{t_lo}-{t_hi} words (hard maximum {hi}).\n"
-                "Cut padding, merge repetitive sentences, and drop the "
-                "least essential\npassage. Never cut mid-thought.\n\n"
+                f"REMOVE AT LEAST {minimum_cut} words. Delete whole secondary "
+                "sentences or paragraphs, not just adjectives. Keep the hook, "
+                "main event and essential explanation. Secondary examples, "
+                "background details and quotes may be omitted entirely. "
+                "Never cut mid-thought or add facts.\n\n"
                 f"BODY TO SHORTEN ({wc} words):\n{body}")
     msg = (f"{head}TASK: EXPAND this body from {wc} words to "
            f"{t_lo}-{t_hi} words (hard minimum {lo}).\n"
@@ -1238,6 +1252,7 @@ def repair_wordcounts(rewrite_result: dict,
             last_wc: int | None = None
             for attempt in (1, 2):
                 user = base_user
+                system = WC_REPAIR_PROMPT
                 if attempt == 2:
                     previous = (f"{last_wc} words" if last_wc is not None
                                 else "no valid body")
@@ -1247,8 +1262,18 @@ def repair_wordcounts(rewrite_result: dict,
                             f"{WC_REPAIR_TARGETS[level][0]}-"
                             f"{WC_REPAIR_TARGETS[level][1]} words. Count before "
                             f"answering.\n\n{base_user}")
+                    if wc > hi:
+                        system = WC_REPAIR_REWRITE_PROMPT
+                        user = (f"The previous edit was {previous}, still too long. "
+                                f"Write a NEW {WC_REPAIR_TARGETS[level][0]}-"
+                                f"{WC_REPAIR_TARGETS[level][1]}-word article "
+                                f"from the original below. Omit at least "
+                                f"{max(1, wc - WC_REPAIR_TARGETS[level][1])} "
+                                f"words worth of secondary details; do not "
+                                f"follow its paragraph structure sentence by "
+                                f"sentence.\n\nORIGINAL BODY:\n{body}")
                 try:
-                    res = deepseek_call(WC_REPAIR_PROMPT, user,
+                    res = deepseek_call(system, user,
                                         max_tokens=2000, temperature=0.3)
                 except Exception as e:  # noqa: BLE001
                     log.warning("  wc-repair [%s/%s] attempt %d failed (%s)",
