@@ -47,10 +47,16 @@ ALGORITHM (internal, don't output intermediate work):
      distress, bias — and interest (0-5, higher is better) across
      importance, fun_factor, kid_appeal. Skip any with safety total > 6
      or any safety dim ≥ 4 — they can never be picked.
+     Judge whether the CENTRAL EVENT can be reported safely after a factual,
+     age-appropriate rewrite, not whether every quote/detail in the source
+     can be copied. War or a brief factual death notice is not automatically
+     unsafe. Graphic injury scenes, frightened witness quotes and attack
+     mechanics may be omitted without changing the event. Keep such a
+     candidate eligible for rewriting if its essential facts can be told
+     calmly; the independent full-text reviewer will judge the actual draft.
+     Never treat this as permission to publish graphic or distressing text.
      Government, diplomacy and civic technology are not unsafe merely
-     because they need background explanation; factual rewriting can make
-     an important event understandable to children. Graphic or distressing
-     details remain subject to the normal safety limits.
+     because they need background explanation.
 
   2. CLUSTER: group candidates covering the same real-world story into
      topic clusters. Pick AT MOST ONE candidate per cluster across all
@@ -97,7 +103,7 @@ ALGORITHM (internal, don't output intermediate work):
      - Exclude college recruitment, verbal commitments, recruiting
        rankings and signing announcements. These are not Fun news.
        Actual college races, championships and records remain eligible.
-     - News: when eligible, keep at least one section_value >= 3 story
+     - News: when eligible, keep at least one section_value >= 2.5 story
        with concrete importance for the US or US children in the top three.
        Importance means consequences, never party preference or sensationalism.
      - Science: use section_value as scientific learning/discovery value.

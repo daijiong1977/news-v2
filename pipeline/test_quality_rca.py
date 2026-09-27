@@ -145,7 +145,7 @@ def test_new_source_spare_gets_normal_safety_gate(monkeypatch):
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
         "articles": [{"source_id": 0}]})
     checked = []
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         checked.append(sources[0]["title"]) or result["articles"], []))
     pool = [{"_unverified_spare": True, "source": SimpleNamespace(name="C"),
              "_winner_brief": {"title": "Swimming record at world championships",
@@ -168,7 +168,7 @@ def test_refill_uses_best_ranked_candidate_when_topic_preference_is_equal(monkey
         return {"articles": [{"source_id": 0}]}
 
     monkeypatch.setattr(fr, "tri_variant_rewrite", rewrite)
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         result["articles"], []))
     pool = [
         {"_unverified_spare": True, "source": SimpleNamespace(name="A"),
@@ -206,7 +206,7 @@ def test_short_category_does_not_use_below_floor_spare(monkeypatch):
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
         "articles": [{"source_id": 0}]})
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         result["articles"], []))
     pool = [{"_unverified_spare": True, "source": SimpleNamespace(name="C"),
              "_winner_brief": {"title": "Thin-day fallback",

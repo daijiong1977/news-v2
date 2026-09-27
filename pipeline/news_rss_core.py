@@ -850,6 +850,14 @@ What real kid reporters do:
   · Mix sentence lengths. Short ones for impact. Longer ones for explaining.
   · Show enthusiasm — let the "wow, did you know?!" energy come through
 
+For serious News (war, deaths, disasters or threats), the rules above have
+an exception: be calm, direct and compassionate, not excited or cinematic.
+Do not ask the child to imagine being attacked or in danger. A brief factual
+mention that people died may be necessary; do not lead with a child's death,
+describe bodies, injuries or wreckage, dwell on a witness's fear, or list
+weapon/tactical details. Explain the new development, context and what
+people are doing about it. Do not erase an essential fact or invent hope.
+
 You will receive N source articles. For EACH, produce THREE variants:
 
 1. easy_en — English. READER IS A 10-YEAR-OLD (grade 4).
@@ -944,8 +952,12 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "CATEGORY: News.\n"
         "Voice: a curious kid reporter explaining a current event to friends.\n"
         "Lead with the WHO + WHAT + WHY-IT-MATTERS in the first paragraph,\n"
-        "but use a concrete vivid detail to hook (a specific number, place,\n"
-        "or quote). Stay neutral — present what each side says without\n"
+        "using a concrete, age-appropriate detail (a number or place).\n"
+        "For war, death, terrorism and disasters, use a calm factual hook,\n"
+        "not a scene of harm or an invitation to imagine danger. State\n"
+        "casualties briefly when essential, but omit graphic aftermath,\n"
+        "fearful witness quotes and weapon or attack mechanics.\n"
+        "Stay neutral — present what each side says without\n"
         "editorializing. For important politics, diplomacy or civic technology,\n"
         "explain necessary adult background in plain language rather than\n"
         "dropping the event or inventing a child-specific impact. Include\n"
@@ -1084,6 +1096,16 @@ facts land harder on a younger reader even in simpler words).
 Score CONSERVATIVELY — flagging a borderline story is cheap; a parent
 complaint is not.
 
+Judge the ACTUAL REWRITTEN WORDS, not the source topic. War, conflict or a
+brief factual statement that someone died is not by itself graphic violence,
+severe fear, or a severe adult theme. Score violence by explicit or vivid
+depiction of injury/death and attack mechanics; fear by the sense of imminent
+danger conveyed to a child; distress by sustained grief, panic or suffering.
+A calm age-appropriate explanation can score 0-2 on these dimensions even
+when the underlying event is grave. Conversely, a child-in-danger opening,
+graphic wreckage, frightened-witness quotes, or detailed attack descriptions
+may warrant 4-5. Do not lower scores just because the event is important.
+
 Return ONLY valid JSON (no markdown fences):
 {"scores": {"<source_id>": {"violence":N,"sexual":N,"substance":N,
  "language":N,"fear":N,"adult_themes":N,"distress":N,"bias":N}, ...}}"""
@@ -1142,6 +1164,65 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
     return out
 
 
+HARD_NEWS_SAFETY_REPAIR_PROMPT = """You are revising ONE already-written kids News
+article after an independent reviewer found that its actual wording was too
+violent, frightening or distressing for a 10-year-old. This is NOT permission
+to erase the war, death or other central news fact. Keep a brief, calm factual
+statement of casualties if essential, but move it away from the opening.
+Remove descriptions of injuries, wreckage, sounds of attack, fearful witness
+quotes, and weapon or attack mechanics. Explain the new development, relevant
+background and response in neutral language. Never invent facts, quotes,
+reassurances or an outcome not present in the input. Do not editorialize.
+Write 320-380 words for middle_body and 150-250 words for easy_body; count
+before returning. Return only valid JSON:
+{"middle_body": "...", "easy_body": "..."}"""
+
+
+def repair_hard_news_safety(article: dict) -> dict | None:
+    """One conservative rewrite plus fresh independent review; never self-approve."""
+    from .forbidden_filter import is_forbidden
+
+    middle = (article.get("middle_en") or {}).get("body") or ""
+    easy = (article.get("easy_en") or {}).get("body") or ""
+    if not middle or not easy:
+        return None
+    try:
+        payload = deepseek_call(
+            HARD_NEWS_SAFETY_REPAIR_PROMPT,
+            f"--- middle_en ---\n{middle}\n\n--- easy_en ---\n{easy}",
+            max_tokens=2500, temperature=0.2)
+        new_middle = (payload.get("middle_body") or "").strip()
+        new_easy = (payload.get("easy_body") or "").strip()
+        if (not new_middle or not new_easy
+                or not _wc_within_qa("middle", len(new_middle.split()))
+                or not _wc_within_qa("easy", len(new_easy.split()))
+                or is_forbidden(new_middle)[0] or is_forbidden(new_easy)[0]):
+            log.info("  hard-news safety repair unusable for source_id=%s "
+                     "(middle=%dw easy=%dw; length/forbidden check)",
+                     article.get("source_id"), len(new_middle.split()), len(new_easy.split()))
+            return None
+        revised = {**article,
+                   "middle_en": {**(article.get("middle_en") or {}), "body": new_middle},
+                   "easy_en": {**(article.get("easy_en") or {}), "body": new_easy}}
+        new_scores = independent_safety_vet([revised]).get(article.get("source_id"))
+        if not new_scores:
+            log.warning("  hard-news safety repair missing fresh independent scores "
+                        "for source_id=%s", article.get("source_id"))
+            return None
+        revised["safety"] = new_scores
+        revised["_independent_vet_status"] = "scored_after_repair"
+        revised_eval = evaluate_rewriter_safety(revised)
+        if revised_eval["verdict"] != "PASS":
+            log.info("  hard-news safety repair still over threshold for source_id=%s: %s",
+                     article.get("source_id"), revised_eval["reason"])
+            return None
+        return revised
+    except Exception as e:  # noqa: BLE001 — failed repair cannot bypass rejection
+        log.warning("  hard-news safety repair failed for source_id=%s: %s",
+                    article.get("source_id"), e)
+        return None
+
+
 # Word-count bands for generation-time measurement. Keep in sync with
 # quality_digest.BODY_TARGETS — those QA gates generate the
 # body_too_short / body_too_long tickets the morning after.
@@ -1190,6 +1271,9 @@ HARD RULES:
     ARTICLE section below.
   · Keep the kid-reporter voice and the hook opening. Do not add a
     headline, preamble, or commentary about your edit.
+  · For war, death or disasters, a concise factual mention is allowed, but
+    never expand using graphic aftermath, frightened-witness quotes, a
+    child-in-danger hook, or weapon/tactical detail from the source.
 
 Return ONLY valid JSON (no markdown fences): {"body": "<rewritten body>"}"""
 
@@ -1199,6 +1283,8 @@ central event, the essential explanation, and why it matters. Discard
 secondary examples, tangents, repeated background, and extra quotations.
 You may omit facts but must not change or invent any fact you retain.
 Write complete, engaging paragraphs for ages 12-14. Count the words.
+For war, death or disasters, keep necessary facts but omit graphic aftermath,
+frightened-witness quotes, child-in-danger hooks and weapon/tactical detail.
 Return ONLY valid JSON: {"body": "<new concise article>"}"""
 
 
@@ -1327,6 +1413,7 @@ def repair_wordcounts(rewrite_result: dict,
 def filter_safe_rewrites(
     rewrite_result: dict,
     sources_by_id: dict | None = None,
+    *, category: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split rewriter articles into (kept, rejected) by Stage 3 safety.
 
@@ -1337,7 +1424,9 @@ def filter_safe_rewrites(
       2. Deterministic forbidden-term scan over the REWRITTEN easy+middle
          bodies (previously only RSS title/summary was screened, so a
          body-only self-harm mention passed every gate).
-      3. The existing strict any_dim>=3 threshold on the winning scores.
+      3. Existing per-dimension thresholds on the independent scores. One
+         News-only wording repair may be attempted for violence/fear/distress
+         after an independent rejection; it requires a second independent pass.
 
     Rejects bodies outside the digest's QA tolerance after repair, instead
     of publishing a known defect. The caller may try a safe spare.
@@ -1392,6 +1481,23 @@ def filter_safe_rewrites(
                   "scores": art.get("safety") or {}}
         else:
             ev = evaluate_rewriter_safety(art)
+            scores = ev.get("scores") or {}
+            repairable = (category == "News"
+                          and art.get("_independent_vet_status") == "scored"
+                          and ev["verdict"] == "REJECT"
+                          and all((scores.get(d, 0) or 0) < STRICT_SAFETY_THRESHOLD
+                                  for d in STRICT_SAFETY_DIMS)
+                          and (scores.get("bias", 0) or 0) < NEWS_SAFETY_THRESHOLD
+                          and any((scores.get(d, 0) or 0) >= NEWS_SAFETY_THRESHOLD
+                                  for d in ("violence", "fear", "distress", "adult_themes")))
+            if repairable:
+                revised = repair_hard_news_safety(art)
+                if revised is not None:
+                    art = revised
+                    ev = evaluate_rewriter_safety(art)
+                    wc_flags = _wordcount_flags(art)
+                    log.info("  Stage 3 hard-news safety repair passed fresh independent vet "
+                             "for source_id=%s", art.get("source_id"))
 
         qa_flags = []
         for level in WC_BANDS:

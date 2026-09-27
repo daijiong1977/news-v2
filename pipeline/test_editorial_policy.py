@@ -112,7 +112,7 @@ def test_new_publisher_spare_uses_safety_and_skips_same_publisher(monkeypatch):
     monkeypatch.setattr(core, "verify_article_content", lambda a: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda *a, **k: {"articles": [{"source_id": 0}]})
     vetted = []
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         vetted.append(sources[0]["title"]) or [], result["articles"]))
     pool = [same, other]
     assert fr.promote_spare_and_rewrite(

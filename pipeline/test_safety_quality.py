@@ -186,6 +186,55 @@ def test_severe_news_dim_rejected():
     assert core.evaluate_rewriter_safety(_safety(fear=5))["verdict"] == "REJECT"
 
 
+def test_factual_war_death_is_not_an_automatic_safety_reject(monkeypatch):
+    article = _article(middle_text=("The war continued. One person died. Talks continued. " * 38).strip())
+    monkeypatch.setattr(core, "repair_hard_news_safety",
+                        lambda art: (_ for _ in ()).throw(AssertionError("unneeded repair")))
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "violence": 1, "adult_themes": 2}})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert len(kept) == 1 and not rejected
+    assert kept[0]["_independent_vet_status"] == "scored"
+
+
+def test_severe_hard_news_gets_one_rewrite_and_fresh_independent_vet(monkeypatch):
+    article = _article()
+    scores = [{**{d: 0 for d in core.SAFETY_DIMS}, "fear": 4, "distress": 4},
+              {**{d: 0 for d in core.SAFETY_DIMS}, "fear": 1, "distress": 1}]
+    calls = []
+    def fake_vet(arts):
+        calls.append(arts[0]["middle_en"]["body"])
+        return {0: scores.pop(0)}
+    monkeypatch.setattr(core, "independent_safety_vet", fake_vet)
+    monkeypatch.setattr(core, "deepseek_call", lambda *args, **kwargs: {
+        "middle_body": "calm " * 350, "easy_body": "calm " * 200})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert len(kept) == 1 and not rejected
+    assert len(calls) == 2 and calls[0] != calls[1]
+    assert kept[0]["_independent_vet_status"] == "scored_after_repair"
+
+
+def test_hard_news_repair_that_fails_fresh_vet_stays_rejected(monkeypatch):
+    article = _article()
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "violence": 4}})
+    monkeypatch.setattr(core, "deepseek_call", lambda *args, **kwargs: {
+        "middle_body": "calm " * 350, "easy_body": "calm " * 200})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert not kept and len(rejected) == 1
+    assert rejected[0]["_safety_eval"]["scores"]["violence"] == 4
+
+
+def test_strict_or_non_news_rejection_does_not_enter_repair(monkeypatch):
+    article = _article()
+    monkeypatch.setattr(core, "repair_hard_news_safety",
+                        lambda art: (_ for _ in ()).throw(AssertionError("bad repair")))
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "language": 3, "fear": 4}})
+    assert len(core.filter_safe_rewrites({"articles": [article]}, category="News")[1]) == 1
+    assert len(core.filter_safe_rewrites({"articles": [_article()]}, category="Fun")[1]) == 1
+
+
 def test_strict_dims_still_reject_at_3():
     # Sexual / substance / language are never-appropriate regardless of news value.
     for d in ("sexual", "substance", "language"):

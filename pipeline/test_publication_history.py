@@ -128,7 +128,7 @@ def test_refill_tries_other_catalog_without_same_day_model_call(monkeypatch):
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
         "articles": [{"source_id": 0}]})
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         result["articles"], []))
     monkeypatch.setattr("pipeline.publication_history.make_client",
                         lambda: pytest.fail("different catalog needed no same-day model call"))
@@ -159,7 +159,7 @@ def test_same_catalog_refill_uses_best_remaining_catalog_pick(monkeypatch):
     rewritten = []
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: (
         rewritten.append(articles[0][1]["title"]) or {"articles": [{"source_id": 0}]}))
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         result["articles"], []))
 
     monkeypatch.setattr("pipeline.publication_history.make_client",
