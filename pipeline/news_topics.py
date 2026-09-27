@@ -26,10 +26,9 @@ SCIENCE_TOPIC_CRITERIA = {
     "astronomy_space": "Astronomy, the moon, planets, stars, galaxies or space missions",
     "physics": "Physics, forces, energy, particles, light or fundamental physical laws",
     "chemistry_materials": "Chemistry, molecules, reactions, materials or new substances",
-    "biology_ecology": "Animal, plant, ecosystem, evolution or biological research",
+    "biology_ecology": "Animal and plant biology, animal behavior, new species, ecosystems, evolution or biological research",
     "earth_climate": "Geology, oceans, weather science, Earth systems or climate research",
     "medicine_health": "Medical research, human biology, disease mechanisms or treatments",
-    "engineering_technology": "Engineering research, inventions, robotics or applied technology",
     "fossils_archaeology": "Fossils, dinosaurs, archaeology or ancient-life discoveries",
     "other": "Science story that fits none of the groups above",
 }
@@ -41,7 +40,9 @@ FUN_TOPIC_CRITERIA = {
     "film_tv": "Movies, television, shows, actors or animation",
     "games": "Video games, board games, puzzles or play",
     "arts_books": "Books, art, theatre, comics or creative projects",
-    "animal_events": "Animal contests, unusual animal activities or events such as Fat Bear Week; not animal research",
+    "animal_events": "Pets, animal contests, unusual animal activities or amusing wildlife events such as Fat Bear Week; biology and animal research stay in Science",
+    "technology": "Technology, engineering applications, robotics, inventions, devices, software or technology policy/business; AI uses artificial_intelligence",
+    "artificial_intelligence": "AI research, applications, models, AI in schools, AI policy or AI business; choose this over technology when AI is central",
     "history_culture": "History, cultural traditions, museums or heritage",
     "kids_community": "Children's achievements, schools, community projects or uplifting human-interest",
     "other": "Fun story that fits none of the groups above",
@@ -49,7 +50,7 @@ FUN_TOPIC_CRITERIA = {
 TOPICS_BY_CATEGORY = {"News": TOPIC_CRITERIA,
                       "Science": SCIENCE_TOPIC_CRITERIA,
                       "Fun": FUN_TOPIC_CRITERIA}
-ALL_TOPIC_LABELS = set().union(*(set(criteria) for criteria in TOPICS_BY_CATEGORY.values()))
+ALL_TOPIC_LABELS = set().union(*(set(criteria) for criteria in TOPICS_BY_CATEGORY.values())) | {"engineering_technology"}  # legacy checkpoints
 MIN_CONFIDENCE = 0.70
 
 
@@ -91,8 +92,9 @@ def tag_topics(category: str, briefs: list[dict], client=None) -> dict:
             f"Choose the PRIMARY editorial topic for this {category} brief. "
             "Different events on the same broad topic share a label; this is "
             "not a same-event or child-safety judgment. Choose exactly one "
-            "label. An animal research discovery is Science biology_ecology; "
-            "Fat Bear Week and animal contests are Fun animal_events. "
+            "label. Animal research/new species/behavior/ecology use Science biology_ecology; "
+            "Fat Bear Week and non-scientific animal happenings use Fun animal_events. "
+            "Technology uses Fun technology; AI uses Fun artificial_intelligence. "
             "Within Fun, swimming and tennis are separate from other_sports."
         )
         question = {"topic": Choice(instructions=instructions,

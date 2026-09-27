@@ -26,6 +26,7 @@ class Fake:
         self.by_title: dict[str, float] = {}
         self.fit_by_title: dict[str, float] = {}
         self.sports_priority_by_title: dict[str, float] = {}
+        self.value_by_title: dict[str, float] = {}
 
     def system_one(self, state, questions):
         if self.delay:
@@ -45,6 +46,8 @@ class Fake:
             if "sports_priority" in questions:
                 answers["sports_priority"] = SimpleNamespace(
                     score=self.sports_priority_by_title.get(t, 0))
+            if "section_value" in questions:
+                answers["section_value"] = SimpleNamespace(score=self.value_by_title.get(t, 2))
             return SimpleNamespace(answers=answers)
         self.pair_calls += 1
         if self.pairs_fail:
@@ -185,7 +188,7 @@ def test_one_source_never_takes_more_than_the_hard_ceiling():
     pool += [_b(f"Other piece word{i}", src=f"Src{i}", pick=0.62 - i / 100) for i in range(6)]
     (out, rep), _ = _run({"Fun": pool})
     six = jr.for_curator(out)["Fun"]
-    assert len(six) == 6 and sum(b["_source_name"] == "BBC Tennis" for b in six) == jr.HARD_PER_SOURCE
+    assert len(six) == 7 and sum(b["_source_name"] == "BBC Tennis" for b in six) == jr.HARD_PER_SOURCE
     assert _distinct(six) >= jr.MIN_DISTINCT_SOURCES
     assert any("from this source" in d["why"] for d in rep["skipped"])
 

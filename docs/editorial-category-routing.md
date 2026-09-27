@@ -2,6 +2,21 @@
 
 This page is the tuning map for the daily News / Science / Fun pipeline. A section is where a story is published; a topic is only a *soft* way to diversify the first three picks within that section. Neither is an event-identity or child-safety verdict.
 
+For actual source counts, every pool boundary, per-section run statistics and
+timing, see the [Sep-26 pipeline funnel audit](pipeline-funnel-audit-2026-09-26.md).
+Its baseline and subsequent policy changes are recorded separately.
+
+Science now targets at least two qualified publishers, grouping ScienceDaily
+feeds together. The preference applies before rewrite and again among safe
+finalists; unavailable alternatives produce an explicit warning. Publisher
+identity and the final preference live in `pipeline/editorial_policy.py`.
+Physics and chemistry are existing topic labels, not guaranteed daily slots.
+
+College recruiting, verbal commitments, recruiting rankings and transfer-portal
+announcements are excluded editorial types, not merely sports stories without
+a ranking bonus. The shared rule also covers spares and carry-over. Actual
+college competition and records remain eligible.
+
 ## Order of decisions
 
 1. RSS collection and existing forbidden-word/preview checks build the candidate pool.
@@ -16,10 +31,21 @@ This page is the tuning map for the daily News / Science / Fun pipeline. A secti
 | Section | Intended stories | Jev topic labels |
 | --- | --- | --- |
 | News | Government, diplomacy, conflict, severe weather, infrastructure and public-health events | `us_politics`, `international_relations`, `war_security`, `severe_weather`, `transport_infrastructure`, `public_health`, `science_environment`, `community`, `technology_business`, `sports`, `entertainment`, `other` |
-| Science | Research and discoveries in nature, space, health and technology | `astronomy_space`, `physics`, `chemistry_materials`, `biology_ecology`, `earth_climate`, `medicine_health`, `engineering_technology`, `fossils_archaeology`, `other` |
-| Fun | Sports, music, screen entertainment, games, arts, animal events, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `history_culture`, `kids_community`, `other` |
+| Science | Physics, chemistry, astronomy, Earth/climate, biology (including animal research), medicine and archaeology | `astronomy_space`, `physics`, `chemistry_materials`, `biology_ecology`, `earth_climate`, `medicine_health`, `fossils_archaeology`, `other` |
+| Fun | Technology and AI stories; non-scientific animal happenings; sports, music, screen entertainment, games, arts, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `technology`, `artificial_intelligence`, `history_culture`, `kids_community`, `other` |
 
-Examples: Fat Bear Week is a Fun `animal_events` story; a study of bears is Science `biology_ecology`; a threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. The News `sports` and `entertainment` labels remain for uncertain/borderline feed items, but confident routing should usually move those to Fun.
+Examples: Fat Bear Week is Fun `animal_events`; a biology study of bears or a newly discovered animal species is Science `biology_ecology`. AI in schools is Fun `artificial_intelligence`; a new telescope instrument is Fun `technology`, while a star discovery using a telescope remains Science `astronomy_space`. A threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. News labels remain for uncertain/borderline feed items; confident routing moves technology/AI stories and non-scientific animal happenings to Fun.
+
+用户更新（9/26）：Tech 与 AI 放 Fun；生物学研究、新物种、动物行为、恐龙/动物化石和生态研究保留 Science。动物趣闻、宠物、比赛和有趣的野生动物活动归 Fun。共享定义位于 `editorial_policy.SECTION_POLICY`，同时用于 Jev 路由、栏目适配（含 deep-dig）和主编。`animal_events` 保留旧名称避免破坏历史标签；新增 `technology`、`artificial_intelligence`。旧 `engineering_technology` 仅兼容历史 checkpoint。按主旨判断，提到 AI 工具不意味着一篇化学稿自动变成 AI 新闻。仍保留 0.90 路由置信度和故障回退；不保证每篇都成功识别。购物、招募、低儿童相关性与安全规则不放宽。需从采集重新运行验证，旧 checkpoint 不会自动重新分栏；本次不迁移来源表或历史已发布稿。
+
+### Science → Fun 来源候选（9/17–9/26 feed 快照）
+
+- **Popular Science（source 121，当前启用）**：RSS 返回 58 条。包含 Fat Bear Week、动物趣闻、奇特动物动态和消费科技，能补 Fun 题材；也混有生物发现与购物指南，因此建议转入 Fun 后继续按单篇分栏/禁购物规则筛选。
+- **ScienceDaily Top Technology（source 6，当前启用）**：36 条，但近期包括大量 LHC、量子物理、行星、天文等研究。来源名里的 Technology 不代表整条 feed 都属于 Fun，建议留在 Science，由逐稿路由处理明确的 AI/机器人/设备稿。
+- **MIT Technology Review（source 110，当前停用）**：feed 可读，但样本含 Pentagon AI 测谎器、边境监控、器官移植等成人政策主题；暂不建议为了填 Fun 而启用。
+- **IEEE Spectrum（source 338，当前停用）**：本次 RSS 请求返回 HTTP 403，暂不能作为可用供稿源。
+
+因此当前有证据支持的源级调整只有 Popular Science 一条；若希望至少两条，宜再找一条活跃、专门且可抓取的 AI/Tech feed，不建议把 science-heavy 的整条 feed 一起搬走。生产来源表尚未改动。
 
 Fun sports are split by sport, not by the broad `sports` label: a swimming race and a tennis match can both appear among the three published Fun articles if they are different events and pass all other gates. Diving and water polo belong to `other_sports`. This remains a preference, not a quota: no swimming story is invented or forced into an edition without a suitable candidate. SwimSwam is an enabled Fun feed in the live source registry (two-day cadence); BBC Tennis is also enabled (daily cadence). Source selection can skip either feed on a particular day.
 
@@ -48,3 +74,13 @@ The mega-curator sees the high `sports_priority` annotation and uses the same pr
 Run `./.venv/bin/python -m pytest -q pipeline/test_editorial_routing.py pipeline/test_news_topics.py` for routing and grouping, then the relevant full pipeline tests. Inspect run telemetry for `section_route`, `jev_rank`, `editorial_topics`, `enrich`, safety rejects and per-section counts. Spot-check every move and the published first three in each section for cross-section event duplicates, topic repetition and genuine category fit. Jev calls cost tokens and time, so compare phase durations and counts with a baseline before widening the probe pool or adding extra calls. A manual dated run can use the workflow's `run_date` input; make sure it is the intended US editorial date when UTC has already crossed midnight.
 
 For future changes to this live project, create a branch and PR, test and review it, then merge into `main` only with the requested approval. The workflow can be dispatched on a branch for validation; that is not a merge.
+# Jev 栏目价值与送审量（PR #69 后续调整）
+
+- News / Science 送主编上限保持 6；Fun 上限改为 **7**。保留池仍为 10，主编最多排 5、首批改写 4、最终发布 3；不是把改写量提高到 7。低分或不合格候选不足时，不强凑 7。
+- `pipeline/jev_prefilter.py` 在同一次预筛请求中新增 `recruiting` 语义判断，≥0.90 提前排除大学体育招募/承诺/转学通道稿。它不受软性「保留 8 篇」保护；shadow 只记录、off 不执行，Jev 故障维持既有回退。正则规则仍是另一路防线。
+- `pipeline/jev_rank.py` 在原有逐稿评分请求中新增 `section_value`（0–4）：News 为对美国/美国儿童的实际重要性；Science 为科学发现与学习价值；Fun 为真实儿童趣味。标准见 `SECTION_VALUE_LEVELS`，不能把美国地名、名人或煽动标题当作重要性。
+- 3/4 分分别给予 0.10/0.18 排名加分；与已有体育加分取最大值，不叠加。Fun ≤1 分不会进入主编、备用池或 deep-dig 补稿，即使池薄也不恢复；未知/失败评分不冒充低趣味评分，保留现有故障回退。
+- News：重要性 ≥3、原始 pick ≥0.40、栏目适配 ≥0.60 的候选优先进送审池，仍受事件去重等硬规则约束。主编被要求保留至少一篇；代码对主编返回候选、最终安全候选再次重排。若最终没有，记录告警。不会凭重要性跳过安全门禁，也不保证在候选缺失、主编剔除或安全拒绝后一定凑到一篇。
+- 该优先项可能在必要时让位于一篇重要报道，而不是强保三个 feed/题材。Science 两出版方规则不变。对 News 的判断基于后果与儿童相关性，不能按党派、政治立场或对政策的赞同加分。
+- `section_value` 会写入 `_jev_rank`、送主编日志及主编输入。阈值集中在上述两个文件和 `pipeline/editorial_policy.py`；调整后运行 `test_editorial_value.py` 及离线全套。
+- 不新增逐稿模型请求轮次，但每次请求的输入/输出会略增；实际 token、耗时和编辑效果须在新一轮模型运行中衡量，不能声称免费或已验证提升。

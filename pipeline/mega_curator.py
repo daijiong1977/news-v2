@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 
 from .news_rss_core import deepseek_reasoner_call
 from .news_topics import topic_group
+from .editorial_policy import publisher_key, prefer_science_publishers
+from .editorial_policy import prefer_important_news, SECTION_POLICY
 
 log = logging.getLogger("mega-curator")
 
@@ -84,6 +86,20 @@ ALGORITHM (internal, don't output intermediate work):
        than 3 sources contributing candidates after the safety vet —
        in that case state so explicitly in `reasoning`. Ranks 4-5 may
        repeat a source freely (they are spares).
+     - In SCIENCE, prefer at least TWO independent publishers among the
+       top three whenever qualified alternatives exist. Different
+       ScienceDaily feeds are ONE publisher. Preserve topic diversity
+       (physics, chemistry, astronomy, biology, etc.) within that choice.
+     - Exclude college recruitment, verbal commitments, recruiting
+       rankings and signing announcements. These are not Fun news.
+       Actual college races, championships and records remain eligible.
+     - News: when eligible, keep at least one section_value >= 3 story
+       with concrete importance for the US or US children in the top three.
+       Importance means consequences, never party preference or sensationalism.
+     - Science: use section_value as scientific learning/discovery value.
+       Fun: use section_value as genuine child-facing enjoyment, not merely
+       a sports/entertainment label. Fun may supply up to seven candidates;
+       still rank at most five, for three final stories and reserves.
      - Cross-category tiebreak (same cluster wanted by two cats):
          News × Fun     → keep the Fun pick
          News × Science → keep the Science pick
@@ -130,9 +146,12 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             topic = topic_group(brief)
             topic_note = f" editorial_topic={topic}" if topic else ""
             sport_score = (brief.get("_jev_rank") or {}).get("sports_priority", 0)
+            value = (brief.get("_jev_rank") or {}).get("section_value")
+            value_note = f" section_value={value}/4" if value is not None else ""
             sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
                           else "")
-            line = (f"  [id={cid}] src={src_name}{topic_note}{sport_note}\n"
+            line = (f"  [id={cid}] src={src_name} publisher={publisher_key(brief.get('_source'))}"
+                    f"{topic_note}{sport_note}{value_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)
@@ -186,7 +205,7 @@ def mega_curate(
     # keeps outgrowing incremental bumps. 64k is well under the API's
     # accepted ceiling (131072 verified) and billing is per generated
     # token, so the headroom is free unless actually used.
-    res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
+    res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT + "\nSECTION POLICY:\n" + SECTION_POLICY, user_msg,
                                   max_tokens=65536)
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""
@@ -238,6 +257,14 @@ def mega_curate(
     # keeps 3 distinct sources, so it doesn't undo the source pass.
     out = _enforce_top3_subject_diversity(out)
     out = _prefer_top3_topic_diversity(out)
+    if "News" in out:
+        out["News"] = prefer_important_news(out["News"])
+        for rank, pick in enumerate(out["News"], start=1):
+            pick["rank"] = rank
+    if "Science" in out:
+        out["Science"] = prefer_science_publishers(out["Science"])
+        for rank, pick in enumerate(out["Science"], start=1):
+            pick["rank"] = rank
 
     for cat, picks in out.items():
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),
