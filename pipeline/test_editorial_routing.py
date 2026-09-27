@@ -72,18 +72,33 @@ def test_new_taxonomy_routes_animals_ai_and_technology_without_losing_entries():
     pool = {"Science": [{"title": t} for t in [titles[0], *titles[2:]]],
             "News": [{"title": titles[1]}], "Fun": []}
     answers = {"Sea spider species discovered": ("Science", .99),
-               "New AI school rules": ("Fun", .99),
+               "New AI school rules": ("News", .99),
                "A new robot": ("Fun", .99),
                "New chemical reaction": ("Science", .99),
                "A distant star": ("Science", .99)}
     out, report = routing.route_briefs(pool, client=PolicyFake(answers), route_mode="on")
-    assert {b["title"] for b in out["Fun"]} == set(titles[1:3])
+    assert {b["title"] for b in out["Fun"]} == {titles[2]}
+    assert {b["title"] for b in out["News"]} == {titles[1]}
     assert {b["title"] for b in out["Science"]} == {titles[0], titles[3], titles[4]}
     assert sum(map(len, out.values())) == 5
-    assert len(report["moved"]) == 2
+    assert len(report["moved"]) == 1
     # Assert the downstream fit gate uses exactly the same policy.
     assert all(SECTION_POLICY in v for v in jev_rank.CATEGORY_FIT_CRITERIA.values())
     assert {"animal_events", "technology", "artificial_intelligence"} <= set(news_topics.FUN_TOPIC_CRITERIA)
     assert news_topics.topic_group({"_jev_topic_group": "biology_ecology"}) == "biology_ecology"
     assert "engineering_technology" not in news_topics.SCIENCE_TOPIC_CRITERIA
     assert news_topics.topic_group({"_jev_topic_group": "engineering_technology"}) == "engineering_technology"
+
+
+def test_sports_url_forces_fun_even_when_jev_calls_it_news():
+    sport = {"title": "Ireland wears black armbands for Israel game",
+             "link": "https://www.bbc.co.uk/sport/football/articles/example"}
+    politics = {"title": "CNN excluded from Air Force One for football trip",
+                "link": "https://www.pbs.org/newshour/politics/cnn-football-trip"}
+    out, report = routing.route_briefs(
+        {"News": [sport, politics], "Science": [], "Fun": []},
+        client=FakeJev({sport["title"]: ("News", .99),
+                        politics["title"]: ("News", .99)}), route_mode="on")
+    assert out["News"] == [politics]
+    assert out["Fun"] == [sport]
+    assert len(report["moved"]) == 1

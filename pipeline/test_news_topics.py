@@ -68,7 +68,7 @@ def test_stage3_spare_prefers_new_topic_and_keeps_unattempted(monkeypatch):
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: (
         attempts.append(articles[0][1]["title"]) or {"articles": [{"source_id": 0}]}))
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources=None: (result["articles"], []))
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources=None, **kwargs: (result["articles"], []))
 
     def spare(title, group, source):
         brief = {"title": title, "_jev_topic_group": group,

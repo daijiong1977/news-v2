@@ -83,6 +83,12 @@ STORAGE_BASE = f"{SUPABASE_URL}/storage/v1/object/public/redesign-daily-content"
 SEND_EMAIL_URL = f"{SUPABASE_URL}/functions/v1/send-email-v2"
 
 CATS  = ("news", "science", "fun")
+MIN_DISTINCT_SOURCES = {"news": 3, "science": 2, "fun": 3}
+
+
+def source_diversity_ok(category: str, distinct_sources: int) -> bool:
+    """Science tolerates one repeated source; missing attribution is checked per story."""
+    return distinct_sources >= MIN_DISTINCT_SOURCES[category]
 # Only English levels are evaluated — cn is summary-only and lives
 # in a different JSON shape that doesn't have body/keywords/why,
 # so quality metrics aren't meaningful there.
@@ -275,14 +281,16 @@ def gather_day(date_iso: str) -> dict:
                     story["sources"].add(metrics["source"])
             cat_block["stories"].append(story)
             cat_block["sources"].extend(story["sources"])
-        # Diversity: top-3 stories should come from 3 distinct sources.
+        # Science may use one source twice when the stories cover different
+        # topics; two distinct sources are sufficient for the digest alert.
+        # News and Fun still aim for three distinct sources.
         # Use easy-level source as the canonical "source of the story".
         easy_sources = [
             s["levels"]["easy"]["source"]
             for s in cat_block["stories"]
             if s["levels"].get("easy") and not s["levels"]["easy"].get("missing")
         ]
-        cat_block["diversity_ok"] = len(set(easy_sources)) == 3
+        cat_block["diversity_ok"] = source_diversity_ok(cat, len(set(easy_sources)))
         cat_block["distinct_source_count"] = len(set(easy_sources))
         out["categories"][cat] = cat_block
     return out
@@ -861,6 +869,9 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
         lines.append(render_rollback_panel(rollback_rows))
 
     total_variants, bad_variants = _count_pass_fail(days)
+    diversity_issues = any(
+        not block.get("diversity_ok", False)
+        for day in days for block in day.get("categories", {}).values())
     queue_count = (queue or {}).get("count", 0)
     escalated_count = len(escalated_rows)
     open_pr_count = len(open_prs)
@@ -874,7 +885,7 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
     # don't bother with the per-day tables. Just confirm "today is good"
     # without listing every checked date — user only wants to see dates
     # that have something wrong.
-    if (bad_variants == 0 and queue_count == 0 and escalated_count == 0
+    if (bad_variants == 0 and not diversity_issues and queue_count == 0 and escalated_count == 0
             and open_pr_count == 0 and rollback_count == 0):
         today_label = days[0]["date"] if days else datetime.now(ET).date().isoformat()
         missing = [d["date"] for d in days if d.get("missing_day")]
@@ -925,7 +936,8 @@ def render_html(days: list[dict], queue: dict | None = None) -> str:
             if not block["diversity_ok"]:
                 issue_lines.append(
                     f'<li><strong>{d["date"]} · {cat.upper()}</strong>: '
-                    f'only {block["distinct_source_count"]}/3 distinct sources. '
+                    f'only {block["distinct_source_count"]}/'
+                    f'{MIN_DISTINCT_SOURCES[cat]} distinct sources. '
                     '<em>Check:</em> review eligible candidates and Stage-3 safety results; '
                     'a third source is used only when its article passes all gates.</li>'
                 )

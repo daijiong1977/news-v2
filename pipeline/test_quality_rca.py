@@ -5,6 +5,30 @@ from types import SimpleNamespace
 
 from pipeline import autofix_apply as af
 from pipeline import full_round as fr
+from pipeline import quality_digest as qd
+
+
+def test_quality_digest_science_allows_two_sources_but_other_sections_need_three():
+    assert qd.source_diversity_ok("science", 2)
+    assert not qd.source_diversity_ok("science", 1)
+    assert not qd.source_diversity_ok("news", 2)
+    assert not qd.source_diversity_ok("fun", 2)
+    assert qd.source_diversity_ok("news", 3)
+
+
+def test_quality_digest_only_alerts_science_below_two_sources(monkeypatch):
+    monkeypatch.setattr(qd, "fetch_open_prs", lambda: [])
+    monkeypatch.setattr(qd, "fetch_escalated_rows", lambda: [])
+    monkeypatch.setattr(qd, "fetch_rollbackable_prs", lambda: [])
+    monkeypatch.setattr(qd, "fetch_pipeline_runs", lambda n: [])
+    day = {"date": "2026-09-27", "categories": {
+        cat: {"stories": [], "diversity_ok": qd.source_diversity_ok(cat, count),
+              "distinct_source_count": count}
+        for cat, count in (("news", 3), ("science", 2), ("fun", 3))}}
+    assert "quality issue" not in qd.render_html([day])
+    day["categories"]["science"]["diversity_ok"] = False
+    day["categories"]["science"]["distinct_source_count"] = 1
+    assert "only 1/2 distinct sources" in qd.render_html([day])
 
 
 def test_body_autofix_requires_source_for_expansion(monkeypatch):
@@ -145,7 +169,7 @@ def test_new_source_spare_gets_normal_safety_gate(monkeypatch):
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
         "articles": [{"source_id": 0}]})
     checked = []
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         checked.append(sources[0]["title"]) or result["articles"], []))
     pool = [{"_unverified_spare": True, "source": SimpleNamespace(name="C"),
              "_winner_brief": {"title": "Swimming record at world championships",
@@ -168,7 +192,7 @@ def test_refill_uses_best_ranked_candidate_when_topic_preference_is_equal(monkey
         return {"articles": [{"source_id": 0}]}
 
     monkeypatch.setattr(fr, "tri_variant_rewrite", rewrite)
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         result["articles"], []))
     pool = [
         {"_unverified_spare": True, "source": SimpleNamespace(name="A"),
@@ -200,13 +224,13 @@ def test_diversity_only_replacement_respects_editorial_floor(monkeypatch):
     assert winner is None and article is None
 
 
-def test_short_category_can_still_use_below_floor_spare(monkeypatch):
+def test_short_category_does_not_use_below_floor_spare(monkeypatch):
     from pipeline import news_rss_core as core
 
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
         "articles": [{"source_id": 0}]})
-    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources: (
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (
         result["articles"], []))
     pool = [{"_unverified_spare": True, "source": SimpleNamespace(name="C"),
              "_winner_brief": {"title": "Thin-day fallback",
@@ -214,4 +238,4 @@ def test_short_category_can_still_use_below_floor_spare(monkeypatch):
                                "_probe_art": {"title": "Thin-day fallback"}}}]
     winner, article = fr.promote_spare_and_rewrite(
         "Fun", pool, used_source_names={"A", "B"})
-    assert winner["source"].name == "C" and article["source_id"] == 0
+    assert winner is None and article is None
