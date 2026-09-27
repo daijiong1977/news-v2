@@ -12,6 +12,23 @@ from urllib.parse import urlsplit
 
 SCIENCE_MIN_PUBLISHERS = 2
 
+# One taxonomy shared by routing and downstream category-fit scoring.
+SECTION_POLICY = (
+    "Editorial policy: animal-related stories belong in Fun, including animal research, "
+    "new species, dinosaurs, animal fossils, behavior, conservation and animal policy. "
+    "Technology and AI stories also belong in Fun, including robotics, inventions, "
+    "software, devices, engineering applications, AI research, AI in schools, "
+    "technology business and regulation. These Fun assignments take precedence over "
+    "the source feed and over the usual research=Science or policy=News convention. "
+    "Judge the central subject, not incidental mentions: a chemistry study using an "
+    "AI tool remains chemistry; a star discovery using a telescope remains astronomy; "
+    "a new telescope instrument is technology. Science retains physics, chemistry, "
+    "astronomy, Earth/climate science, plant/human biology, medicine and archaeology "
+    "when animals, technology or AI are not the central subject. News retains other "
+    "current affairs. Fun also includes sports, music, film, games, arts, history and "
+    "children's achievements. Classification never grants safety or publication approval."
+)
+
 
 def section_value(brief: dict) -> float | None:
     return (brief.get("_jev_rank") or {}).get("section_value")

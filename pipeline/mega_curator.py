@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from .news_rss_core import deepseek_reasoner_call
 from .news_topics import topic_group
 from .editorial_policy import publisher_key, prefer_science_publishers
-from .editorial_policy import prefer_important_news
+from .editorial_policy import prefer_important_news, SECTION_POLICY
 
 log = logging.getLogger("mega-curator")
 
@@ -205,7 +205,7 @@ def mega_curate(
     # keeps outgrowing incremental bumps. 64k is well under the API's
     # accepted ceiling (131072 verified) and billing is per generated
     # token, so the headroom is free unless actually used.
-    res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
+    res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT + "\nSECTION POLICY:\n" + SECTION_POLICY, user_msg,
                                   max_tokens=65536)
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""

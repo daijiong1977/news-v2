@@ -10,23 +10,20 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .jev_prefilter import WORKERS, make_client
+from .editorial_policy import SECTION_POLICY
 
 log = logging.getLogger("editorial-routing")
 
 SECTIONS = ("News", "Science", "Fun")
 MIN_MOVE_CONFIDENCE = 0.90
 SECTION_CRITERIA = {
-    "News": "Current affairs: government, elections, diplomacy, conflict, severe weather, infrastructure disruptions, public health events",
-    "Science": "Scientific research or discovery in astronomy, physics, chemistry, biology, medicine, engineering or environment",
-    "Fun": "Sports, music, movies, TV, games, arts, contests, kid achievements, history or amusing human-interest",
+    "News": "Other current affairs: government, elections, diplomacy, conflict, severe weather, infrastructure disruptions, public health; animal/technology/AI-centered stories go to Fun",
+    "Science": "Physics, chemistry, astronomy, Earth/climate, plant/human biology, medicine and archaeology; animal research and technology/AI go to Fun",
+    "Fun": "All animal, technology and AI stories (including research and policy), plus sports, music, movies, games, arts, contests, kid achievements and history",
 }
 SECTION_INSTRUCTIONS = (
     "Choose the best section for a US kids news site. Judge the actual story, "
-    "not the feed label. An animal SCIENCE discovery or research finding is "
-    "Science; an animal contest, event or amusing activity (including Fat "
-    "Bear Week) is Fun. Sports, music, TV, film, games and children's "
-    "achievements are Fun even when reported by a news outlet. A storm "
-    "threatening people, government decision, diplomacy or conflict is News. "
+    "not the feed label. " + SECTION_POLICY + " "
     "Return one best section."
 )
 

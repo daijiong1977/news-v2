@@ -56,3 +56,29 @@ def test_failed_one_brief_keeps_its_original_section():
     out, report = routing.route_briefs(pool, client=FakeJev(answers), route_mode="on")
     assert report["failed"] == 1
     assert [b["title"] for b in out["News"]] == ["A storm"]
+
+
+def test_new_taxonomy_routes_animals_ai_and_technology_without_losing_entries():
+    from pipeline.editorial_policy import SECTION_POLICY
+    from pipeline import jev_rank, news_topics
+
+    class PolicyFake(FakeJev):
+        def system_one(self, state, questions):
+            assert SECTION_POLICY in routing.SECTION_INSTRUCTIONS
+            return super().system_one(state, questions)
+
+    titles = ["Sea spider species discovered", "New AI school rules", "A new robot",
+              "New chemical reaction", "A distant star"]
+    pool = {"Science": [{"title": t} for t in [titles[0], *titles[2:]]],
+            "News": [{"title": titles[1]}], "Fun": []}
+    answers = {t: ("Fun" if i < 3 else "Science", .99) for i, t in enumerate(titles)}
+    out, report = routing.route_briefs(pool, client=PolicyFake(answers), route_mode="on")
+    assert {b["title"] for b in out["Fun"]} == set(titles[:3])
+    assert {b["title"] for b in out["Science"]} == set(titles[3:])
+    assert sum(map(len, out.values())) == 5
+    assert len(report["moved"]) == 3
+    # Assert the downstream fit gate uses exactly the same policy.
+    assert all(SECTION_POLICY in v for v in jev_rank.CATEGORY_FIT_CRITERIA.values())
+    assert {"animal_events", "technology", "artificial_intelligence"} <= set(news_topics.FUN_TOPIC_CRITERIA)
+    assert "engineering_technology" not in news_topics.SCIENCE_TOPIC_CRITERIA
+    assert news_topics.topic_group({"_jev_topic_group": "engineering_technology"}) == "engineering_technology"

@@ -57,6 +57,7 @@ from .jev_prefilter import MAX_ERROR_RATE, WORKERS, make_client
 from .mega_curator import briefs_same_event, join_event_group, titles_same_story
 from .editorial_policy import publisher_key, editorial_exclusion, SCIENCE_MIN_PUBLISHERS
 from .editorial_policy import low_fun_value, important_news
+from .editorial_policy import SECTION_POLICY
 
 log = logging.getLogger("jev-rank")
 
@@ -147,8 +148,8 @@ SECTION_VALUE_LEVELS = {
     "Fun": [
         "No child-facing enjoyment: recruiting, roster paperwork, adult industry or commercial news",
         "Sports/entertainment label only; routine commitments, rankings of recruits or adult business detail",
-        "An accessible entertaining story a child might enjoy",
-        "A genuinely engaging new result, playful idea, creative achievement or update young fans care about",
+        "An accessible entertaining or curiosity-building animal, technology, AI or cultural story a child might enjoy",
+        "A genuinely engaging animal discovery, technology/AI advance, new sporting result, playful idea or creative achievement",
         "A delightful or remarkable event children would eagerly share; a landmark result for young fans",
     ],
 }
@@ -167,11 +168,8 @@ def _section_questions(base, cat):
     return questions
 CATEGORY_FIT_Q = "Does this story belong in the named section?"
 CATEGORY_FIT_CRITERIA = {
-    "true": "News=current affairs; Science=discoveries, nature, space, medicine, engineering or research; "
-            "Fun=sports, music, movies, games, arts, kid achievements, history or amusing human-interest. "
-            "A science discovery is Science even when it is surprising or fun.",
-    "false": "The story primarily belongs in another section. In particular, astronomy, dinosaurs, fossils, "
-             "animal research and technology research do not belong in Fun.",
+    "true": "The story belongs in the named section under this policy: " + SECTION_POLICY,
+    "false": "The story belongs in another section under this policy: " + SECTION_POLICY,
 }
 SAME_STORY_Q = "Do these headlines cover the same real-world event family or stages/angles of one ongoing event " \
                "that a daily editor should combine into one article?"
