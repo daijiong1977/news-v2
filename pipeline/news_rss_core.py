@@ -116,6 +116,14 @@ def reset_provider_resolution() -> None:
 
 MIN_WORDS_DEFAULT = 500
 MAX_RSS_DEFAULT = 25
+RSS_FETCH_TIMEOUT = 15
+RSS_FETCH_HEADERS = {
+    # The HTML browser UA triggers PBS's challenge page on its RSS endpoint,
+    # while an unlabelled requests client can stall on CBC. Both publishers
+    # returned normal feeds with this explicit RSS-reader identity.
+    "User-Agent": "UniversalFeedParser/6.0",
+    "Accept": "application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
+}
 VIDEO_PATH_RE = re.compile(r"/video/", re.I)
 HTML_FETCH_TIMEOUT = 15
 HTML_FETCH_HEADERS = {
@@ -257,7 +265,19 @@ def fetch_rss_entries(url: str, max_entries: int = MAX_RSS_DEFAULT,
     on it). Stops once we've collected `max_entries` fresh entries.
     Entries with no parseable date are KEPT (safer to err on inclusion
     when the source feed doesn't provide dates)."""
-    feed = feedparser.parse(url)
+    # feedparser.parse(url) owns its network request and has no reliable
+    # timeout. CBC's public world feed can hang there even when a normal
+    # bounded HTTP GET returns immediately. Fetch bytes ourselves, then let
+    # feedparser handle only parsing. A failed feed is an empty source, so
+    # Phase A can continue to the other configured publishers.
+    try:
+        response = requests.get(url, timeout=RSS_FETCH_TIMEOUT,
+                                headers=RSS_FETCH_HEADERS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        log.warning("rss fetch failed [%s]: %s", url[:80], exc)
+        return []
+    feed = feedparser.parse(response.content)
     out: list[dict] = []
     dropped_old = 0
     no_date_kept = 0
