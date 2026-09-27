@@ -546,14 +546,11 @@ function buildDigestHtml(stats, opts) {
   </div>`;
 }
 
-// Cadence toggle + "Send me a copy now" button. The "Send now" button
-// builds an email from THIS DEVICE's localStorage stats and posts to
-// send-email-v2 directly — works regardless of whether a kid is linked
-// to a cloud parent account, which is the common case.
-function DigestCadenceToggle({ parentRow, session, stats, onChanged }) {
+// Scheduled digest is available to signed-in parents. The former "send now"
+// control let an unauthenticated browser choose any recipient and HTML body;
+// it is intentionally removed rather than leaving a public mail relay.
+function DigestCadenceToggle({ parentRow, onChanged }) {
   const [busy, setBusy] = useState(false);
-  const [busySend, setBusySend] = useState(false);
-  const [sendStatus, setSendStatus] = useState(null); // null | 'ok' | string(err)
   const cur = (parentRow && parentRow.digest_cadence) || 'off';
 
   const setCadence = async (c) => {
@@ -563,45 +560,6 @@ function DigestCadenceToggle({ parentRow, session, stats, onChanged }) {
     setBusy(false);
     if (error) { console.warn('[parent] set_digest_cadence', error.message); return; }
     onChanged && onChanged();
-  };
-
-  const sendNow = async () => {
-    // Recipient: signed-in email if present, else prompt.
-    let toEmail = (session && session.user && session.user.email) || '';
-    if (!toEmail) {
-      const v = window.prompt('Email this report to:');
-      if (!v || !v.includes('@')) return;
-      toEmail = v.trim();
-    }
-    setBusySend(true); setSendStatus(null);
-    try {
-      if (!stats || !stats.tweaks) throw new Error('No data to report yet — open kidsnews on this device first.');
-      const sourceLabel = stats.__source === 'cloud'
-        ? `Cloud · ${stats.tweaks.userName || 'kid'}`
-        : 'This device';
-      const html = buildDigestHtml(stats, { sourceLabel });
-      const kidName = stats.tweaks.userName || 'kid';
-      const subject = `kidsnews · ${kidName}'s full reading report`;
-      const text = `kidsnews · ${kidName}'s reading report\n\n` +
-        `${stats.articlesTouched} articles · ${stats.totalAttempts} quizzes · ${stats.avgPct}% avg correct.\n\n` +
-        `(Open in any HTML-capable email client to see the full report — every section of the dashboard is included.)`;
-      const res = await fetch(SUPABASE_URL + '/functions/v1/send-email-v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to_email: toEmail,
-          subject, html, message: text,
-          from_name: 'kidsnews parent dashboard',
-        }),
-      });
-      const data = await res.json();
-      if (data && data.success) setSendStatus('ok');
-      else setSendStatus((data && data.error) || `send-email-v2 ${res.status}`);
-    } catch (e) {
-      setSendStatus(e.message || String(e));
-    }
-    setBusySend(false);
-    setTimeout(() => setSendStatus(null), 6000);
   };
 
   return (
@@ -620,21 +578,6 @@ function DigestCadenceToggle({ parentRow, session, stats, onChanged }) {
           cursor: busy ? 'wait' : 'pointer', fontFamily: 'Nunito, sans-serif',
         }}>{c.label}</button>
       ))}
-      <button onClick={sendNow} disabled={busySend}
-        title="Email the full report (every dashboard section) to your inbox"
-        style={{
-          background: '#fff', color: '#1b1230',
-          border: '2px solid #ffc83d', borderRadius: 999,
-          padding: '4px 12px', fontWeight: 800, fontSize: 12,
-          cursor: busySend ? 'wait' : 'pointer',
-          fontFamily: 'Nunito, sans-serif',
-        }}>{busySend ? 'Sending…' : '📤 Email me the full report'}</button>
-      {sendStatus === 'ok' && (
-        <span style={{ color: '#0e8d82', fontWeight: 800 }}>✓ Sent — check your inbox.</span>
-      )}
-      {sendStatus && sendStatus !== 'ok' && (
-        <span style={{ color: '#b22525', fontWeight: 700 }}>✗ {sendStatus}</span>
-      )}
       {parentRow && parentRow.digest_last_sent_at && (
         <span style={{ color: '#9a8d7a' }}>· last sent {formatRelative(parentRow.digest_last_sent_at)}</span>
       )}
@@ -980,40 +923,11 @@ function RecoveryCodeButton({ session, selectedKid }) {
     if (!sb || !session?.user?.email) return;
     setBusy(true); setStatus(null);
     try {
-      const codeRes = await sb.rpc('generate_parent_recovery_code', { p_client_id: selectedKid.client_id });
-      if (codeRes.error) throw new Error(codeRes.error.message);
-      const code = codeRes.data;
-      if (!code) throw new Error('No code returned');
-      const kidName = selectedKid.display_name || 'your kid';
-      const subject = `kidsnews · recovery code for ${kidName}`;
-      const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#fff9ef;padding:24px;color:#1b1230;">
-        <h2 style="font-family:Georgia,serif;margin:0 0 12px;">Recovery code for ${kidName}</h2>
-        <p style="font-size:14px;color:#3a2a4a;line-height:1.5;">
-          On the device where ${kidName} wants to use kidsnews, open the profile panel and choose
-          <strong>I have a 6-digit code</strong>, then enter:
-        </p>
-        <div style="font-family:Georgia,serif;font-weight:900;font-size:42px;letter-spacing:.2em;background:#fff;padding:18px 24px;border:2.5px solid #1b1230;border-radius:18px;display:inline-block;margin:14px 0;">
-          ${code}
-        </div>
-        <p style="font-size:12px;color:#9a8d7a;line-height:1.5;">
-          This code is single-use and expires in 24 hours. After ${kidName} claims it, all
-          their reading streak and history come back. If they sign in with Google during
-          this session, they won't need a recovery code next time.
-        </p>
-      </div>`;
-      const text = `Recovery code for ${kidName}: ${code}\n\nThis code is single-use and expires in 24 hours.`;
-      const res = await fetch(SUPABASE_URL + '/functions/v1/send-email-v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to_email: session.user.email,
-          subject, html, message: text,
-          from_name: 'kidsnews',
-        }),
+      const { data, error } = await sb.functions.invoke('send-recovery-code', {
+        body: { client_id: selectedKid.client_id },
       });
-      const data = await res.json();
-      if (data && data.success) setStatus('ok');
-      else setStatus((data && data.error) || `send-email-v2 ${res.status}`);
+      if (error || !data?.success) throw new Error(data?.error || error?.message || 'Could not send recovery code');
+      setStatus('ok');
     } catch (e) {
       setStatus(e.message || String(e));
     }
@@ -1100,7 +1014,7 @@ function CloudBanner({ session, kids, signIn, signOut, source, setSource, select
           session={session}
           selectedKid={kids.find(k => k.client_id === selectedKidId) || kids[0]}
         />
-        <DigestCadenceToggle parentRow={parentRow} session={session} stats={stats} onChanged={() => refreshKids && refreshKids()}/>
+        <DigestCadenceToggle parentRow={parentRow} onChanged={() => refreshKids && refreshKids()}/>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'inline-flex', borderRadius: 10, overflow: 'hidden', border: '2px solid #f0e8d8' }}>

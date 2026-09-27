@@ -18,6 +18,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { timingSafeEqual } from "../_shared/email_security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,13 +26,6 @@ const corsHeaders = {
 };
 
 const SEND_EMAIL_SECRET = Deno.env.get("SEND_EMAIL_SECRET") || "";
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length || a.length === 0) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 function htmlToText(html: string): string {
   return html
@@ -48,6 +42,9 @@ function htmlToText(html: string): string {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return new Response(JSON.stringify({ error: "POST only" }), {
+    status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
   try {
     // ── AUTH GATE (new) ──
     if (!SEND_EMAIL_SECRET) {
@@ -87,7 +84,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (e) {
     console.error("Send email error:", e);
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
+    return new Response(JSON.stringify({ error: "Email unavailable" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

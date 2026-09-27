@@ -1,83 +1,64 @@
-# Email security hardening — send-email-v2 open relay + magic-link token exposure
+# Email and magic-link security rollout
 
-**Status:** code drafted, NOT deployed — awaiting owner review.
-**Owner constraint:** the live site must not be affected. This spec's rollout
-order guarantees zero downtime for login and digests.
+The live `kidsnews.21mins.com` client still calls `issue_magic_link` from an
+anonymous browser session and receives the raw token. It also posts arbitrary
+recipient/HTML to `send-email-v2`, deployed with `verify_jwt=false`. The
+`send-digest` worker is publicly triggerable while holding a service-role
+key. These are real security issues, not a news-quality preference.
 
-## The two holes
+## Completed code in PR #35
 
-1. **`send-email-v2` is an open relay.** `verify_jwt=false`, no secret check.
-   Anyone can POST `{to_email, subject, html, from_name}` and send arbitrary
-   mail from the project's Gmail, with a spoofable sender display name →
-   phishing/spam from your domain, Gmail suspension, reputation loss.
-2. **Magic-link token handed to the browser.** `kidsync.js` called
-   `issue_magic_link` and got the raw token client-side, then emailed it via
-   the open relay. So anyone can mint + consume a link for any email without
-   inbox access.
+- `request-magic-link` issues the token server-side and sends a fixed email.
+  The response never contains the token. A link may target only the two
+  production origins; a supplied evil `Origin` cannot redirect the token.
+- `send-recovery-code` validates the parent's Supabase Auth JWT, checks that
+  the requested kid belongs to that parent, runs the existing recovery RPC as
+  the caller, then sends to the authenticated email. Recipient and HTML cannot
+  be chosen by the browser.
+- The anonymous parent-dashboard "email this device's full report to any
+  address" button is removed per owner choice. Scheduled digest remains.
+- `send-digest` and `send-email-v2` require `x-internal-secret`, backed by one
+  64-character random `SEND_EMAIL_SECRET` in Supabase and GitHub Actions.
+  Quality digest, parent digest, and pipeline watchdog supply this header.
+- After the new site is live, a database migration revokes `issue_magic_link`
+  from PUBLIC, anon and authenticated. Only service_role may receive a raw
+  token. The migration must not run before the site changes.
 
-The client uses `send-email-v2` for THREE email types today (all let the
-browser control recipient + HTML + sender):
-- `kidsync.js` — kid magic-link sign-in.
-- `parent.jsx:588` — parent "email me the reading report".
-- `parent.jsx:1005` — parent "email the kid's recovery code".
+## Production rollout — order matters
 
-## Principle
+1. Store the *same* new `SEND_EMAIL_SECRET` in the Supabase project and in
+   the `daijiong1977/news-v2` GitHub Actions secrets. Never put it in the
+   repository or browser bundle.
+2. Deploy `request-magic-link` with `--no-verify-jwt` (kids have no Supabase
+   Auth session) and `send-recovery-code` with JWT verification enabled.
+   Leave the old relay untouched. Smoke-test a test sign-in email and ensure
+   the response contains no token; reject invalid recovery requests.
+3. Merge PR #35. `website/**` triggers the republish/sync/Vercel workflow.
+   Verify the fresh public `kidsync.js` no longer mentions `issue_magic_link`
+   or `send-email-v2`, and the parent page no longer posts to the relay.
+   Verify a sign-in email and authenticated recovery email end-to-end.
+4. Deploy the revised `send-digest` with `--no-verify-jwt`; its own secret
+   gate is mandatory. Check unauthenticated calls return 403 and the parent
+   digest GitHub workflow passes the secret. Confirm quality digest and
+   watchdog callers have their GitHub secret available.
+5. Apply `20260927_restrict_magic_link_issuance.sql`. Confirm anonymous
+   `issue_magic_link` calls are denied while server-side sign-in still works.
+6. **Last**, deploy the hardened `send-email-v2` with `--no-verify-jwt`.
+   Confirm no-secret requests return 403, a fixed-content sign-in email is
+   delivered, and scheduled/admin mail still works. Do not publish the
+   shared secret or test it in a browser.
 
-The browser must never control `to_email` + `html` + `from_name`. Each email
-type gets a purpose-built server function that composes the body server-side;
-`send-email-v2` becomes an internal, secret-gated SMTP relay.
+Do not merge first and wait to deploy the additive functions: the website
+automatically republishes from `main`, so login would break during that gap.
+Do not deploy the relay gate before the website and server callers have moved.
 
-## Pieces (in this PR)
+## Validation and limitations
 
-- `supabase/functions/request-magic-link/index.ts` — NEW. Takes `{email,
-  client_id}`, issues the token server-side (never returns it), composes the
-  sign-in email, forwards to send-email-v2 with the secret. Replaces the
-  kid magic-link path.
-- `supabase/functions/send-email-v2/index.ts` — hardened: requires
-  `x-internal-secret == SEND_EMAIL_SECRET`, else 403. (This repo now holds the
-  source; previously it lived only on Supabase.)
-
-## Pieces (follow-up, described here — build when rolling out)
-
-- `send-recovery-code` edge fn (verify_jwt=true): takes `{kid_client_id}`,
-  reads the caller's email from the JWT, composes + sends. Replaces
-  `parent.jsx:1005`.
-- `send-parent-digest` edge fn (verify_jwt=true): composes the digest
-  server-side from the caller's kid data, sends to the JWT email. Replaces
-  `parent.jsx:588` (recipient stops being client-controlled).
-- Client edits: `kidsync.js` → call `request-magic-link`; `parent.jsx` → call
-  the two new functions. Remove all direct `send-email-v2` fetches.
-- Server callers add the secret header: `pipeline/quality_digest.py`,
-  `supabase/functions/send-digest/index.ts`, `.github/workflows/pipeline-watchdog.yml`.
-
-## Zero-downtime rollout order (CRITICAL)
-
-send-email-v2's lockdown is deployed LAST, only after every caller passes the
-secret — so there is never a window where a legit caller is rejected.
-
-1. Create the secret: `SEND_EMAIL_SECRET` (Supabase project secret) — a random
-   32+ char string. Set it on the project so all edge fns + the GH secret.
-2. Deploy `request-magic-link` (+ the two parent functions). Additive — nothing
-   else changes yet. send-email-v2 still open, so they work.
-3. Ship the client (kidsync.js + parent.jsx) pointing at the new functions.
-   Site deploy. Now no browser calls send-email-v2 directly.
-4. Update the 3 server callers to send `x-internal-secret`. Deploy them.
-   (Harmless extra header while send-email-v2 is still open.)
-5. Deploy the hardened `send-email-v2` (requires the secret). Now every caller
-   passes it → relay closed, zero breakage.
-
-## Verification per phase
-
-- After 2: `curl request-magic-link` with a test email → 200 + email arrives;
-  token never in the response.
-- After 3: real kid + parent sign-in still work (magic link, recovery, digest).
-- After 5: `curl send-email-v2` WITHOUT the secret → 403; WITH → 200. Digests
-  + login still work end-to-end.
-
-## Notes
-
-- Magic-link *binding* (requester vs clicker device) is already fixed and live
-  (PR #33 / `2026-07-08-magic-link-binds-clicking-device.md`).
-- `request-magic-link` stays verify_jwt=false (kids are anonymous); abuse is
-  capped by issue_magic_link's 5-active-links-per-email limit. Consider adding
-  a per-IP rate limit at rollout.
+Run `deno test supabase/functions/_shared/email_security_test.ts`, `deno
+check` on the four edge functions, the relevant Python digest tests, and a
+browser syntax check before rollout. The public magic-link request remains
+anonymous by necessity; the existing RPC limits five unconsumed links per
+email in 30 minutes. Because a malicious caller could still request fixed
+sign-in emails to many addresses, monitor volume and add a stronger global
+abuse control if observed. No child-safety or article-selection threshold is
+changed by this security work.

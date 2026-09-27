@@ -19,11 +19,15 @@
 // Bug: docs/superpowers/specs/2026-07-08-email-security-hardening.md
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { magicLinkOrigin } from "../_shared/email_security.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY")!;
 const SEND_EMAIL_SECRET = Deno.env.get("SEND_EMAIL_SECRET") || "";
+// Accept only the two production origins. Never use an arbitrary Origin header
+// in a sign-in link: an attacker can otherwise direct the token to their site.
+const SITE_URL = (Deno.env.get("KIDSNEWS_SITE_URL") || "https://kidsnews.21mins.com").replace(/\/$/, "");
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -74,8 +78,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch {
     return json(400, { error: "Invalid JSON body" });
   }
-  if (!email || email.indexOf("@") < 1 || email.length > 320) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
     return json(400, { error: "Please enter a valid email." });
+  }
+  if (clientId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientId)) {
+    return json(400, { error: "Invalid device ID." });
   }
 
   // 1. Issue the token server-side (bound to the REQUESTING device). The
@@ -86,16 +93,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
   if (issueErr || !token) {
     // issue_magic_link raises "Too many pending links..." past 5 active.
-    const msg = issueErr?.message || "Could not create a sign-in link.";
-    const status = /too many/i.test(msg) ? 429 : 500;
-    return json(status, { error: msg });
+    const limited = /too many/i.test(issueErr?.message || "");
+    return json(limited ? 429 : 500, {
+      error: limited ? "Too many sign-in requests. Try again later." : "Could not create a sign-in link."
+    });
   }
 
   // 2. Compose the sign-in email server-side and send via the (now
-  //    secret-gated) relay. The origin comes from the request so the link
-  //    points back at the site the user is on.
-  const origin = req.headers.get("origin") || "https://kidsnews.21mins.com";
-  const link = `${origin}/?magic=${encodeURIComponent(String(token))}`;
+  //    secret-gated) relay. The destination is configured server-side, not
+  //    chosen by an untrusted request header.
+  const requestedOrigin = req.headers.get("origin") || "";
+  const siteOrigin = magicLinkOrigin(requestedOrigin, SITE_URL);
+  const link = `${siteOrigin}/?magic=${encodeURIComponent(String(token))}`;
   const html = signinEmailHtml(link);
   const text =
     "Sign in to kidsnews\n\nTap to sync this email to your reading streak:\n" +

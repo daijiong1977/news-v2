@@ -2,25 +2,26 @@
 // kid(s)' reading activity.
 //
 // Triggered by the GitHub Actions cron (.github/workflows/parent-digest.yml)
-// or manually via:  supabase functions invoke send-digest --no-verify-jwt
+// or manually by an authorized operator with x-internal-secret.
 //
 // Sends through the existing `send-email-v2` edge function (Gmail SMTP).
-// No additional secrets required — `send-email-v2` already has
-// GMAIL_ADDRESS / GMAIL_APP_PASSWORD configured in public.secrets.
+// Requires SEND_EMAIL_SECRET for both this cron entrypoint and the relay.
 //
 // Optional env override:
 //   - PARENT_DASHBOARD_URL  e.g. "https://kidsnews.21mins.com/parent.html"
 //                           defaults to that URL.
 //
 // SECURITY: uses the service-role key to bypass RLS for cross-parent
-// aggregation. Treat as an internal cron worker — keep its URL off the
-// public web; it's reached by GitHub Actions only.
+// aggregation. The URL is public, so every request must prove knowledge of
+// the internal secret before any data is queried or email is sent.
 
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { timingSafeEqual } from "../_shared/email_security.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SEND_EMAIL_SECRET = Deno.env.get("SEND_EMAIL_SECRET") ?? "";
 // send-email-v2 lives at /functions/v1/send-email-v2 on the SAME project.
 const SEND_EMAIL_URL = (SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/send-email-v2";
 const DASH_URL     = Deno.env.get("PARENT_DASHBOARD_URL") ?? "https://kidsnews.21mins.com/parent.html";
@@ -29,8 +30,7 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-// CORS — the parent dashboard calls this from the browser via the
-// "Send me a copy now" button. send-email-v2 uses the same pattern.
+// Internal caller only. CORS does not substitute for the secret gate.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -178,7 +178,7 @@ async function buildAndSend(parent: Parent): Promise<{ ok: boolean; reason?: str
 
   const res = await fetch(SEND_EMAIL_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-internal-secret": SEND_EMAIL_SECRET },
     body: JSON.stringify({
       to_email: parent.email,
       subject,
@@ -205,6 +205,11 @@ Deno.serve(async (req) => {
   // the actual POST is allowed.
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+  if (!SEND_EMAIL_SECRET || !timingSafeEqual(req.headers.get("x-internal-secret") || "", SEND_EMAIL_SECRET)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return new Response(JSON.stringify({ error: "Missing SUPABASE_URL/SERVICE_ROLE_KEY" }), {

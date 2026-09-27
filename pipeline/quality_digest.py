@@ -81,6 +81,7 @@ def resolve_recipients(cli_arg: str | None) -> list[str]:
 
 STORAGE_BASE = f"{SUPABASE_URL}/storage/v1/object/public/redesign-daily-content"
 SEND_EMAIL_URL = f"{SUPABASE_URL}/functions/v1/send-email-v2"
+SEND_EMAIL_SECRET = os.environ.get("SEND_EMAIL_SECRET", "")
 
 CATS  = ("news", "science", "fun")
 MIN_DISTINCT_SOURCES = {"news": 3, "science": 2, "fun": 3}
@@ -1011,18 +1012,23 @@ def send_email(to: str, subject: str, html: str) -> bool:
     if not SUPABASE_URL or not SUPABASE_KEY:
         log.error("missing SUPABASE_URL/SUPABASE_SERVICE_KEY")
         return False
+    if not SEND_EMAIL_SECRET:
+        log.error("missing SEND_EMAIL_SECRET")
+        return False
     body = json.dumps({
         "to_email": to,
         "subject":  subject,
         "html":     html,
         "from_name": "Kids News Pipeline",
     }).encode()
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+    }
+    headers["x-internal-secret"] = SEND_EMAIL_SECRET
     req = request.Request(
         SEND_EMAIL_URL, method="POST", data=body,
-        headers={
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-        },
+        headers=headers,
     )
     try:
         with request.urlopen(req, timeout=30) as r:
