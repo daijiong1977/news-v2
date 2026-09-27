@@ -55,7 +55,20 @@
   <footer>Every story is on <a href="https://kidsnews.21mins.com">kidsnews.21mins.com</a>. The hosts are AI voices; the writing and the choice of stories are ours.</footer>
 </div>
 <script>
-  var FEED = "https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/feed.xml";
+  // ?feed=test -> the Grok Bot shadow-week feed (2026-09-27). Only these two feeds: the page never
+  // subscribes anyone to a URL taken from the query string.
+  var FEEDS = {
+    real: "https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/feed.xml",
+    test: "https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews-test/feed.xml"
+  };
+  var which = new URLSearchParams(location.search).get("feed") === "test" ? "test" : "real";
+  var FEED = FEEDS[which];
+  if (which === "test") {
+    document.title = "Kids News TEST · Grok";
+    document.querySelector("h1").textContent = "Kids News TEST · Grok";
+    document.querySelector(".tag").textContent = "Test feed · not the real show";
+    document.querySelector("p.lede").textContent = "A one-week test: the same show made by a different AI, published to its own feed so it can be compared with the real one. Subscribe to both, listen side by side.";
+  }
   var bare = FEED.replace(/^https?:\/\//, "");
   document.getElementById("url").textContent = FEED;
   // Apple Podcasts opens podcast:// links straight into "follow this show".
