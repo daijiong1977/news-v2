@@ -55,12 +55,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .jev_prefilter import MAX_ERROR_RATE, WORKERS, make_client
 from .mega_curator import briefs_same_event, join_event_group, titles_same_story
+from .editorial_policy import publisher_key, editorial_exclusion, SCIENCE_MIN_PUBLISHERS
 
 log = logging.getLogger("jev-rank")
 
 TO_CURATOR = 6              # the curator ranks 5 of these; one is its to drop
 MIN_SEND = 4                # below this the floor yields — see FLOOR
-MAX_PER_SOURCE = 2          # among the 6, so its "3 different sources in the top 3" rule stays satisfiable
+MAX_PER_SOURCE = 2          # among the 6; Science groups by publisher, others by feed
 MIN_DISTINCT_SOURCES = 3    # what the curator's top-3 rule needs to be satisfiable at all
 CAP_YIELD_GAP = 0.10        # a 3rd from one source beats an alternative this much worse
 HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
@@ -358,10 +359,6 @@ class _Pairs:
         return None
 
 
-def _distinct(bs) -> int:
-    return len({b.get("_source_name") for b in bs})
-
-
 def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _Pairs,
             recent_titles: list[str]) -> tuple[list[dict], list[tuple[dict, str]], int]:
     """Greedy top-TO_CURATOR. Returns (chosen, skipped, n_sent_below_floor).
@@ -378,6 +375,12 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
     news = cat == "News"
     floor = FLOOR.get(cat, DEFAULT_FLOOR)
     pick = lambda b: (b.get("_jev_pick") or 0.0)
+    # Multiple ScienceDaily feeds must not each get a separate source quota.
+    source_group = lambda b: (publisher_key(b.get("_source")) or b.get("_source_name")) \
+        if cat == "Science" else b.get("_source_name")
+    distinct = lambda bs: len({source_group(b) for b in bs})
+    diversity_target = SCIENCE_MIN_PUBLISHERS if cat == "Science" else MIN_DISTINCT_SOURCES
+    group_label = "publisher" if cat == "Science" else "source"
 
     chosen: list[dict] = []
     hard: list[tuple[dict, str]] = []
@@ -385,6 +388,9 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
     low: list[tuple[dict, str]] = []
 
     def hard_reason(b: dict) -> str | None:
+        excluded = editorial_exclusion(b)
+        if excluded:
+            return excluded
         fit = float(b.get("_jev_category_fit", 1.0))
         if fit < CATEGORY_FIT_MIN:
             return f"category fit {fit:.2f} is below {CATEGORY_FIT_MIN:.2f}"
@@ -399,14 +405,14 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
     def cap_may_yield(b: dict, rest: list[dict]) -> bool:
         """True when a 3rd brief from one source is worth more than what replacing it
         would cost. `rest` is what is still eligible below b in the ranking."""
-        others = [o for o in rest if o.get("_source_name") != b.get("_source_name")
+        others = [o for o in rest if source_group(o) != source_group(b)
                   and pick(o) >= floor]
         if others and pick(b) - pick(others[0]) <= CAP_YIELD_GAP:
             return False                                   # a comparable alternative exists
         # Taking b costs a slot; can the set still reach MIN_DISTINCT_SOURCES?
-        new_srcs = {o.get("_source_name") for o in others} - {c.get("_source_name") for c in chosen}
+        new_srcs = {source_group(o) for o in others} - {source_group(c) for c in chosen}
         slots_after = TO_CURATOR - len(chosen) - 1
-        return _distinct(chosen) + min(slots_after, len(new_srcs)) >= MIN_DISTINCT_SOURCES
+        return distinct(chosen) + min(slots_after, len(new_srcs)) >= diversity_target
 
     for i, b in enumerate(ranked):
         if len(chosen) == TO_CURATOR:
@@ -416,14 +422,14 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
             hard.append((b, why))
         elif pick(b) < floor:
             low.append((b, f"below the {cat} floor of {floor:.2f}"))
-        elif (sum(c.get("_source_name") == b.get("_source_name") for c in chosen) >= MAX_PER_SOURCE
-              and (sum(c.get("_source_name") == b.get("_source_name") for c in chosen) >= HARD_PER_SOURCE
+        elif (sum(source_group(c) == source_group(b) for c in chosen) >= MAX_PER_SOURCE
+              and (sum(source_group(c) == source_group(b) for c in chosen) >= HARD_PER_SOURCE
                    or not cap_may_yield(b, ranked[i + 1:]))):
-            capped.append((b, f"already {MAX_PER_SOURCE} from this source"))
+            capped.append((b, f"already {MAX_PER_SOURCE} from this {group_label}"))
         elif news and sum(pairs.relation(c, b, subject=True) == "subject" for c in chosen) >= MAX_SAME_SUBJECT:
             capped.append((b, f"already {MAX_SAME_SUBJECT} about the same subject"))
         else:
-            if sum(c.get("_source_name") == b.get("_source_name") for c in chosen) >= MAX_PER_SOURCE:
+            if sum(source_group(c) == source_group(b) for c in chosen) >= MAX_PER_SOURCE:
                 log.info("  [%s] source cap yielded for %.2f: no comparable alternative left", cat, pick(b))
             chosen.append(b)
 
@@ -438,7 +444,7 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
             if len(chosen) >= limit:
                 break
             if honour_ceiling and sum(
-                    c.get("_source_name") == b.get("_source_name") for c in chosen) >= HARD_PER_SOURCE:
+                    source_group(c) == source_group(b) for c in chosen) >= HARD_PER_SOURCE:
                 continue
             blocked = hard_reason(b)
             if blocked:
@@ -534,7 +540,8 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             # Reserve order: unchosen by rank, with same-story duplicates last — a
             # duplicate must never reach the curator by filling a thin pool's slots.
             dup_ids = {id(b) for b, why in skipped if "same story" in why}
-            rest = [b for b in ranked if not any(b is c for c in chosen)]
+            rest = [b for b in ranked if not any(b is c for c in chosen)
+                    and not editorial_exclusion(b)]
             rest = [b for b in rest if id(b) not in dup_ids] + [b for b in rest if id(b) in dup_ids]
             final = (chosen + rest)[:max(POOL_KEEP, len(chosen))]
             for pos, b in enumerate(final, start=1):

@@ -2,6 +2,21 @@
 
 This page is the tuning map for the daily News / Science / Fun pipeline. A section is where a story is published; a topic is only a *soft* way to diversify the first three picks within that section. Neither is an event-identity or child-safety verdict.
 
+For actual source counts, every pool boundary, per-section run statistics and
+timing, see the [Sep-26 pipeline funnel audit](pipeline-funnel-audit-2026-09-26.md).
+Its baseline and subsequent policy changes are recorded separately.
+
+Science now targets at least two qualified publishers, grouping ScienceDaily
+feeds together. The preference applies before rewrite and again among safe
+finalists; unavailable alternatives produce an explicit warning. Publisher
+identity and the final preference live in `pipeline/editorial_policy.py`.
+Physics and chemistry are existing topic labels, not guaranteed daily slots.
+
+College recruiting, verbal commitments, recruiting rankings and transfer-portal
+announcements are excluded editorial types, not merely sports stories without
+a ranking bonus. The shared rule also covers spares and carry-over. Actual
+college competition and records remain eligible.
+
 ## Order of decisions
 
 1. RSS collection and existing forbidden-word/preview checks build the candidate pool.

@@ -109,6 +109,7 @@ def validate_bundle(today: str, content_root: Path | None = None) -> None:
     default is the local website dir.
     """
     root = content_root or WEB
+    from .editorial_policy import editorial_exclusion
     errs: list[str] = []
 
     # Listing files — 2 or 3 per cat/lvl acceptable (ideal=3; 2 after
@@ -129,6 +130,8 @@ def validate_bundle(today: str, content_root: Path | None = None) -> None:
                 elif len(arts) < 3:
                     short_cats.add(f"{cat}/{lvl}")
                 for a in arts:
+                    if editorial_exclusion(a):
+                        errs.append(f"{p.name}: excluded college recruitment: {a.get('id', '?')}")
                     if not (a.get("title") and a.get("summary") and a.get("id")):
                         errs.append(f"{p.name}: article {a.get('id','?')} missing title/summary/id")
             except Exception as e:  # noqa: BLE001
@@ -161,6 +164,8 @@ def validate_bundle(today: str, content_root: Path | None = None) -> None:
                 continue
             try:
                 d = json.loads(p.read_text())
+                if editorial_exclusion(d):
+                    errs.append(f"{story_id}/{lvl}: excluded college recruitment")
                 if not (d.get("summary") and len((d.get("summary") or "").split()) >= 50):
                     errs.append(f"{story_id}/{lvl}: summary missing or <50 words")
                 for field, min_n in DETAIL_MIN:
@@ -419,8 +424,10 @@ def _topup_thin_categories(final_root: Path, old_root: Path,
     """Append carried-over stories from the previous live bundle to any
     category whose listings have 1..target-1 articles, until `target`.
     Copies the carried stories' detail payloads / images / PDFs. Pure
-    file ops — no LLM, no gate changes. Returns {cat: [carried ids]}."""
+    file ops — no LLM. Excluded editorial types cannot return as carry-over.
+    Returns {cat: [carried ids]}."""
     carried: dict[str, list[str]] = {}
+    from .editorial_policy import editorial_exclusion
     for cat in CATS:
         mid = final_root / "payloads" / f"articles_{cat}_middle.json"
         old_mid = old_root / "payloads" / f"articles_{cat}_middle.json"
@@ -436,7 +443,8 @@ def _topup_thin_categories(final_root: Path, old_root: Path,
             continue
         fresh_ids = {a.get("id") for a in fresh_arts}
         cand_ids = [a.get("id") for a in old_arts
-                    if a.get("id") and a["id"] not in fresh_ids]
+                    if a.get("id") and a["id"] not in fresh_ids
+                    and not editorial_exclusion(a)]
         cand_ids = cand_ids[: target - len(fresh_arts)]
         if not cand_ids:
             continue

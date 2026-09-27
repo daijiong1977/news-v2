@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 from .news_rss_core import deepseek_reasoner_call
 from .news_topics import topic_group
+from .editorial_policy import publisher_key, prefer_science_publishers
 
 log = logging.getLogger("mega-curator")
 
@@ -84,6 +85,13 @@ ALGORITHM (internal, don't output intermediate work):
        than 3 sources contributing candidates after the safety vet —
        in that case state so explicitly in `reasoning`. Ranks 4-5 may
        repeat a source freely (they are spares).
+     - In SCIENCE, prefer at least TWO independent publishers among the
+       top three whenever qualified alternatives exist. Different
+       ScienceDaily feeds are ONE publisher. Preserve topic diversity
+       (physics, chemistry, astronomy, biology, etc.) within that choice.
+     - Exclude college recruitment, verbal commitments, recruiting
+       rankings and signing announcements. These are not Fun news.
+       Actual college races, championships and records remain eligible.
      - Cross-category tiebreak (same cluster wanted by two cats):
          News × Fun     → keep the Fun pick
          News × Science → keep the Science pick
@@ -132,7 +140,8 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             sport_score = (brief.get("_jev_rank") or {}).get("sports_priority", 0)
             sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
                           else "")
-            line = (f"  [id={cid}] src={src_name}{topic_note}{sport_note}\n"
+            line = (f"  [id={cid}] src={src_name} publisher={publisher_key(brief.get('_source'))}"
+                    f"{topic_note}{sport_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)
@@ -238,6 +247,10 @@ def mega_curate(
     # keeps 3 distinct sources, so it doesn't undo the source pass.
     out = _enforce_top3_subject_diversity(out)
     out = _prefer_top3_topic_diversity(out)
+    if "Science" in out:
+        out["Science"] = prefer_science_publishers(out["Science"])
+        for rank, pick in enumerate(out["Science"], start=1):
+            pick["rank"] = rank
 
     for cat, picks in out.items():
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),

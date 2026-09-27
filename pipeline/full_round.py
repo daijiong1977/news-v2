@@ -31,6 +31,8 @@ from .fun_aggregate import run_source as run_fun
 # refer to e.g. `db_config.load_sources` per-call without re-importing.
 from . import checkpoints as ckpt
 from . import db_config
+from .editorial_policy import (editorial_exclusion, publisher_key,
+                               prefer_science_publishers, SCIENCE_MIN_PUBLISHERS)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("full-round")
@@ -611,6 +613,11 @@ def phase_a_light(category: str, sources, max_per_source: int = 4) -> list[dict]
             log.warning("[%s] feed fetch failed: %s", source.name, e)
             continue
         for entry in entries:
+            excluded = editorial_exclusion(entry)
+            if excluded:
+                log.info("  [%s] editorial DROP (%s): %s", category,
+                         excluded, (entry.get("title") or "")[:100])
+                continue
             briefs.append({
                 "title": entry.get("title") or "",
                 "summary": entry.get("summary") or "",
@@ -848,10 +855,16 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
             if cid in used:
                 continue
             brief = r["brief"]
+            if editorial_exclusion(brief):
+                log.info("  [%s] verify skipped college recruitment: %s",
+                         cat, (brief.get("title") or "")[:80])
+                continue
             # Stage 1.5 already body-fetched this brief; reuse the cached
             # article dict to avoid a second HTTP round-trip per pick.
             cached = brief.get("_probe_art") if isinstance(brief, dict) else None
             art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
+            if editorial_exclusion(art):
+                continue
             ok, reason = verify_article_content(art)
             if not ok:
                 log.info("  [%s] rank %s (%s) body-verify FAIL: %s",
@@ -934,6 +947,7 @@ def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict],
         b for b in briefs
         if (b.get("link") or b.get("title") or id(b)) not in used_keys
         and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
+        and not editorial_exclusion(b)
     ]
     out: list[dict] = []
     # keep_order: the pool arrives Jev-ranked, so promote spares best-first.
@@ -975,7 +989,7 @@ def _deep_dig_spares(cat: str, sources, exclude_links: set,
             continue
         for entry in entries:
             link = entry.get("link") or ""
-            if not link or link in seen:
+            if not link or link in seen or editorial_exclusion(entry):
                 continue
             seen.add(link)
             briefs.append({
@@ -1046,6 +1060,8 @@ def promote_spare_and_rewrite(
     used_event_groups: set[str] | None = None,
     used_topic_groups: set[str] | None = None,
     require_new_source: bool = False,
+    used_publishers: set[str] | None = None,
+    require_new_publisher: bool = False,
 ) -> tuple[dict | None, dict | None]:
     """Pop the next un-verified spare for `cat`, body+image verify, then
     run a 1-article tri_variant_rewrite. Returns (story_dict, rewrite_art)
@@ -1072,11 +1088,16 @@ def promote_spare_and_rewrite(
     shipped_briefs.extend({"title": t} for t in (used_titles or ()) if t)
     shipped_groups = set(used_event_groups or ())
     topics_used = set(used_topic_groups or ())
+    publishers_used = set(used_publishers or ())
 
     def _try_one(spare: dict):
         if not spare.get("_unverified_spare"):
             return None, None
         brief = spare.get("_winner_brief") or {}
+        if editorial_exclusion(brief):
+            log.info("  [%s] spare skipped college recruitment: %s",
+                     cat, (brief.get("title") or "")[:80])
+            return None, None
         spare_title = (brief.get("title") or "") if isinstance(brief, dict) else ""
         fit = float(brief.get("_jev_category_fit", 1.0))
         if fit < CATEGORY_FIT_MIN:
@@ -1090,7 +1111,7 @@ def promote_spare_and_rewrite(
         rank = brief.get("_jev_rank") or {}
         pick = rank.get("editorial_pick")
         floor = rank.get("floor")
-        if require_new_source and pick is not None and floor is not None \
+        if (require_new_source or require_new_publisher) and pick is not None and floor is not None \
                 and float(pick) < float(floor):
             log.info("  [%s] spare rank %s skipped — editorial pick %.2f below %.2f",
                      cat, spare.get("_rank"), float(pick), float(floor))
@@ -1103,6 +1124,8 @@ def promote_spare_and_rewrite(
             return None, None
         cached = brief.get("_probe_art") if isinstance(brief, dict) else None
         art = dict(cached) if cached else _fetch_and_enrich(dict(brief))
+        if editorial_exclusion(art):
+            return None, None
         ok, _ = verify_article_content(art)
         if not ok:
             return None, None
@@ -1142,6 +1165,9 @@ def promote_spare_and_rewrite(
         return int(repeats_topic), int(src_name in used)
 
     for spare in sorted(spares, key=_priority):
+        if require_new_publisher and (not publisher_key(spare.get("source"))
+                                      or publisher_key(spare.get("source")) in publishers_used):
+            continue
         if require_new_source and ((spare.get("source") and spare["source"].name) or "") in used:
             continue
         spares.pop(next(i for i, candidate in enumerate(spares) if candidate is spare))
@@ -2232,7 +2258,13 @@ def main_mega() -> None:
         s3_per_source: dict[str, dict] = {}
         for cat, bundle in rewrites_by_cat.items():
             winners = bundle.get("_winners") or []
-            rewrite_res = {"articles": bundle.get("articles") or []}
+            excluded_ids = {i for i, w in enumerate(winners)
+                            if editorial_exclusion(w.get("winner") or {})}
+            if excluded_ids:
+                log.info("  [%s] excluding %d recruiting rewrites (checkpoint guard)",
+                         cat, len(excluded_ids))
+            rewrite_res = {"articles": [a for a in bundle.get("articles") or []
+                                         if a.get("source_id") not in excluded_ids]}
             # source_id → source article, so the wc-repair pass can draw
             # real details from the source when a body needs expanding.
             srcs_by_id = {i: (w or {}).get("winner") or {}
@@ -2310,9 +2342,13 @@ def main_mega() -> None:
             # is short, so try a *new-source* spare here as well. This is a
             # preference, not a license to ship an unvetted or wrong-section
             # article merely to satisfy the digest's 3/3 source metric.
-            if len(survived_winners) >= 3 and len({
+            needs_publisher = cat == "Science" and len({
+                publisher_key(w.get("source")) for w in survived_winners
+            } - {""}) < SCIENCE_MIN_PUBLISHERS
+            needs_source = len({
                 w["source"].name for w in survived_winners if w.get("source")
-            }) < 3 and spare_pool:
+            }) < 3
+            if len(survived_winners) >= 3 and (needs_source or needs_publisher) and spare_pool:
                 used_names = {w["source"].name for w in survived_winners if w.get("source")}
                 used_briefs = [w.get("_brief") or w.get("_winner_brief")
                                or w.get("winner") or {} for w in survived_winners]
@@ -2324,6 +2360,8 @@ def main_mega() -> None:
                                        for b in used_briefs if b.get("_event_group")},
                     used_topic_groups={topic_group(b) for b in used_briefs if topic_group(b)},
                     require_new_source=True,
+                    used_publishers={publisher_key(w.get("source")) for w in survived_winners},
+                    require_new_publisher=needs_publisher,
                 )
                 if pw:
                     survived_winners.append(pw)
@@ -2360,8 +2398,21 @@ def main_mega() -> None:
 
             survived_winners, survived_articles = _prefer_final_source_diversity(
                 survived_winners, survived_articles)
+            if cat == "Science":
+                choices = [{"source": w.get("source"),
+                            "brief": w.get("_brief") or w.get("_winner_brief") or {},
+                            "winner": w, "article": a}
+                           for w, a in zip(survived_winners, survived_articles)]
+                choices = prefer_science_publishers(choices)
+                survived_winners = [x["winner"] for x in choices]
+                survived_articles = [x["article"] for x in choices]
             final_stories[cat] = survived_winners[:3]
             final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+            if cat == "Science":
+                publishers = {publisher_key(w.get("source")) for w in final_stories[cat]} - {""}
+                if len(publishers) < SCIENCE_MIN_PUBLISHERS:
+                    telemetry["warnings"].append(
+                        f"Science: only {len(publishers)}/{SCIENCE_MIN_PUBLISHERS} safe publishers available")
             if len(final_stories[cat]) >= 3:
                 unique_sources = len({w["source"].name for w in final_stories[cat]
                                       if w.get("source")})
@@ -2373,15 +2424,20 @@ def main_mega() -> None:
                 cs.setdefault(name, {"shipped": 0, "safety_rejected": 0})["shipped"] += 1
             if promotions:
                 telemetry["warnings"].append(
-                    f"{cat}: Stage 3 promoted {promotions} spare(s) to fill the slot"
+                    f"{cat}: Stage 3 promoted {promotions} safe spare(s)"
                     + (f" ({dug} via deep-dig into today's feeds)" if dug else ""))
             if len(survived_winners) < 3:
                 telemetry["warnings"].append(
                     f"{cat}: only {len(survived_winners)} stories shipped after Stage 3"
                     " (deep-dig exhausted; pack will carry over from yesterday)")
-            log.info("  [%s] final: %d stories (%d rejected, %d promoted, %d deep-dug)",
-                     cat, len(survived_winners), len(rejected), promotions, dug)
-        _set_phase("stage3_safety", t0, per_source=s3_per_source)
+            log.info("  [%s] final: %d published from %d safe candidates "
+                     "(%d rejected, %d promoted, %d deep-dug)",
+                     cat, len(final_stories[cat]), len(survived_winners),
+                     len(rejected), promotions, dug)
+        _set_phase("stage3_safety", t0, per_source=s3_per_source,
+                   published_counts={c: len(ws) for c, ws in final_stories.items()},
+                   publisher_counts={c: len({publisher_key(w.get("source")) for w in ws} - {""})
+                                     for c, ws in final_stories.items()})
         # Bundle both products into a single checkpoint payload.
         return {"final_stories_by_cat": final_stories, "final_variants_by_cat": final_variants}
 
