@@ -1085,20 +1085,37 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
         lines.append(easy)
         lines.append("")
     res = deepseek_call(SAFETY_VET_PROMPT, "\n".join(lines), max_tokens=2000)
-    raw = res.get("scores") or {}
     out: dict[int, dict] = {}
-    for art in articles:
-        sid = art.get("source_id")
-        scores = raw.get(str(sid)) or raw.get(sid)
-        if not isinstance(scores, dict):
+
+    def _scores(payload: dict, sid: int) -> dict:
+        values = (payload.get("scores") or {}).get(str(sid)) or (payload.get("scores") or {}).get(sid)
+        if not isinstance(values, dict):
             raise RuntimeError(f"independent vet returned no scores for source_id={sid}")
         clean = {}
         for d in SAFETY_DIMS:
-            v = scores.get(d)
-            if not isinstance(v, (int, float)):
+            v = values.get(d)
+            if not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 5:
                 raise RuntimeError(f"independent vet: bad {d!r} for source_id={sid}: {v!r}")
-            clean[d] = int(v)
-        out[sid] = clean
+            clean[d] = v
+        return clean
+
+    for art in articles:
+        sid = art.get("source_id")
+        try:
+            out[sid] = _scores(res, sid)
+        except RuntimeError as e:
+            # One malformed row must not discard valid independent judgments
+            # for the rest of the batch. Re-ask only this article once.
+            log.warning("  independent vet source_id=%s malformed (%s); retrying alone", sid, e)
+            single = (f"=== ARTICLE source_id={sid} ===\n"
+                      f"--- middle_en body ---\n{(art.get('middle_en') or {}).get('body') or ''}\n"
+                      f"--- easy_en body ---\n{(art.get('easy_en') or {}).get('body') or ''}")
+            try:
+                retry = deepseek_call(SAFETY_VET_PROMPT, single, max_tokens=500)
+                out[sid] = _scores(retry, sid)
+            except Exception as retry_error:  # noqa: BLE001 — keep other validated rows
+                log.warning("  independent vet source_id=%s retry failed (%s); "
+                            "only this article uses self-scores", sid, retry_error)
     return out
 
 
@@ -1182,9 +1199,8 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
 
     Gates per article, in order:
       1. Independent safety vet (one extra chat call per batch) overrides
-         the rewriter's self-scores — the author must not be the only gate
-         on its own text. On ANY vet failure we fall back to self-scores
-         rather than rejecting the whole batch.
+         the rewriter's self-scores. Malformed rows are retried individually;
+         only unavailable rows fall back to self-scores.
       2. Deterministic forbidden-term scan over the REWRITTEN easy+middle
          bodies (previously only RSS title/summary was screened, so a
          body-only self-harm mention passed every gate).
@@ -1213,10 +1229,16 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
             if sid in indep:
                 art["safety_self"] = art.get("safety")
                 art["safety"] = indep[sid]
-        log.info("  Stage 3: independent safety vet scored %d article(s)", len(indep))
+                art["_independent_vet_status"] = "scored"
+            else:
+                art["_independent_vet_status"] = "fallback"
+        log.info("  Stage 3: independent safety vet scored %d/%d article(s)",
+                 len(indep), len(articles))
     except Exception as e:  # noqa: BLE001
         log.warning("  Stage 3: independent safety vet failed — falling back to "
                     "rewriter self-scores: %s", e)
+        for art in articles:
+            art["_independent_vet_status"] = "fallback"
 
     kept: list[dict] = []
     rejected: list[dict] = []

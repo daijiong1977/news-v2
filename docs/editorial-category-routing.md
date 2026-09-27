@@ -28,6 +28,7 @@ Examples: Fat Bear Week is a Fun `animal_events` story; a study of bears is Scie
 - Soft first-three preference and source-preserving swap: `_prefer_top3_topic_diversity` in `pipeline/mega_curator.py`; candidate refill preference: `promote_spare_and_rewrite` in `pipeline/full_round.py`.
 - Same-event and past-seven-day controls: `pipeline/jev_rank.py` (`SAME_STORY_Q`, `SAME_EVENT_Q`, pair-selection and past-event logic). These are distinct from topic labels and should be tested with both duplicate and legitimate-follow-up examples.
 - Final safety gate: `filter_safe_rewrites` in `pipeline/full_round.py` and the safety evaluator it calls. Do not skip it based on a Jev section/topic answer.
+- Independent safety-vet resilience: `independent_safety_vet` in `pipeline/news_rss_core.py` retries an incomplete batch row as a single article. Other valid independent scores remain in force; only a row still unavailable after retry uses the existing rewriter-score fallback, marked `_independent_vet_status=fallback`. Inspect this count in every run; a fallback is a safety-review warning, not a normal success signal.
 
 ## Validation and operations
 
