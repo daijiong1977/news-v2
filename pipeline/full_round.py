@@ -627,12 +627,12 @@ def _drop_dup_briefs(briefs: list[dict], past_titles: list[str],
 
 
 def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
-                                 days: int = 3,
+                                 days: int = 7,
                                  threshold: float = 0.80,
                                  run_date: str | None = None) -> dict[str, list[dict]]:
     """Mega-path counterpart of filter_past_duplicates (which only the
     legacy path calls): drop briefs whose title ≥threshold-matches a story
-    the same category published in the `days` days BEFORE this run's date. A
+    any category published in the `days` days BEFORE this run's date. A
     sticky top-of-feed item on a cadence-1 source would otherwise be eligible
     to republish on consecutive days. Fail-open: any DB error keeps all briefs.
 
@@ -646,19 +646,18 @@ def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
     start = (date.fromisoformat(end) - timedelta(days=days)).isoformat()
     try:
         r = client().table("redesign_stories").select(
-            "source_title, category"
-        ).gte("published_date", start).lt("published_date", end).execute()
-        past_by_cat: dict[str, list[str]] = {}
-        for row in (r.data or []):
-            past_by_cat.setdefault(row.get("category") or "", []).append(
-                row.get("source_title") or "")
+            "source_title"
+        ).gte("published_date", start).lt("published_date", end).eq(
+            "archived", False).execute()
+        past_titles = sorted({row["source_title"] for row in (r.data or [])
+                              if row.get("source_title")})
     except Exception as e:  # noqa: BLE001
         log.warning("brief past-dedup skipped — query failed: %s", e)
         return briefs_by_cat
 
     out: dict[str, list[dict]] = {}
     for cat, briefs in briefs_by_cat.items():
-        kept, dropped = _drop_dup_briefs(briefs, past_by_cat.get(cat, []), threshold)
+        kept, dropped = _drop_dup_briefs(briefs, past_titles, threshold)
         for b in dropped:
             log.info("  [%s] past-dup brief drop: %s", cat, (b.get("title") or "")[:70])
         out[cat] = kept
@@ -867,7 +866,7 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
     return out
 
 
-def _recent_published_titles(today: str, days: int = 3) -> list[str]:
+def _recent_published_titles(today: str, days: int = 7) -> list[str]:
     """Source headlines published in the last `days` days, every category, EXCLUDING
     today — a same-day re-run must not see its own earlier output as the past.
     Fail-open: any DB error returns []."""
@@ -876,7 +875,8 @@ def _recent_published_titles(today: str, days: int = 3) -> list[str]:
         from .supabase_io import client
         start = (date.fromisoformat(today) - timedelta(days=days)).isoformat()
         rows = client().table("redesign_stories").select("source_title") \
-            .gte("published_date", start).lt("published_date", today).execute().data or []
+            .gte("published_date", start).lt("published_date", today) \
+            .eq("archived", False).execute().data or []
         return sorted({r["source_title"] for r in rows if r.get("source_title")})
     except Exception as e:  # noqa: BLE001
         log.warning("recent-published lookup failed (non-fatal): %s", e)
@@ -1877,7 +1877,8 @@ def main_mega() -> None:
             picked_sources_by_cat[cat_name] = srcs
             out[cat_name] = phase_a_light(
                 cat_name, srcs, max_per_source=PHASE_A_PER_SOURCE.get(cat_name, 4))
-        # Drop briefs that ~match a story published in the last 3 days —
+        # Drop briefs that ~match a story published in any section in the last
+        # 7 days —
         # the mega path previously had NO past-run dedup at all.
         out = filter_past_duplicate_briefs(out, run_date=today)
         _set_phase("phase_a_light", t0,
@@ -2049,6 +2050,9 @@ def main_mega() -> None:
             _set_phase("jev_rank", t0, mode=rank_mode, jev=report["jev"], applied=applied,
                        pool={c: len(b) for c, b in briefs_by_cat.items()},
                        pair_calls=report["pair_calls"], passed_over=len(report["skipped"]),
+                       past_event_calls=report["past_event_calls"],
+                       past_event_input_tokens=report["past_event_input_tokens"],
+                       past_event_output_tokens=report["past_event_output_tokens"],
                        below_floor=report.get("below_floor", {}))
             if applied:
                 return _with_topics(ranked)

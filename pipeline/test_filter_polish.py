@@ -176,6 +176,10 @@ def test_past_dedup_window_excludes_the_runs_own_date():
             seen["end"] = v
             return self
 
+        def eq(self, col, v):
+            seen[col] = v
+            return self
+
         def execute(self):
             return type("R", (), {"data": [
                 {"category": "News", "source_title": "Fat Bear Week crowns a champion"},
@@ -197,8 +201,50 @@ def test_past_dedup_window_excludes_the_runs_own_date():
     finally:
         sio.client = real
 
-    assert seen == {"start": "2026-09-17", "end": "2026-09-20"}, seen
+    assert seen == {"start": "2026-09-13", "end": "2026-09-20",
+                    "archived": False}, seen
     assert [b["link"] for b in out["News"]] == ["b"]
+
+
+def test_past_dedup_matches_across_categories_and_seven_days():
+    from pipeline import full_round as fr
+    import pipeline.supabase_io as sio
+
+    seen = {}
+
+    class FakeQuery:
+        def select(self, *args): return self
+        def gte(self, column, value):
+            seen["start"] = value
+            return self
+        def lt(self, column, value):
+            seen["end"] = value
+            return self
+        def eq(self, column, value):
+            seen[column] = value
+            return self
+        def execute(self):
+            return type("R", (), {"data": [
+                {"category": "News", "source_title": "Fat Bear Week begins in Alaska"},
+            ]})()
+
+    class FakeClient:
+        def table(self, name): return FakeQuery()
+
+    real = sio.client
+    sio.client = lambda: FakeClient()
+    try:
+        briefs = {"Fun": [{"title": "Fat Bear Week begins in Alaska"},
+                          {"title": "A new children's music contest"}]}
+        out = fr.filter_past_duplicate_briefs(briefs, run_date="2026-09-26")
+        recent = fr._recent_published_titles("2026-09-26")
+    finally:
+        sio.client = real
+
+    assert [b["title"] for b in out["Fun"]] == ["A new children's music contest"]
+    assert recent == ["Fat Bear Week begins in Alaska"]
+    assert seen == {"start": "2026-09-19", "end": "2026-09-26",
+                    "archived": False}
 
 if __name__ == "__main__":
     _run_all()

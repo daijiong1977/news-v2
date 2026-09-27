@@ -48,8 +48,11 @@ class Fake:
         if "same_event" in questions:
             self.event_calls += 1
             # "the same single event" when both headlines carry the same marker phrase
-            same = any(m in a and m in b for m in ("White House", "assisted dying"))
-            return SimpleNamespace(answers={"same_event": SimpleNamespace(noul=0.9 if same else 0.05)})
+            same = any(m in a.lower() and m in b.lower()
+                       for m in ("white house", "assisted dying", "fat bear week"))
+            return SimpleNamespace(
+                answers={"same_event": SimpleNamespace(noul=0.9 if same else 0.05)},
+                usage=SimpleNamespace(input_tokens=42, output_tokens=3))
         ans = {"same_story": SimpleNamespace(noul=0.9 if ("assisted dying" in a and "assisted dying" in b) else 0.05)}
         if "same_subject" in questions:
             ans["same_subject"] = SimpleNamespace(noul=0.9 if ("Trump" in a and "Trump" in b) else 0.05)
@@ -217,6 +220,18 @@ def test_already_published_is_not_sent_again_even_from_another_category_or_rewor
     assert any("Sheeran admits" in t for t in _sent(out, "News"))            # a new development is still news
     assert sum("same story as published" in d["why"] for d in rep["skipped"]) == 2
     assert _titles(out["Fun"])[-1].startswith("Ms. Rachel")                  # demoted, not lost
+
+
+def test_fat_bear_cross_category_event_check_is_measured():
+    old = "Alaska's salmon-feasting bears face off in biggest Fat Bear Week ever"
+    new = _b("Fat bear week celebrates its twelfth year", cat="Fun", pick=0.8)
+    fake = Fake()
+    q_rank, q_story, q_both, q_event = jr._questions()
+    pairs = jr._Pairs(fake, q_story, q_both, q_event, time.monotonic() + 10)
+    assert pairs.already_published(new, [old]) == old
+    assert pairs.published_calls == pairs.calls == 1
+    assert pairs.published_input_tokens == 42
+    assert pairs.published_output_tokens == 3
 
 
 def test_below_floor_is_held_back_until_the_pool_is_thin():

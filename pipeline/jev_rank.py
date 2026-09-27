@@ -21,7 +21,7 @@ to see more than one brief is done here, code first:
   · near-identical headlines                      code (mega_curator.titles_same_story)
   · same story told in different words            Jev, asked only about pairs whose
     (within a category and across categories)     headlines share a content word
-  · already published in the last 3 days,          code, then Jev ("same single event?")
+  · already published in the last 7 days,          code, then Jev ("same single event?")
     in ANY category                               — the legacy filter only compares inside
                                                   one category at 80% title similarity
   · News: at most 3 of the 6 about one person     Jev, same gate. A CAP, not a ban: the
@@ -259,13 +259,14 @@ class _Pairs:
     def __init__(self, client, q_story, q_both, q_event, deadline: float):
         self.client, self.q_story, self.q_both, self.q_event, self.deadline = client, q_story, q_both, q_event, deadline
         self.calls = self.errors = 0
+        self.published_calls = self.published_input_tokens = self.published_output_tokens = 0
         self._cache: dict[tuple[int, int, bool], str | None] = {}
         self._published: dict[int, str | None] = {}
 
     def already_published(self, b: dict, recent_titles: list[str]) -> str | None:
-        """The published headline this brief repeats, or None. The legacy past-dup
-        filter compares within one category at 80% title similarity, so it misses a
-        story that moves category and one that another outlet reworded.
+        """The published headline this brief repeats, or None. The early
+        80%-title-similarity filter catches near-identical titles across
+        categories; this Jev pass catches an event another outlet reworded.
 
         Cached per brief: _select asks up to three times per brief (main pass, then
         each thin-pool fill), and without the cache every ask re-scanned the whole
@@ -282,10 +283,16 @@ class _Pairs:
             if len(toks & _tokens(past)) < 2 or time.monotonic() > self.deadline:
                 continue                                  # 2 shared words: far more pairs here than within a pool
             self.calls += 1
+            self.published_calls += 1
             try:
-                ans = self.client.system_one(state={"headline_A": past, "headline_B": title,
-                                                    "summary_B": _text(b)[1][:300]},
-                                             questions=self.q_event).answers
+                response = self.client.system_one(state={"headline_A": past, "headline_B": title,
+                                                         "summary_B": _text(b)[1][:300]},
+                                                  questions=self.q_event)
+                usage = getattr(response, "usage", None)
+                if usage is not None:
+                    self.published_input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+                    self.published_output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+                ans = response.answers
                 if float(ans["same_event"].noul) > SAME_MIN:
                     self._published[id(b)] = past
                     return past
@@ -448,7 +455,9 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
     curator (use `for_curator`, never a positional slice: a thin pool sends fewer than
     TO_CURATOR); the rest are Stage 3 spares in rank order. Never raises, never mutates
     the input lists (briefs gain a `_jev_rank` annotation)."""
-    report: dict = {"jev": "skipped", "pair_calls": 0, "skipped": [], "sent": {}, "below_floor": {}}
+    report: dict = {"jev": "skipped", "pair_calls": 0, "past_event_calls": 0,
+                    "past_event_input_tokens": 0, "past_event_output_tokens": 0,
+                    "skipped": [], "sent": {}, "below_floor": {}}
     t0 = time.monotonic()
     own_client = client is None
     try:
@@ -514,6 +523,9 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]
         out = {cat: out[cat] for cat in briefs_by_cat}          # caller's category order
         report["pair_calls"] = pairs.calls
+        report["past_event_calls"] = pairs.published_calls
+        report["past_event_input_tokens"] = pairs.published_input_tokens
+        report["past_event_output_tokens"] = pairs.published_output_tokens
         report["jev"] = (f"{len(flat) - errors}/{len(flat)} scored, {pairs.calls} pair checks"
                          f"{f' ({pairs.errors} failed)' if pairs.errors else ''} in {time.monotonic() - t0:.1f}s")
         return out, report
