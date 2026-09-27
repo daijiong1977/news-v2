@@ -19,6 +19,13 @@ def _b(src: str, title: str) -> dict:
     return {"title": title, "_source_name": src}
 
 
+def test_phase_a_source_limit_expands_fun_only():
+    assert fr.phase_a_source_limit("Fun") == 10
+    assert fr.phase_a_source_limit("News") == 8
+    assert fr.phase_a_source_limit("Science") == 8
+    assert fr.phase_a_source_limit("Other") == 8
+
+
 # ── 1. round-robin interleave ──
 
 def test_interleave_round_robins_sources():
