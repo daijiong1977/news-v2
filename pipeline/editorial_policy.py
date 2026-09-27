@@ -17,22 +17,45 @@ SECTION_POLICY = (
     "Editorial policy: animal science belongs in Science, including biology, animal research, "
     "new species, dinosaurs, animal fossils, behavior and ecology. Non-scientific animal "
     "stories such as pets, animal events and amusing wildlife activity belong in Fun. "
-    "Technology and AI stories belong in Fun, including robotics, inventions, "
-    "software, devices, engineering applications, AI research, AI in schools, "
-    "technology business and regulation. These Fun assignments take precedence over "
-    "the source feed and over the usual research=Science or policy=News convention. "
+    "Technology and AI stories about public affairs belong in News: government use, "
+    "regulation, civic consequences, infrastructure and data-center disputes, "
+    "international negotiations, and effects on schools or communities. "
+    "Playful technology and AI belong in Fun: robots, inventions, games, gadgets, "
+    "creative uses and demonstrations whose main point is discovery or enjoyment. "
+    "Technology research about underlying science may belong in Science. "
     "Judge the central subject, not incidental mentions: a chemistry study using an "
     "AI tool remains chemistry; a star discovery using a telescope remains astronomy; "
     "a new telescope instrument is technology. Science retains physics, chemistry, "
     "astronomy, Earth/climate science, plant/human biology, medicine and archaeology "
-    "when animals are the scientific subject. News retains other "
-    "current affairs. Fun also includes sports, music, film, games, arts, history and "
+    "when animals are the scientific subject. News retains other current affairs, "
+    "including major government and diplomatic developments even when the original "
+    "article needs a child-friendly explanation. Fun also includes sports, music, "
+    "film, games, arts, history and "
     "children's achievements. Classification never grants safety or publication approval."
 )
 
 
+def explicit_section(brief: dict) -> str | None:
+    """An unambiguous sports article URL is Fun, not News.
+
+    A football game mentioned incidentally in a politics article must remain
+    eligible for News. This is a section hint, never a child-safety decision.
+    """
+    path = (urlsplit(brief.get("link") or brief.get("source_url") or "").path or "").lower()
+    if path.startswith(("/sport/", "/sports/")):
+        return "Fun"
+    return None
+
+
 def section_value(brief: dict) -> float | None:
     return (brief.get("_jev_rank") or {}).get("section_value")
+
+
+def below_quality_floor(brief: dict) -> bool:
+    """True only when Jev actually scored a brief below its section floor."""
+    rank = brief.get("_jev_rank") or {}
+    pick, floor = rank.get("editorial_pick"), rank.get("floor")
+    return pick is not None and floor is not None and float(pick) < float(floor)
 
 
 def low_fun_value(brief: dict) -> bool:
@@ -42,8 +65,8 @@ def low_fun_value(brief: dict) -> bool:
 
 def important_news(brief: dict) -> bool:
     rank = brief.get("_jev_rank") or {}
-    return (rank.get("section_value", 0) >= 3
-            and rank.get("pick", 0) >= rank.get("floor", .40)
+    return (rank.get("section_value", 0) >= 2.5
+            and rank.get("editorial_pick", rank.get("pick", 0)) >= rank.get("floor", .40)
             and rank.get("category_fit", 0) >= .60)
 
 

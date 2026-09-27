@@ -17,7 +17,7 @@ TOPIC_CRITERIA = {
     "public_health": "Disease outbreaks, vaccination or community health",
     "science_environment": "Science, astronomy, research, climate or environment without an acute storm",
     "community": "Local human-interest, civic action or community projects",
-    "technology_business": "Technology companies, AI business, regulation or corporate disputes",
+    "technology_business": "Technology or AI with public consequences: data centers, government websites, rules, civic effects or corporate disputes",
     "sports": "Sports competitions, athletes or sports governance",
     "entertainment": "Music, television, movies or celebrity culture",
     "other": "None of the above",
@@ -41,8 +41,8 @@ FUN_TOPIC_CRITERIA = {
     "games": "Video games, board games, puzzles or play",
     "arts_books": "Books, art, theatre, comics or creative projects",
     "animal_events": "Pets, animal contests, unusual animal activities or amusing wildlife events such as Fat Bear Week; biology and animal research stay in Science",
-    "technology": "Technology, engineering applications, robotics, inventions, devices, software or technology policy/business; AI uses artificial_intelligence",
-    "artificial_intelligence": "AI research, applications, models, AI in schools, AI policy or AI business; choose this over technology when AI is central",
+    "technology": "Playful technology: engineering applications, robotics, inventions, gadgets or games, not public-policy disputes; AI uses artificial_intelligence",
+    "artificial_intelligence": "Creative or playful AI tools and inventions, not AI government use, regulation or other public-affairs stories",
     "history_culture": "History, cultural traditions, museums or heritage",
     "kids_community": "Children's achievements, schools, community projects or uplifting human-interest",
     "other": "Fun story that fits none of the groups above",
@@ -94,7 +94,8 @@ def tag_topics(category: str, briefs: list[dict], client=None) -> dict:
             "not a same-event or child-safety judgment. Choose exactly one "
             "label. Animal research/new species/behavior/ecology use Science biology_ecology; "
             "Fat Bear Week and non-scientific animal happenings use Fun animal_events. "
-            "Technology uses Fun technology; AI uses Fun artificial_intelligence. "
+            "Public-affairs technology and AI use News technology_business; playful "
+            "robots and gadgets use Fun technology, and creative AI uses Fun artificial_intelligence. "
             "Within Fun, swimming and tennis are separate from other_sports."
         )
         question = {"topic": Choice(instructions=instructions,

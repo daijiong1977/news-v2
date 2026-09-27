@@ -33,7 +33,8 @@ from . import checkpoints as ckpt
 from . import db_config
 from .editorial_policy import (editorial_exclusion, publisher_key,
                                prefer_science_publishers, SCIENCE_MIN_PUBLISHERS)
-from .editorial_policy import low_fun_value, important_news, prefer_important_news
+from .editorial_policy import (low_fun_value, important_news, prefer_important_news,
+                               explicit_section, below_quality_floor)
 from .editorial_policy import prefer_final_editorial_diversity
 from .publication_history import (PublicationHistoryGuard, HistoryReviewBudget,
                                   winner_brief, assert_history_clear)
@@ -954,6 +955,7 @@ def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict],
         b for b in briefs
         if (b.get("link") or b.get("title") or id(b)) not in used_keys
         and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
+        and (not explicit_section(b) or explicit_section(b) == b.get("_category"))
         and not editorial_exclusion(b)
         and not (b.get("_category") == "Fun" and low_fun_value(b))
     ]
@@ -1102,6 +1104,11 @@ def promote_spare_and_rewrite(
         if not spare.get("_unverified_spare"):
             return None, None
         brief = spare.get("_winner_brief") or {}
+        forced = explicit_section(brief)
+        if forced and forced != cat:
+            log.info("  [%s] spare skipped — article belongs in %s: %s",
+                     cat, forced, (brief.get("title") or "")[:80])
+            return None, None
         if cat == "Fun" and low_fun_value(brief):
             return None, None
         if editorial_exclusion(brief):
@@ -1114,17 +1121,14 @@ def promote_spare_and_rewrite(
             log.info("  [%s] spare rank %s skipped — category fit %.2f: %s",
                      cat, spare.get("_rank"), fit, spare_title[:60])
             return None, None
-        # A diversity-only replacement is optional. Never displace a safe
-        # published candidate with a Jev-scored brief below the editorial
-        # floor merely to turn a 2/3 source metric into 3/3. In a thin
-        # category the ordinary refill may still use that brief.
-        rank = brief.get("_jev_rank") or {}
-        pick = rank.get("editorial_pick")
-        floor = rank.get("floor")
-        if (require_new_source or require_new_publisher or require_new_topic) and pick is not None and floor is not None \
-                and float(pick) < float(floor):
+        # A thin section may publish fewer than three fresh stories. Never
+        # fill a slot with a candidate that the editor already rated below
+        # the section's own quality floor.
+        if below_quality_floor(brief):
+            rank = brief["_jev_rank"]
             log.info("  [%s] spare rank %s skipped — editorial pick %.2f below %.2f",
-                     cat, spare.get("_rank"), float(pick), float(floor))
+                     cat, spare.get("_rank"), float(rank["editorial_pick"]),
+                     float(rank["floor"]))
             return None, None
         spare_group = (brief.get("_event_group") or "").strip()
         if ((spare_group and spare_group in shipped_groups)
@@ -1968,12 +1972,10 @@ def main_mega() -> None:
     # stays empty on RESUME runs (phase A skipped), which disables probe
     # stamping for that attempt — acceptable, resume is the rare path.
     picked_sources_by_cat: dict[str, list] = {}
-    # News has only 4 sources, so it alone is supply-starved: at 4 each it mined 16
-    # and ~12 survived the length gate. 10 each is the "dig deeper" half of the
-    # pick-floor design in jev_rank — a floor only helps if there is more to choose
-    # from. Science/Fun already mine 2-2.5x what is used. The real fix is more News
-    # sources; this buys room until then.
-    PHASE_A_PER_SOURCE = {"News": 10}
+    # News has only four sources and US-relevant civic stories can sit just
+    # below the tenth RSS item after a feed refresh. Sample twelve per source;
+    # the later body/rank gates still decide what is publishable.
+    PHASE_A_PER_SOURCE = {"News": 12}
 
     def _phase_a_runner():
         t0 = time.monotonic()
@@ -2284,6 +2286,8 @@ def main_mega() -> None:
             winners = bundle.get("_winners") or []
             excluded_ids = {i for i, w in enumerate(winners)
                             if editorial_exclusion(w.get("winner") or {})
+                            or (explicit_section(w.get("_brief") or {}) not in {None, cat})
+                            or below_quality_floor(w.get("_brief") or {})
                             or (cat == "Fun" and low_fun_value(w.get("_brief") or {}))}
             excluded_ids.update(i for i, w in enumerate(winners)
                                 if i not in excluded_ids and not _history_guard(cat).allows(winner_brief(w)))
@@ -2432,6 +2436,11 @@ def main_mega() -> None:
                     seen_links.add(((s.get("winner") or {}).get("link")) or "")
                 for w in survived_winners:
                     seen_links.add(((w.get("winner") or {}).get("link")) or "")
+                # Include every initially probed link, even ones rejected by
+                # ranking or routing. Otherwise a deep feed fetch can re-add
+                # a low-quality or wrong-section first-round candidate.
+                for b in probe_pool_by_cat.get(cat, []):
+                    seen_links.add(b.get("link") or "")
                 dig_pool = _deep_dig_spares(cat, picked_sources_by_cat[cat],
                                             seen_links, max_per_source=15)
                 if dig_pool:

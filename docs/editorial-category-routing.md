@@ -30,13 +30,21 @@ college competition and records remain eligible.
 
 | Section | Intended stories | Jev topic labels |
 | --- | --- | --- |
-| News | Government, diplomacy, conflict, severe weather, infrastructure and public-health events | `us_politics`, `international_relations`, `war_security`, `severe_weather`, `transport_infrastructure`, `public_health`, `science_environment`, `community`, `technology_business`, `sports`, `entertainment`, `other` |
+| News | Government, diplomacy, conflict, severe weather, infrastructure, public health and civic/public-affairs Tech/AI | `us_politics`, `international_relations`, `war_security`, `severe_weather`, `transport_infrastructure`, `public_health`, `science_environment`, `community`, `technology_business`, `sports`, `entertainment`, `other` |
 | Science | Physics, chemistry, astronomy, Earth/climate, biology (including animal research), medicine and archaeology | `astronomy_space`, `physics`, `chemistry_materials`, `biology_ecology`, `earth_climate`, `medicine_health`, `fossils_archaeology`, `other` |
-| Fun | Technology and AI stories; non-scientific animal happenings; sports, music, screen entertainment, games, arts, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `technology`, `artificial_intelligence`, `history_culture`, `kids_community`, `other` |
+| Fun | Playful Tech/AI (robots, inventions, creative uses); non-scientific animal happenings; sports, music, screen entertainment, games, arts, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `technology`, `artificial_intelligence`, `history_culture`, `kids_community`, `other` |
 
-Examples: Fat Bear Week is Fun `animal_events`; a biology study of bears or a newly discovered animal species is Science `biology_ecology`. AI in schools is Fun `artificial_intelligence`; a new telescope instrument is Fun `technology`, while a star discovery using a telescope remains Science `astronomy_space`. A threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. News labels remain for uncertain/borderline feed items; confident routing moves technology/AI stories and non-scientific animal happenings to Fun.
+Examples: Fat Bear Week is Fun `animal_events`; a biology study of bears or a newly discovered animal species is Science `biology_ecology`. Government AI use, school AI rules and data-center disputes with community consequences are News `technology_business`; an armadillo-inspired robot is Fun `technology`. A star discovery using a telescope remains Science `astronomy_space`. A threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. News labels remain for uncertain/borderline feed items.
 
-用户更新（9/26）：Tech 与 AI 放 Fun；生物学研究、新物种、动物行为、恐龙/动物化石和生态研究保留 Science。动物趣闻、宠物、比赛和有趣的野生动物活动归 Fun。共享定义位于 `editorial_policy.SECTION_POLICY`，同时用于 Jev 路由、栏目适配（含 deep-dig）和主编。`animal_events` 保留旧名称避免破坏历史标签；新增 `technology`、`artificial_intelligence`。旧 `engineering_technology` 仅兼容历史 checkpoint。按主旨判断，提到 AI 工具不意味着一篇化学稿自动变成 AI 新闻。仍保留 0.90 路由置信度和故障回退；不保证每篇都成功识别。购物、招募、低儿童相关性与安全规则不放宽。需从采集重新运行验证，旧 checkpoint 不会自动重新分栏；本次不迁移来源表或历史已发布稿。
+旧版记录（9/26，已由下段 9/27 规则修订）：Tech 与 AI 放 Fun；生物学研究、新物种、动物行为、恐龙/动物化石和生态研究保留 Science。动物趣闻、宠物、比赛和有趣的野生动物活动归 Fun。共享定义位于 `editorial_policy.SECTION_POLICY`，同时用于 Jev 路由、栏目适配（含 deep-dig）和主编。`animal_events` 保留旧名称避免破坏历史标签；新增 `technology`、`artificial_intelligence`。旧 `engineering_technology` 仅兼容历史 checkpoint。按主旨判断，提到 AI 工具不意味着一篇化学稿自动变成 AI 新闻。仍保留 0.90 路由置信度和故障回退；不保证每篇都成功识别。购物、招募、低儿童相关性与安全规则不放宽。需从采集重新运行验证，旧 checkpoint 不会自动重新分栏；本次不迁移来源表或历史已发布稿。
+
+用户修订（9/27）：上句「Tech 与 AI 放 Fun」不再作为一刀切规则。**公共事务类 Tech/AI 留 News，趣味科技留 Fun**。例如数据中心争议、AI 与政府网站、科技监管及学校规则归 News；机器人、发明、游戏和创意演示归 Fun。重大政治、政府和外交事件不能只因需要成人背景而被排除；适宜时选一篇最有实际后果的政治/外交报道，用儿童可理解的语言中立重写，独立全文安全审核不变。中美就伊朗、古巴问题交锋应留在 News 候选目录接受重要性、历史事件和安全审查，不等于强制发布。News 仍优先三种不同题材，不靠多篇类似政治报道凑数。
+
+9/27 不发布预览的边界：四篇用户点名的稿件（美国国会监督、数据中心争议、OpenAI 与美国政府网站、中美就伊朗/古巴交锋）都进入 News 候选；明确的 BBC 足球稿进入 Fun，机器人进入 Fun。但 Jev 对这些公共事务稿的 `section_value` 仅约 1.5–1.7，未达到原有高重要性提示门槛 2.5；一次安全阶段复测的 News 三篇仍未达到理想编辑组合。故目前不能把分类通过等同于最终选稿质量通过，也不能只靠调低阈值宣称问题已解决。
+
+后续安全阶段预览（同日、无写入/发布）：News 最终候选是「俄德外交冲突」「英国美军基地附近反恐逮捕」「自主 AI 代理的法律责任」，仍只有两家来源、没有达到高重要性条件；Science 和 Fun 各三篇，Science 来自两家出版方。儿童安全独立审核正常运行并拒绝三篇 News；Fun 有一篇 middle 版本 282 字，低于理想 300–410 字区间。这说明本 PR 改善的是候选分栏及错误补稿防线，**还没有解决 News 最终编辑质量或所有字数问题**。不要仅凭单次预览自动合并或发布。
+
+补稿防线（9/27）：BBC 等来源的明确 `/sport/`、`/sports/` 文章不能从 News 补稿路径进入；深层同日 feed 不可重新加入首轮已看过的链接；低于栏目 Jev 选稿线的候选不能为了凑够三篇而发布，合格稿不足时保留 1–2 篇。News 每源首轮由 10 提到 12 条，以免第 11–12 条仍新鲜的公共事务稿随 feed 滚动落出采集窗口。调整点为 `editorial_policy.py`、`editorial_routing.py`、`jev_rank.py`、`full_round.py`；先做分栏和编辑测试，再做不发布预览，不能以模型一次评分代替全文安全审核。
 
 ### Science → Fun 来源候选（9/17–9/26 feed 快照）
 
@@ -80,7 +88,7 @@ For future changes to this live project, create a branch and PR, test and review
 - `pipeline/jev_prefilter.py` 在同一次预筛请求中新增 `recruiting` 语义判断，≥0.90 提前排除大学体育招募/承诺/转学通道稿。它不受软性「保留 8 篇」保护；shadow 只记录、off 不执行，Jev 故障维持既有回退。正则规则仍是另一路防线。
 - `pipeline/jev_rank.py` 在原有逐稿评分请求中新增 `section_value`（0–4）：News 为对美国/美国儿童的实际重要性；Science 为科学发现与学习价值；Fun 为真实儿童趣味。标准见 `SECTION_VALUE_LEVELS`，不能把美国地名、名人或煽动标题当作重要性。
 - 3/4 分分别给予 0.10/0.18 排名加分；与已有体育加分取最大值，不叠加。Fun ≤1 分不会进入主编、备用池或 deep-dig 补稿，即使池薄也不恢复；未知/失败评分不冒充低趣味评分，保留现有故障回退。
-- News：重要性 ≥3、原始 pick ≥0.40、栏目适配 ≥0.60 的候选优先进送审池，仍受事件去重等硬规则约束。主编被要求保留至少一篇；代码对主编返回候选、最终安全候选再次重排。若最终没有，记录告警。不会凭重要性跳过安全门禁，也不保证在候选缺失、主编剔除或安全拒绝后一定凑到一篇。
+- News：重要性 ≥2.5、编辑 pick 不低于栏目线、栏目适配 ≥0.60 的候选优先进送审池，仍受事件去重等硬规则约束。主编被要求保留至少一篇；代码对主编返回候选、最终安全候选再次重排。若最终没有，记录告警。不会凭重要性跳过安全门禁，也不保证在候选缺失、主编剔除或安全拒绝后一定凑到一篇。
 - 该优先项可能在必要时让位于一篇重要报道，而不是强保三个 feed/题材。Science 两出版方规则不变。对 News 的判断基于后果与儿童相关性，不能按党派、政治立场或对政策的赞同加分。
 - `section_value` 会写入 `_jev_rank`、送主编日志及主编输入。阈值集中在上述两个文件和 `pipeline/editorial_policy.py`；调整后运行 `test_editorial_value.py` 及离线全套。
 - 不新增逐稿模型请求轮次，但每次请求的输入/输出会略增；实际 token、耗时和编辑效果须在新一轮模型运行中衡量，不能声称免费或已验证提升。

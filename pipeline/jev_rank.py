@@ -56,7 +56,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .jev_prefilter import MAX_ERROR_RATE, WORKERS, make_client
 from .mega_curator import briefs_same_event, join_event_group, titles_same_story
 from .editorial_policy import publisher_key, editorial_exclusion, SCIENCE_MIN_PUBLISHERS
-from .editorial_policy import low_fun_value, important_news
+from .editorial_policy import low_fun_value, important_news, explicit_section
 from .editorial_policy import SECTION_POLICY
 
 log = logging.getLogger("jev-rank")
@@ -97,16 +97,18 @@ AUDIENCE = {
     "they_choose": "Stories they can picture and retell: animals, space, dinosaurs and fossils, records and firsts, "
                    "major swimming and tennis results and athletes they follow, games, films and characters made for their age, "
                    "kids doing remarkable things, weird science.",
-    "they_skip": "Stories that need adult background: legislative procedure, party finance, sanctions, markets, "
-                 "product shopping advice, adult film and art criticism, and the local politics of other countries.",
-    "editor_also_runs": "A few major world or US events each day that a child should know about even if they "
-                        "would not pick them first.",
+    "they_skip": "Product shopping advice, adult film and art criticism, routine political theater "
+                 "without a concrete consequence, and the local politics of other countries.",
+    "editor_also_runs": "Major US or world government, diplomatic and civic-technology events children "
+                        "should understand; the writer will explain adult background in age-appropriate language. "
+                        "One strong political or diplomatic story can be enough for a varied News edition.",
 }
 PICK_Q = "Would the editor put this story in today's edition for the reader described in `audience`?"
 PICK_CRITERIA = {
     "true": "The reader would choose it, or it is a major world or US event they should know about",
-    "false": "It is for adults, needs adult background, is shopping advice, is local to another country, "
-             "or is not a single news story",
+    "false": "It has no clear public consequence, is routine political theater or shopping advice, "
+             "is only local politics of another country, or is not a single news story; "
+             "adult background alone is not a reason to reject an important event",
 }
 WANT_Q = "Match this story to the reaction of the reader described in `audience`"
 WANT_LEVELS = [
@@ -132,11 +134,11 @@ SPORTS_PRIORITY_LEVELS = [
 SPORTS_PRIORITY_BONUS = {3: 0.10, 4: 0.18}  # modest, soft Fun ranking preference
 SECTION_VALUE_LEVELS = {
     "News": [
-        "Routine adult/local detail with no clear consequence for US children",
-        "Limited consequence; being American or mentioning a president alone does not make it important",
-        "Useful current affairs context for US children, but not a major development",
-        "Significant NEW consequence for US children/families or US public life: schools, health, environment, rights, civic life",
-        "Major NEW national or world development with substantial consequences for the US or US children",
+        "Routine spectacle or local detail with no meaningful public consequence",
+        "Limited public consequence; a US place name or famous politician alone is not enough",
+        "Concrete new civic or diplomatic development worth explaining: federal oversight, public infrastructure, data centers, government AI use, or US relations, even before direct effects are known",
+        "Substantive new action affecting US public institutions, rights, communities, national security or major US diplomacy; no immediate child-specific impact is required",
+        "Major verified national or world turning point with substantial US or global public consequences",
     ],
     "Science": [
         "No clear science learning or discovery value",
@@ -171,8 +173,13 @@ CATEGORY_FIT_CRITERIA = {
     "true": "The story belongs in the named section under this policy: " + SECTION_POLICY,
     "false": "The story belongs in another section under this policy: " + SECTION_POLICY,
 }
-SAME_STORY_Q = "Do these headlines cover the same real-world event family or stages/angles of one ongoing event " \
-               "that a daily editor should combine into one article?"
+SAME_STORY_Q = (
+    "Do these headlines cover the same concrete real-world occurrence or direct "
+    "stages/angles of one visit, storm or decision that a daily editor should combine? "
+    "Sharing countries, leaders, a conflict, the UN, AI or another broad subject is "
+    "NOT enough. Separate speeches, policy actions or diplomatic exchanges remain "
+    "different events unless they report the same action or its direct consequence."
+)
 # Against already-published stories the question is narrower on purpose: a follow-up
 # with a new development ("...admits mistakes") is news; the same event reworded by
 # another outlet ("reporters denied access" / "journalists denied access") is not.
@@ -246,6 +253,9 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
     unavailable or a call fails, keep the existing published story instead of
     promoting an unclassified article into the wrong section.
     """
+    if not briefs:
+        return []
+    briefs = [b for b in briefs if not explicit_section(b) or explicit_section(b) == cat]
     if not briefs:
         return []
     own_client = client is None
@@ -437,6 +447,9 @@ def _select(cat: str, ranked: list[dict], pairs: _Pairs,
     low: list[tuple[dict, str]] = []
 
     def hard_reason(b: dict) -> str | None:
+        forced = explicit_section(b)
+        if forced and forced != cat:
+            return f"article belongs in {forced}"
         excluded = editorial_exclusion(b)
         if excluded:
             return excluded
@@ -589,6 +602,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             dup_ids = {id(b) for b, why in skipped if "same story" in why}
             rest = [b for b in ranked if not any(b is c for c in chosen)
                     and not editorial_exclusion(b) and not (cat == "Fun" and low_fun_value(b))
+                    and (not explicit_section(b) or explicit_section(b) == cat)
                     and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
                     and not pairs._published.get(id(b)) and id(b) not in dup_ids]
             # The old reserve kept known duplicate events at the end. Build

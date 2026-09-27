@@ -200,7 +200,7 @@ def test_diversity_only_replacement_respects_editorial_floor(monkeypatch):
     assert winner is None and article is None
 
 
-def test_short_category_can_still_use_below_floor_spare(monkeypatch):
+def test_short_category_does_not_use_below_floor_spare(monkeypatch):
     from pipeline import news_rss_core as core
 
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
@@ -214,4 +214,4 @@ def test_short_category_can_still_use_below_floor_spare(monkeypatch):
                                "_probe_art": {"title": "Thin-day fallback"}}}]
     winner, article = fr.promote_spare_and_rewrite(
         "Fun", pool, used_source_names={"A", "B"})
-    assert winner["source"].name == "C" and article["source_id"] == 0
+    assert winner is None and article is None

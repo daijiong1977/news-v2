@@ -946,7 +946,10 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "Lead with the WHO + WHAT + WHY-IT-MATTERS in the first paragraph,\n"
         "but use a concrete vivid detail to hook (a specific number, place,\n"
         "or quote). Stay neutral — present what each side says without\n"
-        "editorializing. Include real names, dates, and places when they\n"
+        "editorializing. For important politics, diplomacy or civic technology,\n"
+        "explain necessary adult background in plain language rather than\n"
+        "dropping the event or inventing a child-specific impact. Include\n"
+        "real names, dates, and places when they\n"
         "appear in the source.\n"
     ),
     "Science": (

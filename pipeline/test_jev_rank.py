@@ -113,6 +113,15 @@ def test_deep_dig_category_gate_rejects_wrong_section_and_unscored():
     assert "_jev_category_fit" not in briefs[2]
 
 
+def test_deep_dig_never_admits_news_from_sports_article_url():
+    sport = _b("Ireland wears black armbands for Israel game", cat="News", pick=0.9)
+    sport["link"] = "https://www.bbc.co.uk/sport/football/articles/example"
+    fake = Fake()
+    fake.by_title[sport["title"]] = 0.9
+    fake.fit_by_title = {sport["title"]: 0.99}
+    assert jr.gate_deep_dig_category("News", [sport], client=fake) == []
+
+
 def test_deep_dig_category_gate_fails_closed_when_jev_unavailable():
     brief = _b("Unexpected science story", cat="Fun", pick=0.8)
     old = jr.make_client

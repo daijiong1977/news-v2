@@ -10,16 +10,16 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .jev_prefilter import WORKERS, make_client
-from .editorial_policy import SECTION_POLICY
+from .editorial_policy import SECTION_POLICY, explicit_section
 
 log = logging.getLogger("editorial-routing")
 
 SECTIONS = ("News", "Science", "Fun")
 MIN_MOVE_CONFIDENCE = 0.90
 SECTION_CRITERIA = {
-    "News": "Other current affairs: government, elections, diplomacy, conflict, severe weather, infrastructure disruptions and public health; technology/AI stories go to Fun",
-    "Science": "Physics, chemistry, astronomy, Earth/climate, biology including animal research/species/ecology, medicine and archaeology; technology/AI stories go to Fun",
-    "Fun": "Technology and AI stories including research and policy, plus animal happenings/entertainment (not biology or animal research), sports, music, movies, games, arts, contests, kid achievements and history",
+    "News": "Current affairs: government, elections, diplomacy, conflict, severe weather, public health, and technology/AI with civic or public-policy consequences",
+    "Science": "Physics, chemistry, astronomy, Earth/climate, biology including animal research/species/ecology, medicine and archaeology, or underlying technology research",
+    "Fun": "Playful technology and AI such as robots, inventions and games, plus animal happenings/entertainment (not biology or animal research), sports, music, movies, arts, contests, kid achievements and history",
 }
 SECTION_INSTRUCTIONS = (
     "Choose the best section for a US kids news site. Judge the actual story, "
@@ -92,6 +92,9 @@ def route_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
         out = {cat: [] for cat in briefs_by_cat}
         for cat, brief in flat:
             target, confidence = judgments.get(id(brief), (cat, 0.0))
+            forced = explicit_section(brief)
+            if forced and forced != cat:
+                target, confidence = forced, 1.0
             if target != cat and confidence >= MIN_MOVE_CONFIDENCE and target in out:
                 brief["_jev_routed_from"] = cat
                 brief["_jev_route_confidence"] = round(confidence, 3)

@@ -47,6 +47,10 @@ ALGORITHM (internal, don't output intermediate work):
      distress, bias — and interest (0-5, higher is better) across
      importance, fun_factor, kid_appeal. Skip any with safety total > 6
      or any safety dim ≥ 4 — they can never be picked.
+     Government, diplomacy and civic technology are not unsafe merely
+     because they need background explanation; factual rewriting can make
+     an important event understandable to children. Graphic or distressing
+     details remain subject to the normal safety limits.
 
   2. CLUSTER: group candidates covering the same real-world story into
      topic clusters. Pick AT MOST ONE candidate per cluster across all
