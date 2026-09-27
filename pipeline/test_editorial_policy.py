@@ -57,7 +57,7 @@ def test_science_ranking_caps_publisher_not_each_feed():
                 "_source_name": "Live", "_jev_pick": .7},
                {"title": "A new molecule", "_source": source("MIT", "news.mit.edu"),
                 "_source_name": "MIT", "_jev_pick": .65}]
-    selected, _, below = jr._select("Science", briefs, [], Pairs(), [])
+    selected, _, below = jr._select("Science", briefs, Pairs(), [])
     assert len({ep.publisher_key(b["_source"]) for b in selected}) >= 2
     assert sum(ep.publisher_key(b["_source"]) == "sciencedaily" for b in selected) <= 3
     assert below == 0

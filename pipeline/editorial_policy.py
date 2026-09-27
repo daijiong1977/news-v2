@@ -103,6 +103,27 @@ def prefer_science_publishers(items: list[dict], limit: int = 3) -> list[dict]:
     return [items[i] for i in chosen] + [x for i, x in enumerate(items) if i not in chosen]
 
 
+def prefer_final_editorial_diversity(category, items, limit=3):
+    """Choose jointly; a later source-only pass must not undo topic diversity."""
+    from .news_topics import topic_group
+    n = min(limit, len(items))
+    if n < 2:
+        return items
+
+    def quality(indices):
+        chosen = [items[i] for i in indices]
+        topics = {topic_group(x.get("brief") or {}) for x in chosen} - {""}
+        publishers = {publisher_key(x.get("source")) for x in chosen} - {""}
+        sources = {getattr(x.get("source"), "name", "") for x in chosen} - {""}
+        important = category == "News" and any(important_news(x.get("brief") or {}) for x in chosen)
+        science_publishers = min(SCIENCE_MIN_PUBLISHERS, len(publishers)) if category == "Science" else 0
+        return (important, science_publishers, len(topics), len(publishers), len(sources),
+                -sum(indices), tuple(-i for i in indices))
+
+    chosen = max(combinations(range(len(items)), n), key=quality)
+    return [items[i] for i in chosen] + [x for i, x in enumerate(items) if i not in chosen]
+
+
 _CONTEXT = re.compile(
     r"\b(?:ncaa|recruit\w*|swim\w*|"
     r"tennis|athlet\w*|basketball|football|soccer|volleyball|baseball|softball|"

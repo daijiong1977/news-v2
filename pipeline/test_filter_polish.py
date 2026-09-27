@@ -206,7 +206,7 @@ def test_past_dedup_window_excludes_the_runs_own_date():
     assert [b["link"] for b in out["News"]] == ["b"]
 
 
-def test_past_dedup_matches_across_categories_and_seven_days():
+def test_past_dedup_limits_comparisons_to_same_category_and_seven_days():
     from pipeline import full_round as fr
     import pipeline.supabase_io as sio
 
@@ -224,9 +224,12 @@ def test_past_dedup_matches_across_categories_and_seven_days():
             seen[column] = value
             return self
         def execute(self):
-            return type("R", (), {"data": [
+            rows = [
                 {"category": "News", "source_title": "Fat Bear Week begins in Alaska"},
-            ]})()
+                {"category": "Fun", "source_title": "Yesterday children played violin"},
+            ]
+            return type("R", (), {"data": [r for r in rows if not seen.get("category")
+                                            or r["category"] == seen["category"]]})()
 
     class FakeClient:
         def table(self, name): return FakeQuery()
@@ -237,14 +240,14 @@ def test_past_dedup_matches_across_categories_and_seven_days():
         briefs = {"Fun": [{"title": "Fat Bear Week begins in Alaska"},
                           {"title": "A new children's music contest"}]}
         out = fr.filter_past_duplicate_briefs(briefs, run_date="2026-09-26")
-        recent = fr._recent_published_titles("2026-09-26")
+        recent = fr._recent_published_titles("2026-09-26", category="Fun")
     finally:
         sio.client = real
 
-    assert [b["title"] for b in out["Fun"]] == ["A new children's music contest"]
-    assert recent == ["Fat Bear Week begins in Alaska"]
+    assert [b["title"] for b in out["Fun"]] == ["Fat Bear Week begins in Alaska", "A new children's music contest"]
+    assert recent == ["Yesterday children played violin"]
     assert seen == {"start": "2026-09-19", "end": "2026-09-26",
-                    "archived": False}
+                    "archived": False, "category": "Fun"}
 
 
 def test_past_dedup_catches_same_url_with_different_bbc_rss_title(monkeypatch):
@@ -261,6 +264,7 @@ def test_past_dedup_catches_same_url_with_different_bbc_rss_title(monkeypatch):
         def execute(self):
             return type("R", (), {"data": [{
                 "source_title": "Alcaraz on late finishes and Laver Cup return",
+                "category": "Fun",
                 "source_url": "https://www.bbc.co.uk/sport/tennis/articles/cmvgy73zvwx1o?at_medium=RSS",
             }]})()
 
