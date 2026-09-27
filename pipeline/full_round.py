@@ -2490,9 +2490,10 @@ def main_mega() -> None:
             if len(final_stories[cat]) >= 3:
                 unique_sources = len({w["source"].name for w in final_stories[cat]
                                       if w.get("source")})
-                if unique_sources < 3:
+                min_sources = 2 if cat == "Science" else 3
+                if unique_sources < min_sources:
                     telemetry["warnings"].append(
-                        f"{cat}: only {unique_sources}/3 distinct safe sources available")
+                        f"{cat}: only {unique_sources}/{min_sources} distinct safe sources available")
             for w in final_stories[cat]:
                 name = w["source"].name if w.get("source") else "?"
                 cs.setdefault(name, {"shipped": 0, "safety_rejected": 0})["shipped"] += 1
