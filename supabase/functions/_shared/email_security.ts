@@ -18,3 +18,18 @@ export function relayAuthorized(internalHeader: string, bearer: string,
                                 internalSecret: string, serviceRoleKey: string): boolean {
   return timingSafeEqual(internalHeader, internalSecret) || timingSafeEqual(bearer, serviceRoleKey);
 }
+
+export async function validServiceBearer(
+  bearer: string, supabaseUrl: string, fetcher: typeof fetch = fetch,
+): Promise<boolean> {
+  if (!bearer || !supabaseUrl) return false;
+  try {
+    const response = await fetcher(`${supabaseUrl}/auth/v1/admin/users?per_page=1`, {
+      headers: { apikey: bearer, Authorization: `Bearer ${bearer}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    return response.status === 200;
+  } catch {
+    return false;
+  }
+}
