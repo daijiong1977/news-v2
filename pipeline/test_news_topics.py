@@ -92,17 +92,40 @@ def test_science_and_fun_soft_topic_swaps():
                _pick(2, "Star map", "astronomy_space", "B"),
                _pick(3, "New frog", "biology_ecology", "C"),
                _pick(4, "New molecule", "chemistry_materials", "D")]
-    fun = [_pick(1, "Soccer match", "sports", "A"),
-           _pick(2, "Tennis match", "sports", "B"),
+    fun = [_pick(1, "Soccer match", "other_sports", "A"),
+           _pick(2, "Tennis match", "tennis", "B"),
            _pick(3, "New song", "music", "C"),
            _pick(4, "Fat Bear Week", "animal_events", "D")]
     out = mc._prefer_top3_topic_diversity({"Science": science, "Fun": fun})
     assert {nt.topic_group(p["brief"]) for p in out["Science"][:3]} == {
         "astronomy_space", "biology_ecology", "chemistry_materials"}
     assert {nt.topic_group(p["brief"]) for p in out["Fun"][:3]} == {
-        "sports", "music", "animal_events"}
+        "other_sports", "tennis", "music"}
 
 
 def test_science_and_fun_topic_labels_are_recognized():
     assert nt.topic_group({"_jev_topic_group": "physics"}) == "physics"
     assert nt.topic_group({"_jev_topic_group": "animal_events"}) == "animal_events"
+    assert nt.topic_group({"_jev_topic_group": "swimming"}) == "swimming"
+    assert nt.topic_group({"_jev_topic_group": "tennis"}) == "tennis"
+    assert nt.topic_group({"_jev_topic_group": "other_sports"}) == "other_sports"
+
+
+def test_fun_can_select_swimming_and_tennis_together():
+    picks = [_pick(1, "Swim race", "swimming", "SwimSwam"),
+             _pick(2, "Tennis final", "tennis", "BBC Tennis"),
+             _pick(3, "Second tennis story", "tennis", "ESPN"),
+             _pick(4, "Football final", "other_sports", "AP")]
+    out = mc._prefer_top3_topic_diversity({"Fun": picks})["Fun"]
+    assert [nt.topic_group(p["brief"]) for p in out[:3]] == [
+        "swimming", "tennis", "other_sports"]
+    assert len({p["source"].name for p in out[:3]}) == 3
+
+
+def test_fun_does_not_drop_second_tennis_story_without_alternative():
+    picks = [_pick(1, "Swim race", "swimming", "SwimSwam"),
+             _pick(2, "Tennis final", "tennis", "BBC Tennis"),
+             _pick(3, "Another tennis final", "tennis", "ESPN")]
+    out = mc._prefer_top3_topic_diversity({"Fun": picks})["Fun"]
+    assert [p["brief"]["title"] for p in out[:3]] == [
+        "Swim race", "Tennis final", "Another tennis final"]

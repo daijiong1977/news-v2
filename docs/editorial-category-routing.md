@@ -17,9 +17,11 @@ This page is the tuning map for the daily News / Science / Fun pipeline. A secti
 | --- | --- | --- |
 | News | Government, diplomacy, conflict, severe weather, infrastructure and public-health events | `us_politics`, `international_relations`, `war_security`, `severe_weather`, `transport_infrastructure`, `public_health`, `science_environment`, `community`, `technology_business`, `sports`, `entertainment`, `other` |
 | Science | Research and discoveries in nature, space, health and technology | `astronomy_space`, `physics`, `chemistry_materials`, `biology_ecology`, `earth_climate`, `medicine_health`, `engineering_technology`, `fossils_archaeology`, `other` |
-| Fun | Sports, music, screen entertainment, games, arts, animal events, history and kids' achievements | `sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `history_culture`, `kids_community`, `other` |
+| Fun | Sports, music, screen entertainment, games, arts, animal events, history and kids' achievements | `swimming`, `tennis`, `other_sports`, `music`, `film_tv`, `games`, `arts_books`, `animal_events`, `history_culture`, `kids_community`, `other` |
 
 Examples: Fat Bear Week is a Fun `animal_events` story; a study of bears is Science `biology_ecology`; a threatening hurricane is News `severe_weather`; a study of hurricanes is Science `earth_climate`. The News `sports` and `entertainment` labels remain for uncertain/borderline feed items, but confident routing should usually move those to Fun.
+
+Fun sports are split by sport, not by the broad `sports` label: a swimming race and a tennis match can both appear among the three published Fun articles if they are different events and pass all other gates. Diving and water polo belong to `other_sports`. This remains a preference, not a quota: no swimming story is invented or forced into an edition without a suitable candidate. SwimSwam is an enabled Fun feed in the live source registry (two-day cadence); BBC Tennis is also enabled (daily cadence). Source selection can skip either feed on a particular day.
 
 ## Where to tune
 

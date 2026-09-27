@@ -34,7 +34,9 @@ SCIENCE_TOPIC_CRITERIA = {
     "other": "Science story that fits none of the groups above",
 }
 FUN_TOPIC_CRITERIA = {
-    "sports": "Athletes, matches, tournaments, records or sports organisations",
+    "swimming": "Competitive swimming, swimmers, swim meets, swimming races or pool/open-water swim records; not diving or water polo",
+    "tennis": "Tennis players, matches, tournaments, rankings or tennis organisations",
+    "other_sports": "Sports other than swimming or tennis, including football, basketball, diving and water polo",
     "music": "Songs, performers, concerts, albums or music competitions",
     "film_tv": "Movies, television, shows, actors or animation",
     "games": "Video games, board games, puzzles or play",
@@ -90,7 +92,8 @@ def tag_topics(category: str, briefs: list[dict], client=None) -> dict:
             "Different events on the same broad topic share a label; this is "
             "not a same-event or child-safety judgment. Choose exactly one "
             "label. An animal research discovery is Science biology_ecology; "
-            "Fat Bear Week and animal contests are Fun animal_events."
+            "Fat Bear Week and animal contests are Fun animal_events. "
+            "Within Fun, swimming and tennis are separate from other_sports."
         )
         question = {"topic": Choice(instructions=instructions,
                                     criteria=TOPICS_BY_CATEGORY[category])}
