@@ -38,21 +38,31 @@ def test_real_slang_and_editorial_choices_still_forbidden():
     assert is_forbidden("betting on the game")[0] is True           # ditto — deliberately kept
 
 
-# ── 2. image check order ──
+# ── 2. image quality: reject a missing/generic image, keep a real one ──
 
-def test_missing_image_reported_honestly():
+def test_missing_image_rejected():
+    # Owner choice (2026-07-08): a real photo matters — reject rather than ship
+    # a blank/wrong card. Missing image → reject, honest reason.
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": None}
     ok, reason = core.verify_article_content(art)
-    assert ok is False
-    assert reason == "no og:image"          # was "generic social image: None"
+    assert ok is False and reason == "no og:image"
 
 
-def test_generic_image_still_rejected():
+def test_generic_image_rejected():
+    # NPR's facebook-default (generic branding) image → reject (don't ship the
+    # wrong photo). The safety loosening keeps News filled from real-image sources.
     art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
            "og_image": "https://media.npr.org/include/images/facebook-default-wide.jpg"}
     ok, reason = core.verify_article_content(art)
     assert ok is False and "generic social image" in reason
+
+
+def test_real_image_kept():
+    art = {"word_count": (core.MIN_PICK_BODY_WORDS + core.MAX_PICK_BODY_WORDS) // 2,
+           "og_image": "https://example.com/real-article-photo.jpg"}
+    ok, reason = core.verify_article_content(art)
+    assert ok is True and reason is None
 
 
 # ── 3. cadence estimator ──
@@ -145,6 +155,132 @@ def _run_all():
         print(f"  PASS {fn.__name__}")
     print(f"OK — {len(fns)} tests passed")
 
+
+
+def test_past_dedup_window_excludes_the_runs_own_date():
+    """A re-run must not treat its own earlier attempt as \"already published\".
+    Bug: docs/bugs/2026-09-20-past-dedup-self-poisons-reruns.md"""
+    from pipeline import full_round as fr
+
+    seen = {}
+
+    class FakeQuery:
+        def select(self, *a, **k):
+            return self
+
+        def gte(self, col, v):
+            seen["start"] = v
+            return self
+
+        def lt(self, col, v):
+            seen["end"] = v
+            return self
+
+        def eq(self, col, v):
+            seen[col] = v
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": [
+                {"category": "News", "source_title": "Fat Bear Week crowns a champion"},
+            ]})()
+
+    class FakeClient:
+        def table(self, name):
+            return FakeQuery()
+
+    import pipeline.supabase_io as sio
+    real = sio.client
+    sio.client = lambda: FakeClient()
+    try:
+        briefs = {"News": [
+            {"title": "Fat Bear Week crowns a champion", "link": "a"},   # matches the published one
+            {"title": "A brand new story about volcanoes", "link": "b"},
+        ]}
+        out = fr.filter_past_duplicate_briefs(briefs, run_date="2026-09-20")
+    finally:
+        sio.client = real
+
+    assert seen == {"start": "2026-09-13", "end": "2026-09-20",
+                    "archived": False}, seen
+    assert [b["link"] for b in out["News"]] == ["b"]
+
+
+def test_past_dedup_limits_comparisons_to_same_category_and_seven_days():
+    from pipeline import full_round as fr
+    import pipeline.supabase_io as sio
+
+    seen = {}
+
+    class FakeQuery:
+        def select(self, *args): return self
+        def gte(self, column, value):
+            seen["start"] = value
+            return self
+        def lt(self, column, value):
+            seen["end"] = value
+            return self
+        def eq(self, column, value):
+            seen[column] = value
+            return self
+        def execute(self):
+            rows = [
+                {"category": "News", "source_title": "Fat Bear Week begins in Alaska"},
+                {"category": "Fun", "source_title": "Yesterday children played violin"},
+            ]
+            return type("R", (), {"data": [r for r in rows if not seen.get("category")
+                                            or r["category"] == seen["category"]]})()
+
+    class FakeClient:
+        def table(self, name): return FakeQuery()
+
+    real = sio.client
+    sio.client = lambda: FakeClient()
+    try:
+        briefs = {"Fun": [{"title": "Fat Bear Week begins in Alaska"},
+                          {"title": "A new children's music contest"}]}
+        out = fr.filter_past_duplicate_briefs(briefs, run_date="2026-09-26")
+        recent = fr._recent_published_titles("2026-09-26", category="Fun")
+    finally:
+        sio.client = real
+
+    assert [b["title"] for b in out["Fun"]] == ["Fat Bear Week begins in Alaska", "A new children's music contest"]
+    assert recent == ["Yesterday children played violin"]
+    assert seen == {"start": "2026-09-19", "end": "2026-09-26",
+                    "archived": False, "category": "Fun"}
+
+
+def test_past_dedup_catches_same_url_with_different_bbc_rss_title(monkeypatch):
+    from pipeline import full_round as fr
+    import pipeline.supabase_io as sio
+
+    class FakeQuery:
+        def select(self, columns):
+            assert "source_url" in columns
+            return self
+        def gte(self, *args): return self
+        def lt(self, *args): return self
+        def eq(self, *args): return self
+        def execute(self):
+            return type("R", (), {"data": [{
+                "source_title": "Alcaraz on late finishes and Laver Cup return",
+                "category": "Fun",
+                "source_url": "https://www.bbc.co.uk/sport/tennis/articles/cmvgy73zvwx1o?at_medium=RSS",
+            }]})()
+
+    class FakeClient:
+        def table(self, name): return FakeQuery()
+
+    monkeypatch.setattr(sio, "client", lambda: FakeClient())
+    pool = {"Fun": [
+        {"title": "I suffered but I enjoyed after defeat",
+         "link": "https://www.bbc.co.uk/sport/tennis/articles/cmvgy73zvwx1o?at_campaign=rss"},
+        {"title": "Fresh swim race", "link": "https://swimswam.com/race-123"},
+    ]}
+    out = fr.filter_past_duplicate_briefs(pool, run_date="2026-09-26")
+    assert [b["title"] for b in out["Fun"]] == ["Fresh swim race"]
+    assert fr._canonical_source_url("https://example.org/story?id=2") != fr._canonical_source_url(
+        "https://example.org/story?id=3")
 
 if __name__ == "__main__":
     _run_all()

@@ -91,7 +91,7 @@ function SignInNudge({ tweaks, onOpenUserPanel }) {
   };
 
   return (
-    <section style={{maxWidth:1180, margin:'14px auto 0', padding:'0 28px'}}>
+    <section style={{maxWidth:1180, margin:'14px auto 0', padding:'0 clamp(12px, 4vw, 28px)'}}>
       <div style={{
         display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
         background:'linear-gradient(135deg, #fff9ef 0%, #ffe9bb 100%)',
@@ -114,9 +114,13 @@ function SignInNudge({ tweaks, onOpenUserPanel }) {
           fontFamily:'Nunito, sans-serif', cursor:'pointer',
           letterSpacing:'.04em', whiteSpace:'nowrap',
         }}>🇬 Sign in →</button>
-        <button onClick={dismiss} title="Hide this for now" style={{
+        <button onClick={dismiss} title="Hide this for now" aria-label="Hide this for now" style={{
           background:'transparent', color:'#9a8d7a', border:'none',
-          padding:'4px 6px', fontSize:18, fontWeight:700, cursor:'pointer',
+          // 44x44 is Apple's minimum touch target; this measured 23x26 on a
+          // phone, next to a Sign in button a mis-tap would trigger.
+          minWidth:44, minHeight:44, display:'inline-flex',
+          alignItems:'center', justifyContent:'center',
+          padding:0, fontSize:18, fontWeight:700, cursor:'pointer',
           lineHeight:1, fontFamily:'Nunito, sans-serif',
         }}>×</button>
       </div>
@@ -265,7 +269,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone,
   return (
     <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
       {/* Header */}
-      <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
+      <div style={{padding:'14px clamp(12px, 4vw, 28px)', borderBottom:`2px solid ${theme.chip}`}}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
           <KidsNewsLockup size={100}/>
         </div>
@@ -274,7 +278,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone,
       {/* Hero */}
       <div style={{
         background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-        padding:'32px 28px 28px', borderBottom:`2px solid ${theme.border}`,
+        padding:'32px clamp(12px, 4vw, 28px) 28px', borderBottom:`2px solid ${theme.border}`,
       }}>
         <div style={{maxWidth:760, margin:'0 auto', textAlign:'center'}}>
           <div style={{
@@ -302,7 +306,7 @@ function OnboardingScreen({ tweaks, updateTweak, level, setLevel, theme, onDone,
       </div>
 
       {/* Form */}
-      <div style={{maxWidth:720, margin:'0 auto', padding:'28px'}}>
+      <div style={{maxWidth:720, margin:'0 auto', padding:'clamp(14px, 4vw, 28px)'}}>
 
         <_OnbSection label="What's your name?" sub="So we can say hi every morning.">
           <input
@@ -541,6 +545,7 @@ function _shortHook(s, max = 50) {
 //   · 'feature' — large hero card with image left + content right
 //   · 'normal'  — compact card stacked image-on-top
 function PickCard({ story, picked, variant, onSelect }) {
+  const narrow = useIsNarrow();
   const c = CATEGORIES.find(x => x.label === story.category) || CATEGORIES[0];
   const baseStyle = {
     position:'relative', textAlign:'left', cursor:'pointer',
@@ -580,7 +585,10 @@ function PickCard({ story, picked, variant, onSelect }) {
       <button onClick={onSelect} style={baseStyle}>
         {checkBadge}
         <div style={{
-          display:'grid', gridTemplateColumns:'minmax(240px, 1.1fr) 1.4fr',
+          // minmax(240px, …) keeps a 240px image column even at 390px, which
+          // leaves the headline ~126px. Stack image over text on phones.
+          display:'grid',
+          gridTemplateColumns: narrow ? '1fr' : 'minmax(240px, 1.1fr) 1.4fr',
           gap:0,
         }}>
           <div style={{
@@ -630,6 +638,7 @@ function PickCard({ story, picked, variant, onSelect }) {
 }
 
 function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
+  const narrow = useIsNarrow();
   const cfg = window.SITE_CONFIG || {};
   const dailyGoal = cfg.dailyGoalMinutes ?? 21;
 
@@ -703,6 +712,28 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
   // (Ordering already follows source priority + last-used rotation upstream.)
   const [featureCandidate, ...smallCandidates] = cur.candidates;
 
+  // Which card the phone deck is showing, for the dots. Derived from scroll
+  // position rather than tracked on tap, so a swipe updates it too.
+  const deckRef = React.useRef(null);
+  const [deckIdx, setDeckIdx] = React.useState(0);
+  const onDeckScroll = React.useCallback(() => {
+    const el = deckRef.current;
+    if (!el || !el.children.length) return;
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = 0, bestGap = Infinity;
+    for (let i = 0; i < el.children.length; i++) {
+      const c = el.children[i];
+      const gap = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+      if (gap < bestGap) { bestGap = gap; best = i; }
+    }
+    setDeckIdx(best);
+  }, []);
+  // A new category starts at its first card.
+  React.useEffect(() => {
+    setDeckIdx(0);
+    if (deckRef.current) deckRef.current.scrollLeft = 0;
+  }, [step]);
+
   // ── Complete-status screen (after the 3rd pick auto-fires) ─────────
   // Shows all three picked stories side-by-side with a confirmation CTA.
   // Kid can change their mind via tracker pills or "Change my picks".
@@ -712,7 +743,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
     const totalMins = finals.reduce((m, s) => m + (s.readMins || 0), 0);
     return (
       <div style={{minHeight:'100vh', background: theme.bg, fontFamily:'Nunito, sans-serif'}}>
-        <div style={{padding:'14px 28px', borderBottom:`2px solid ${theme.chip}`}}>
+        <div style={{padding:'14px clamp(12px, 4vw, 28px)', borderBottom:`2px solid ${theme.chip}`}}>
           <div style={{maxWidth:1180, margin:'0 auto'}}>
             <KidsNewsLockup size={66}/>
           </div>
@@ -720,7 +751,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 
         <div style={{
           background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-          padding:'30px 28px 24px', borderBottom:`2px solid ${theme.border}`, textAlign:'center',
+          padding:'30px clamp(12px, 4vw, 28px) 24px', borderBottom:`2px solid ${theme.border}`, textAlign:'center',
         }}>
           <div style={{
             fontSize:12, fontWeight:800, letterSpacing:'.12em',
@@ -745,9 +776,9 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
           </div>
         </div>
 
-        <div style={{maxWidth:1180, margin:'0 auto', padding:'28px'}}>
+        <div style={{maxWidth:1180, margin:'0 auto', padding:'clamp(14px, 4vw, 28px)'}}>
           <div style={{
-            display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:18, marginBottom:28,
+            display:'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(3, 1fr)', gap:18, marginBottom:28,
           }}>
             {finals.map((s, i) => {
               const c = CATEGORIES.find(x => x.label === s.category) || CATEGORIES[0];
@@ -788,7 +819,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 
             <button onClick={lockNow} style={{
               background:'#1b1230', color:'#fff', border:'none', borderRadius:16,
-              padding:'16px 28px', fontWeight:900, fontSize:17,
+              padding:'16px clamp(14px, 4vw, 28px)', fontWeight:900, fontSize:17,
               fontFamily:'Nunito, sans-serif', cursor:'pointer',
               boxShadow:'0 5px 0 rgba(27,18,48,0.18)',
             }}>▶ Start your {dailyGoal} minutes</button>
@@ -803,7 +834,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       {/* — Header strip — */}
       <div style={{
         background: theme.bg, borderBottom:`2px solid ${theme.chip}`,
-        padding:'14px 28px',
+        padding:'14px clamp(12px, 4vw, 28px)',
       }}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
           <KidsNewsLockup size={66}/>
@@ -813,7 +844,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       {/* — Hero band: date + step heading + tagline + clickable tracker — */}
       <div style={{
         background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
-        padding:'24px 28px 22px', borderBottom:`2px solid ${theme.border}`,
+        padding:'24px clamp(12px, 4vw, 28px) 22px', borderBottom:`2px solid ${theme.border}`,
       }}>
         <div style={{maxWidth:1180, margin:'0 auto'}}>
           <div style={{
@@ -841,8 +872,16 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
               </div>
             </div>
 
-            {/* Tracker pills — clickable to jump back */}
-            <div style={{display:'flex', gap:8}}>
+            {/* Tracker pills — clickable to jump back.
+                Three at minWidth:130 plus gaps is 406px; a 390px phone has ~366px
+                to give, so the third pill was cut off and unreachable — the reader
+                could not jump back to Fun. Scroll the strip and let the pills
+                shrink. */}
+            <div style={{
+              display:'flex', gap:8,
+              overflowX:'auto', WebkitOverflowScrolling:'touch',
+              scrollbarWidth:'none', paddingBottom:2, maxWidth:'100%',
+            }}>
               {groups.map((g, i) => {
                 const sel = selections[g.cat.label];
                 const isCurrent = i === step;
@@ -853,7 +892,7 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
                     style={{
                       cursor:'pointer', border:'none',
                       background:'#fff', borderRadius:14,
-                      padding:'10px 14px', minWidth:130,
+                      padding:'10px 14px', minWidth: narrow ? 104 : 130, flexShrink:0,
                       borderTop: isCurrent ? `4px solid ${g.cat.color}` : '4px solid transparent',
                       borderLeft: sel ? `3px solid ${g.cat.color}` : '3px solid transparent',
                       boxShadow: isCurrent ? '0 4px 0 rgba(27,18,48,0.12)' : '0 2px 0 rgba(27,18,48,0.06)',
@@ -884,27 +923,84 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
       </div>
 
       {/* — Big feature + 2 small compagnion cards — */}
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 28px'}}>
-        {featureCandidate && (
-          <PickCard
-            story={featureCandidate} variant="feature"
-            picked={selectedId === featureCandidate.id}
-            onSelect={() => select(featureCandidate.id)}
-          />
-        )}
-        {smallCandidates.length > 0 && (
-          <div style={{
-            display:'grid',
-            gridTemplateColumns: smallCandidates.length === 1 ? '1fr' : 'repeat(2, 1fr)',
-            gap:18, marginTop:18,
-          }}>
-            {smallCandidates.map(s => (
-              <PickCard key={s.id} story={s} variant="normal"
-                picked={selectedId === s.id}
-                onSelect={() => select(s.id)}
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 28px'}}>
+        {narrow ? (
+          /* Phone: a swipeable deck. Stacked vertically these candidates were
+             1387px of card in a 1933px page — 2.3 screens of scrolling to choose
+             one of three, and three categories to get through. One card per
+             screen, swipe across, tap to pick.
+
+             CSS scroll-snap rather than touch handlers: it inherits the OS
+             momentum and rubber-banding, never fights Safari's back-swipe, and
+             leaves vertical scrolling alone. */
+          <>
+            <div
+              ref={deckRef}
+              onScroll={onDeckScroll}
+              style={{
+                display:'flex', gap:12,
+                overflowX:'auto', overflowY:'hidden',
+                scrollSnapType:'x mandatory',
+                WebkitOverflowScrolling:'touch', scrollbarWidth:'none',
+                // full-bleed: cancel the page gutter so a card can sit centred
+                // with its neighbours peeking in at the edges
+                marginInline:'calc(-1 * clamp(12px, 4vw, 28px))',
+                paddingInline:'clamp(12px, 4vw, 28px)',
+                scrollPaddingInline:'clamp(12px, 4vw, 28px)',
+                paddingBottom:4,
+              }}>
+              {cur.candidates.map(s => (
+                <div key={s.id} style={{flex:'0 0 88%', scrollSnapAlign:'center'}}>
+                  <PickCard story={s} variant="normal"
+                    picked={selectedId === s.id}
+                    onSelect={() => select(s.id)}
+                  />
+                </div>
+              ))}
+            </div>
+            {cur.candidates.length > 1 && (
+              <div style={{display:'flex', justifyContent:'center', gap:8, marginTop:14}}
+                   aria-hidden="true">
+                {cur.candidates.map((s, i) => (
+                  <span key={s.id} style={{
+                    width: i === deckIdx ? 22 : 8, height:8, borderRadius:999,
+                    background: i === deckIdx ? cur.cat.color : '#e0d6c4',
+                    transition:'width .18s, background .18s',
+                  }}/>
+                ))}
+              </div>
+            )}
+            <div style={{
+              textAlign:'center', marginTop:10, fontSize:13, color:'#9a8d7a',
+              fontFamily:'Nunito, sans-serif', fontWeight:700,
+            }}>
+              {selectedId ? 'Picked! Swipe on, or tap Next below.' : 'Swipe to see all 3 · tap one to pick'}
+            </div>
+          </>
+        ) : (
+          <>
+            {featureCandidate && (
+              <PickCard
+                story={featureCandidate} variant="feature"
+                picked={selectedId === featureCandidate.id}
+                onSelect={() => select(featureCandidate.id)}
               />
-            ))}
-          </div>
+            )}
+            {smallCandidates.length > 0 && (
+              <div style={{
+                display:'grid',
+                gridTemplateColumns: smallCandidates.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+                gap:18, marginTop:18,
+              }}>
+                {smallCandidates.map(s => (
+                  <PickCard key={s.id} story={s} variant="normal"
+                    picked={selectedId === s.id}
+                    onSelect={() => select(s.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* — Bottom nav: Back + progress hint (Next is implicit — tap card) — */}
@@ -945,6 +1041,27 @@ function PickFlow({ pool, onLock, theme, tweaks, dateLabel }) {
 //                              article whose steps[] is partial)
 //   · Done       ........... "🎉 All done — see you tomorrow"
 // ────────────────────────────────────────────────────────────────────
+// ── Viewport ───────────────────────────────────────────────────────────────
+// Every style in this app is an inline React style, and inline styles cannot
+// carry a media query. Sizes that only need to SCALE use clamp() directly;
+// layouts that must CHANGE shape (a row becoming a stack) read this hook.
+// 640px splits phones from everything else: iPhone 13 is 390 CSS px and a
+// 16 Pro Max is 440, so both land on the narrow side.
+const NARROW_BP = 640;
+function useIsNarrow(bp = NARROW_BP) {
+  const query = `(max-width: ${bp}px)`;
+  const [narrow, setNarrow] = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  React.useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = e => setNarrow(e.matches);
+    setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return narrow;
+}
+
 function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen, tweaks }) {
   if (!daily3 || daily3.length === 0) return null;
 
@@ -980,7 +1097,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
       position:'sticky', top: 0, zIndex: 25,
       background: 'rgba(255,249,239,0.96)', backdropFilter:'blur(8px)',
       borderBottom:`2px solid ${theme.chip}`,
-      padding:'26px 28px 24px',   // ~40% taller than the previous version
+      padding:'26px clamp(12px, 4vw, 28px) 24px',   // ~40% taller than the previous version
     }}>
       <div style={{maxWidth:1180, margin:'0 auto'}}>
         {/* Greeting row: "Hi {name}! 👋 · {date}" — moved up from the hero. */}
@@ -1050,6 +1167,7 @@ function TodayBanner({ daily3, progress, theme, dailyGoal, minutesToday, onOpen,
 function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLevel, cat, setCat, progress, setProgress, theme, heroVariant, tweaks, updateTweak, onOpenUserPanel, archiveDay, magicConsuming, magicLinkError }) {
   theme = theme || { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' };
 
+  const narrow = useIsNarrow();
   const isZh = tweaks && tweaks.language === 'zh';
   // In zh mode we show the Chinese summary cards (language === 'zh'); otherwise
   // we show English cards at the selected level (Sprout => easy, Tree => middle).
@@ -1287,7 +1405,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
 
       {/* ——————————— ARCHIVE BANNER (when viewing an old day) ——————————— */}
       {isArchive && (
-        <section style={{maxWidth:1180, margin:'16px auto 0', padding:'0 28px'}}>
+        <section style={{maxWidth:1180, margin:'16px auto 0', padding:'0 clamp(12px, 4vw, 28px)'}}>
           <div style={{
             background:'#1b1230', color:'#fff', borderRadius:18,
             padding:'14px 20px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap',
@@ -1318,11 +1436,11 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
           below. The pickup-route gate + sticky-TodayBanner check `!isZh`
           for the same reason; this third surface was missed. */}
       {!isArchive && !isZh && (
-      <section style={{maxWidth:1180, margin:'0 auto', padding:'24px 28px 0'}}>
+      <section style={{maxWidth:1180, margin:'0 auto', padding:'24px clamp(12px, 4vw, 28px) 0'}}>
         <div style={{
           background:`linear-gradient(135deg, ${theme.hero1} 0%, ${theme.hero2} 100%)`,
           borderRadius:28,
-          padding:'40px 48px',   // ~40% bigger than the previous 28×32
+          padding:'clamp(20px, 5vw, 40px) clamp(14px, 5vw, 48px)',  // ~40% bigger than the previous 28×32 on a laptop; on a 390px phone this and the section around it stacked to 184px of padding and left cards 234px wide
           position:'relative',
           overflow:'hidden',
           border:`2px solid ${theme.border}`,
@@ -1396,27 +1514,38 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
                   ) : (
                   <div style={{
                     background:'#fff', border:'2px solid #fff', borderRadius:18,
-                    padding:'18px 22px', display:'flex', gap:20, alignItems:'flex-start',
+                    padding: narrow ? '14px 16px' : '18px 22px',
+                    display:'flex', gap: narrow ? 12 : 20, alignItems:'flex-start',
+                    // 56 badge + 196 image + 36 actions + gaps + padding needs 392px.
+                    // A 390px phone gives this card ~280px, which squeezed the title
+                    // to zero width. On a phone the image takes its own line instead.
+                    flexWrap: narrow ? 'wrap' : 'nowrap',
                     boxShadow:'0 2px 0 rgba(27,18,48,0.08)',
                   }}>
                     <div style={{
-                      width:56, height:56, borderRadius:16, flexShrink:0,
+                      width: narrow ? 44 : 56, height: narrow ? 44 : 56,
+                      borderRadius:16, flexShrink:0,
                       background: catColor, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center',
-                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize:26,
+                      fontFamily:'Fraunces, serif', fontWeight:900, fontSize: narrow ? 20 : 26,
                     }}>{i+1}</div>
                     <div style={{
-                      width:196, height:196, borderRadius:16, flexShrink:0,
+                      width: narrow ? '100%' : 196, height: narrow ? 150 : 196,
+                      order: narrow ? -1 : 0,          // image first, on its own line
+                      borderRadius:16, flexShrink:0,
                       background:`url(${a.image}) center/cover, ${catColor}`,
                       border:`2px solid ${catColor}`,
                     }}/>
                     <button onClick={()=>onOpen(a.id)} style={{
-                      flex:1, minWidth:0, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0,
+                      flex:'1 1 140px', minWidth:0, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0,
                       display:'flex', flexDirection:'column', gap:8,
                     }}>
                       <div style={{
                         fontFamily:'Fraunces, serif', fontWeight:900,
-                        fontSize:24, color:'#1b1230', lineHeight:1.2,
-                        display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:2, overflow:'hidden',
+                        fontSize: narrow ? 19 : 24, color:'#1b1230', lineHeight:1.2,
+                        // 2 lines cut nearly every headline mid-word once the text
+                        // column is ~176px instead of the ~400px a laptop gives it.
+                        display:'-webkit-box', WebkitBoxOrient:'vertical',
+                        WebkitLineClamp: narrow ? 3 : 2, overflow:'hidden',
                       }}>
                         {a.title}
                       </div>
@@ -1468,7 +1597,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
       )}
 
       {/* ——————————— CATEGORY TABS ——————————— */}
-      <section style={{maxWidth:1180, margin: isArchive ? '24px auto 0' : '32px auto 0', padding:'0 28px', position:'relative'}}>
+      <section style={{maxWidth:1180, margin: isArchive ? '24px auto 0' : '32px auto 0', padding:'0 clamp(12px, 4vw, 28px)', position:'relative'}}>
         <div style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'center'}}>
           {CATEGORIES.map(c => (
             <CatTab key={c.id} label={c.label} emoji={c.emoji} color={c.color} bg={c.bg} active={cat===c.label} onClick={()=>setCat(c.label)} />
@@ -1492,7 +1621,7 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
       </section>
 
       {/* ——————————— ARTICLES GRID ——————————— */}
-      <section style={{maxWidth:1180, margin:'20px auto 0', padding:'0 28px 60px'}}>
+      <section style={{maxWidth:1180, margin:'20px auto 0', padding:'0 clamp(12px, 4vw, 28px) 60px'}}>
         {filtered.length === 0 ? (
           <div style={{textAlign:'center', padding:'40px 20px', color:'#9a8d7a', background:'#fff', borderRadius:16, border:'2px dashed #f0e8d8'}}>
             <div style={{fontSize:36, marginBottom:8}}>🌱</div>
@@ -1503,7 +1632,9 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
           /* Editorial layout: big feature on top (photo left, article right) + 2 companions below */
           <div style={{display:'flex', flexDirection:'column', gap:20}}>
             <ArticleCard article={filtered[0]} onOpen={isZh ? null : ()=>onOpen(filtered[0].id)} read={_isDoneArticle(progress, filtered[0].id)} pct={_articlePct((progress.articleProgress||{})[filtered[0].id])} variant="feature" />
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
+            {/* Side by side gives each card ~170px on a 390px phone — the body
+                wraps at about nine characters a line. One per row on phones. */}
+            <div style={{display:'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 1fr', gap:20}}>
               <ArticleCard article={filtered[1]} onOpen={isZh ? null : ()=>onOpen(filtered[1].id)} read={_isDoneArticle(progress, filtered[1].id)} pct={_articlePct((progress.articleProgress||{})[filtered[1].id])} variant="normal" />
               <ArticleCard article={filtered[2]} onOpen={isZh ? null : ()=>onOpen(filtered[2].id)} read={_isDoneArticle(progress, filtered[2].id)} pct={_articlePct((progress.articleProgress||{})[filtered[2].id])} variant="normal" />
             </div>
@@ -1522,7 +1653,9 @@ function HomePage({ onOpen, onOpenArchive, onOpenSearch, onResume, level, setLev
       </section>
 
       {/* ——————————— FOOTER ——————————— */}
-      <footer style={{textAlign:'center', padding:'28px 20px 40px', color:'#9a8d7a', fontSize:13}}>
+      <footer style={{textAlign:'center', padding:'28px 20px 40px', color:'#9a8d7a', fontSize:13,
+                      // give the legal links a finger-sized row rather than 16px
+                      lineHeight:1.9}}>
         {(() => {
           // Use the freshest mined_at across all loaded articles as the "page
           // generated" timestamp. Displayed in the reader's local timezone.
@@ -1613,15 +1746,25 @@ function DatePopover({ onPick, onClose }) {
 function Header({ level, setLevel, theme, tweaks, onOpenUserPanel, progress, recentOpen, setRecentOpen, onOpenArticle, onOpenArchive, onOpenSearch }) {
   theme = theme || { bg:'#fff9ef', chip:'#f0e8d8' };
   tweaks = tweaks || {};
+  const narrow = useIsNarrow();
   return (
     <header style={{
       background: theme.bg,
       borderBottom: `2px solid ${theme.chip}`,
       position:'sticky', top:0, zIndex:30, backdropFilter:'blur(6px)',
     }}>
-      <div style={{maxWidth:1180, margin:'0 auto', padding:'14px 28px', display:'flex', alignItems:'center', gap:16}}>
+      <div style={{
+        maxWidth:1180, margin:'0 auto',
+        // Fluid gutter: 28px on a laptop, 12px on a 390px phone. Hardcoding 28
+        // left a 390px screen only 334px of content and pushed this row to 826px.
+        padding:'14px clamp(12px, 4vw, 28px)',
+        display:'flex', alignItems:'center', gap:'clamp(8px, 2vw, 16px)',
+        // Without wrap this row is one 826px line on a phone: the whole page then
+        // scrolls sideways and iOS shrinks the text to fit.
+        flexWrap:'wrap', rowGap:10,
+      }}>
         {/* New brand lockup — kidsnews mark + wordmark + "a 21mins channel" */}
-        <KidsNewsLockup size={66}/>
+        <KidsNewsLockup size={narrow ? 48 : 66}/>
 
         <div style={{flex:1}}/>
 
@@ -1784,8 +1927,10 @@ function SearchPage({ onBack, onOpenResult, level, language }) {
         }}>
           <button onClick={onBack} style={{
             background:'transparent', border:'none', cursor:'pointer',
-            fontSize:22, color:'#1b1230', padding:'4px 6px', lineHeight:1,
-          }} title="Back">←</button>
+            fontSize:22, color:'#1b1230', lineHeight:1,
+            minWidth:44, minHeight:44, display:'inline-flex',
+            alignItems:'center', justifyContent:'center', padding:0,
+          }} title="Back" aria-label="Back">←</button>
           <div style={{
             fontFamily:'Fraunces, serif', fontWeight:900, fontSize:20,
             color:'#1b1230', marginRight:6,
@@ -1973,6 +2118,8 @@ function FeedbackModal({ onClose }) {
           </div>
           <button onClick={onClose} style={{
             background:'transparent', border:'none', fontSize:22, cursor:'pointer', color:'#888',
+            minWidth:44, minHeight:44, display:'inline-flex',
+            alignItems:'center', justifyContent:'center', padding:0,
           }} aria-label="Close">×</button>
         </div>
 
@@ -2320,6 +2467,7 @@ function KeywordTip({ term, def }) {
 }
 
 function ArticleCard({ article, onOpen, read, pct, variant }) {
+  const narrow = useIsNarrow();
   const [hover, setHover] = useStateH(false);
   const isFeature = variant === 'feature';
   const isTall = variant === 'tall-feature';
@@ -2345,7 +2493,7 @@ function ArticleCard({ article, onOpen, read, pct, variant }) {
         transform: clickable && hover ? 'translateY(-4px) rotate(-0.3deg)' : 'translateY(0)',
         boxShadow: clickable && hover ? '0 10px 0 rgba(27,18,48,0.08)' : '0 4px 0 rgba(27,18,48,0.06)',
         transition:'all .2s cubic-bezier(.3,1.4,.6,1)',
-        gridColumn: isFeature ? 'span 2' : 'auto',
+        gridColumn: (isFeature && !narrow) ? 'span 2' : 'auto',
         display:'flex',
         flexDirection:'column',
         width: isTall ? '100%' : undefined,

@@ -19,7 +19,7 @@ from . import config as cfg
 log = logging.getLogger(__name__)
 
 
-CURATOR_SYSTEM_PROMPT = """You are curating kid-appropriate news for ages 8-13.
+CURATOR_SYSTEM_PROMPT = """You are curating kid-appropriate news for ages 10-14.
 
 You have 15 news story briefs, grouped by source:
 - GROUP A (Tier 1): NPR, Reuters

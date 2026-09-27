@@ -492,7 +492,7 @@ function buildDigestHtml(stats, opts) {
   const settings = [
     ['Name', tw.userName || '—'],
     ['Avatar', tw.avatar || '—'],
-    ['Reading level', tw.level === 'Tree' ? '🌳 Tree (ages 11–13)' : tw.level === 'Sprout' ? '🌱 Sprout (ages 8–10)' : '—'],
+    ['Reading level', tw.level === 'Tree' ? '🌳 Tree (ages 12–14)' : tw.level === 'Sprout' ? '🌱 Sprout (ages 10–11)' : '—'],
     ['Language', tw.language === 'zh' ? '🇨🇳 中文' : tw.language === 'en' ? '🇬🇧 English' : '—'],
     ['Theme', tw.theme || '—'],
     ['Daily goal', `${tw.dailyGoal || 21} minutes`],
@@ -1420,7 +1420,7 @@ function SettingsPanel({ stats }) {
         {[
           ['Name', t.userName || '—'],
           ['Avatar', t.avatar || '—'],
-          ['Reading level', t.level === 'Tree' ? '🌳 Tree (ages 11–13)' : t.level === 'Sprout' ? '🌱 Sprout (ages 8–10)' : '—'],
+          ['Reading level', t.level === 'Tree' ? '🌳 Tree (ages 12–14)' : t.level === 'Sprout' ? '🌱 Sprout (ages 10–11)' : '—'],
           ['Language', t.language === 'zh' ? '🇨🇳 中文' : t.language === 'en' ? '🇬🇧 English' : '—'],
           ['Theme', t.theme || '—'],
           ['Daily goal', `${t.dailyGoal || 21} minutes`],

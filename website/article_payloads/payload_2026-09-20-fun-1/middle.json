@@ -1,0 +1,137 @@
+{
+  "title": "Astronomers Discover Two 'Super-Puff' Planets Lighter Than Cotton Candy",
+  "summary": "Astronomers have discovered a pair of Jupiter-sized planets that are less dense than cotton candy. Named TOI-791 b and TOI-791 c, they orbit a Sun-like star about 1,113 light-years from Earth. These planets belong to a rare class called \"super-puffs.\" \"Only a handful of these super-puffy planets are known, and it is even rarer to find two in the same system,\" said Dr. George Dransfield, who led the study. The first clues came from volunteers studying data from NASA's TESS space telescope. They noticed tiny dips in the star's brightness, suggesting planets were passing in front of it. To confirm, Dr. Dransfield's team used telescopes worldwide, including the ASTEP observatory in Antarctica. Its location allowed continuous observation during the Antarctic winter, recording several complete transits. Each transit lasted over 11 hours — the longest ever observed from the ground. By measuring the star's light changes, the team determined the planets' sizes. They calculated masses by analyzing how the planets' gravity affected each other's orbits. Together, these measurements revealed extremely low densities. The two super-puffs orbit in a repeating pattern: for every five orbits of the inner planet, the outer completes three. This suggests they formed together from the same disk of gas and dust. The findings were published in the Monthly Notices of the Royal Astronomical Society on June 25, 2026. Scientists are still unsure how super-puffs form. One leading theory is that they have large amounts of hydrogen and helium gas around small solid cores. These thick atmospheres make the planets appear much larger while keeping density extremely low. Dr. Dransfield's team hopes to study their atmospheres with the James Webb Space Telescope to solve the mystery. This discovery gives astronomers a rare chance to study two super-puffs at once, and it may help explain how such strange, fluffy worlds form.",
+  "why_it_matters": "Planets like these break the simple rules scientists use to guess what a planet can be made of, so studying them tests how much we really understand about how solar systems form — including the one we live in.",
+  "image_url": "/article_images/article_b4582bafab6b.webp",
+  "keywords": [
+    {
+      "term": "super-puffs",
+      "explanation": "A rare kind of planet that is huge in size but extremely light for its size, like a giant ball of fluff."
+    },
+    {
+      "term": "transit",
+      "explanation": "When a planet passes in front of its star and briefly blocks a bit of the star's light."
+    },
+    {
+      "term": "densities",
+      "explanation": "How much mass is packed into a given amount of space — a low density means something is light and puffy."
+    },
+    {
+      "term": "light-years",
+      "explanation": "The distance light travels in one year, used to measure the huge gaps between stars."
+    },
+    {
+      "term": "observatory",
+      "explanation": "A place built with telescopes to watch the sky and collect measurements."
+    },
+    {
+      "term": "atmospheres",
+      "explanation": "The layers of gas wrapped around a planet."
+    }
+  ],
+  "questions": [
+    {
+      "question": "What rare class of planet did the astronomers discover?",
+      "options": [
+        "Rocky super-Earths",
+        "Hot Jupiters",
+        "Ice giants",
+        "Super-puffs"
+      ],
+      "correct_answer": "Super-puffs"
+    },
+    {
+      "question": "How far from Earth is the star that these planets orbit?",
+      "options": [
+        "About 11,130 light-years",
+        "About 1,113 light-years",
+        "About 111 light-years",
+        "About 113 light-years"
+      ],
+      "correct_answer": "About 1,113 light-years"
+    },
+    {
+      "question": "Which telescope's data first gave volunteers clues about the planets?",
+      "options": [
+        "The Hubble Space Telescope",
+        "NASA's TESS space telescope",
+        "The ASTEP observatory",
+        "The James Webb Space Telescope"
+      ],
+      "correct_answer": "NASA's TESS space telescope"
+    },
+    {
+      "question": "Why was the ASTEP observatory in Antarctica especially useful for this study?",
+      "options": [
+        "It could observe continuously during the Antarctic winter",
+        "It is the closest telescope to the star",
+        "It is the largest telescope in the world",
+        "It can see through clouds better than any other site"
+      ],
+      "correct_answer": "It could observe continuously during the Antarctic winter"
+    },
+    {
+      "question": "What repeating pattern do the two planets' orbits follow?",
+      "options": [
+        "For every five orbits of the inner planet, the outer one completes three",
+        "Both planets take exactly the same time to orbit",
+        "They swap positions with each other every orbit",
+        "The outer planet orbits five times for every three orbits of the inner one"
+      ],
+      "correct_answer": "For every five orbits of the inner planet, the outer one completes three"
+    },
+    {
+      "question": "What is one leading theory about why super-puffs look so big and light?",
+      "options": [
+        "They are hollow inside like balloons",
+        "They are young planets that still glow with heat",
+        "They have thick hydrogen and helium atmospheres around small solid cores",
+        "They are made mostly of water and rock"
+      ],
+      "correct_answer": "They have thick hydrogen and helium atmospheres around small solid cores"
+    }
+  ],
+  "background_read": [
+    "A 'super-puff' is a planet so light for its size that its density is lower than cotton candy's, and only a handful have been confirmed since the first ones were spotted in the 2010s. For comparison, even Saturn — the least dense planet in our own solar system — is already light enough that it would float in water.",
+    "NASA's TESS (the Transiting Exoplanet Survey Satellite, a space telescope that stares at bright nearby stars looking for tiny dips in their light) was built exactly for this kind of hunt, and its huge piles of data are often checked by citizen-science volunteers rather than only by professional astronomers.",
+    "Antarctica is a favourite site for certain measurements because during the polar winter the Sun stays below the horizon for months, giving telescopes an unbroken view of the same patch of sky — the same reason facilities like the South Pole Telescope are built there.",
+    "The James Webb Space Telescope (the largest telescope ever sent into space, which studies infrared light) is now the main tool for probing the atmospheres of planets outside our solar system, and it is what this team hopes to use next."
+  ],
+  "Article_Structure": [
+    "LEAD: a rare kind of planet — Jupiter-sized but lighter than cotton candy",
+    "  └─ named TOI-791 b and TOI-791 c, orbiting a Sun-like star 1,113 light-years away",
+    "DISCOVERY PATH",
+    "  ├─ CLUE: volunteers notice tiny dips in the star's brightness in NASA TESS data",
+    "  ├─ CONFIRMATION: telescopes worldwide, including the ASTEP observatory in Antarctica",
+    "  └─ DETAIL: each transit lasted over 11 hours — the longest ever recorded from the ground",
+    "MEASUREMENTS",
+    "  ├─ SIZE: from how much the star's light dims",
+    "  ├─ MASS: from how the planets' gravity affects each other's orbits",
+    "  └─ RESULT: extremely low densities",
+    "ORBITAL PATTERN: five inner orbits for every three outer ones — a hint they formed from the same disk of gas and dust",
+    "OPEN QUESTION: how do super-puffs form? leading theory is thick hydrogen and helium envelopes around small solid cores",
+    "NEXT STEP: study their atmospheres with the James Webb Space Telescope"
+  ],
+  "perspectives": [
+    {
+      "perspective": "The discovery team and planet-hunters",
+      "description": "For astronomers, finding two super-puffs in one system is a rare chance to compare two similar worlds side by side. It lets them test ideas about how such planets form against a matched pair rather than a single odd example, and it makes this system a prime target for follow-up observations."
+    },
+    {
+      "perspective": "Skeptical astronomers",
+      "description": "Some researchers argue that 'super-puff' may be less a real class of planet than a label for objects whose sizes are much easier to measure than their masses. With only a handful known, a small error in a mass estimate could push a planet in or out of the category, so the group may partly reflect the limits of our instruments."
+    },
+    {
+      "perspective": "Theorists studying planet formation",
+      "description": "The 5-to-3 orbital rhythm is strong evidence that the pair grew together in the same disk of gas and dust. But similar resonances can also appear when planets drift inward over time, so the pattern is suggestive rather than proof — exactly the kind of tension that keeps the super-puff mystery open."
+    },
+    {
+      "perspective": "Volunteers and ground-based observers",
+      "description": "The first hint came from volunteers scanning TESS data, and the confirmation relied partly on an observatory in Antarctica rather than only on flagship space telescopes. That suggests the next breakthrough might again come from ordinary people and unusual locations, not just the biggest and most expensive instruments."
+    }
+  ],
+  "mined_at": "2026-09-20T03:57:41+00:00",
+  "source_published_at": "",
+  "source_name": "DOGOnews",
+  "source_url": "https://www.dogonews.com/2026/9/16/these-giant-super-puff-planets-are-less-dense-than-cotton-candy"
+}

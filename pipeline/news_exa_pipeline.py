@@ -123,7 +123,7 @@ def apply_filters(results: list[dict]) -> tuple[list[dict], list[dict]]:
 # Step 3: Curator
 # ---------------------------------------------------------------------------
 
-CURATOR_PROMPT = """You are curating kid-appropriate news for ages 8-13.
+CURATOR_PROMPT = """You are curating kid-appropriate news for ages 10-14.
 You have news briefs from Al Jazeera and NPR.
 
 Pick exactly 3 stories best for kids. Prefer:
@@ -187,7 +187,7 @@ def curate(briefs: list[dict]) -> dict:
 # Step 4: Rewriter (500-word kids article)
 # ---------------------------------------------------------------------------
 
-REWRITER_PROMPT = """You are a children's journalist writing for "News Oh, Ye!" — a news site for ages 8-13.
+REWRITER_PROMPT = """You are a children's journalist writing for "News Oh, Ye!" — a news site for ages 10-14.
 
 You will receive: article title, source, key highlights (extracted sentences).
 Your job: write a 500-word (±50) kids article at a 5th-6th grade reading level.

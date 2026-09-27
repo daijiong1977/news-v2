@@ -69,6 +69,37 @@ def test_independent_vet_failure_falls_back_to_self_scores():
     assert len(kept) == 1 and rejected == []
 
 
+def test_one_malformed_vet_row_retries_without_discarding_other_rows(monkeypatch):
+    first = _clean_scores(0, fear=2)
+    first["scores"]["1"] = {d: 0 for d in core.SAFETY_DIMS}
+    first["scores"]["1"]["fear"] = None
+    calls = []
+
+    def fake(system, user, max_tokens, **kw):
+        calls.append(user)
+        return first if len(calls) == 1 else _clean_scores(1, fear=1)
+
+    monkeypatch.setattr(core, "deepseek_call", fake)
+    articles = [_article(sid=0), _article(sid=1)]
+    kept, rejected = core.filter_safe_rewrites({"articles": articles})
+    assert len(calls) == 2 and "source_id=1" in calls[1]
+    assert rejected == []
+    assert [a["safety"]["fear"] for a in kept] == [2, 1]
+    assert all(a["_independent_vet_status"] == "scored" for a in kept)
+
+
+def test_malformed_retry_falls_back_only_for_that_article(monkeypatch):
+    first = _clean_scores(0, fear=2)
+    first["scores"]["1"] = {d: 0 for d in core.SAFETY_DIMS}
+    first["scores"]["1"]["fear"] = None
+    monkeypatch.setattr(core, "deepseek_call", lambda *args, **kwargs: first)
+    kept, rejected = core.filter_safe_rewrites({"articles": [_article(0), _article(1)]})
+    assert rejected == []
+    assert [a["_independent_vet_status"] for a in kept] == ["scored", "fallback"]
+    assert kept[0]["safety"]["fear"] == 2
+    assert kept[1]["safety"]["fear"] == 0
+
+
 def test_forbidden_term_in_rewritten_body_rejects():
     # Independent vet returns clean scores, but the rewritten middle body
     # carries a self-harm term → deterministic backstop REJECTs.
@@ -82,8 +113,9 @@ def test_forbidden_term_in_rewritten_body_rejects():
     assert "forbidden" in rejected[0]["_safety_eval"]["reason"].lower()
 
 
-def test_wordcount_flags_annotated():
-    short_easy = _article(sid=0, easy_words=150)   # below 200 easy floor
+def test_wordcount_flags_annotated(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
+    short_easy = _article(sid=0, easy_words=core.WC_BANDS["easy"][0] - 20)
     kept, _ = _with_fake_vet(
         _clean_scores(0),
         lambda: core.filter_safe_rewrites({"articles": [short_easy]}),
@@ -100,9 +132,113 @@ def test_wordcount_flags_annotated():
     assert not (kept2[0].get("_wc_flags") or [])
 
 
+def test_outside_digest_tolerance_rejected_after_failed_repair(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
+    art = _article(sid=0, middle_words=203)
+    kept, rejected = _with_fake_vet(
+        _clean_scores(0),
+        lambda: core.filter_safe_rewrites({"articles": [art]}),
+    )
+    assert not kept
+    assert len(rejected) == 1
+    assert "word-count QA" in rejected[0]["_safety_eval"]["reason"]
+
+
 def test_easy_band_aligned_with_digest_gate():
-    assert "170-210" not in core.TRI_VARIANT_REWRITER_PROMPT
-    assert "210-300" in core.TRI_VARIANT_REWRITER_PROMPT
+    """The easy word band is stated in four places: the rewriter prompt, the
+    repair targets, the generation-time QA band, and quality_digest's gate.
+    They drift silently — the prompt is prose, the rest are tuples — and the
+    symptom is a morning full of body_too_short tickets for bodies the
+    rewriter was told to write. Assert all four agree."""
+    from pipeline.quality_digest import BODY_TARGETS, WC_SLACK
+
+    assert core.WC_QA_SLACK == WC_SLACK
+
+    for level in ("easy", "middle"):
+        t_lo, t_hi = core.WC_REPAIR_TARGETS[level]
+        b_lo, b_hi = core.WC_BANDS[level]
+        assert f"{t_lo}-{t_hi} words" in core.TRI_VARIANT_REWRITER_PROMPT, \
+            f"{level}: prompt does not state the repair target {t_lo}-{t_hi}"
+        assert b_lo < t_lo and t_hi < b_hi, \
+            f"{level}: QA band {b_lo}-{b_hi} must sit outside repair target {t_lo}-{t_hi}"
+        assert BODY_TARGETS[level] == core.WC_BANDS[level], \
+            f"{level}: quality_digest gate {BODY_TARGETS[level]} != WC_BANDS {core.WC_BANDS[level]}"
+
+
+# ── per-dimension safety thresholds (2026-07-08) ──
+
+def _safety(**dims):
+    base = {d: 0 for d in core.SAFETY_DIMS}
+    base.update(dims)
+    return {"safety": base}
+
+
+def test_moderate_news_dims_pass():
+    # War/politics/conflict at a MODERATE level (3) is allowed for a news site.
+    assert core.evaluate_rewriter_safety(
+        _safety(violence=3, fear=3, distress=3, adult_themes=3, bias=3)
+    )["verdict"] == "PASS"
+
+
+def test_severe_news_dim_rejected():
+    # Graphic/severe (>=4) still rejects.
+    assert core.evaluate_rewriter_safety(_safety(violence=4))["verdict"] == "REJECT"
+    assert core.evaluate_rewriter_safety(_safety(fear=5))["verdict"] == "REJECT"
+
+
+def test_factual_war_death_is_not_an_automatic_safety_reject(monkeypatch):
+    article = _article(middle_text=("The war continued. One person died. Talks continued. " * 38).strip())
+    monkeypatch.setattr(core, "repair_hard_news_safety",
+                        lambda art: (_ for _ in ()).throw(AssertionError("unneeded repair")))
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "violence": 1, "adult_themes": 2}})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert len(kept) == 1 and not rejected
+    assert kept[0]["_independent_vet_status"] == "scored"
+
+
+def test_severe_hard_news_gets_one_rewrite_and_fresh_independent_vet(monkeypatch):
+    article = _article()
+    scores = [{**{d: 0 for d in core.SAFETY_DIMS}, "fear": 4, "distress": 4},
+              {**{d: 0 for d in core.SAFETY_DIMS}, "fear": 1, "distress": 1}]
+    calls = []
+    def fake_vet(arts):
+        calls.append(arts[0]["middle_en"]["body"])
+        return {0: scores.pop(0)}
+    monkeypatch.setattr(core, "independent_safety_vet", fake_vet)
+    monkeypatch.setattr(core, "deepseek_call", lambda *args, **kwargs: {
+        "middle_body": "calm " * 350, "easy_body": "calm " * 200})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert len(kept) == 1 and not rejected
+    assert len(calls) == 2 and calls[0] != calls[1]
+    assert kept[0]["_independent_vet_status"] == "scored_after_repair"
+
+
+def test_hard_news_repair_that_fails_fresh_vet_stays_rejected(monkeypatch):
+    article = _article()
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "violence": 4}})
+    monkeypatch.setattr(core, "deepseek_call", lambda *args, **kwargs: {
+        "middle_body": "calm " * 350, "easy_body": "calm " * 200})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert not kept and len(rejected) == 1
+    assert rejected[0]["_safety_eval"]["scores"]["violence"] == 4
+
+
+def test_strict_or_non_news_rejection_does_not_enter_repair(monkeypatch):
+    article = _article()
+    monkeypatch.setattr(core, "repair_hard_news_safety",
+                        lambda art: (_ for _ in ()).throw(AssertionError("bad repair")))
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "language": 3, "fear": 4}})
+    assert len(core.filter_safe_rewrites({"articles": [article]}, category="News")[1]) == 1
+    assert len(core.filter_safe_rewrites({"articles": [_article()]}, category="Fun")[1]) == 1
+
+
+def test_strict_dims_still_reject_at_3():
+    # Sexual / substance / language are never-appropriate regardless of news value.
+    for d in ("sexual", "substance", "language"):
+        assert core.evaluate_rewriter_safety(_safety(**{d: 3}))["verdict"] == "REJECT", d
 
 
 def _run_all():

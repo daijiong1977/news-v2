@@ -11,27 +11,34 @@ Returns a dict suitable for downstream stages:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
 from .news_rss_core import deepseek_reasoner_call
+from .news_topics import topic_group
+from .editorial_policy import publisher_key, prefer_science_publishers
+from .editorial_policy import prefer_important_news, SECTION_POLICY
 
 log = logging.getLogger("mega-curator")
 
 
 MEGA_CURATOR_SYSTEM_PROMPT = """You are the Editor-in-Chief of "News Oh, Ye!", a
-daily news site for kids ages 8-13. The pipeline mined ~36 candidates from
-9 RSS feeds (3 News + 3 Science + 3 Fun, up to 12 per cat), ran a
-forbidden-word safety filter, and now hands you the survivors.
+daily news site for kids ages 10-14. The pipeline mined candidates from the
+day's RSS feeds, ran a forbidden-word filter, dropped shopping guides and
+content that can never ship, then ranked what was left and handed you the
+best few per category. Each category below states how many it has.
 
-YOUR JOB: rank 5 candidates per category (15 total), in order, ready for
+YOUR JOB: rank UP TO 5 candidates per category, in order, ready for
 rewriting. Ranks 1-4 are the rewrite pool. Rank 5 is the spare — only
 used if a rank-1..4 pick later fails the post-rewrite safety vet.
 
-OUTPUT CONTRACT (strict): exactly 5 ranked picks per category. Score
-ONLY the 15 picks inline — do NOT emit per-candidate vet for the full
-pool (that blows the token budget).
+OUTPUT CONTRACT (strict): rank EVERY candidate a category gives you, up to
+5. A category with 4 candidates gets exactly 4 ranked picks — never repeat a
+candidate id or invent one to reach 5. Score ONLY the picks inline — do NOT
+emit per-candidate vet for the full pool (that blows the token budget).
 
 ALGORITHM (internal, don't output intermediate work):
 
@@ -40,21 +47,69 @@ ALGORITHM (internal, don't output intermediate work):
      distress, bias — and interest (0-5, higher is better) across
      importance, fun_factor, kid_appeal. Skip any with safety total > 6
      or any safety dim ≥ 4 — they can never be picked.
+     Judge whether the CENTRAL EVENT can be reported safely after a factual,
+     age-appropriate rewrite, not whether every quote/detail in the source
+     can be copied. War or a brief factual death notice is not automatically
+     unsafe. Graphic injury scenes, frightened witness quotes and attack
+     mechanics may be omitted without changing the event. Keep such a
+     candidate eligible for rewriting if its essential facts can be told
+     calmly; the independent full-text reviewer will judge the actual draft.
+     Never treat this as permission to publish graphic or distressing text.
+     Government, diplomacy and civic technology are not unsafe merely
+     because they need background explanation.
 
   2. CLUSTER: group candidates covering the same real-world story into
      topic clusters. Pick AT MOST ONE candidate per cluster across all
-     3 categories combined.
+     3 categories combined. Also tag each pick with a `subject` — the
+     ONE dominant named person or organization the story centers on
+     (e.g. "Donald Trump", "NASA", "Taylor Swift"), or "" if no single
+     person/org dominates. `subject` is COARSER than cluster_id: three
+     different Trump stories (a summit, an election ruling, a tariff)
+     share subject "Donald Trump" even though their cluster_ids differ.
 
   3. PICK 5 PER CAT, RANKED:
      - Prefer high interest_peak (max of importance / fun / kid_appeal)
        AND low safety_total.
+     - In FUN, give strong preference to a FRESH major swimming or tennis
+       development: a world record, Olympics/World Championship title,
+       Grand Slam champion/final result, or a concrete new achievement by a
+       swimmer or tennis star. A famous name alone, a routine meet, college
+       recruitment, or a new interview about an old match is not equivalent.
+       This is a soft editorial preference, never a safety exception or a
+       required sports quota.
      - Prefer DIFFERENT topic clusters within a cat.
+     - For EACH CATEGORY's top 3, prefer three different `editorial_topic` labels
+       when qualified candidates allow it. This is a SOFT preference,
+       unlike same-event dedup: two different storms may both run when
+       there is no suitable different-topic alternative. Never confuse
+       editorial_topic with the named-person/org `subject` field.
+     - HARD RULE — subject diversity in NEWS top 3: ranks 1, 2, 3 of
+       the News category MUST each have a DIFFERENT `subject` (a
+       non-empty subject may appear only ONCE in the News top 3). Do
+       NOT ship three stories about the same person — e.g. three Trump
+       stories. Keep the single strongest one and fill the other News
+       ranks with different-subject stories. Only repeat a subject if
+       News genuinely has no other qualifying story.
      - HARD RULE — source diversity in top 3: ranks 1, 2, 3 of each
        category MUST come from THREE DIFFERENT sources (different
        `src=` value). Only break this rule if the category has fewer
        than 3 sources contributing candidates after the safety vet —
        in that case state so explicitly in `reasoning`. Ranks 4-5 may
        repeat a source freely (they are spares).
+     - In SCIENCE, prefer at least TWO independent publishers among the
+       top three whenever qualified alternatives exist. Different
+       ScienceDaily feeds are ONE publisher. Preserve topic diversity
+       (physics, chemistry, astronomy, biology, etc.) within that choice.
+     - Exclude college recruitment, verbal commitments, recruiting
+       rankings and signing announcements. These are not Fun news.
+       Actual college races, championships and records remain eligible.
+     - News: when eligible, keep at least one section_value >= 2.5 story
+       with concrete importance for the US or US children in the top three.
+       Importance means consequences, never party preference or sensationalism.
+     - Science: use section_value as scientific learning/discovery value.
+       Fun: use section_value as genuine child-facing enjoyment, not merely
+       a sports/entertainment label. Fun may supply up to seven candidates;
+       still rank at most five, for three final stories and reserves.
      - Cross-category tiebreak (same cluster wanted by two cats):
          News × Fun     → keep the Fun pick
          News × Science → keep the Science pick
@@ -68,14 +123,14 @@ has the vet signal. Use SHORT integer scores, no totals/peaks, no prose.
 {
   "picks": {
     "News": [
-      {"rank":1,"id":N,"cluster_id":"<short>",
+      {"rank":1,"id":N,"cluster_id":"<short>","subject":"<person/org or empty>",
        "safety":{"violence":N,"sexual":N,"substance":N,"language":N,
                  "fear":N,"adult_themes":N,"distress":N,"bias":N},
        "interest":{"importance":N,"fun_factor":N,"kid_appeal":N}},
-      ...5 entries ranked 1..5...
+      ...one entry per candidate, ranked 1..N, N<=5...
     ],
-    "Science": [...5 entries...],
-    "Fun":     [...5 entries...]
+    "Science": [...same shape...],
+    "Fun":     [...same shape...]
   },
   "reasoning": "1-3 sentences: cross-cat dups you caught, topic
                 diversity choices, cases where rank-1 isn't choice_1."
@@ -98,7 +153,15 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             title = (brief.get("title") or "")[:240]
             summary = (brief.get("summary") or "")[:600]
             src_name = (brief.get("_source_name") or "?")
-            line = (f"  [id={cid}] src={src_name}\n"
+            topic = topic_group(brief)
+            topic_note = f" editorial_topic={topic}" if topic else ""
+            sport_score = (brief.get("_jev_rank") or {}).get("sports_priority", 0)
+            value = (brief.get("_jev_rank") or {}).get("section_value")
+            value_note = f" section_value={value}/4" if value is not None else ""
+            sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
+                          else "")
+            line = (f"  [id={cid}] src={src_name} publisher={publisher_key(brief.get('_source'))}"
+                    f"{topic_note}{sport_note}{value_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)
@@ -113,7 +176,8 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
     parts = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.", ""]
     for cat in ("News", "Science", "Fun"):
         lines = by_cat_lines.get(cat, [])
-        parts.append(f"=== {cat} ({len(lines)} candidates) ===")
+        parts.append(f"=== {cat} ({len(lines)} candidates — rank all of them, "
+                     f"up to 5) ===")
         if not lines:
             parts.append("  (none)")
         else:
@@ -145,13 +209,14 @@ def mega_curate(
              len(registry), len(briefs_by_cat))
 
     # Reasoner thinking budget shares max_tokens with output. 6k truncated
-    # at 34 candidates (run 24921275967), 12k truncated at 89, and 12k
-    # also truncated today on DeepSeek V4 Pro at 27 candidates (run
-    # 24997954155) — V4 Pro produces longer chain-of-thought than the
-    # earlier provider. Bumped to 20k to give the reasoner ~14k of
-    # thinking room above the slim 6k output budget.
-    res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT, user_msg,
-                                  max_tokens=20000)
+    # at 34 candidates (run 24921275967), 12k truncated at 89 and again
+    # at 27 on V4 Pro (run 24997954155), 20k truncated at 30 on V4 Flash
+    # (run 32878436351, 2026-08-25) — CoT length is content-dependent and
+    # keeps outgrowing incremental bumps. 64k is well under the API's
+    # accepted ceiling (131072 verified) and billing is per generated
+    # token, so the headroom is free unless actually used.
+    res = deepseek_reasoner_call(MEGA_CURATOR_SYSTEM_PROMPT + "\nSECTION POLICY:\n" + SECTION_POLICY, user_msg,
+                                  max_tokens=65536)
     raw_picks = res.get("picks") or {}
     reasoning = res.get("reasoning") or ""
 
@@ -183,6 +248,7 @@ def mega_curate(
                 "safety": p.get("safety") or {},
                 "interest": p.get("interest") or {},
                 "cluster_id": p.get("cluster_id") or "",
+                "subject": (p.get("subject") or "").strip(),
             }
             vet[cid] = pick_vet
             out[cat].append({
@@ -193,12 +259,303 @@ def mega_curate(
                 "vet": pick_vet,
             })
 
+    # Drop same-story duplicates FIRST (two sources carrying one wire
+    # story), then reorder survivors for source/subject diversity.
+    out = _dedupe_ranked_stories(out)
     out = _enforce_top3_source_diversity(out)
+    # Subject cap runs AFTER source diversity and prefers a spare that
+    # keeps 3 distinct sources, so it doesn't undo the source pass.
+    out = _enforce_top3_subject_diversity(out)
+    out = _prefer_top3_topic_diversity(out)
+    if "News" in out:
+        out["News"] = prefer_important_news(out["News"])
+        for rank, pick in enumerate(out["News"], start=1):
+            pick["rank"] = rank
+    if "Science" in out:
+        out["Science"] = prefer_science_publishers(out["Science"])
+        for rank, pick in enumerate(out["Science"], start=1):
+            pick["rank"] = rank
 
     for cat, picks in out.items():
         log.info("  curator [%s] %d ranked: %s", cat, len(picks),
                  ", ".join(f"rank{p['rank']}={p['source'].name}" for p in picks[:6]))
     return out, vet, reasoning
+
+
+def _story_tokens(title: str) -> set[str]:
+    """Content words (≥3 chars) of a headline, for overlap comparison."""
+    s = re.sub(r"[^\w\s]", " ", (title or "").lower())
+    return {w for w in s.split() if len(w) >= 3}
+
+
+def titles_same_story(a: str, b: str, thresh: float = 0.7) -> bool:
+    """True when two headlines describe the same event — overlap
+    coefficient (shared words / smaller headline) ≥ thresh. Used both to
+    dedup the curator's ranked list and to guard Stage-3 spare promotion
+    (probe-pool spares carry no cluster_id, so title is the only signal)."""
+    ta, tb = _story_tokens(a), _story_tokens(b)
+    if not ta or not tb:
+        return False
+    return len(ta & tb) / min(len(ta), len(tb)) >= thresh
+
+
+_EVENT_STOP = {
+    "the", "and", "for", "from", "with", "into", "after", "before", "over",
+    "says", "said", "say", "new", "news", "today", "could", "would", "will",
+    "what", "why", "how", "this", "that", "these", "those", "one", "two",
+    "big", "first", "latest", "leader", "leaders", "president", "government",
+}
+_EVENT_CUES = {
+    "visit", "visits", "visited", "meeting", "meet", "meets", "summit", "talk",
+    "talks", "dinner", "welcome", "welcomes", "deal", "truce", "conference",
+    "trial", "ruling", "election", "launch", "landfall", "strike", "storm",
+}
+
+
+def _event_words(text: str) -> set[str]:
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'’-]*", text or "")
+    return {
+        re.sub(r"(?:'s|’s)$", "", w.lower())
+        for w in words
+        if len(w) >= 3 and w.lower() not in _EVENT_STOP
+    }
+
+
+def _event_entities(title: str) -> set[str]:
+    """Headline actor tokens for the deterministic event-family guard.
+
+    Two shared actors are required below. A single recurring person is a
+    subject, not an event, so unrelated stories about that person stay apart.
+    """
+    # A whitespace-connected proper-name span is one actor ("Donald Trump"),
+    # while a hyphen separates actors ("Trump-Xi"). This prevents two unrelated
+    # Trump stories from looking like they share two entities: Donald + Trump.
+    text = (title or "").replace("-", " | ")
+    spans = re.findall(
+        r"\b(?:[A-Z]{2,}|[A-Z][a-z]+)(?:['’]s)?"
+        r"(?:\s+(?:[A-Z]{2,}|[A-Z][a-z]+)(?:['’]s)?)*\b",
+        text,
+    )
+    entities: set[str] = set()
+    for span in spans:
+        words = [re.sub(r"(?:'s|’s)$", "", w.lower())
+                 for w in span.split()]
+        words = [w for w in words if len(w) >= 2 and w not in _EVENT_STOP]
+        if words:
+            entities.add(" ".join(words))
+    return entities
+
+
+def briefs_same_event(a: dict, b: dict, title_thresh: float = 0.7) -> bool:
+    """True when two briefs belong to one daily-news event family.
+
+    Besides near-identical headlines, this catches different stages or angles
+    of one event (state dinner, summit agenda, red-carpet outcome). It requires
+    two shared headline actors plus context or event language, limiting false
+    positives between unrelated stories about one recurring public figure.
+    """
+    ga = (a.get("_event_group") or "").strip()
+    gb = (b.get("_event_group") or "").strip()
+    if ga and gb and ga == gb:
+        return True
+
+    ta, tb = a.get("title") or "", b.get("title") or ""
+    if titles_same_story(ta, tb, title_thresh):
+        return True
+
+    shared_entities = _event_entities(ta) & _event_entities(tb)
+    if len(shared_entities) < 2:
+        return False
+
+    wa = _event_words(f"{ta} {a.get('summary') or ''}")
+    wb = _event_words(f"{tb} {b.get('summary') or ''}")
+    contextual_overlap = len(wa & wb) / max(1, min(len(wa), len(wb)))
+    title_cues_a = _event_words(ta) & _EVENT_CUES
+    title_cues_b = _event_words(tb) & _EVENT_CUES
+    return contextual_overlap >= 0.18 or bool(title_cues_a and title_cues_b)
+
+
+def join_event_group(anchor: dict, duplicate: dict) -> str:
+    """Attach one stable event id to two briefs and return it."""
+    group = (anchor.get("_event_group") or duplicate.get("_event_group") or "").strip()
+    if not group:
+        basis = " ".join(sorted(_event_words(anchor.get("title") or "")))
+        group = "evt_" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
+    anchor["_event_group"] = group
+    duplicate["_event_group"] = group
+    return group
+
+
+def _dedupe_ranked_stories(
+    ranked_by_cat: dict[str, list[dict]],
+    subject_cap_categories: tuple[str, ...] = ("News",),
+    title_thresh: float = 0.7,
+) -> dict[str, list[dict]]:
+    """Drop same-story duplicates from each category's ranked list, then
+    re-rank survivors 1..N. Two sources routinely carry the SAME wire
+    story (e.g. the NYT Air Force One subpoena from both PBS and NPR);
+    the curator tags them with the same cluster_id but still emits both,
+    and a lower-ranked dup gets promoted into the shipped 3 when a top
+    pick is dropped downstream (live bug 2026-07-11).
+
+    A pick is dropped if, versus a better-ranked survivor: cluster_id
+    matches, OR title is near-identical (titles_same_story), OR — for the
+    capped categories (News) — its non-empty subject repeats. This is the
+    deterministic backstop for the prompt's soft cluster/subject rules;
+    deep backfill / carry-over refill the freed slots with different
+    stories."""
+    for cat, picks in ranked_by_cat.items():
+        seen_clusters: set[str] = set()
+        seen_subjects: set[str] = set()
+        kept_briefs: list[dict] = []
+        kept: list[dict] = []
+        for p in sorted(picks, key=lambda x: int(x.get("rank") or 99)):
+            vet = p.get("vet") or {}
+            cl = (vet.get("cluster_id") or "").strip().lower()
+            subj = (vet.get("subject") or "").strip().lower()
+            title = ((p.get("brief") or {}).get("title") or "")
+            why = None
+            if cl and cl in seen_clusters:
+                why = f"cluster={cl}"
+            elif cat in subject_cap_categories and subj and subj in seen_subjects:
+                why = f"subject={subj}"
+            else:
+                matched = next(
+                    (kb for kb in kept_briefs
+                     if briefs_same_event(p.get("brief") or {}, kb, title_thresh)),
+                    None,
+                )
+                if matched is not None:
+                    join_event_group(matched, p.get("brief") or {})
+                    why = "event-family~dup"
+            if why:
+                log.info("  [%s] story-dedup drop rank%s (%s): %s",
+                         cat, p.get("rank"), why, title[:60])
+                continue
+            if cl:
+                seen_clusters.add(cl)
+            if subj:
+                seen_subjects.add(subj)
+            kept_briefs.append(p.get("brief") or {})
+            kept.append(p)
+        for i, p in enumerate(kept, start=1):
+            p["rank"] = i
+        ranked_by_cat[cat] = kept
+    return ranked_by_cat
+
+
+def _enforce_top3_subject_diversity(
+    ranked_by_cat: dict[str, list[dict]],
+    cap_categories: tuple[str, ...] = ("News",),
+) -> dict[str, list[dict]]:
+    """Enforce: within the capped categories' top 3, a non-empty
+    `subject` (dominant person/org) appears at most ONCE — so News never
+    ships three stories about the same person (owner ask 2026-07-08:
+    "all 3 news were Trump"). Deterministic backstop for the prompt HARD
+    RULE, mirroring _enforce_top3_source_diversity.
+
+    Strategy per capped category: if a subject repeats in ranks 1-3, swap
+    the WORST-rank duplicate for a rank-4/5 spare with a DIFFERENT
+    subject — preferring a spare that also keeps 3 distinct sources, then
+    falling back to any different-subject spare (subject cap wins over
+    source diversity when they conflict). Empty subject never collides.
+    Degrades cleanly (leaves picks intact + warns) when the pool has no
+    other subject to offer; deep backfill / carry-over then fill from
+    other sources downstream."""
+    from collections import Counter
+
+    def _subj(p: dict) -> str:
+        return ((p.get("vet") or {}).get("subject") or "").strip()
+
+    for cat, picks in ranked_by_cat.items():
+        if cat not in cap_categories or len(picks) < 3:
+            continue
+        for _ in range(4):
+            top3 = picks[:3]
+            top3_subs = {_subj(p) for p in top3 if _subj(p)}
+            counter = Counter(_subj(p) for p in top3 if _subj(p))
+            dups = [s for s, c in counter.items() if c > 1]
+            if not dups:
+                break
+            dup_idx = max((i for i in range(3) if _subj(picks[i]) in dups),
+                          key=lambda i: picks[i]["rank"])
+
+            def _spare(keep_source: bool):
+                for j in range(3, len(picks)):
+                    if _subj(picks[j]) in top3_subs:
+                        continue                     # not a new subject
+                    if keep_source:
+                        new_srcs = [picks[i]["source"].name
+                                    for i in range(3) if i != dup_idx]
+                        new_srcs.append(picks[j]["source"].name)
+                        if len(set(new_srcs)) < 3:
+                            continue                 # would create a source dup
+                    return j
+                return None
+
+            spare_idx = _spare(keep_source=True)
+            if spare_idx is None:
+                spare_idx = _spare(keep_source=False)
+            if spare_idx is None:
+                log.warning("  [%s] subject-cap: subject %s repeats but no "
+                            "different-subject spare — top 3 stays "
+                            "(only %d distinct subjects in curator's top %d)",
+                            cat, dups,
+                            len({_subj(p) for p in picks if _subj(p)}),
+                            len(picks))
+                break
+
+            old, new = picks[dup_idx], picks[spare_idx]
+            log.info("  [%s] subject-cap swap: rank%d/%s (%s) ↔ rank%d/%s (%s)",
+                     cat, old["rank"], old["source"].name, _subj(old),
+                     new["rank"], new["source"].name, _subj(new))
+            old_rank, new_rank = old["rank"], new["rank"]
+            picks[dup_idx], picks[spare_idx] = new, old
+            picks[dup_idx]["rank"] = old_rank
+            picks[spare_idx]["rank"] = new_rank
+
+    return ranked_by_cat
+
+
+def _prefer_top3_topic_diversity(ranked_by_cat: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """Prefer three topics per section, but allow repeats when no spare fits.
+
+    Only confident Jev labels count. The curator's other requirements stay in
+    force: a swap must not reduce source diversity, and hard same-event dedup
+    has already run. The fourth/fifth picks remain available for safety refill.
+    """
+    from collections import Counter
+
+    for cat, picks in ranked_by_cat.items():
+        for _ in range(3):
+            top = picks[:3]
+            if len(top) < 3:
+                break
+            groups = [topic_group(p.get("brief") or {}) for p in top]
+            repeated = {group for group, n in Counter(g for g in groups if g).items() if n > 1}
+            if not repeated:
+                break
+            duplicate_idx = max(i for i, group in enumerate(groups) if group in repeated)
+            kept = [p for i, p in enumerate(top) if i != duplicate_idx]
+            kept_groups = {topic_group(p.get("brief") or {}) for p in kept}
+            old_sources = {p["source"].name for p in top}
+            spare_idx = next((j for j in range(3, len(picks))
+                              if (group := topic_group(picks[j].get("brief") or {}))
+                              and group not in kept_groups
+                              and len({p["source"].name for p in kept} | {picks[j]["source"].name})
+                              >= len(old_sources)), None)
+            if spare_idx is None:
+                log.info("  [%s] topic diversity: %s repeats; no suitable different-topic spare",
+                         cat, sorted(repeated))
+                break
+            old, new = picks[duplicate_idx], picks[spare_idx]
+            log.info("  [%s] topic-diversity swap: rank%d/%s (%s) ↔ rank%d/%s (%s)",
+                     cat, old["rank"], old["source"].name, topic_group(old.get("brief") or {}),
+                     new["rank"], new["source"].name, topic_group(new.get("brief") or {}))
+            old_rank, new_rank = old["rank"], new["rank"]
+            picks[duplicate_idx], picks[spare_idx] = new, old
+            picks[duplicate_idx]["rank"], picks[spare_idx]["rank"] = old_rank, new_rank
+    return ranked_by_cat
 
 
 def _enforce_top3_source_diversity(

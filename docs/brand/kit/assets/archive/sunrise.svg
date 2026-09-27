@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  
+  <line x1="20" y1="130" x2="180" y2="130" stroke="#1b1230" stroke-width="3" stroke-linecap="round"></line>
+  
+  <path d="M 40 130 A 60 60 0 0 1 160 130 Z" fill="#ffc83d"></path>
+  
+  <line x1="39.38" y1="95.00" x2="23.79" y2="86.00" stroke="#ffc83d" stroke-width="5" stroke-linecap="round"></line>
+  <line x1="65.00" y1="69.38" x2="56.00" y2="53.79" stroke="#ffc83d" stroke-width="5" stroke-linecap="round"></line>
+  <line x1="100.00" y1="60.00" x2="100.00" y2="42.00" stroke="#ffc83d" stroke-width="5" stroke-linecap="round"></line>
+  <line x1="135.00" y1="69.38" x2="144.00" y2="53.79" stroke="#ffc83d" stroke-width="5" stroke-linecap="round"></line>
+  <line x1="160.62" y1="95.00" x2="176.21" y2="86.00" stroke="#ffc83d" stroke-width="5" stroke-linecap="round"></line>
+  
+  <text x="100" y="160" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="600" font-size="28" fill="#1b1230">21</text>
+</svg>

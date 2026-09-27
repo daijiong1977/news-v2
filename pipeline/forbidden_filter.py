@@ -1,6 +1,6 @@
 """Stage 1 of the mega pipeline: cheap deterministic forbidden-word filter
 on RSS title + summary. Runs BEFORE any LLM call so we never spend tokens
-on content that's clearly inappropriate for ages 8-13.
+on content that's clearly inappropriate for ages 10-14.
 
 Designed for kids news. Not a full content-policy engine — just the
 obvious nopes that never belong in a kids edition. Patterns are word-

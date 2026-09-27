@@ -1,5 +1,4 @@
-"""Queue body-length / keyword / image issues for the local Mac
-daemon (runs `claude -p`) to fix via LLM regen.
+"""Queue body-length / keyword / image issues for the CI auto-fix worker.
 
 This module is intentionally NOT a fixer — every quality miss is
 queued. We never mechanically trim article content: a hard cut at
@@ -173,7 +172,11 @@ def autofix_day(date_iso: str, dry_run: bool) -> dict:
 
 def run(days: int, dry_run: bool) -> dict:
     today = datetime.now(ET).date()
-    targets = [(today - timedelta(days=i)).isoformat() for i in range(days)]
+    # The live website serves today's bundled static payloads, not these
+    # Storage objects. Only repair completed, archived days: editing today's
+    # Storage copy would make the digest say "fixed" while readers still see
+    # the stale body in latest.zip until the next site sync.
+    targets = [(today - timedelta(days=i)).isoformat() for i in range(1, days + 1)]
     log.info("autofix scanning %d ET days: %s (dry_run=%s)",
              days, targets, dry_run)
     overall = {"days": [], "totals": {"queued": 0, "skipped": 0}}

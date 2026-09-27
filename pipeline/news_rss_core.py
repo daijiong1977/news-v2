@@ -23,6 +23,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlparse
 
 import feedparser
@@ -115,6 +116,14 @@ def reset_provider_resolution() -> None:
 
 MIN_WORDS_DEFAULT = 500
 MAX_RSS_DEFAULT = 25
+RSS_FETCH_TIMEOUT = 15
+RSS_FETCH_HEADERS = {
+    # The HTML browser UA triggers PBS's challenge page on its RSS endpoint,
+    # while an unlabelled requests client can stall on CBC. Both publishers
+    # returned normal feeds with this explicit RSS-reader identity.
+    "User-Agent": "UniversalFeedParser/6.0",
+    "Accept": "application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
+}
 VIDEO_PATH_RE = re.compile(r"/video/", re.I)
 HTML_FETCH_TIMEOUT = 15
 HTML_FETCH_HEADERS = {
@@ -256,7 +265,19 @@ def fetch_rss_entries(url: str, max_entries: int = MAX_RSS_DEFAULT,
     on it). Stops once we've collected `max_entries` fresh entries.
     Entries with no parseable date are KEPT (safer to err on inclusion
     when the source feed doesn't provide dates)."""
-    feed = feedparser.parse(url)
+    # feedparser.parse(url) owns its network request and has no reliable
+    # timeout. CBC's public world feed can hang there even when a normal
+    # bounded HTTP GET returns immediately. Fetch bytes ourselves, then let
+    # feedparser handle only parsing. A failed feed is an empty source, so
+    # Phase A can continue to the other configured publishers.
+    try:
+        response = requests.get(url, timeout=RSS_FETCH_TIMEOUT,
+                                headers=RSS_FETCH_HEADERS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        log.warning("rss fetch failed [%s]: %s", url[:80], exc)
+        return []
+    feed = feedparser.parse(response.content)
     out: list[dict] = []
     dropped_old = 0
     no_date_kept = 0
@@ -374,7 +395,7 @@ def process_entry(entry: dict, min_words: int = MIN_WORDS_DEFAULT) -> dict:
 # ---------------------------------------------------------------------------
 
 def build_vet_prompt(pick_count: int) -> str:
-    return f"""You are a content reviewer + curator for a kids news site (readers ages 8-13, grades 3-8 — calibrate safety to the YOUNGEST reader, interest to a 12-year-old).
+    return f"""You are a content reviewer + curator for a kids news site (readers ages 10-14, grades 5-9 — calibrate safety to the YOUNGEST reader, interest to a 12-year-old).
 
 You will receive a numbered list of news articles (id 0..N-1), each with title + first paragraphs.
 
@@ -454,11 +475,19 @@ CALL_STATS: dict[str, int] = {
     "reasoner_transport_retries": 0, "reasoner_repaired": 0,
     "reasoner_truncated": 0,
 }
+_CALL_STATS_LOCK = Lock()
+
+
+def _bump_call_stat(name: str) -> None:
+    """Keep call telemetry accurate when categories enrich concurrently."""
+    with _CALL_STATS_LOCK:
+        CALL_STATS[name] += 1
 
 
 def reset_call_stats() -> None:
-    for k in CALL_STATS:
-        CALL_STATS[k] = 0
+    with _CALL_STATS_LOCK:
+        for k in CALL_STATS:
+            CALL_STATS[k] = 0
 
 
 def _retry_sleep_for(err: Exception, attempt: int) -> float:
@@ -600,7 +629,7 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
             res = _deepseek_post(payload, timeout=120, api_key=api_key, endpoint=endpoint)
             if res.parsed is not None:
                 if res.repair_kind:
-                    CALL_STATS["chat_repaired"] += 1
+                    _bump_call_stat("chat_repaired")
                 return res.parsed
             if res.finish_reason == "length":
                 raise RuntimeError(
@@ -608,7 +637,7 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
                     "repair failed — caller should reduce payload"
                 )
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
-            CALL_STATS["chat_retries"] += 1
+            _bump_call_stat("chat_retries")
             # Log the raw content snippet so we can see what the model
             # actually emitted. Without this, "JSON parse failed" is
             # an opaque signal — we can't tell if the model returned
@@ -624,9 +653,9 @@ def _deepseek_call_with_model(model: str, system: str, user: str,
                 log.warning("  raw[-200:] = %r", tail)
             if attempt < max_attempts:
                 time.sleep(_retry_sleep_for(last_err, attempt))
-        except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
+        except requests.RequestException as e:
             last_err = e
-            CALL_STATS["chat_retries"] += 1
+            _bump_call_stat("chat_retries")
             wait = _retry_sleep_for(e, attempt)
             log.warning("chat attempt %d/%d on %s failed (%s): waiting %.1fs",
                         attempt, max_attempts, model, type(e).__name__, wait)
@@ -657,7 +686,7 @@ def deepseek_call(system: str, user: str, max_tokens: int, temperature: float = 
     If the primary IS already Flash, just use full max_attempts on it
     (no fallback-to-self loop)."""
     api_key, endpoint, model = _resolve_chat_provider()
-    CALL_STATS["chat_calls"] += 1
+    _bump_call_stat("chat_calls")
     fallback = "deepseek-v4-flash"
     primary_is_flash = "flash" in model.lower()
 
@@ -821,12 +850,24 @@ What real kid reporters do:
   · Mix sentence lengths. Short ones for impact. Longer ones for explaining.
   · Show enthusiasm — let the "wow, did you know?!" energy come through
 
+For serious News (war, deaths, disasters or threats), the rules above have
+an exception: be calm, direct and compassionate, not excited or cinematic.
+Do not ask the child to imagine being attacked or in danger. A brief factual
+mention that people died may be necessary; do not lead with a child's death,
+describe bodies, injuries or wreckage, dwell on a witness's fear, or list
+weapon/tactical details. Explain the new development, context and what
+people are doing about it. Do not erase an essential fact or invent hope.
+
 You will receive N source articles. For EACH, produce THREE variants:
 
 1. easy_en — English. READER IS A 10-YEAR-OLD (grade 4).
-   · body: 210-300 words (STRICT — count before returning).
-     Under 210 → add one more concrete detail or example from the
-     source. QA gates at 200; do not go below it.
+   · body: 150-250 words (STRICT — count before returning).
+     This is a SHORT read on purpose — a 10-year-old loses patience
+     before the scroll ends. Say the thing, give one vivid detail,
+     stop. Over 250 → cut the least essential paragraph, do not
+     compress every sentence into a list of facts.
+     Under 150 → add one more concrete detail or example from the
+     source. QA gates at 140; do not go below it.
    · Simple but not baby-talk; explain any hard word inline in plain English:
      "a ceasefire (when both sides agree to stop fighting for a while)"
    · Short, punchy sentences; lead with a hook — not a summary
@@ -911,9 +952,16 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "CATEGORY: News.\n"
         "Voice: a curious kid reporter explaining a current event to friends.\n"
         "Lead with the WHO + WHAT + WHY-IT-MATTERS in the first paragraph,\n"
-        "but use a concrete vivid detail to hook (a specific number, place,\n"
-        "or quote). Stay neutral — present what each side says without\n"
-        "editorializing. Include real names, dates, and places when they\n"
+        "using a concrete, age-appropriate detail (a number or place).\n"
+        "For war, death, terrorism and disasters, use a calm factual hook,\n"
+        "not a scene of harm or an invitation to imagine danger. State\n"
+        "casualties briefly when essential, but omit graphic aftermath,\n"
+        "fearful witness quotes and weapon or attack mechanics.\n"
+        "Stay neutral — present what each side says without\n"
+        "editorializing. For important politics, diplomacy or civic technology,\n"
+        "explain necessary adult background in plain language rather than\n"
+        "dropping the event or inventing a child-specific impact. Include\n"
+        "real names, dates, and places when they\n"
         "appear in the source.\n"
     ),
     "Science": (
@@ -990,50 +1038,73 @@ def tri_variant_rewrite(
 # produce easy_en as a simplified subset (shorter sentences, plainer
 # words, same facts), so if middle passes, easy is safe by construction.
 # zh is for adult consumption (parents reading with kids) and not vetted.
-STRICT_REJECT_THRESHOLD = 3
+# Per-dimension Stage-3 reject thresholds (admin choice 2026-07-08).
+# Kids on a NEWS site should be allowed to read age-appropriate hard news —
+# war, politics, conflict at a MODERATE level (score 3) — so those
+# "news-inherent" dims only reject at SEVERE (>=4). But sexual / substance /
+# offensive-language content is never appropriate regardless of news value, so
+# those stay strict (>=3). Bug: docs/bugs/2026-07-08-safety-threshold-per-dim.md
+STRICT_SAFETY_DIMS = ("sexual", "substance", "language")
+STRICT_SAFETY_THRESHOLD = 3
+NEWS_SAFETY_DIMS = ("violence", "fear", "distress", "adult_themes", "bias")
+NEWS_SAFETY_THRESHOLD = 4
 
 
 def evaluate_rewriter_safety(article_entry: dict) -> dict:
     """For one rewriter output article, returns:
         {"verdict": "PASS"|"REJECT", "reason": "...", "scores": {...}}
-    Verdict is determined by middle_en's safety scores (the single
-    `safety` field on the article entry). Strict any_dim ≥ 3 → REJECT.
+    Verdict is from middle_en's safety scores (the `safety` field). REJECT if
+    any strict dim (sexual/substance/language) >= 3, OR any news-inherent dim
+    (violence/fear/distress/adult_themes/bias) >= 4.
     """
     scores = article_entry.get("safety") or {}
     if not scores:
         return {"verdict": "REJECT",
                 "reason": "no safety scores returned",
                 "scores": {}}
-    max_dim = max(((scores.get(d, 0) or 0) for d in SAFETY_DIMS), default=0)
     total = sum((scores.get(d, 0) or 0) for d in SAFETY_DIMS)
-    if max_dim >= STRICT_REJECT_THRESHOLD:
+    hits = [f"{d}={scores.get(d, 0) or 0}"
+            for d in STRICT_SAFETY_DIMS if (scores.get(d, 0) or 0) >= STRICT_SAFETY_THRESHOLD]
+    hits += [f"{d}={scores.get(d, 0) or 0}"
+             for d in NEWS_SAFETY_DIMS if (scores.get(d, 0) or 0) >= NEWS_SAFETY_THRESHOLD]
+    if hits:
         return {
             "verdict": "REJECT",
-            "reason": f"any_dim ≥ {STRICT_REJECT_THRESHOLD} (max={max_dim}, total={total})",
+            "reason": f"over threshold: {', '.join(hits)} (total={total})",
             "scores": scores,
         }
     return {"verdict": "PASS",
-            "reason": f"max_dim={max_dim} total={total}",
+            "reason": f"total={total}",
             "scores": scores}
 
 
 SAFETY_VET_PROMPT = """You are an INDEPENDENT safety reviewer for a kids news site
-(readers ages 8-13, grades 3-8 — calibrate to the YOUNGEST reader). You did
+(readers ages 10-14, grades 5-9 — calibrate to the YOUNGEST reader). You did
 NOT write these articles; review them strictly, as if a cautious parent will
 read your scores.
 
 For each article you receive two rewritten variants:
   middle_en — grade 7-8 reader (age 12-14)
-  easy_en   — grade 3-4 reader (age ~9)
+  easy_en   — grade 4-5 reader (age ~10)
 
 Score 8 dimensions, each 0-5 (0=none, 5=severe), on the middle_en body:
   violence, sexual, substance, language, fear, adult_themes, distress, bias
-Then re-read easy_en imagining a 9-year-old and score fear and distress a
+Then re-read easy_en imagining a 10-year-old and score fear and distress a
 second time; for those two dims report the MAX of the two readings (the same
 facts land harder on a younger reader even in simpler words).
 
 Score CONSERVATIVELY — flagging a borderline story is cheap; a parent
 complaint is not.
+
+Judge the ACTUAL REWRITTEN WORDS, not the source topic. War, conflict or a
+brief factual statement that someone died is not by itself graphic violence,
+severe fear, or a severe adult theme. Score violence by explicit or vivid
+depiction of injury/death and attack mechanics; fear by the sense of imminent
+danger conveyed to a child; distress by sustained grief, panic or suffering.
+A calm age-appropriate explanation can score 0-2 on these dimensions even
+when the underlying event is grave. Conversely, a child-in-danger opening,
+graphic wreckage, frightened-witness quotes, or detailed attack descriptions
+may warrant 4-5. Do not lower scores just because the event is important.
 
 Return ONLY valid JSON (no markdown fences):
 {"scores": {"<source_id>": {"violence":N,"sexual":N,"substance":N,
@@ -1059,27 +1130,114 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
         lines.append(easy)
         lines.append("")
     res = deepseek_call(SAFETY_VET_PROMPT, "\n".join(lines), max_tokens=2000)
-    raw = res.get("scores") or {}
     out: dict[int, dict] = {}
-    for art in articles:
-        sid = art.get("source_id")
-        scores = raw.get(str(sid)) or raw.get(sid)
-        if not isinstance(scores, dict):
+
+    def _scores(payload: dict, sid: int) -> dict:
+        values = (payload.get("scores") or {}).get(str(sid)) or (payload.get("scores") or {}).get(sid)
+        if not isinstance(values, dict):
             raise RuntimeError(f"independent vet returned no scores for source_id={sid}")
         clean = {}
         for d in SAFETY_DIMS:
-            v = scores.get(d)
-            if not isinstance(v, (int, float)):
+            v = values.get(d)
+            if not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 5:
                 raise RuntimeError(f"independent vet: bad {d!r} for source_id={sid}: {v!r}")
-            clean[d] = int(v)
-        out[sid] = clean
+            clean[d] = v
+        return clean
+
+    for art in articles:
+        sid = art.get("source_id")
+        try:
+            out[sid] = _scores(res, sid)
+        except RuntimeError as e:
+            # One malformed row must not discard valid independent judgments
+            # for the rest of the batch. Re-ask only this article once.
+            log.warning("  independent vet source_id=%s malformed (%s); retrying alone", sid, e)
+            single = (f"=== ARTICLE source_id={sid} ===\n"
+                      f"--- middle_en body ---\n{(art.get('middle_en') or {}).get('body') or ''}\n"
+                      f"--- easy_en body ---\n{(art.get('easy_en') or {}).get('body') or ''}")
+            try:
+                retry = deepseek_call(SAFETY_VET_PROMPT, single, max_tokens=500)
+                out[sid] = _scores(retry, sid)
+            except Exception as retry_error:  # noqa: BLE001 — keep other validated rows
+                log.warning("  independent vet source_id=%s retry failed (%s); "
+                            "only this article uses self-scores", sid, retry_error)
     return out
+
+
+HARD_NEWS_SAFETY_REPAIR_PROMPT = """You are revising ONE already-written kids News
+article after an independent reviewer found that its actual wording was too
+violent, frightening or distressing for a 10-year-old. This is NOT permission
+to erase the war, death or other central news fact. Keep a brief, calm factual
+statement of casualties if essential, but move it away from the opening.
+Remove descriptions of injuries, wreckage, sounds of attack, fearful witness
+quotes, and weapon or attack mechanics. Explain the new development, relevant
+background and response in neutral language. Never invent facts, quotes,
+reassurances or an outcome not present in the input. Do not editorialize.
+Write 320-380 words for middle_body and 150-250 words for easy_body; count
+before returning. Return only valid JSON:
+{"middle_body": "...", "easy_body": "..."}"""
+
+
+def repair_hard_news_safety(article: dict) -> dict | None:
+    """One conservative rewrite plus fresh independent review; never self-approve."""
+    from .forbidden_filter import is_forbidden
+
+    middle = (article.get("middle_en") or {}).get("body") or ""
+    easy = (article.get("easy_en") or {}).get("body") or ""
+    if not middle or not easy:
+        return None
+    try:
+        payload = deepseek_call(
+            HARD_NEWS_SAFETY_REPAIR_PROMPT,
+            f"--- middle_en ---\n{middle}\n\n--- easy_en ---\n{easy}",
+            max_tokens=2500, temperature=0.2)
+        new_middle = (payload.get("middle_body") or "").strip()
+        new_easy = (payload.get("easy_body") or "").strip()
+        if (not new_middle or not new_easy
+                or not _wc_within_qa("middle", len(new_middle.split()))
+                or not _wc_within_qa("easy", len(new_easy.split()))
+                or is_forbidden(new_middle)[0] or is_forbidden(new_easy)[0]):
+            log.info("  hard-news safety repair unusable for source_id=%s "
+                     "(middle=%dw easy=%dw; length/forbidden check)",
+                     article.get("source_id"), len(new_middle.split()), len(new_easy.split()))
+            return None
+        revised = {**article,
+                   "middle_en": {**(article.get("middle_en") or {}), "body": new_middle},
+                   "easy_en": {**(article.get("easy_en") or {}), "body": new_easy}}
+        new_scores = independent_safety_vet([revised]).get(article.get("source_id"))
+        if not new_scores:
+            log.warning("  hard-news safety repair missing fresh independent scores "
+                        "for source_id=%s", article.get("source_id"))
+            return None
+        revised["safety"] = new_scores
+        revised["_independent_vet_status"] = "scored_after_repair"
+        revised_eval = evaluate_rewriter_safety(revised)
+        if revised_eval["verdict"] != "PASS":
+            log.info("  hard-news safety repair still over threshold for source_id=%s: %s",
+                     article.get("source_id"), revised_eval["reason"])
+            return None
+        return revised
+    except Exception as e:  # noqa: BLE001 — failed repair cannot bypass rejection
+        log.warning("  hard-news safety repair failed for source_id=%s: %s",
+                    article.get("source_id"), e)
+        return None
 
 
 # Word-count bands for generation-time measurement. Keep in sync with
 # quality_digest.BODY_TARGETS — those QA gates generate the
 # body_too_short / body_too_long tickets the morning after.
-WC_BANDS = {"easy": (200, 320), "middle": (300, 410)}
+WC_BANDS = {"easy": (140, 270), "middle": (300, 410)}
+WC_QA_SLACK = 0.15  # Same tolerance used by the post-publication digest.
+
+
+def _wc_within_qa(level: str, count: int) -> bool:
+    lo, hi = WC_BANDS[level]
+    return lo * (1 - WC_QA_SLACK) <= count <= hi * (1 + WC_QA_SLACK)
+
+
+def _wc_distance(count: int, lo: int, hi: int) -> int:
+    """Distance to the ideal band; zero means the draft is on target."""
+    return max(lo - count, count - hi, 0)
 
 
 def _wordcount_flags(art: dict) -> list[str]:
@@ -1092,26 +1250,199 @@ def _wordcount_flags(art: dict) -> list[str]:
     return flags
 
 
-def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
+# Repair targets sit inside WC_BANDS with margin, so a repaired body
+# that drifts a few words on the second pass still lands inside the
+# QA band that _wordcount_flags / quality_digest enforce.
+WC_REPAIR_TARGETS = {"easy": (150, 250), "middle": (320, 380)}
+
+WC_REPAIR_PROMPT = """You are a precise copy editor for a kids news site. You receive ONE
+article body whose length is outside the required band, and you rewrite
+it to hit the target length.
+
+HARD RULES:
+  · Return a body inside the stated word range. Count the words before
+    you answer.
+  · The input is ALREADY out of band, so returning it unchanged is a
+    failure — the length MUST change.
+  · Keep every fact you RETAIN accurate. You may omit secondary facts,
+    names, numbers, quotes, and whole paragraphs when shortening; the
+    central news event and essential context must remain. Never invent.
+    When expanding, take extra concrete details ONLY from the SOURCE
+    ARTICLE section below.
+  · Keep the kid-reporter voice and the hook opening. Do not add a
+    headline, preamble, or commentary about your edit.
+  · For war, death or disasters, a concise factual mention is allowed, but
+    never expand using graphic aftermath, frightened-witness quotes, a
+    child-in-danger hook, or weapon/tactical detail from the source.
+
+Return ONLY valid JSON (no markdown fences): {"body": "<rewritten body>"}"""
+
+WC_REPAIR_REWRITE_PROMPT = """You are a kids-news editor writing a NEW, concise
+version of an overlong article. This is not a line edit: select only the
+central event, the essential explanation, and why it matters. Discard
+secondary examples, tangents, repeated background, and extra quotations.
+You may omit facts but must not change or invent any fact you retain.
+Write complete, engaging paragraphs for ages 12-14. Count the words.
+For war, death or disasters, keep necessary facts but omit graphic aftermath,
+frightened-witness quotes, child-in-danger hooks and weapon/tactical detail.
+Return ONLY valid JSON: {"body": "<new concise article>"}"""
+
+
+def _wc_repair_user_msg(level: str, body: str, wc: int,
+                        band: tuple[int, int], target: tuple[int, int],
+                        source_body: str = "") -> str:
+    """Shrink and expand are different jobs and need different framing.
+
+    The first version of this pass used one generic message telling the
+    model to expand "with details already present in the text" — which
+    is impossible, so it echoed the input back verbatim (5 of 7 misses
+    in verification run 34927289853 were too-SHORT bodies returned at
+    exactly their original length). Expansion needs the SOURCE article
+    as raw material."""
+    lo, hi = band
+    t_lo, t_hi = target
+    reader = ("a 10-year-old (grade 4)" if level == "easy"
+              else "a middle schooler (grade 7-8)")
+    head = f"Reader: {reader}.\n"
+    if wc > hi:
+        minimum_cut = max(1, wc - t_hi)
+        return (f"{head}TASK: SHORTEN this body from {wc} words to "
+                f"{t_lo}-{t_hi} words (hard maximum {hi}).\n"
+                f"REMOVE AT LEAST {minimum_cut} words. Delete whole secondary "
+                "sentences or paragraphs, not just adjectives. Keep the hook, "
+                "main event and essential explanation. Secondary examples, "
+                "background details and quotes may be omitted entirely. "
+                "Never cut mid-thought or add facts.\n\n"
+                f"BODY TO SHORTEN ({wc} words):\n{body}")
+    msg = (f"{head}TASK: EXPAND this body from {wc} words to "
+           f"{t_lo}-{t_hi} words (hard minimum {lo}).\n"
+           "Add concrete details, names, numbers, or a short quote taken "
+           "from the\nSOURCE ARTICLE below. Do not pad with filler and do "
+           "not restate what\nthe body already says.\n\n"
+           f"BODY TO EXPAND ({wc} words):\n{body}")
+    if source_body:
+        excerpt = " ".join(source_body.split()[:1200])
+        msg += ("\n\nSOURCE ARTICLE (take the extra details from here; "
+                f"never invent):\n{excerpt}")
+    return msg
+
+
+def repair_wordcounts(rewrite_result: dict,
+                      sources_by_id: dict | None = None) -> int:
+    """Up to two targeted DeepSeek edits per out-of-band body.
+
+    The second call runs only when the first still misses the ideal band.
+    It receives the actual failed word count and edits from the ORIGINAL
+    body/source, not from an unverified draft. The best candidate within
+    the published-content QA tolerance is applied; failures are rejected
+    by filter_safe_rewrites.
+    Runs BEFORE the independent safety vet so the vet scores the text
+    that ships. Returns the number of bodies repaired.
+
+    `sources_by_id` maps source_id → the original source article dict;
+    its `body` is handed to the model when a variant needs EXPANDING.
+    Bug: docs/bugs/2026-09-15-middle-body-wordcount-repair.md"""
+    fixed = 0
+    sources_by_id = sources_by_id or {}
+    for art in rewrite_result.get("articles") or []:
+        src = sources_by_id.get(art.get("source_id")) or {}
+        source_body = (src.get("body") or "") if isinstance(src, dict) else ""
+        for level, (lo, hi) in WC_BANDS.items():
+            var = art.get(f"{level}_en") or {}
+            body = var.get("body") or ""
+            wc = len(body.split())
+            if not wc or lo <= wc <= hi:
+                continue
+            base_user = _wc_repair_user_msg(
+                level, body, wc, (lo, hi), WC_REPAIR_TARGETS[level],
+                source_body)
+            best_body = body if _wc_within_qa(level, wc) else ""
+            best_wc = wc if best_body else 0
+            last_wc: int | None = None
+            for attempt in (1, 2):
+                user = base_user
+                system = WC_REPAIR_PROMPT
+                if attempt == 2:
+                    previous = (f"{last_wc} words" if last_wc is not None
+                                else "no valid body")
+                    user = (f"RETRY: the first edit produced {previous}; it did not "
+                            f"meet the ideal {lo}-{hi}-word band. Start from the "
+                            f"original body below. Aim near the middle of "
+                            f"{WC_REPAIR_TARGETS[level][0]}-"
+                            f"{WC_REPAIR_TARGETS[level][1]} words. Count before "
+                            f"answering.\n\n{base_user}")
+                    if wc > hi:
+                        system = WC_REPAIR_REWRITE_PROMPT
+                        user = (f"The previous edit was {previous}, still too long. "
+                                f"Write a NEW {WC_REPAIR_TARGETS[level][0]}-"
+                                f"{WC_REPAIR_TARGETS[level][1]}-word article "
+                                f"from the original below. Omit at least "
+                                f"{max(1, wc - WC_REPAIR_TARGETS[level][1])} "
+                                f"words worth of secondary details; do not "
+                                f"follow its paragraph structure sentence by "
+                                f"sentence.\n\nORIGINAL BODY:\n{body}")
+                try:
+                    res = deepseek_call(system, user,
+                                        max_tokens=2000, temperature=0.3)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("  wc-repair [%s/%s] attempt %d failed (%s)",
+                                art.get("source_id"), level, attempt, e)
+                    continue
+                new_body = ((res or {}).get("body") or "").strip()
+                last_wc = len(new_body.split())
+                if new_body and _wc_within_qa(level, last_wc):
+                    if not best_body or _wc_distance(last_wc, lo, hi) < _wc_distance(best_wc, lo, hi):
+                        best_body, best_wc = new_body, last_wc
+                if new_body and lo <= last_wc <= hi:
+                    break
+                log.warning("  wc-repair [%s/%s] attempt %d returned %dw "
+                            "(ideal %d-%d, QA ±15%%)",
+                            art.get("source_id"), level, attempt, last_wc, lo, hi)
+            if best_body and best_body != body:
+                var["body"] = best_body
+                fixed += 1
+                log.info("  wc-repair [%s/%s]: %dw → %dw (band %d-%d)",
+                         art.get("source_id"), level, wc, best_wc, lo, hi)
+            elif not best_body:
+                log.warning("  wc-repair [%s/%s]: no QA-safe length after two edits; "
+                            "keeping original %dw for Stage-3 rejection",
+                            art.get("source_id"), level, wc)
+    return fixed
+
+
+def filter_safe_rewrites(
+    rewrite_result: dict,
+    sources_by_id: dict | None = None,
+    *, category: str | None = None,
+) -> tuple[list[dict], list[dict]]:
     """Split rewriter articles into (kept, rejected) by Stage 3 safety.
 
     Gates per article, in order:
       1. Independent safety vet (one extra chat call per batch) overrides
-         the rewriter's self-scores — the author must not be the only gate
-         on its own text. On ANY vet failure we fall back to self-scores
-         rather than rejecting the whole batch.
+         the rewriter's self-scores. Malformed rows are retried individually;
+         only unavailable rows fall back to self-scores.
       2. Deterministic forbidden-term scan over the REWRITTEN easy+middle
          bodies (previously only RSS title/summary was screened, so a
          body-only self-harm mention passed every gate).
-      3. The existing strict any_dim>=3 threshold on the winning scores.
+      3. Existing per-dimension thresholds on the independent scores. One
+         News-only wording repair may be attempted for violence/fear/distress
+         after an independent rejection; it requires a second independent pass.
 
-    Also annotates `_wc_flags` when a body falls outside the QA word bands —
-    surfacing at generation time what quality_digest would ticket tomorrow.
+    Rejects bodies outside the digest's QA tolerance after repair, instead
+    of publishing a known defect. The caller may try a safe spare.
     Returns articles annotated with `_safety_eval`.
     Bug: docs/bugs/2026-07-08-safety-quality.md"""
     from .forbidden_filter import is_forbidden
 
     articles = list(rewrite_result.get("articles") or [])
+
+    # Word-count repair BEFORE the safety vet, so the vet scores the text
+    # that actually ships. The rewriter prompt's hard caps are advisory to
+    # the model; this pass is the deterministic enforcement.
+    try:
+        repair_wordcounts(rewrite_result, sources_by_id)
+    except Exception as e:  # noqa: BLE001
+        log.warning("  Stage 3: wc-repair pass failed (%s) — continuing", e)
 
     try:
         indep = independent_safety_vet(articles)
@@ -1120,10 +1451,16 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
             if sid in indep:
                 art["safety_self"] = art.get("safety")
                 art["safety"] = indep[sid]
-        log.info("  Stage 3: independent safety vet scored %d article(s)", len(indep))
+                art["_independent_vet_status"] = "scored"
+            else:
+                art["_independent_vet_status"] = "fallback"
+        log.info("  Stage 3: independent safety vet scored %d/%d article(s)",
+                 len(indep), len(articles))
     except Exception as e:  # noqa: BLE001
         log.warning("  Stage 3: independent safety vet failed — falling back to "
                     "rewriter self-scores: %s", e)
+        for art in articles:
+            art["_independent_vet_status"] = "fallback"
 
     kept: list[dict] = []
     rejected: list[dict] = []
@@ -1144,8 +1481,33 @@ def filter_safe_rewrites(rewrite_result: dict) -> tuple[list[dict], list[dict]]:
                   "scores": art.get("safety") or {}}
         else:
             ev = evaluate_rewriter_safety(art)
+            scores = ev.get("scores") or {}
+            repairable = (category == "News"
+                          and art.get("_independent_vet_status") == "scored"
+                          and ev["verdict"] == "REJECT"
+                          and all((scores.get(d, 0) or 0) < STRICT_SAFETY_THRESHOLD
+                                  for d in STRICT_SAFETY_DIMS)
+                          and (scores.get("bias", 0) or 0) < NEWS_SAFETY_THRESHOLD
+                          and any((scores.get(d, 0) or 0) >= NEWS_SAFETY_THRESHOLD
+                                  for d in ("violence", "fear", "distress", "adult_themes")))
+            if repairable:
+                revised = repair_hard_news_safety(art)
+                if revised is not None:
+                    art = revised
+                    ev = evaluate_rewriter_safety(art)
+                    wc_flags = _wordcount_flags(art)
+                    log.info("  Stage 3 hard-news safety repair passed fresh independent vet "
+                             "for source_id=%s", art.get("source_id"))
 
-        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags}
+        qa_flags = []
+        for level in WC_BANDS:
+            wc = len(((art.get(f"{level}_en") or {}).get("body") or "").split())
+            if not _wc_within_qa(level, wc):
+                qa_flags.append(f"{level}: {wc}w outside digest tolerance")
+        if qa_flags and ev["verdict"] == "PASS":
+            ev = {**ev, "verdict": "REJECT", "reason": "word-count QA: " + "; ".join(qa_flags)}
+        ann = {**art, "_safety_eval": ev, "_wc_flags": wc_flags,
+               "_wc_qa_flags": qa_flags}
         if ev["verdict"] == "PASS":
             kept.append(ann)
         else:
@@ -1166,7 +1528,7 @@ body alone doesn't provide — historical context, real-world pattern, nuance.
 
 You will receive N articles (where N is given in the user message; usually 3,
 but could be 1, 2, or 3). Each article has two rewritten English bodies:
-  easy_en  — grade 4 / 10-year-old reader (~200 words)
+  easy_en  — grade 4-5 / 10-year-old reader (~200 words)
   middle_en — grade 7-8 / 12-14 year old reader (~320 words)
 
 For each of the 2N slots (N articles × {easy, middle}) produce:
@@ -1418,7 +1780,16 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
     reuses them across all keywords for that slot — avoids the N-per-
     keyword recomputation Copilot flagged in the 2026-04-29 review.
     """
-    articles_by_id = {a["source_id"]: a for a in rewrite_result.get("articles") or []}
+    # Slot keys are POSITIONAL: _detail_enrich_input_single_level builds them as
+    # f"{i}_{level}" for i in range(len(articles)). Looking them up by
+    # `source_id` only agreed while source_id happened to equal the position.
+    # Once Stage 3 rejected an article and a spare was promoted the two
+    # diverged, this returned {}, body was "", and EVERY keyword was dropped as
+    # "hallucinated" — 2 of 9 articles shipped with an empty Word Treasure on
+    # 2026-09-20, including an Ebola story whose dropped terms were "Ebola",
+    # "vaccine" and "outbreak".
+    # Bug: docs/bugs/2026-09-20-keywords-dropped-by-slot-id-mismatch.md
+    arts = rewrite_result.get("articles") or []
     for slot_key, det in details.items():
         kws = det.get("keywords") or []
         if not kws:
@@ -1428,9 +1799,19 @@ def filter_keywords(details: dict, rewrite_result: dict) -> dict:
             aid = int(aid_str)
         except (ValueError, TypeError):
             continue
-        art = articles_by_id.get(aid, {})
+        art = arts[aid] if 0 <= aid < len(arts) else None
+        if art is None:
+            log.warning("  [%s] slot has no article at that position (%d of %d) — "
+                        "keeping its %d keywords unvalidated", slot_key, aid, len(arts), len(kws))
+            continue
         variant = art.get(f"{lvl}_en" if lvl in ("easy", "middle") else lvl) or {}
         body = variant.get("body") or ""
+        if not body:
+            # Nothing to validate against. Dropping every keyword is the one
+            # outcome that is certainly wrong.
+            log.warning("  [%s] no body to validate against — keeping its %d keywords",
+                        slot_key, len(kws))
+            continue
         body_lc = body.lower()
         body_stems = _body_word_stem_index(body)
         kept = []
@@ -1470,18 +1851,18 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
             res = _deepseek_post(payload, timeout=300, api_key=api_key, endpoint=endpoint)
             if res.parsed is not None:
                 if res.repair_kind:
-                    CALL_STATS["reasoner_repaired"] += 1
+                    _bump_call_stat("reasoner_repaired")
                     log.info("reasoner: parse OK after repair on %s (%s, finish=%s)",
                              model, res.repair_kind, res.finish_reason)
                 return res.parsed
             if res.finish_reason == "length":
-                CALL_STATS["reasoner_truncated"] += 1
+                _bump_call_stat("reasoner_truncated")
                 raise RuntimeError(
                     f"reasoner output truncated (max_tokens={max_tokens} hit); "
                     "split-batch fallback in caller will shrink the payload"
                 )
             content_attempts += 1
-            CALL_STATS["reasoner_content_retries"] += 1
+            _bump_call_stat("reasoner_content_retries")
             last_err = res.parse_error or json.JSONDecodeError("repair failed", "", 0)
             # Log raw content snippet so we can see WHY the JSON parse
             # failed — same instrumentation as chat-call path.
@@ -1499,9 +1880,9 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
                     f"reasoner on {model}: {max_content_attempts} content attempts failed"
                 ) from last_err
             time.sleep(_retry_sleep_for(last_err, content_attempts))
-        except (requests.HTTPError, requests.ConnectionError, requests.Timeout) as e:
+        except requests.RequestException as e:
             transport_attempts += 1
-            CALL_STATS["reasoner_transport_retries"] += 1
+            _bump_call_stat("reasoner_transport_retries")
             last_err = e
             wait = _retry_sleep_for(e, transport_attempts)
             log.warning("reasoner transport attempt %d/%d on %s failed (%s): waiting %.1fs",
@@ -1514,7 +1895,7 @@ def _reasoner_call_with_model(model: str, system: str, user: str,
             time.sleep(wait)
 
 
-def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
+def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 65536,
                            max_transport_attempts: int = 4,
                            max_content_attempts: int = 2) -> dict:
     """Call the active reasoner (thinking mode) provider.
@@ -1528,7 +1909,7 @@ def deepseek_reasoner_call(system: str, user: str, max_tokens: int = 16000,
     Truncation always raises immediately — caller's split-batch
     shrinks the payload."""
     api_key, endpoint, model = _resolve_reasoner_provider()
-    CALL_STATS["reasoner_calls"] += 1
+    _bump_call_stat("reasoner_calls")
     fallback = "deepseek-v4-flash"
     primary_is_flash = "flash" in model.lower()
 
@@ -1695,10 +2076,16 @@ def detail_enrich(rewrite_result: dict) -> dict:
             # If 20k starts truncating too, the next architectural
             # step is a true "1 slot at a time" fallback below
             # split-batch (deferred — see invariant in bug record).
+            # 2026-09-05: 20000 → 65536. V4 Flash (sole provider since
+            # 2026-08-23) spends CoT from the same max_tokens budget;
+            # 4/6 enrich calls truncated at 20k every day 08-29..09-05,
+            # leaving slots without questions/background_read and
+            # failing bundle validation. API ceiling 131072 verified;
+            # billing is per generated token so headroom is free.
             res = deepseek_reasoner_call(
                 DETAIL_ENRICH_PROMPT,
                 _detail_enrich_input_single_level(rewrite_result, level),
-                max_tokens=20000,
+                max_tokens=65536,
             )
             for k, v in (res.get("details") or {}).items():
                 details[k] = v
@@ -1786,9 +2173,14 @@ def verify_article_content(art: dict) -> tuple[bool, str | None]:
         return False, f"body {wc}w < {MIN_PICK_BODY_WORDS}w"
     if wc > MAX_PICK_BODY_WORDS:
         return False, f"body {wc}w > {MAX_PICK_BODY_WORDS}w (suspect aggregate page)"
-    # Order matters: is_generic_social_image(None) is True, so the generic
-    # check must come AFTER the missing check or absent images get reported
-    # as "generic social image: None" (and the branch below is unreachable).
+    # A real, relevant photo matters (owner choice 2026-07-08): REJECT an
+    # article whose image is missing or a generic social default (e.g. NPR's
+    # facebook-default logo) rather than ship a wrong/blank card. This is
+    # affordable now because the per-dimension safety loosening lets hard-news
+    # sources with REAL photos (PBS, BBC, Al Jazeera) through, so News stays
+    # filled without accepting bad images. (Order: the missing check first —
+    # is_generic_social_image(None) is True, so it would otherwise misreport.)
+    # Bug: docs/bugs/2026-07-08-news-safety-and-image-tuning.md
     if not art.get("og_image"):
         return False, "no og:image"
     if is_generic_social_image(art.get("og_image")):
@@ -1873,7 +2265,7 @@ def run_source_phase_a(source, html_tag_stripper=None) -> dict | None:
     # add a per-brief fallback similar to detail_enrich's pattern.
     batch_vet = deepseek_reasoner_call(build_vet_prompt(2),
                                         vet_curator_input(briefs, 2),
-                                        max_tokens=12000)
+                                        max_tokens=65536)
 
     # Re-apply strict thresholds authoritatively
     for v in batch_vet.get("vet") or []:

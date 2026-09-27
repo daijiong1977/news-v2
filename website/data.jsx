@@ -30,7 +30,7 @@ const SITE_CONFIG = {
   parent:        "21mins",            // parent brand
   endorsement:   "21MINS daily news.",// small caps endorsement under the lockup (line 1)
   endorsement2:  "Learn the real world.", // second-line endorsement
-  audience:      "Kids age 8-13",
+  audience:      "Kids age 10-14",
   domain:        "kidsnews.21mins.com",
   vertical:      "kidsnews",
 

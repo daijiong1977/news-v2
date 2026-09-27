@@ -162,11 +162,12 @@ jobs:
 
       - name: Run autofix scan (queue issues)
         if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_autofix != true }}
-        # Scans yesterday's articles, enqueues word-count / keyword /
-        # image misses into redesign_autofix_queue. No mechanical edits.
+        # Scan the same number of completed archive days as the digest
+        # looks back. Never edit today's static-bundle content via Storage
+        # alone: readers would still see the old body in latest.zip.
         continue-on-error: true
         run: |
-          python -m pipeline.quality_autofix --days 1 | tee autofix.json
+          python -m pipeline.quality_autofix --days "${QUALITY_DIGEST_DAYS}" | tee autofix.json
 
       - name: Apply queued autofixes (DeepSeek + image regrab)
         if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_autofix != true }}

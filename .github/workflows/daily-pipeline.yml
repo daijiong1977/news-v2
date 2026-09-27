@@ -17,6 +17,14 @@ on:
         description: "Internal — set by pipeline-watchdog to prevent retry-of-retry loop"
         type: boolean
         default: false
+      categories:
+        description: "Partial run — comma-separated categories (e.g. News). Other categories keep today's live content (merged from latest.zip). Empty = all."
+        type: string
+        default: ''
+      run_date:
+        description: "Manual rerun date (YYYY-MM-DD, within the past 7 UTC days). Empty = current UTC date."
+        type: string
+        default: ''
   schedule:
     # Hardcoded admin-configured fire time. Synced FROM
     # `redesign_cron_config` table by the quality-digest workflow at
@@ -24,7 +32,7 @@ on:
     # admin edits the cron in the website's admin panel, that change
     # appears here as a `chore(cron): sync ...` commit and takes
     # effect from the NEXT day's run. No more 30-min polling.
-    - cron: "20 17 * * *"
+    - cron: "0 7 * * *"   # 03:00 America/New_York in summer time (02:00 after the November change); the podcast builds at 05:30
 
 permissions:
   contents: read
@@ -46,6 +54,12 @@ jobs:
     timeout-minutes: 90
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      # Optional. Unset/empty → the Jev pre-filter (Stage 1.2) skips itself.
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      # on | shadow | off — repo variable, so it can be flipped without a commit.
+      JEV_PREFILTER: ${{ vars.JEV_PREFILTER || 'on' }}
+      # on | shadow | off — high-confidence News/Science/Fun routing.
+      JEV_ROUTE: ${{ vars.JEV_ROUTE || 'on' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       # NOTE: the effective variant is resolved by the cron_check step
@@ -136,6 +150,14 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
 
+      - name: Install optional Jev SDK (best-effort)
+        if: steps.cron_check.outputs.proceed != 'false'
+        # Deliberately NOT in requirements.txt: a broken or yanked release of
+        # an optional third-party SDK must never fail the daily run. If this
+        # step fails, jev_prefilter sees the import error and skips itself.
+        continue-on-error: true
+        run: pip install "typesafe-sdk>=0.7,<1"
+
       - name: Write .env for modules that read it directly
         if: steps.cron_check.outputs.proceed != 'false'
         run: |
@@ -144,6 +166,7 @@ jobs:
           DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
           SUPABASE_URL=${SUPABASE_URL}
           SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+          TYPESAFE_API_KEY=${TYPESAFE_API_KEY}
           EOF
 
       - name: Run full_round
@@ -156,6 +179,11 @@ jobs:
           # Optional checkpoint resume — only honored on workflow_dispatch
           # (scheduled runs always start fresh).
           RESUME_FROM: ${{ inputs.resume_from || '' }}
+          # Optional partial run (workflow_dispatch only): regenerate just
+          # these categories; the rest merge in from the live latest.zip.
+          PIPELINE_CATEGORIES: ${{ inputs.categories || '' }}
+          # Explicit manual backdate for an evening rerun after UTC midnight.
+          PIPELINE_RUN_DATE: ${{ inputs.run_date || '' }}
         run: python -m pipeline.full_round
 
       - name: Refresh search index

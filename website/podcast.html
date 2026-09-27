@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kids News Podcast · from 21mins.com</title>
+<meta name="description" content="Four real news stories a day for curious kids, in about eight minutes. Subscribe in Apple Podcasts, Overcast, Pocket Casts or any podcast app.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kids News Podcast · Find the news in minutes">
+<meta property="og:description" content="Four real news stories a day for curious kids 10–14, in about eight minutes. Tap to subscribe.">
+<meta property="og:image" content="https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/cover-4c.png">
+<meta property="og:url" content="https://kidsnews.21mins.com/podcast">
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg:#fdf8ee; --surface:#fff; --ink:#1b1b3a; --ink2:#55556f; --line:#e7dcc7; --teal:#0e8f8c; --amber:#c9762a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16161f; --surface:#1f1f2b; --ink:#f2ede2; --ink2:#bcbccd; --line:#34344a; --teal:#4fc9c4; --amber:#e2a468; } }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC",sans-serif; }
+  .wrap { max-width:520px; margin:0 auto; padding:28px 16px 64px; text-align:center; }
+  img.cover { width:min(260px,70vw); border-radius:22px; box-shadow:0 10px 30px rgba(0,0,0,.18); }
+  h1 { font-size:1.7rem; margin:20px 0 4px; }
+  .tag { color:var(--teal); font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:.75rem; }
+  p.lede { color:var(--ink2); line-height:1.55; margin:8px 0 22px; }
+  .btn { display:block; width:100%; box-sizing:border-box; padding:15px 18px; margin:10px 0; border-radius:14px; font-size:1.05rem; font-weight:700;
+         text-decoration:none; border:1px solid var(--line); background:var(--surface); color:var(--ink); }
+  .btn.apple { background:#b150e2; color:#fff; border-color:#b150e2; }
+  .btn.over { background:#fc7e0f; color:#fff; border-color:#fc7e0f; }
+  .btn.pkt { background:#f43e37; color:#fff; border-color:#f43e37; }
+  .btn.copy { background:var(--teal); color:#fff; border-color:var(--teal); }
+  .url { font-family:ui-monospace,Menlo,monospace; font-size:.78rem; word-break:break-all; color:var(--ink2);
+         background:var(--surface); border:1px dashed var(--line); border-radius:10px; padding:10px; margin:8px 0 0; user-select:all; -webkit-user-select:all; }
+  .how { text-align:left; color:var(--ink2); font-size:.9rem; line-height:1.6; margin-top:26px; border-top:1px solid var(--line); padding-top:16px; }
+  .how b { color:var(--ink); }
+  .ok { color:var(--teal); font-weight:700; min-height:1.2em; margin-top:6px; font-size:.9rem; }
+  footer { margin-top:30px; font-size:.8rem; color:var(--ink2); }
+  footer a { color:var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="cover" src="https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/cover-4c.png" alt="Kids News podcast cover">
+  <div class="tag">Podcast · from 21mins.com</div>
+  <h1>Kids News</h1>
+  <p class="lede">Find the news in minutes. Four real stories a day for curious kids 10–14, in about eight minutes — Monday news, Tuesday science, Wednesday fun things, then again. Hosted by Maya and Theo.</p>
+
+  <a class="btn apple" id="apple" href="#">Open in Apple Podcasts</a>
+  <a class="btn over" id="overcast" href="#">Add to Overcast</a>
+  <a class="btn pkt" id="pocket" href="#">Add to Pocket Casts</a>
+  <button class="btn copy" id="copy" type="button">Copy the feed link (any app)</button>
+  <div class="ok" id="ok"></div>
+  <div class="url" id="url"></div>
+
+  <div class="how">
+    <b>If a button does nothing:</b> copy the link above, then in Apple Podcasts go to <b>Library → ··· → Follow a Show by URL</b> and paste it. (Pasting into the search box won't work — search only looks at Apple's directory, and this show is not listed there yet.)
+  </div>
+  <footer>Every story is on <a href="https://kidsnews.21mins.com">kidsnews.21mins.com</a>. The hosts are AI voices; the writing and the choice of stories are ours.</footer>
+</div>
+<script>
+  var FEED = "https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/feed.xml";
+  var bare = FEED.replace(/^https?:\/\//, "");
+  document.getElementById("url").textContent = FEED;
+  // Apple Podcasts opens podcast:// links straight into "follow this show".
+  document.getElementById("apple").href = "podcast://" + bare;
+  document.getElementById("overcast").href = "overcast://x-callback-url/add?url=" + encodeURIComponent(FEED);
+  document.getElementById("pocket").href = "pktc://subscribe/" + bare;
+  document.getElementById("copy").addEventListener("click", function () {
+    var ok = document.getElementById("ok");
+    function done(msg) { ok.textContent = msg; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(FEED).then(function () { done("Copied. Now paste it in your podcast app."); },
+                                              function () { done("Select the link below and copy it."); });
+    } else { done("Select the link below and copy it."); }
+  });
+</script>
+</body>
+</html>

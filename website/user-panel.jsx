@@ -22,8 +22,8 @@ const LANGS = [
 ];
 
 const LEVEL_OPTIONS = [
-  { id:'Sprout', emoji:'🌱', sub:'Ages 8–10 · easier reads' },
-  { id:'Tree', emoji:'🌳', sub:'Ages 11–13 · deeper dives' },
+  { id:'Sprout', emoji:'🌱', sub:'Ages 10–11 · easier reads' },
+  { id:'Tree', emoji:'🌳', sub:'Ages 12–14 · deeper dives' },
 ];
 
 const THEMES = [

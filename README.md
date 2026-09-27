@@ -1,6 +1,23 @@
 # news-v2
 
-Working repo for the KidsNews v2 redesign.
+Production content pipeline for KidsNews v2. `news-v2` generates content;
+`kidsnews-v2` synchronizes and deploys the website at https://kidsnews.21mins.com.
+
+## Current pipeline and tuning guide
+
+- [2026-09-26 pipeline audit (中文)](docs/pipeline-funnel-audit-2026-09-26.md): separate News/Science/Fun source inventories, candidate funnels, measured timings, bottlenecks, and tuning locations.
+- [2026-09-27 fixes and reuse (中文)](docs/2026-09-27-fixes-and-reuse.md): today's issues, fixes, source-table changes, validation limits, and reusable practices.
+- [Editorial categories and topic tuning](docs/editorial-category-routing.md): routing, topic groups, sports priorities, publisher diversity, and recruitment exclusions.
+- [Reusable JEV article filtering guide (中文)](docs/jev-article-filtering-playbook.md): step-by-step selection workflow and an AI News configuration template for other projects.
+- [Bug and regression index](docs/bugs/INDEX.md).
+
+Production changes require a feature branch, tests, and a pull request before merging.
+
+## Historical redesign plan (not the current production configuration)
+
+The notes below describe the original phased redesign. Their domains, repository
+status, and candidate counts are historical; use the current audit above for
+operational decisions.
 
 **Future deploy target:** `news.6ray.com` (separate domain from the v1 site at `kidsnews.6ray.com`).
 

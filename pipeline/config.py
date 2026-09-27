@@ -123,7 +123,7 @@ DEEPSEEK_MODEL = "deepseek-chat"
 DEEPSEEK_TEMPERATURE = 0.1
 DEEPSEEK_MAX_TOKENS = 600
 
-VETTER_SYSTEM_PROMPT = """You are a content reviewer for a kids news site (ages 8-13, grades 3-8).
+VETTER_SYSTEM_PROMPT = """You are a content reviewer for a kids news site (ages 10-14, grades 5-9).
 You are judging based ONLY on the title and a short snippet.
 
 PART A — SAFETY. Rate each 0-5 (0=none, 5=severe):
@@ -137,7 +137,7 @@ safety_verdict:
 PART B — INTEREST. A safe story still needs to be worth reading. Rate each 0-5:
 - importance: how globally significant (0=trivial, 5=major historic event)
 - fun_factor: how funny, delightful, surprising (0=dry, 5=hilarious/amazing)
-- kid_appeal: how likely an 8-13 year old would WANT to read this (0=boring to a kid, 5=kid magnet)
+- kid_appeal: how likely a 10-14 year old would WANT to read this (0=boring to a kid, 5=kid magnet)
 Compute interest_peak = max(importance, fun_factor, kid_appeal).
 interest_verdict:
   peak >= 3 -> ENGAGING
