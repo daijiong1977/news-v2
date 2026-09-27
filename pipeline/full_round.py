@@ -14,7 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 from .news_rss_core import (CALL_STATS, check_duplicates, detail_enrich,
                               fetch_source_entries, filter_safe_rewrites,
@@ -614,16 +614,33 @@ def phase_a_light(category: str, sources, max_per_source: int = 4) -> list[dict]
     return briefs
 
 
+def _canonical_source_url(url: str) -> str:
+    """Ignore tracking parameters, but preserve query parameters identifying an article."""
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().removeprefix("www.")
+    if not host:
+        return ""
+    query = urlencode(sorted((k, v) for k, v in parse_qsl(parsed.query)
+                             if not (k.lower().startswith("utm_") or k.lower() in
+                                     {"at_medium", "at_campaign", "fbclid"})))
+    return f"{host}{parsed.path.rstrip('/') or '/'}?{query}" if query else f"{host}{parsed.path.rstrip('/') or '/'}"
+
+
 def _drop_dup_briefs(briefs: list[dict], past_titles: list[str],
-                     threshold: float = 0.80) -> tuple[list[dict], list[dict]]:
+                     threshold: float = 0.80,
+                     past_urls: set[str] | None = None) -> tuple[list[dict], list[dict]]:
     """Pure core of the mega-path past-run dedup: split briefs into
     (kept, dropped) by title similarity against recently published titles."""
     kept: list[dict] = []
     dropped: list[dict] = []
+    past_urls = past_urls or set()
     for b in briefs:
         t = b.get("title") or ""
+        url = _canonical_source_url(b.get("link") or "")
         best = max((_title_similarity(t, pt) for pt in past_titles), default=0.0)
-        (dropped if best >= threshold else kept).append(b)
+        (dropped if best >= threshold or (url and url in past_urls) else kept).append(b)
     return kept, dropped
 
 
@@ -632,7 +649,8 @@ def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
                                  threshold: float = 0.80,
                                  run_date: str | None = None) -> dict[str, list[dict]]:
     """Mega-path counterpart of filter_past_duplicates (which only the
-    legacy path calls): drop briefs whose title ≥threshold-matches a story
+    legacy path calls): drop briefs whose URL matches exactly (ignoring
+    tracking parameters) or whose title ≥threshold-matches a story
     any category published in the `days` days BEFORE this run's date. A
     sticky top-of-feed item on a cadence-1 source would otherwise be eligible
     to republish on consecutive days. Fail-open: any DB error keeps all briefs.
@@ -647,18 +665,21 @@ def filter_past_duplicate_briefs(briefs_by_cat: dict[str, list[dict]],
     start = (date.fromisoformat(end) - timedelta(days=days)).isoformat()
     try:
         r = client().table("redesign_stories").select(
-            "source_title"
+            "source_title,source_url"
         ).gte("published_date", start).lt("published_date", end).eq(
             "archived", False).execute()
         past_titles = sorted({row["source_title"] for row in (r.data or [])
                               if row.get("source_title")})
+        past_urls = {_canonical_source_url(row.get("source_url") or "")
+                     for row in (r.data or []) if row.get("source_url")}
     except Exception as e:  # noqa: BLE001
         log.warning("brief past-dedup skipped — query failed: %s", e)
         return briefs_by_cat
 
     out: dict[str, list[dict]] = {}
     for cat, briefs in briefs_by_cat.items():
-        kept, dropped = _drop_dup_briefs(briefs, past_titles, threshold)
+        kept, dropped = _drop_dup_briefs(briefs, past_titles, threshold,
+                                         past_urls=past_urls)
         for b in dropped:
             log.info("  [%s] past-dup brief drop: %s", cat, (b.get("title") or "")[:70])
         out[cat] = kept
