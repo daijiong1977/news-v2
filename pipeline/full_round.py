@@ -20,6 +20,7 @@ from .news_rss_core import (CALL_STATS, check_duplicates, detail_enrich,
                               fetch_source_entries, filter_safe_rewrites,
                               reset_call_stats, run_source_phase_a,
                               tri_variant_rewrite)
+from .run_date import pipeline_run_date
 from .image_optimize import fetch_and_optimize
 from .supabase_io import insert_run, insert_story, update_run, upload_image
 from .news_aggregate import run_source as run_news
@@ -1496,7 +1497,7 @@ def _phase(t0: float) -> float:
 
 
 def main() -> None:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = pipeline_run_date()
     website_dir = Path(__file__).resolve().parent.parent / "website"
 
     # Telemetry — every phase / category event lands here. Persisted to
@@ -1779,7 +1780,7 @@ def main_mega() -> None:
     from .forbidden_filter import filter_briefs
     from .mega_curator import mega_curate
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = pipeline_run_date()
     website_dir = Path(__file__).resolve().parent.parent / "website"
 
     reset_call_stats()

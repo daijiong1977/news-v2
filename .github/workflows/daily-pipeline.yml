@@ -21,6 +21,10 @@ on:
         description: "Partial run — comma-separated categories (e.g. News). Other categories keep today's live content (merged from latest.zip). Empty = all."
         type: string
         default: ''
+      run_date:
+        description: "Manual rerun date (YYYY-MM-DD, within the past 7 UTC days). Empty = current UTC date."
+        type: string
+        default: ''
   schedule:
     # Hardcoded admin-configured fire time. Synced FROM
     # `redesign_cron_config` table by the quality-digest workflow at
@@ -176,6 +180,8 @@ jobs:
           # Optional partial run (workflow_dispatch only): regenerate just
           # these categories; the rest merge in from the live latest.zip.
           PIPELINE_CATEGORIES: ${{ inputs.categories || '' }}
+          # Explicit manual backdate for an evening rerun after UTC midnight.
+          PIPELINE_RUN_DATE: ${{ inputs.run_date || '' }}
         run: python -m pipeline.full_round
 
       - name: Refresh search index

@@ -26,6 +26,8 @@ from pathlib import Path
 
 from supabase import create_client
 
+from .run_date import pipeline_run_date
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("pack")
 
@@ -668,7 +670,7 @@ def restore_latest_from(sb, date_str: str) -> None:
 
 
 def main() -> None:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = pipeline_run_date()
 
     # Restore mode: short-circuit; just copy a known-good dated zip
     # to latest.zip and exit. No build, no validation.
