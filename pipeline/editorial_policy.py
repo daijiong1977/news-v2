@@ -13,6 +13,33 @@ from urllib.parse import urlsplit
 SCIENCE_MIN_PUBLISHERS = 2
 
 
+def section_value(brief: dict) -> float | None:
+    return (brief.get("_jev_rank") or {}).get("section_value")
+
+
+def low_fun_value(brief: dict) -> bool:
+    value = section_value(brief)
+    return value is not None and value <= 1.0
+
+
+def important_news(brief: dict) -> bool:
+    rank = brief.get("_jev_rank") or {}
+    return (rank.get("section_value", 0) >= 3
+            and rank.get("pick", 0) >= rank.get("floor", .40)
+            and rank.get("category_fit", 0) >= .60)
+
+
+def prefer_important_news(items: list[dict], limit: int = 3) -> list[dict]:
+    """Keep one qualified important story within already eligible/safe choices."""
+    if any(important_news(x.get("brief") or {}) for x in items[:limit]):
+        return items
+    candidate = next((i for i, x in enumerate(items[limit:], limit)
+                      if important_news(x.get("brief") or {})), None)
+    if candidate is None:
+        return items
+    return items[:limit - 1] + [items[candidate]] + items[limit - 1:candidate] + items[candidate + 1:]
+
+
 def publisher_key(source) -> str:
     """Known brand aliases, otherwise the feed hostname (not a guessed eTLD)."""
     def get(key):

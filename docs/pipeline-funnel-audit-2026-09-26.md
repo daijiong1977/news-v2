@@ -291,6 +291,8 @@ Jev 相关墙钟约 4.1+9.0+1.5=14.6 秒，约占主体 4%。因此首要性能�
 
 代码与测试在同一 PR 中交付。尚未以这套新规则重新生成 9/26；合并/上线状态应以 PR 和后续 run 为准。
 
+后续反馈又将 Fun 送主编上限从 6 调到 7，并加入早期 Jev 招募识别及各栏目价值评分。详见[栏目价值与送审量](editorial-category-routing.md)。前面的 40→24→5→3 是旧运行的事实，不应改写成新规则已经成功运行的结果；新目标为最多 7 个合格 Fun 候选送主编，最后仍发布 3。
+
 ### Science：至少两家合格出版方的目标
 
 - 新增 [editorial_policy.py](../pipeline/editorial_policy.py) 的 `publisher_key`。ScienceDaily 的 feed 合并到一个品牌，已知 BBC/NPR/Smithsonian 域名也有映射；未知来源按 feed hostname 区分。这是显式映射加 hostname 的实现，还没有给来源表添加 `publisher_id` 列。

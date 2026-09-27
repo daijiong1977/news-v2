@@ -56,17 +56,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .jev_prefilter import MAX_ERROR_RATE, WORKERS, make_client
 from .mega_curator import briefs_same_event, join_event_group, titles_same_story
 from .editorial_policy import publisher_key, editorial_exclusion, SCIENCE_MIN_PUBLISHERS
+from .editorial_policy import low_fun_value, important_news
 
 log = logging.getLogger("jev-rank")
 
 TO_CURATOR = 6              # the curator ranks 5 of these; one is its to drop
+TO_CURATOR_BY_CATEGORY = {"News": 6, "Science": 6, "Fun": 7}
 MIN_SEND = 4                # below this the floor yields — see FLOOR
-MAX_PER_SOURCE = 2          # among the 6; Science groups by publisher, others by feed
+MAX_PER_SOURCE = 2          # within the shortlist; Science groups by publisher, others by feed
 MIN_DISTINCT_SOURCES = 3    # what the curator's top-3 rule needs to be satisfiable at all
 CAP_YIELD_GAP = 0.10        # a 3rd from one source beats an alternative this much worse
 HARD_PER_SOURCE = 3         # the cap may be exceeded by one brief, never more
 MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
-POOL_KEEP = 10              # top 6 + 4 reserve spares, in rank order
+POOL_KEEP = 10              # up to 6/6/7 sent; remaining entries are reserve spares
 CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
 DEEP_DIG_BORDERLINE_MAX = 0.70  # only uncertain late backfill pays for cross-section checks
 DEEP_DIG_FIT_MARGIN = 0.05     # target must beat the best alternative, not merely pass 0.60
@@ -127,6 +129,42 @@ SPORTS_PRIORITY_LEVELS = [
     "World record broken, Olympic/World Championship title, Grand Slam champion/final result, or comparable landmark",
 ]
 SPORTS_PRIORITY_BONUS = {3: 0.10, 4: 0.18}  # modest, soft Fun ranking preference
+SECTION_VALUE_LEVELS = {
+    "News": [
+        "Routine adult/local detail with no clear consequence for US children",
+        "Limited consequence; being American or mentioning a president alone does not make it important",
+        "Useful current affairs context for US children, but not a major development",
+        "Significant NEW consequence for US children/families or US public life: schools, health, environment, rights, civic life",
+        "Major NEW national or world development with substantial consequences for the US or US children",
+    ],
+    "Science": [
+        "No clear science learning or discovery value",
+        "Routine technical or promotional item with little understandable learning",
+        "A clear fact or explanation children can understand",
+        "A meaningful new discovery or compelling explanation with a concrete takeaway",
+        "A major well-supported discovery or exceptional scientific insight children can understand",
+    ],
+    "Fun": [
+        "No child-facing enjoyment: recruiting, roster paperwork, adult industry or commercial news",
+        "Sports/entertainment label only; routine commitments, rankings of recruits or adult business detail",
+        "An accessible entertaining story a child might enjoy",
+        "A genuinely engaging new result, playful idea, creative achievement or update young fans care about",
+        "A delightful or remarkable event children would eagerly share; a landmark result for young fans",
+    ],
+}
+SECTION_VALUE_BONUS = {3: .10, 4: .18}
+
+
+def _section_questions(base, cat):
+    from typesafe_sdk import Score
+    questions = {**base, "section_value": Score(
+        instructions="Evaluate the actual new development for this section and US children aged 10–14. "
+                     "Use evidence in the title/summary, not sensational wording or famous names. "
+                     "For News use consequences, never political party, ideology or approval of a policy.",
+        criteria=SECTION_VALUE_LEVELS.get(cat, SECTION_VALUE_LEVELS["News"]))}
+    if cat == "Fun":
+        questions["sports_priority"] = Score(instructions=SPORTS_PRIORITY_Q, criteria=SPORTS_PRIORITY_LEVELS)
+    return questions
 CATEGORY_FIT_Q = "Does this story belong in the named section?"
 CATEGORY_FIT_CRITERIA = {
     "true": "News=current affairs; Science=discoveries, nature, space, medicine, engineering or research; "
@@ -182,17 +220,22 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
     pick, want = float(ans["pick"].noul), float(ans["want"].score)
     category_fit = float(ans["category_fit"].noul)
     sports_priority = float(getattr(ans.get("sports_priority"), "score", 0) or 0)
+    value = float(ans["section_value"].score) if "section_value" in q else None
     if not (math.isfinite(pick) and 0 <= pick <= 1
             and math.isfinite(want) and 0 <= want <= len(WANT_LEVELS) - 1
             and math.isfinite(category_fit) and 0 <= category_fit <= 1
-            and math.isfinite(sports_priority) and 0 <= sports_priority <= 4):
+            and math.isfinite(sports_priority) and 0 <= sports_priority <= 4
+            and (value is None or math.isfinite(value) and 0 <= value <= 4)):
         raise ValueError(
             f"jev returned out-of-range answers: pick={pick} want={want} "
             f"category_fit={category_fit} sports_priority={sports_priority}"
         )
     priority_band = min(4, max(0, int(sports_priority + 0.5)))
     bonus = SPORTS_PRIORITY_BONUS.get(priority_band, 0) if cat == "Fun" else 0
+    # Do not stack two bonuses for the same sporting achievement.
+    bonus = max(bonus, SECTION_VALUE_BONUS.get(int(value), 0) if value is not None else 0)
     return {"pick": round(pick, 3), "want": round(want, 2),
+            **({"section_value": round(value, 2)} if value is not None else {}),
             "category_fit": round(category_fit, 3),
             "sports_priority": round(sports_priority, 2) if cat == "Fun" else 0,
             "editorial_pick": round(min(1.0, pick + bonus), 3)}
@@ -215,7 +258,8 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
                         cat, why, len(briefs))
             return []
     try:
-        q_rank = _questions()[0]
+        q_base = _questions()[0]
+        q_rank = _section_questions(q_base, cat)
         accepted: set[int] = set()
         borderline: list[dict] = []
         with ThreadPoolExecutor(max_workers=WORKERS) as ex:
@@ -223,7 +267,11 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
             for fut in as_completed(futs):
                 b = futs[fut]
                 try:
-                    fit = fut.result()["category_fit"]
+                    score = fut.result()
+                    fit = score["category_fit"]
+                    b["_jev_rank"] = {**score, "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
+                    if cat == "Fun" and low_fun_value(b):
+                        continue
                 except Exception as e:  # noqa: BLE001 — unscored backfill is not safe to promote
                     log.warning("  [%s] deep-dig category score failed for %s: %s",
                                 cat, (b.get("title") or "")[:60], e)
@@ -240,7 +288,7 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
             alternatives = [other for other in ("News", "Science", "Fun") if other != cat]
             other_scores: dict[int, dict[str, float]] = {id(b): {} for b in borderline}
             with ThreadPoolExecutor(max_workers=WORKERS) as ex:
-                futs = {ex.submit(_score_one, client, q_rank, other, b): (b, other)
+                futs = {ex.submit(_score_one, client, q_base, other, b): (b, other)
                         for b in borderline for other in alternatives}
                 for fut in as_completed(futs):
                     b, other = futs[fut]
@@ -373,6 +421,9 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
         thin day should publish a weak story rather than go blank, but never pad
         a healthy day with one"""
     news = cat == "News"
+    to_curator = TO_CURATOR_BY_CATEGORY.get(cat, TO_CURATOR)
+    if news:
+        ranked = sorted(ranked, key=lambda b: not important_news(b))
     floor = FLOOR.get(cat, DEFAULT_FLOOR)
     pick = lambda b: (b.get("_jev_pick") or 0.0)
     # Multiple ScienceDaily feeds must not each get a separate source quota.
@@ -391,6 +442,8 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
         excluded = editorial_exclusion(b)
         if excluded:
             return excluded
+        if cat == "Fun" and low_fun_value(b):
+            return "low Fun value"
         fit = float(b.get("_jev_category_fit", 1.0))
         if fit < CATEGORY_FIT_MIN:
             return f"category fit {fit:.2f} is below {CATEGORY_FIT_MIN:.2f}"
@@ -411,11 +464,11 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
             return False                                   # a comparable alternative exists
         # Taking b costs a slot; can the set still reach MIN_DISTINCT_SOURCES?
         new_srcs = {source_group(o) for o in others} - {source_group(c) for c in chosen}
-        slots_after = TO_CURATOR - len(chosen) - 1
+        slots_after = to_curator - len(chosen) - 1
         return distinct(chosen) + min(slots_after, len(new_srcs)) >= diversity_target
 
     for i, b in enumerate(ranked):
-        if len(chosen) == TO_CURATOR:
+        if len(chosen) == to_curator:
             break
         why = hard_reason(b)
         if why:
@@ -458,7 +511,7 @@ def _select(cat: str, ranked: list[dict], taken_elsewhere: list[dict], pairs: _P
                 note(b)
         return n
 
-    _fill(capped, TO_CURATOR, honour_ceiling=True)         # over-represented but good
+    _fill(capped, to_curator, honour_ceiling=True)         # over-represented but good
     _fill(capped, MIN_SEND, honour_ceiling=False,          # a one-source day still needs MIN_SEND
           note=lambda b: log.info("  [%s] over the per-source ceiling to reach %d briefs — thin pool",
                                   cat, MIN_SEND))
@@ -493,9 +546,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                 report["jev"] = f"IGNORED ({why})"
                 return None, report
         q_rank, q_story, q_both, q_event = _questions()
-        from typesafe_sdk import Score
-        q_fun = {**q_rank, "sports_priority": Score(
-            instructions=SPORTS_PRIORITY_Q, criteria=SPORTS_PRIORITY_LEVELS)}
+        questions_by_cat = {cat: _section_questions(q_rank, cat) for cat in briefs_by_cat}
         flat = [(cat, b) for cat, briefs in briefs_by_cat.items() for b in briefs]
         if not flat:
             report["jev"] = "IGNORED (no briefs)"
@@ -505,7 +556,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
         errors = 0
         ex = ThreadPoolExecutor(max_workers=WORKERS)
         try:
-            futs = {ex.submit(_score_one, client, q_fun if cat == "Fun" else q_rank, cat, b): b
+            futs = {ex.submit(_score_one, client, questions_by_cat[cat], cat, b): b
                     for cat, b in flat}
             try:
                 for fut in as_completed(futs, timeout=TIME_BUDGET_S):
@@ -533,6 +584,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                 b["_jev_pick"] = (scores.get(id(b)) or {}).get("editorial_pick", -1.0)
                 b["_jev_category_fit"] = (scores.get(id(b)) or {}).get(
                     "category_fit", 1.0)
+                b["_jev_rank"] = {**(scores.get(id(b)) or {}), "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
             ranked = sorted(briefs_by_cat[cat], key=lambda b: -b["_jev_pick"])
             chosen, skipped, below = _select(cat, ranked, taken, pairs, recent_titles or [])
             report["below_floor"][cat] = below
@@ -541,7 +593,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             # duplicate must never reach the curator by filling a thin pool's slots.
             dup_ids = {id(b) for b, why in skipped if "same story" in why}
             rest = [b for b in ranked if not any(b is c for c in chosen)
-                    and not editorial_exclusion(b)]
+                    and not editorial_exclusion(b) and not (cat == "Fun" and low_fun_value(b))]
             rest = [b for b in rest if id(b) not in dup_ids] + [b for b in rest if id(b) in dup_ids]
             final = (chosen + rest)[:max(POOL_KEEP, len(chosen))]
             for pos, b in enumerate(final, start=1):
@@ -551,6 +603,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             report["sent"][cat] = [{"pos": i, "pick": (scores.get(id(b)) or {}).get("editorial_pick"),
                                     "raw_pick": (scores.get(id(b)) or {}).get("pick"),
                                     "sports_priority": (scores.get(id(b)) or {}).get("sports_priority"),
+                                    "section_value": (scores.get(id(b)) or {}).get("section_value"),
                                     "source": b.get("_source_name"), "title": b.get("title")}
                                    for i, b in enumerate(chosen, start=1)]
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]

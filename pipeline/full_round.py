@@ -33,6 +33,7 @@ from . import checkpoints as ckpt
 from . import db_config
 from .editorial_policy import (editorial_exclusion, publisher_key,
                                prefer_science_publishers, SCIENCE_MIN_PUBLISHERS)
+from .editorial_policy import low_fun_value, important_news, prefer_important_news
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("full-round")
@@ -855,6 +856,8 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
             if cid in used:
                 continue
             brief = r["brief"]
+            if cat == "Fun" and low_fun_value(brief):
+                continue
             if editorial_exclusion(brief):
                 log.info("  [%s] verify skipped college recruitment: %s",
                          cat, (brief.get("title") or "")[:80])
@@ -948,6 +951,7 @@ def _unpicked_probe_spares(briefs: list[dict], ranked: list[dict],
         if (b.get("link") or b.get("title") or id(b)) not in used_keys
         and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
         and not editorial_exclusion(b)
+        and not (b.get("_category") == "Fun" and low_fun_value(b))
     ]
     out: list[dict] = []
     # keep_order: the pool arrives Jev-ranked, so promote spares best-first.
@@ -1094,6 +1098,8 @@ def promote_spare_and_rewrite(
         if not spare.get("_unverified_spare"):
             return None, None
         brief = spare.get("_winner_brief") or {}
+        if cat == "Fun" and low_fun_value(brief):
+            return None, None
         if editorial_exclusion(brief):
             log.info("  [%s] spare skipped college recruitment: %s",
                      cat, (brief.get("title") or "")[:80])
@@ -2259,9 +2265,10 @@ def main_mega() -> None:
         for cat, bundle in rewrites_by_cat.items():
             winners = bundle.get("_winners") or []
             excluded_ids = {i for i, w in enumerate(winners)
-                            if editorial_exclusion(w.get("winner") or {})}
+                            if editorial_exclusion(w.get("winner") or {})
+                            or (cat == "Fun" and low_fun_value(w.get("_brief") or {}))}
             if excluded_ids:
-                log.info("  [%s] excluding %d recruiting rewrites (checkpoint guard)",
+                log.info("  [%s] excluding %d editorially ineligible rewrites (checkpoint guard)",
                          cat, len(excluded_ids))
             rewrite_res = {"articles": [a for a in bundle.get("articles") or []
                                          if a.get("source_id") not in excluded_ids]}
@@ -2398,16 +2405,20 @@ def main_mega() -> None:
 
             survived_winners, survived_articles = _prefer_final_source_diversity(
                 survived_winners, survived_articles)
-            if cat == "Science":
+            if cat in {"Science", "News"}:
                 choices = [{"source": w.get("source"),
                             "brief": w.get("_brief") or w.get("_winner_brief") or {},
                             "winner": w, "article": a}
                            for w, a in zip(survived_winners, survived_articles)]
-                choices = prefer_science_publishers(choices)
+                choices = (prefer_science_publishers(choices) if cat == "Science"
+                           else prefer_important_news(choices))
                 survived_winners = [x["winner"] for x in choices]
                 survived_articles = [x["article"] for x in choices]
             final_stories[cat] = survived_winners[:3]
             final_variants[cat] = {i: art for i, art in enumerate(survived_articles[:3])}
+            if cat == "News" and not any(important_news(
+                    w.get("_brief") or w.get("_winner_brief") or {}) for w in final_stories[cat]):
+                telemetry["warnings"].append("News: no qualified high-importance story in final selection")
             if cat == "Science":
                 publishers = {publisher_key(w.get("source")) for w in final_stories[cat]} - {""}
                 if len(publishers) < SCIENCE_MIN_PUBLISHERS:

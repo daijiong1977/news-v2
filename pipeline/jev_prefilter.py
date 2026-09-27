@@ -48,7 +48,8 @@ log = logging.getLogger("jev-prefilter")
 SHOPPING_MIN = 0.90
 HARM_MIN = 3.0              # level 3 = "centres on people being killed"; 2.75 also caught 9/11 remembrance
 UK_DOMESTIC_MIN = 0.90      # clear-cut only; borderline ones stay for the curator to weigh
-MIN_KEEP_PER_CAT = 8        # Jev rules never shrink a category below this
+RECRUITING_MIN = 0.90       # editorial exclusion: never restored by the soft pool floor
+MIN_KEEP_PER_CAT = 8        # soft-rule floor; explicit recruiting exclusions do not yield
 MAX_ERROR_RATE = 0.30       # above this the whole Jev pass is discarded
 TIME_BUDGET_S = 60.0
 CALL_TIMEOUT_S = 10.0
@@ -66,6 +67,11 @@ HARM_LEVELS = [
     "The story dwells on the killing of children, sexual violence, suicide, torture or graphic injury",
 ]
 UK_Q = "Is this story mainly about the domestic affairs of the United Kingdom?"
+RECRUITING_Q = "Is the main news a college sports recruitment, commitment, signing, transfer-portal move or recruiting ranking?"
+RECRUITING_CRITERIA = {
+    "true": "The news itself is an athlete choosing/joining a college team or a recruiting announcement/ranking",
+    "false": "An actual race, match, championship or record; recruitment mentioned only as background; non-sports news",
+}
 UK_CRITERIA = {
     "true": "UK party politics, UK government policy, a local UK incident or UK weather, or the royal household",
     "false": "A world event that a UK outlet happens to report, any sports story, any science story, "
@@ -107,6 +113,7 @@ def _build_client():
             "shopping": Noul(instructions=SHOPPING_Q),
             "harm": Score(instructions=HARM_Q, criteria=HARM_LEVELS),
             "uk_domestic": Noul(instructions=UK_Q, criteria=UK_CRITERIA),
+            "recruiting": Noul(instructions=RECRUITING_Q, criteria=RECRUITING_CRITERIA),
         }
         return (client, questions), None
     except Exception as e:  # noqa: BLE001
@@ -124,16 +131,21 @@ def _score_one(client, questions, brief: dict) -> dict:
         questions=questions,
     ).answers
     shopping, harm, uk = float(ans["shopping"].noul), float(ans["harm"].score), float(ans["uk_domestic"].noul)
+    recruiting = float(ans["recruiting"].noul) if "recruiting" in questions else 0.0
     # Out-of-range or NaN answers count as a failed call. NaN would also be
     # unstorable in jsonb and silently void every later checkpoint of the run.
     top = len(HARM_LEVELS) - 1
     if not (all(math.isfinite(v) for v in (shopping, harm, uk))
-            and 0 <= shopping <= 1 and 0 <= uk <= 1 and 0 <= harm <= top):
+            and 0 <= shopping <= 1 and 0 <= uk <= 1 and 0 <= harm <= top
+            and math.isfinite(recruiting) and 0 <= recruiting <= 1):
         raise ValueError(f"jev returned out-of-range answers: shopping={shopping} harm={harm} uk={uk}")
-    return {"shopping": round(shopping, 3), "harm": round(harm, 2), "uk_domestic": round(uk, 3)}
+    return {"shopping": round(shopping, 3), "harm": round(harm, 2), "uk_domestic": round(uk, 3),
+            "recruiting": round(recruiting, 3)}
 
 
 def _jev_reason(j: dict) -> str | None:
+    if j.get("recruiting", 0) >= RECRUITING_MIN:
+        return f"recruiting={j['recruiting']:.2f}"
     if j["shopping"] >= SHOPPING_MIN:
         return f"shopping={j['shopping']:.2f}"
     if j["harm"] >= HARM_MIN:
@@ -230,8 +242,10 @@ def prefilter_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             continue
         # Starvation guard: drop the most clear-cut first, stop at the floor.
         flagged.sort(key=lambda t: -_clearcut(t[0]["_jev"]))
-        room = max(0, len(briefs) - MIN_KEEP_PER_CAT)
-        drop_ids = {id(b) for b, _ in flagged[:room]}
+        hard_ids = {id(b) for b, _ in flagged if b["_jev"].get("recruiting", 0) >= RECRUITING_MIN}
+        soft = [(b, why) for b, why in flagged if id(b) not in hard_ids]
+        room = max(0, len(briefs) - len(hard_ids) - MIN_KEEP_PER_CAT)
+        drop_ids = hard_ids | {id(b) for b, _ in soft[:room]}
         report["restored"] += len(flagged) - len(drop_ids)
         report["dropped"] += [{"cat": cat, "title": b.get("title"), "why": why}
                               for b, why in flagged if id(b) in drop_ids]
