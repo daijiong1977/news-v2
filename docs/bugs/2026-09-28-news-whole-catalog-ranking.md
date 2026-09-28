@@ -1,6 +1,8 @@
 # News: whole-catalog editorial ranking before the six-brief curator cut
 
-Status: feature branch / PR #76 only. Not merged or deployed.
+Status: feature branch / PR #76, not merged into `main`. A manual full-round
+run on this branch **did publish** the 2026-09-28 content to the public site;
+that does not make the feature code the production `main` implementation.
 
 ## Why
 
@@ -68,3 +70,34 @@ headline appeal is not the same as comparing the day's full choice set.
 - This feature is a selection experiment. Validate several natural runs and
   compare top-six choices, published quality, history rejections, call usage
   and topic/source diversity before treating it as a settled editorial rule.
+
+## Manual full-round result (2026-09-28, branch commit `5b1fbb3`)
+
+[Daily pipeline run 36427645986](https://github.com/daijiong1977/news-v2/actions/runs/36427645986)
+completed in about 12m27s, published three stories per section and triggered
+[kidsnews-v2 sync 36429087887](https://github.com/daijiong1977/kidsnews-v2/actions/runs/36429087887)
+(site commit `38609433428fcecb98faf28830a1d59f274b4aa5`). Public article
+payloads on both site domains showed the new 2026-09-28 edition. Every shipped
+story had the independent safety `SAFE` verdict, but the editorial result did
+**not** match the intended News choices:
+
+- News global rank compared 29 candidates in 1.5s. Panda agreement, civil
+  rights cuts and AI safeguards entered the six-item curator shortlist;
+  Maricopa election-security was numeric rank 7, just outside it.
+- The curator put panda agreement at rank 5, a spare. Gates/AI safeguards was
+  marked `unverified` by the seven-day history guard and excluded. A nor'easter
+  article was correctly identified as a repeat of September 26. The civil
+  rights rewrite was independently rejected at bias 3.
+- Refill preferred a new broad topic over the higher-ranked panda spare,
+  promoting an AI-in-schools experiment and a Maine Senate race. Final News
+  became Venezuela prisoner release, AI-in-schools, and the Maine Senate race.
+  Telemetry warned `News: no qualified high-importance story in final selection`.
+- JEV Stage-1 prefilter timed out at 60s and failed open; later JEV ranking
+  nevertheless scored 81/81 candidates. The full run's JEV rank phase took
+  150s, including routing/topic overhead reported separately in telemetry.
+
+Conclusion: one numeric whole-set rank improves what the curator can see, but
+the six-slot cut, curator ordering, uncertain history decisions and Stage-3
+topic-first refill can still undo the editorial choice. A green workflow is
+not a quality acceptance. Do not merge PR #76 solely on this run; measure and
+fix those downstream interactions before another production overwrite.

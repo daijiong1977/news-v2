@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T08:49:42-04:00",
+  "updated_at": "2026-09-28T09:36:18-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-neutral-selection",
-      "purpose": "News 候选中立性、三语成稿复核及 JEV 后 29 篇以内的整组编号排序临时 PR 分支；尚未合并或部署。",
+      "purpose": "News 候选中立性、三语成稿复核及 JEV 后 29 篇以内的整组编号排序临时 PR 分支；代码未合并 main，但 2026-09-28 的手动 full round 从该分支发布了当天内容。",
       "status": "feature_unmerged"
     }
   ],
@@ -23,8 +23,8 @@
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_homepage_http_200_verified",
-      "verified_at": "2026-09-28T03:56:00-04:00"
+      "status": "public_2026-09-28_article_payload_verified_after_branch_run",
+      "verified_at": "2026-09-28T09:36:18-04:00"
     },
     {
       "environment": "production_alias",
@@ -32,8 +32,8 @@
       "url": "https://news.6ray.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_homepage_http_200_verified",
-      "verified_at": "2026-09-28T03:56:00-04:00"
+      "status": "public_2026-09-28_article_payload_verified_after_branch_run",
+      "verified_at": "2026-09-28T09:36:18-04:00"
     }
   ],
   "files": [
@@ -191,6 +191,12 @@
       "date": "2026-09-28",
       "title": "逐篇吸引力分不足以决定 News 六篇送审",
       "note": "9 月 28 日候选中，大熊猫政府协议进入六篇，但美国选举核验与 AI 安全规则分别排在 JEV 目录第 14 和第 8，原主编根本看不到。未合并 PR #76 加入 JEV 后最多 29 篇的 DeepSeek 整组比较，只接受完整纯数字排列，再按来源与题材选六篇；本地回放三者均进入送审。排名仍可能把七天内相似事件排高，不能代替后续独立历史、儿童安全与中立复核；未验证自然运行，不视为已上线。",
+      "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "真实 full round 暴露选稿与补稿的断层",
+      "note": "PR #76 的提交 5b1fbb3 于 2026-09-28 手动运行完整流水线并覆盖当天网站内容，九篇 SAFE 且网站同步成功，但 News 没有达到期望的熊猫、美国选举核验、AI 安全三篇：选举稿在六篇之外，AI 安全稿历史复核不确定，熊猫列为主编第五名后被题材优先补稿越过；最终发布委内瑞拉释放被拘者、学校 AI 实验、缅因州参议员选战，并触发无高重要性稿告警。JEV 初筛 60 秒超时、后续打分仍完成。Actions 成功不代表编辑质量合格；PR 代码仍未合并 main。",
       "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
     }
   ]
