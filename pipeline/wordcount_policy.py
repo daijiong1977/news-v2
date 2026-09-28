@@ -9,6 +9,10 @@ STANDARD_REPAIR_TARGETS = {"easy": (150, 250), "middle": (320, 380)}
 SHORT_FUN_BANDS = {"easy": (120, 220), "middle": (250, 350)}
 SHORT_FUN_TARGETS = {"easy": (135, 185), "middle": (265, 315)}
 
+# Science explainers may need room for an analogy and the underlying mechanism.
+# This raises the ceiling only; it does not require every Science story to grow.
+SCIENCE_BANDS = {"easy": (140, 320), "middle": (300, 520)}
+
 
 def is_short_fun_source(category: str | None, source_word_count: int | None) -> bool:
     try:
@@ -20,7 +24,8 @@ def is_short_fun_source(category: str | None, source_word_count: int | None) -> 
 
 def body_band(level: str, *, category: str | None = None,
               source_word_count: int | None = None) -> tuple[int, int]:
-    bands = SHORT_FUN_BANDS if is_short_fun_source(category, source_word_count) else STANDARD_BANDS
+    bands = (SHORT_FUN_BANDS if is_short_fun_source(category, source_word_count)
+             else SCIENCE_BANDS if category == "Science" else STANDARD_BANDS)
     return bands[level]
 
 

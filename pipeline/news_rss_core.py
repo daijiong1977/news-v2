@@ -863,7 +863,8 @@ people are doing about it. Do not erase an essential fact or invent hope.
 You will receive N source articles. For EACH, produce THREE variants:
 
 1. easy_en — English. READER IS A 10-YEAR-OLD (grade 4).
-   · body: 150-250 words (STRICT — count before returning).
+   · body: 150-250 words (STRICT — count before returning, unless a
+     category-specific length override is supplied below).
      This is a SHORT read on purpose — a 10-year-old loses patience
      before the scroll ends. Say the thing, give one vivid detail,
      stop. Over 250 → cut the least essential paragraph, do not
@@ -880,7 +881,8 @@ You will receive N source articles. For EACH, produce THREE variants:
      punctuation. Stay under 50 words — the kid is scanning, not reading.
 
 2. middle_en — English. READER IS A MIDDLE SCHOOLER (grade 7-8, age 12-14).
-   · body: target 320-380 words; HARD MAXIMUM 400 words.
+   · body: target 320-380 words; HARD MAXIMUM 400 words unless a
+     category-specific length override is supplied below.
      STRICT — count silently before returning.
      Under 320 → add more vivid details, specific names, or a direct
      quote from the source. NEVER invent.
@@ -984,6 +986,11 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "everyday analogies — \"the size of a grain of rice\", \"like a\n"
         "1000-piece jigsaw puzzle\". Explain the concept BEFORE introducing\n"
         "the jargon. End with WHY it matters or WHAT comes next.\n"
+        "Use the normal body lengths when they explain the story clearly.\n"
+        "If the real source provides enough detail and the mechanism needs\n"
+        "more explanation, easy may be up to 300 words and middle up to\n"
+        "500 words. These Science ceilings override the general hard caps.\n"
+        "Do not add filler, unsupported analogies, or invented facts.\n"
     ),
     "Fun": (
         "CATEGORY: Fun.\n"

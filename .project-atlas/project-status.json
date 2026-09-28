@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T16:29:35-04:00",
+  "updated_at": "2026-09-28T16:33:46-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "拟议的 Fun 正文门槛 250 词（News/Science 保持 350，JEV 初筛顺序不变）；News/Fun 最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在高于送审容量时调用；JEV 移除未使用的 want 判断并缩短初筛故障等待。待 PR 审核非生产。",
+      "purpose": "拟议的 Fun 原文门槛 250 词和短稿成稿规则、Science 成稿解释篇幅上限提高（原文门槛不变，JEV 顺序不变）；News/Fun 最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在富余合格候选时调用。待 PR 审核非生产。",
       "status": "proposed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "pipeline/wordcount_policy.py",
-      "purpose": "标准与短原文 Fun 的 easy/middle 成稿词数区间，供生成审查、次日质量摘要和自动修复共用。",
+      "purpose": "标准、短原文 Fun 与可较长 Science 解释稿的 easy/middle 成稿词数区间，供生成审查、次日质量摘要和自动修复共用。",
       "location": "repo"
     },
     {
@@ -281,6 +281,12 @@
       "date": "2026-09-28",
       "title": "保持 JEV 在正文探测前，仅放宽 Fun 原文门槛至 250 词",
       "note": "完整网页抓取会增加网络时间，故保留 RSS 标题/摘要 JEV 初筛→正文探测的原顺序；正文词数关本身不耗模型，但不会减少 JEV 初筛调用。拟议分支将 Fun 最少原文词数从 350 调为 250，News/Science 维持 350，上限 1200。250–349 词 Fun 原文改写目标缩为 easy 135–185、middle 265–315，并让发布后的质量摘要与自动修复识别同一短稿门槛；BBC Tennis 等候选可进入后续审核，223 词游泳稿仍会被挡。改写不得编造事实，仍需独立全文审核。仅完成本地测试，未合并或验证生产质量。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "Science 只放宽儿童成稿篇幅上限，不改变来源原文上限",
+      "note": "科学概念需要解释机制时，拟议分支允许 easy 最多约 300、middle 最多约 500 词；通常短篇仍按原目标，不能用编造细节凑字数。生成、次日质量摘要、自动修复共用 Science 长稿区间 easy 140–320、middle 300–520。Science 原文 350–1200 词筛选不变，News/Fun 成稿规则不受此项影响；独立全文儿童安全审核保留。尚未合并或验证生产质量。",
       "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]

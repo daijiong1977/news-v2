@@ -38,6 +38,19 @@ def test_short_fun_bands_align_generation_and_published_digest():
     assert not score_article({**payload, "category": "News"}, "middle")["body_ok"]
 
 
+def test_science_has_higher_optional_ceiling_than_news():
+    assert body_band("easy", category="Science") == (140, 320)
+    assert body_band("middle", category="Science") == (300, 520)
+    assert body_band("middle", category="News") == (300, 410)
+    payload = {"summary": "word " * 480, "category": "Science",
+               "source_name": "ScienceDaily", "image_url": "https://example.org/image.jpg"}
+    assert score_article(payload, "middle")["body_ok"]
+    assert not score_article({**payload, "category": "News"}, "middle")["body_ok"]
+    prompt = core.tri_variant_rewriter_input(
+        [(0, {"title": "A discovery", "body": "science " * 500})], category="Science")
+    assert "middle up to\n500 words" in prompt
+
+
 def test_repairs_long_middle_body(monkeypatch):
     calls = []
 

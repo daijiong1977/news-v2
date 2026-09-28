@@ -100,3 +100,16 @@ categories keep their prior bands. The rewriter and repair prompts require
 source-grounded details, and independent final safety/quality gates remain.
 No articles were republished; published quality and JEV billing impact require
 a future natural run.
+
+## Science explanatory length ceiling
+
+Science still uses the same source-body gate (350–1,200 words). For the
+published kid-facing rewrite, the ordinary target remains easy 150–250 and
+middle 320–380 words. When the source has enough verified detail and the
+concept needs more explanation, the Science prompt now permits up to 300 easy
+or 500 middle words; it does not require every Science piece to get longer.
+Generation QA, the next-day digest and auto-fix use matching Science bands
+(easy 140–320, middle 300–520). News and Fun bands are unchanged by this
+Science exception. The prompt still prohibits filler and invented facts, and
+the independent full-text child-safety review remains mandatory. This is a
+code/test change, not a measured production-quality improvement yet.

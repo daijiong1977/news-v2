@@ -177,6 +177,16 @@ def test_short_fun_lower_body_passes_final_gate_but_too_short_still_fails(monkey
     assert not kept and "word-count QA" in rejected[0]["_safety_eval"]["reason"]
 
 
+def test_science_long_explainer_passes_final_length_gate(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
+    article = _article(sid=0, easy_words=285, middle_words=480)
+    kept, rejected = _with_fake_vet(
+        _clean_scores(0),
+        lambda: core.filter_safe_rewrites({"articles": [article]}, category="Science"),
+    )
+    assert len(kept) == 1 and not rejected
+
+
 def test_easy_band_aligned_with_digest_gate():
     """The easy word band is stated in four places: the rewriter prompt, the
     repair targets, the generation-time QA band, and quality_digest's gate.
