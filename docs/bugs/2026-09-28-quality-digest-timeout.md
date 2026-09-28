@@ -1,0 +1,7 @@
+# Quality digest cancelled before sending (2026-09-28)
+
+The scheduled Daily pipeline run [36391689636](https://github.com/daijiong1977/news-v2/actions/runs/36391689636) was **not** a no-op. `full_round` ran from 07:27:16 to 07:34:47 UTC (450.7 seconds), produced nine stories (three per section), and verified a fresh kidsnews-v2 sync commit. The complete Actions job ran 07:26:51–07:35:15 UTC.
+
+The following quality-digest run [36392460946](https://github.com/daijiong1977/news-v2/actions/runs/36392460946) started at 07:35:21 UTC. Its 92-minute-from-trigger anchor required an 83-minute sleep (`4995s`) before autofix and email. The job's `timeout-minutes: 75` cancelled it at 08:50:34 UTC, before the `Send digest` step. Fast pipelines therefore made the quality email *less* likely to be sent. The same configuration could fail on any pipeline completing in less than about 17 minutes, even with no autofix time.
+
+Increase the job timeout to 120 minutes, preserving the intended 92-minute post-trigger delivery target and leaving at least 28 minutes for autofix, digest generation and email. A regression test checks that the job limit exceeds the anchor by at least 20 minutes. No historical email is automatically resent by this change. The `parent-digest` schedule is a separate workflow and was manually disabled at the user's request; do not confuse its delivery status with this quality email.
