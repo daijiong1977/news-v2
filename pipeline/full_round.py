@@ -824,10 +824,15 @@ def _partition_probe_results(results: list[dict], min_words: int,
 
 
 PROBE_MIN_WORDS_BY_CATEGORY = {"News": 350, "Science": 350, "Fun": 250}
+PROBE_MAX_WORDS_BY_CATEGORY = {"News": 1200, "Science": 1500, "Fun": 1200}
 
 
 def _probe_min_words(category: str) -> int:
     return PROBE_MIN_WORDS_BY_CATEGORY.get(category, 350)
+
+
+def _probe_max_words(category: str) -> int:
+    return PROBE_MAX_WORDS_BY_CATEGORY.get(category, 1200)
 
 
 def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
@@ -2063,7 +2068,6 @@ def main_mega() -> None:
     # eligible briefs (RSS feed order ≈ newest first). The fetched
     # article dict is cached on the brief as "_probe_art" so
     # verify_picks_lazy can skip re-fetching downstream.
-    PROBE_MAX_WORDS = 1200
     PROBE_MAX_PER_CAT = 10
     # Keep the full probed catalog so Stage 3 can continue searching after
     # safety or event rejections; only curator input remains capped.
@@ -2086,8 +2090,8 @@ def main_mega() -> None:
     def _stage1_5_runner():
         from concurrent.futures import ThreadPoolExecutor
         t0 = time.monotonic()
-        log.info("=== MEGA Stage 1.5 — body probe + length gate (%s ≤ wc ≤ %d) ===",
-                 PROBE_MIN_WORDS_BY_CATEGORY, PROBE_MAX_WORDS)
+        log.info("=== MEGA Stage 1.5 — body probe + length gate (min %s; max %s) ===",
+                 PROBE_MIN_WORDS_BY_CATEGORY, PROBE_MAX_WORDS_BY_CATEGORY)
         out: dict[str, list[dict]] = {}
         kept_total = 0
         dropped_thin = 0
@@ -2104,7 +2108,7 @@ def main_mega() -> None:
             with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
                 results = list(ex.map(_probe_one, briefs))
             kept, tally = _partition_probe_results(
-                results, _probe_min_words(cat), PROBE_MAX_WORDS, probe_cap)
+                results, _probe_min_words(cat), _probe_max_words(cat), probe_cap)
             out[cat] = kept
             per_source[cat] = tally
             kept_total += len(kept)

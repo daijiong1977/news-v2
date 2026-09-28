@@ -51,6 +51,14 @@ def test_science_has_higher_optional_ceiling_than_news():
     assert "middle up to\n500 words" in prompt
 
 
+def test_science_1500_word_source_reaches_rewriter_without_local_truncation():
+    body = " ".join(["science"] * 1499 + ["SCIENCE_END_MARKER"])
+    prompt = core.tri_variant_rewriter_input(
+        [(0, {"title": "A detailed finding", "body": body, "word_count": 1500})],
+        category="Science")
+    assert "SCIENCE_END_MARKER" in prompt
+
+
 def test_repairs_long_middle_body(monkeypatch):
     calls = []
 

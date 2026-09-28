@@ -80,6 +80,17 @@ def test_fun_short_sources_pass_body_gate_but_news_and_science_do_not():
             ([250, 254, 320, 349, 350] if category == "Fun" else [350])
 
 
+def test_science_source_ceiling_is_1500_without_expanding_news_or_fun():
+    assert fr._probe_max_words("Science") == 1500
+    assert fr._probe_max_words("News") == fr._probe_max_words("Fun") == 1200
+    results = [_r("publisher", i, wc) for i, wc in enumerate((1200, 1201, 1499, 1500, 1501))]
+    for category in ("News", "Science", "Fun"):
+        kept, _ = fr._partition_probe_results(
+            results, fr._probe_min_words(category), fr._probe_max_words(category), cap=10)
+        assert [b["word_count"] for b in kept] == \
+            ([1200, 1201, 1499, 1500] if category == "Science" else [1200])
+
+
 def test_jev_checkpoint_precedes_body_probe_and_ranking():
     from pipeline.checkpoints import STAGES
     assert STAGES.index("stage1") < STAGES.index("stage1_jev") \

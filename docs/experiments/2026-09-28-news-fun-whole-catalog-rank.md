@@ -86,8 +86,9 @@ counting uses no model, but because it stays after JEV it does not save JEV
 prefilter calls. The cached body is still reused during later verification.
 
 Fun's source-body minimum is now 250 words, matching the downstream
-verification minimum; News/Science remain at 350 and all categories retain
-the 1,200-word upper bound. This makes known 254-word BBC Tennis, 270-word
+verification minimum; News/Science remain at 350. News/Fun retain the
+1,200-word source upper bound, while a later Science-only test lifts its
+source upper bound to 1,500 words. This makes known 254-word BBC Tennis, 270-word
 TIME for Kids, 320-word DOGO pelican, and 334-word BBC Tennis candidates
 eligible for **later assessment**. The 223-word BBC Swimming world-record item
 still fails. For a 250–349-word Fun source, the per-item rewrite prompt targets
@@ -103,7 +104,11 @@ a future natural run.
 
 ## Science explanatory length ceiling
 
-Science still uses the same source-body gate (350–1,200 words). For the
+Science now uses a source-body gate of 350–1,500 words in this PR; its
+upper bound was increased from 1,200 only after the rewrite-ceiling change.
+The 2026-09-28 read-only pre-DeepSeek replay found no Science original in
+the 1,201–1,500-word interval, so this increase rescued no candidate that
+day; see [the full preview](2026-09-28-pre-deepseek-preview.md). For the
 published kid-facing rewrite, the ordinary target remains easy 150–250 and
 middle 320–380 words. When the source has enough verified detail and the
 concept needs more explanation, the Science prompt now permits up to 300 easy

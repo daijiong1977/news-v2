@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T16:33:46-04:00",
+  "updated_at": "2026-09-28T17:49:42-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "拟议的 Fun 原文门槛 250 词和短稿成稿规则、Science 成稿解释篇幅上限提高（原文门槛不变，JEV 顺序不变）；News/Fun 最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在富余合格候选时调用。待 PR 审核非生产。",
+      "purpose": "拟议的 Fun 原文门槛 250 词和短稿成稿规则、Science 成稿解释篇幅上限提高并试增原文上限至 1500（JEV 顺序不变）；News/Fun 最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在富余合格候选时调用。待 PR 审核非生产。",
       "status": "proposed"
     },
     {
@@ -54,7 +54,7 @@
   "files": [
     {
       "path": "pipeline/full_round.py",
-      "purpose": "每日采集、JEV 初筛、正文词数过滤（News/Science 350、Fun 250）、候选补稿、安全审核和发布编排。",
+      "purpose": "每日采集、JEV 初筛、正文词数过滤（News 350–1200、Science 350–1500、Fun 250–1200）、候选补稿、安全审核和发布编排。",
       "location": "repo"
     },
     {
@@ -75,6 +75,11 @@
     {
       "path": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md",
       "purpose": "News/Fun 整组排序实验、9 月 26–28 日候选回放与安全上线边界。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/experiments/2026-09-28-pre-deepseek-preview.md",
+      "purpose": "2026-09-28 只读预览采集至 JEV 完整目录、DeepSeek 输入前的 News/Fun 标题及 Science 候选和词数上限影响。",
       "location": "repo"
     },
     {
@@ -285,9 +290,15 @@
     },
     {
       "date": "2026-09-28",
-      "title": "Science 只放宽儿童成稿篇幅上限，不改变来源原文上限",
-      "note": "科学概念需要解释机制时，拟议分支允许 easy 最多约 300、middle 最多约 500 词；通常短篇仍按原目标，不能用编造细节凑字数。生成、次日质量摘要、自动修复共用 Science 长稿区间 easy 140–320、middle 300–520。Science 原文 350–1200 词筛选不变，News/Fun 成稿规则不受此项影响；独立全文儿童安全审核保留。尚未合并或验证生产质量。",
+      "title": "Science 成稿先放宽，随后原文上限试增至 1500",
+      "note": "科学概念需要解释机制时，拟议分支允许 easy 最多约 300、middle 最多约 500 词；通常短篇仍按原目标，不能用编造细节凑字数。生成、次日质量摘要、自动修复共用 Science 长稿区间 easy 140–320、middle 300–520。随后仅将 Science 原文上限由 1200 提至 1500（下限仍350），News/Fun 成稿规则不受此项影响；独立全文儿童安全审核保留。9月28日预览中没有 1201–1500 词 Science 原文，故当天候选数未受影响。尚未合并或验证生产质量。",
       "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "预览必须停在 DeepSeek 前且不写生产状态",
+      "note": "用当前来源的只读本地回放可检查原始采集、历史/禁词过滤、JEV、正文词数、分栏和完整目录，再停止于整组 DeepSeek 排名前。17:45 ET 回放约47.5秒，News/Science/Fun 目录29/20/21；Science 1201–1500 词为零，Fun 254词 BBC Tennis 通过。JEV 排名前列仍有战争稿与偏消费 Fun，预览不能当作最终安全/编辑验证；没有创建 run/checkpoint、DeepSeek 调用或发布。第一次终端输出被截断，实际做了两次 JEV 回放，费用需从控制台核对。",
+      "source_ref": "docs/experiments/2026-09-28-pre-deepseek-preview.md"
     }
   ]
 }
