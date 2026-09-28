@@ -60,6 +60,21 @@ def test_independent_vet_overrides_clean_self_scores():
     assert rejected[0]["safety_self"]["violence"] == 0     # self kept for telemetry
 
 
+def test_independent_vet_reads_chinese_and_english_cards(monkeypatch):
+    article = _article()
+    article["zh"] = {"headline": "公平守护者被砍掉", "summary": "投诉被直接扔掉"}
+    seen = []
+    def fake(system, user, max_tokens, **kw):
+        seen.append((system, user))
+        return _clean_scores(0, bias=3)
+    monkeypatch.setattr(core, "deepseek_call", fake)
+    scores = core.independent_safety_vet([article])
+    assert scores[0]["bias"] == 3
+    assert "公平守护者被砍掉" in seen[0][1]
+    assert "published Chinese headline" in seen[0][1]
+    assert "card summaries" in seen[0][0]
+
+
 def test_independent_vet_failure_falls_back_to_self_scores():
     art = _article(sid=0)          # self-scores all 0 → PASS on fallback
     kept, rejected = _with_fake_vet(
@@ -176,8 +191,13 @@ def _safety(**dims):
 def test_moderate_news_dims_pass():
     # War/politics/conflict at a MODERATE level (3) is allowed for a news site.
     assert core.evaluate_rewriter_safety(
-        _safety(violence=3, fear=3, distress=3, adult_themes=3, bias=3)
+        _safety(violence=3, fear=3, distress=3, adult_themes=3, bias=2), category="News"
     )["verdict"] == "PASS"
+
+
+def test_prominent_one_sided_framing_rejected_at_3():
+    assert core.evaluate_rewriter_safety(_safety(bias=3), category="News")["verdict"] == "REJECT"
+    assert core.evaluate_rewriter_safety(_safety(bias=3), category="Fun")["verdict"] == "PASS"
 
 
 def test_severe_news_dim_rejected():
@@ -223,6 +243,40 @@ def test_hard_news_repair_that_fails_fresh_vet_stays_rejected(monkeypatch):
     kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
     assert not kept and len(rejected) == 1
     assert rejected[0]["_safety_eval"]["scores"]["violence"] == 4
+
+
+def test_news_bias_gets_one_source_grounded_rewrite_and_fresh_vet(monkeypatch):
+    article = _article()
+    article["zh"] = {"headline": "一座快饿死的城市", "summary": "一方的说法"}
+    scores = [{**{d: 0 for d in core.SAFETY_DIMS}, "bias": 3},
+              {d: 0 for d in core.SAFETY_DIMS}]
+    reviews = []
+    def fake_vet(arts):
+        reviews.append(arts[0]["zh"]["headline"])
+        return {0: scores.pop(0)}
+    def fake_rewrite(inputs, category, editorial_feedback):
+        assert category == "News" and inputs[0][1]["body"] == "source facts and both responses"
+        assert "Do not invent" in editorial_feedback
+        revised = _article()
+        revised["zh"] = {"headline": "乌克兰空投食物，双方回应当地短缺", "summary": "双方说法各有归属"}
+        return {"articles": [revised]}
+    monkeypatch.setattr(core, "independent_safety_vet", fake_vet)
+    monkeypatch.setattr(core, "tri_variant_rewrite", fake_rewrite)
+    kept, rejected = core.filter_safe_rewrites(
+        {"articles": [article]}, {0: {"body": "source facts and both responses"}},
+        category="News")
+    assert not rejected and len(kept) == 1
+    assert reviews == ["一座快饿死的城市", "乌克兰空投食物，双方回应当地短缺"]
+    assert kept[0]["_independent_vet_status"] == "scored_after_neutrality_repair"
+
+
+def test_news_bias_with_no_source_for_repair_stays_rejected(monkeypatch):
+    article = _article()
+    monkeypatch.setattr(core, "independent_safety_vet", lambda arts: {
+        0: {**{d: 0 for d in core.SAFETY_DIMS}, "bias": 3}})
+    kept, rejected = core.filter_safe_rewrites({"articles": [article]}, category="News")
+    assert not kept and len(rejected) == 1
+    assert "bias=3" in rejected[0]["_safety_eval"]["reason"]
 
 
 def test_strict_or_non_news_rejection_does_not_enter_repair(monkeypatch):

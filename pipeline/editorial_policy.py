@@ -70,6 +70,27 @@ def important_news(brief: dict) -> bool:
             and rank.get("category_fit", 0) >= .60)
 
 
+def news_editorial_strength(brief: dict) -> float | None:
+    """Comparable News value for *already eligible* candidates.
+
+    Topic and source variety are soft preferences; they should not displace a
+    much stronger safe civic story. Missing JEV scores retain the old
+    diversity-only ordering instead of being treated as zero-quality news.
+    """
+    rank = brief.get("_jev_rank") or {}
+    pick = rank.get("editorial_pick")
+    if pick is None:
+        return None
+    value = float(rank.get("section_value") or 0)
+    global_rank = rank.get("global_rank")
+    # The whole-set comparison carries information that isolated JEV scoring
+    # misses, especially for timely civic explainers. It is a bounded signal,
+    # never an eligibility or safety override.
+    rank_bonus = (.02 * max(0, 6 - int(global_rank))
+                  if isinstance(global_rank, int) and global_rank > 0 else 0)
+    return float(pick) + .04 * min(4, max(0, value)) + rank_bonus
+
+
 def prefer_important_news(items: list[dict], limit: int = 3) -> list[dict]:
     """Keep one qualified important story within already eligible/safe choices."""
     if any(important_news(x.get("brief") or {}) for x in items[:limit]):
@@ -140,6 +161,15 @@ def prefer_final_editorial_diversity(category, items, limit=3):
         sources = {getattr(x.get("source"), "name", "") for x in chosen} - {""}
         important = category == "News" and any(important_news(x.get("brief") or {}) for x in chosen)
         science_publishers = min(SCIENCE_MIN_PUBLISHERS, len(publishers)) if category == "Science" else 0
+        if category == "News":
+            strengths = [news_editorial_strength(x.get("brief") or {}) for x in chosen]
+            if all(s is not None for s in strengths):
+                # One extra topic is worth 0.06, one extra feed 0.02; a
+                # substantially stronger vetted story therefore remains in
+                # the edition even when its broad topic repeats.
+                score = sum(strengths) + .06 * len(topics) + .02 * len(sources)
+                return (important, 0, round(score, 6), len(topics), len(sources),
+                        -sum(indices), tuple(-i for i in indices))
         return (important, science_publishers, len(topics), len(publishers), len(sources),
                 -sum(indices), tuple(-i for i in indices))
 

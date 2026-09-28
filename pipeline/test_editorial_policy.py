@@ -45,6 +45,54 @@ def test_no_second_eligible_publisher_does_not_invent_one():
     assert ep.prefer_science_publishers(rows) == rows
 
 
+def test_news_final_soft_diversity_does_not_displace_much_stronger_safe_story():
+    def item(title, topic, strength, source_name):
+        return {"source": source(source_name, f"{source_name}.example"),
+                "brief": {"title": title, "_jev_topic_group": topic,
+                          "_jev_rank": {"editorial_pick": strength,
+                                        "section_value": 1, "category_fit": .9,
+                                        "floor": .4}}}
+
+    rows = [item("Venezuela", "international_relations", .69, "bbc"),
+            item("Panda diplomacy", "international_relations", .82, "pbs"),
+            item("Election security", "us_politics", .49, "npr"),
+            item("Routine school AI", "technology_business", .50, "cbc")]
+    chosen = ep.prefer_final_editorial_diversity("News", rows)[:3]
+    assert "Panda diplomacy" in [x["brief"]["title"] for x in chosen]
+
+
+def test_news_final_prefers_new_topic_when_quality_is_close():
+    rows = [
+        {"source": source(name, f"{name}.example"),
+         "brief": {"title": name, "_jev_topic_group": topic,
+                   "_jev_rank": {"editorial_pick": score, "section_value": 1,
+                                 "category_fit": .9, "floor": .4}}}
+        for name, topic, score in (
+            ("a", "international_relations", .65),
+            ("b", "international_relations", .61),
+            ("c", "us_politics", .60),
+            ("d", "technology_business", .58))]
+    chosen = ep.prefer_final_editorial_diversity("News", rows)[:3]
+    assert len({x["brief"]["_jev_topic_group"] for x in chosen}) == 3
+
+
+def test_news_global_rank_can_rescue_undervalued_civic_explainer():
+    rows = []
+    for title, topic, pick_score, value, global_rank, outlet in (
+            ("Panda diplomacy", "international_relations", .82, 1.56, 3, "pbs"),
+            ("Venezuela", "international_relations", .69, 2.24, 7, "bbc"),
+            ("Maricopa election verification", "us_politics", .49, .9, 1, "npr"),
+            ("Routine school AI", "technology_business", .50, .96, 4, "npr")):
+        rows.append({"source": source(outlet, f"{outlet}.example"),
+                     "brief": {"title": title, "_jev_topic_group": topic,
+                               "_jev_rank": {"editorial_pick": pick_score,
+                                             "section_value": value,
+                                             "global_rank": global_rank,
+                                             "category_fit": .9, "floor": .4}}})
+    chosen = ep.prefer_final_editorial_diversity("News", rows)[:3]
+    assert "Maricopa election verification" in [x["brief"]["title"] for x in chosen]
+
+
 def test_science_ranking_caps_publisher_not_each_feed():
     class Pairs:
         def relation(self, *args, **kwargs):

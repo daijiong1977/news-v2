@@ -87,6 +87,30 @@ def test_stage3_spare_prefers_new_topic_and_keeps_unattempted(monkeypatch):
     assert [s["_winner_brief"]["title"] for s in pool] == ["Another storm"]
 
 
+def test_news_refill_keeps_strong_safe_story_over_weak_new_topic(monkeypatch):
+    attempts = []
+    monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: (
+        attempts.append(articles[0][1]["title"]) or {"articles": [{"source_id": 0}]}))
+    monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources=None, **kwargs: (result["articles"], []))
+
+    def spare(title, group, pick, value):
+        brief = {"title": title, "_jev_topic_group": group,
+                 "_jev_rank": {"editorial_pick": pick, "section_value": value,
+                               "floor": .4},
+                 "_probe_art": {"title": title, "link": title}}
+        return {"_unverified_spare": True, "_winner_brief": brief,
+                "source": Source(title), "_rank": title}
+
+    pool = [spare("Panda diplomacy", "international_relations", .82, 1.56),
+            spare("Routine school AI", "technology_business", .50, .96)]
+    winner, _ = fr.promote_spare_and_rewrite(
+        "News", pool, used_topic_groups={"international_relations"})
+    assert winner["winner"]["title"] == "Panda diplomacy"
+    assert attempts == ["Panda diplomacy"]
+    assert [s["_winner_brief"]["title"] for s in pool] == ["Routine school AI"]
+
+
 def test_science_and_fun_soft_topic_swaps():
     science = [_pick(1, "Moon mission", "astronomy_space", "A"),
                _pick(2, "Star map", "astronomy_space", "B"),

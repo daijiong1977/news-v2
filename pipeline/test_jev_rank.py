@@ -27,6 +27,7 @@ class Fake:
         self.fit_by_title: dict[str, float] = {}
         self.sports_priority_by_title: dict[str, float] = {}
         self.value_by_title: dict[str, float] = {}
+        self.neutrality_risk_by_title: dict[str, float] = {}
 
     def system_one(self, state, questions):
         if self.delay:
@@ -48,6 +49,9 @@ class Fake:
                     score=self.sports_priority_by_title.get(t, 0))
             if "section_value" in questions:
                 answers["section_value"] = SimpleNamespace(score=self.value_by_title.get(t, 2))
+            if "neutrality_risk" in questions:
+                answers["neutrality_risk"] = SimpleNamespace(
+                    score=self.neutrality_risk_by_title.get(t, 0))
             return SimpleNamespace(answers=answers)
         self.pair_calls += 1
         if self.pairs_fail:
@@ -176,6 +180,43 @@ def test_deep_dig_never_admits_news_from_sports_article_url():
     fake.by_title[sport["title"]] = 0.9
     fake.fit_by_title = {sport["title"]: 0.99}
     assert jr.gate_deep_dig_category("News", [sport], client=fake) == []
+
+
+def test_news_neutrality_gate_excludes_loaded_briefs_even_from_refill_catalog():
+    loaded = [
+        _b("Fairness protectors cut in half, leaving disabled children helpless",
+           src="A", pick=0.98),
+        _b("Aid airdrop saves starving city as one army blocks every escape",
+           src="B", pick=0.95),
+    ]
+    factual = _b("Government reports office closures and complaint backlog",
+                 src="C", pick=0.70)
+    attributed = _b("Officials dispute cause of food shortage near front line",
+                    src="D", pick=0.65)
+    fake = Fake()
+    fake.neutrality_risk_by_title = {
+        loaded[0]["title"]: 3.0,
+        loaded[1]["title"]: 4.0,
+        attributed["title"]: 2.0,
+    }
+    for b in loaded + [factual, attributed]:
+        fake.by_title[b["title"]] = b["_p"]
+    out, report = jr.rank_briefs({"News": loaded + [factual, attributed]}, client=fake)
+    assert _titles(out["News"]) == [factual["title"], attributed["title"]]
+    assert len([item for item in report["skipped"]
+                if item["why"] == "one-sided or unsupported framing"]) == 2
+    assert attributed["_jev_rank"]["neutrality_risk"] == 2.0
+    assert fake.rank_calls == 4  # neutrality rides in the existing per-brief call
+
+
+def test_news_neutrality_gate_also_applies_to_late_deep_dig():
+    loaded = _b("One side blamed for every shortage", pick=0.9)
+    factual = _b("Aid groups describe food deliveries and disputed access", pick=0.8)
+    fake = Fake()
+    fake.by_title = {b["title"]: b["_p"] for b in (loaded, factual)}
+    fake.neutrality_risk_by_title = {loaded["title"]: 3.0,
+                                      factual["title"]: 2.0}
+    assert jr.gate_deep_dig_category("News", [loaded, factual], client=fake) == [factual]
 
 
 def test_deep_dig_category_gate_fails_closed_when_jev_unavailable():

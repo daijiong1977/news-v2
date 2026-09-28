@@ -1079,8 +1079,9 @@ def promote_spare_and_rewrite(
     on success or (None, None) if no spare survives verify+rewrite+vet.
 
     `used_source_names` is the set of source.name strings already in
-    the surviving top 3. The function prefers another topic group, then
-    follows the ranked candidate order. A repeated source is eligible
+    the surviving top 3. News uses scored editorial value with a small
+    topic bonus; the other sections prefer another topic group, then
+    follow the ranked candidate order. A repeated source is eligible
     unless `require_new_source` is set for a diversity-only pass.
 
     `used_titles` are the headlines already shipping — a probe-pool spare
@@ -1092,6 +1093,7 @@ def promote_spare_and_rewrite(
     from .jev_rank import CATEGORY_FIT_MIN
     from .mega_curator import briefs_same_event
     from .news_topics import topic_group
+    from .editorial_policy import news_editorial_strength
 
     used = set(used_source_names or ())
     shipped_briefs = list(used_briefs or ())
@@ -1169,13 +1171,19 @@ def promote_spare_and_rewrite(
             kept[0],
         )
 
-    # Try another known topic group first. Within each tier, keep the
-    # pre-ranked catalog order so the strongest remaining article wins.
+    # Topic variety is a soft preference. In News, a much stronger scored
+    # candidate from an already-used broad group must not lose to a weak one.
+    # Unscored spares and the other sections retain the existing topic tiers.
     # Failed candidates are consumed; unattempted ones remain available.
-    def _priority(spare: dict) -> int:
+    def _priority(spare: dict):
         brief = spare.get("_winner_brief") or {}
         label = topic_group(brief)
         repeats_topic = bool(topics_used) and (not label or label in topics_used)
+        if cat == "News":
+            strength = news_editorial_strength(brief)
+            if strength is not None:
+                return (0, -(strength + (0 if repeats_topic else .06)))
+            return (1, int(repeats_topic))
         return int(repeats_topic)
 
     for spare in sorted(spares, key=_priority):
@@ -2155,9 +2163,10 @@ def main_mega() -> None:
             return _with_topics(_legacy_cut(rank_input))
         log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
         try:
+            recent_titles_by_cat = {cat: _recent_published_titles(today, category=cat)
+                                    for cat in rank_input}
             ranked, report = jev_rank.rank_briefs(
-                rank_input, recent_titles={cat: _recent_published_titles(today, category=cat)
-                                           for cat in rank_input})
+                rank_input, recent_titles=recent_titles_by_cat)
             log.info("  jev: %s", report["jev"])
             for cat, sent in report["sent"].items():
                 log.info("  [%s] %s: %s", cat,
@@ -2179,7 +2188,13 @@ def main_mega() -> None:
                        past_event_output_tokens=report["past_event_output_tokens"],
                        below_floor=report.get("below_floor", {}))
             if applied:
-                return _with_topics(ranked)
+                ranked = _with_topics(ranked)
+                from .news_global_rank import rerank_news_catalog
+                news_t0 = time.monotonic()
+                ranked["News"], news_report = rerank_news_catalog(
+                    ranked.get("News") or [], recent_titles_by_cat.get("News") or [])
+                _set_phase("news_global_rank", news_t0, **news_report)
+                return ranked
         except Exception as e:  # noqa: BLE001 — an optional stage must never break the run
             log.warning("  jev_rank stage failed (%s) — using the legacy cut", e)
         for b in (b for bs in rank_input.values() for b in bs):
