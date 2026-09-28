@@ -2155,9 +2155,10 @@ def main_mega() -> None:
             return _with_topics(_legacy_cut(rank_input))
         log.info("=== MEGA Stage 1.7 — Jev ranking (%s) ===", rank_mode)
         try:
+            recent_titles_by_cat = {cat: _recent_published_titles(today, category=cat)
+                                    for cat in rank_input}
             ranked, report = jev_rank.rank_briefs(
-                rank_input, recent_titles={cat: _recent_published_titles(today, category=cat)
-                                           for cat in rank_input})
+                rank_input, recent_titles=recent_titles_by_cat)
             log.info("  jev: %s", report["jev"])
             for cat, sent in report["sent"].items():
                 log.info("  [%s] %s: %s", cat,
@@ -2179,7 +2180,13 @@ def main_mega() -> None:
                        past_event_output_tokens=report["past_event_output_tokens"],
                        below_floor=report.get("below_floor", {}))
             if applied:
-                return _with_topics(ranked)
+                ranked = _with_topics(ranked)
+                from .news_global_rank import rerank_news_catalog
+                news_t0 = time.monotonic()
+                ranked["News"], news_report = rerank_news_catalog(
+                    ranked.get("News") or [], recent_titles_by_cat.get("News") or [])
+                _set_phase("news_global_rank", news_t0, **news_report)
+                return ranked
         except Exception as e:  # noqa: BLE001 — an optional stage must never break the run
             log.warning("  jev_rank stage failed (%s) — using the legacy cut", e)
         for b in (b for bs in rank_input.values() for b in bs):

@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T07:32:24-04:00",
+  "updated_at": "2026-09-28T08:49:42-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-neutral-selection",
-      "purpose": "News 候选中立性与三语成稿复核的临时 PR 分支；尚未合并或部署。",
+      "purpose": "News 候选中立性、三语成稿复核及 JEV 后 29 篇以内的整组编号排序临时 PR 分支；尚未合并或部署。",
       "status": "feature_unmerged"
     }
   ],
@@ -48,6 +48,11 @@
       "location": "repo"
     },
     {
+      "path": "pipeline/news_global_rank.py",
+      "purpose": "DeepSeek 对最多 29 篇合格 News 候选返回纯编号排列，并据此决定六篇送审顺序；失败时回退 JEV。",
+      "location": "repo"
+    },
+    {
       "path": "pipeline/mega_curator.py",
       "purpose": "主编排序、栏目题材与来源多样性；News 入选前复核中立表达可行性。",
       "location": "repo"
@@ -80,6 +85,11 @@
     {
       "path": "docs/bugs/2026-09-28-news-neutrality-selection-and-cn-card.md",
       "purpose": "News 中立性问题根因、筛选与三语成稿复核策略及本地验证。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md",
+      "purpose": "News 全候选编号排序的漏选根因、流程边界、回放结果与后续调参点。",
       "location": "repo"
     },
     {
@@ -176,6 +186,12 @@
       "title": "中立性要同时约束选文可改写性与最终三语卡片",
       "note": "News 候选要判断现有证据是否足以做中立报道，但不可因战争、政治或残疾权益题材一概删除；原稿有立场可据真实双方说法调整。2026-09-28 两篇投诉稿的英文材料可中立改写，失衡主要出在未被独立审核的中文标题与卡片。独立复核应覆盖所有可见语言；严重偏向仅允许一次有来源的重写并复核，否则换备稿，不能编造对立观点。此修复目前只在未合并 PR 分支，本条不表示已上线。",
       "source_ref": "docs/bugs/2026-09-28-news-neutrality-selection-and-cn-card.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "逐篇吸引力分不足以决定 News 六篇送审",
+      "note": "9 月 28 日候选中，大熊猫政府协议进入六篇，但美国选举核验与 AI 安全规则分别排在 JEV 目录第 14 和第 8，原主编根本看不到。未合并 PR #76 加入 JEV 后最多 29 篇的 DeepSeek 整组比较，只接受完整纯数字排列，再按来源与题材选六篇；本地回放三者均进入送审。排名仍可能把七天内相似事件排高，不能代替后续独立历史、儿童安全与中立复核；未验证自然运行，不视为已上线。",
+      "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
     }
   ]
 }
