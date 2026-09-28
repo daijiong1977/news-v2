@@ -3,12 +3,17 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-27T13:04:06-04:00",
+  "updated_at": "2026-09-28T07:32:24-04:00",
   "branches": [
     {
       "name": "main",
       "purpose": "当前生产流水线；由合并后的 PR 更新。",
       "status": "production"
+    },
+    {
+      "name": "codex/news-neutral-selection",
+      "purpose": "News 候选中立性与三语成稿复核的临时 PR 分支；尚未合并或部署。",
+      "status": "feature_unmerged"
     }
   ],
   "deployments": [
@@ -19,7 +24,7 @@
       "audience": "儿童读者和家长",
       "branch": "main",
       "status": "public_homepage_http_200_verified",
-      "verified_at": "2026-09-27T11:40:00-04:00"
+      "verified_at": "2026-09-28T03:56:00-04:00"
     },
     {
       "environment": "production_alias",
@@ -28,7 +33,7 @@
       "audience": "儿童读者和家长",
       "branch": "main",
       "status": "public_homepage_http_200_verified",
-      "verified_at": "2026-09-27T12:51:00-04:00"
+      "verified_at": "2026-09-28T03:56:00-04:00"
     }
   ],
   "files": [
@@ -39,7 +44,17 @@
     },
     {
       "path": "pipeline/jev_rank.py",
-      "purpose": "JEV 评分、同事件筛选和完整候选目录。",
+      "purpose": "JEV 评分、News 中立可改写性判断、同事件筛选和完整候选目录。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/mega_curator.py",
+      "purpose": "主编排序、栏目题材与来源多样性；News 入选前复核中立表达可行性。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/news_rss_core.py",
+      "purpose": "三语改写、中文卡片生成、独立安全与中立性复核及必要时一次有据重写。",
       "location": "repo"
     },
     {
@@ -60,6 +75,11 @@
     {
       "path": "docs/editorial-category-routing.md",
       "purpose": "News、Science、Fun 分类与题材组调参说明。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-28-news-neutrality-selection-and-cn-card.md",
+      "purpose": "News 中立性问题根因、筛选与三语成稿复核策略及本地验证。",
       "location": "repo"
     },
     {
@@ -84,12 +104,12 @@
     },
     {
       "path": "/Users/jiong/myprojects/news-v2",
-      "purpose": "news-v2 本机主 checkout；本次停在旧专题分支，不能代替远端生产 main 判断。",
+      "purpose": "news-v2 本机主 checkout；目前位于 main，但生产状态仍以远端 main、Actions 和公开网站分别核验。",
       "location": "local"
     },
     {
       "path": "/Users/jiong/myprojects/news-v2-fun-source-pool",
-      "purpose": "news-v2 项目交接 PR #74 使用过的独立工作树；不作为长期生产分支。",
+      "purpose": "news-v2 复用的独立工作树；目前承载 codex/news-neutral-selection 临时 PR 分支。",
       "location": "local"
     },
     {
@@ -150,6 +170,12 @@
       "title": "main 是唯一长期入口，旧分支不能盲目合并",
       "note": "只有开放 PR #74 需要合并；其他远端历史分支即使未被 Git 识别为 main 的祖先，也不等于有待上线修复。逐一核对独有提交、PR 状态及工作树占用后再归档或删除。",
       "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "中立性要同时约束选文可改写性与最终三语卡片",
+      "note": "News 候选要判断现有证据是否足以做中立报道，但不可因战争、政治或残疾权益题材一概删除；原稿有立场可据真实双方说法调整。2026-09-28 两篇投诉稿的英文材料可中立改写，失衡主要出在未被独立审核的中文标题与卡片。独立复核应覆盖所有可见语言；严重偏向仅允许一次有来源的重写并复核，否则换备稿，不能编造对立观点。此修复目前只在未合并 PR 分支，本条不表示已上线。",
+      "source_ref": "docs/bugs/2026-09-28-news-neutrality-selection-and-cn-card.md"
     }
   ]
 }

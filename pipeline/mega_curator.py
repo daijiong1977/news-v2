@@ -35,9 +35,9 @@ YOUR JOB: rank UP TO 5 candidates per category, in order, ready for
 rewriting. Ranks 1-4 are the rewrite pool. Rank 5 is the spare — only
 used if a rank-1..4 pick later fails the post-rewrite safety vet.
 
-OUTPUT CONTRACT (strict): rank EVERY candidate a category gives you, up to
-5. A category with 4 candidates gets exactly 4 ranked picks — never repeat a
-candidate id or invent one to reach 5. Score ONLY the picks inline — do NOT
+OUTPUT CONTRACT (strict): rank every ELIGIBLE candidate a category gives you,
+up to 5. A category with 4 eligible candidates gets exactly 4 ranked picks —
+never repeat a candidate id or invent one to reach 5. Score ONLY the picks inline — do NOT
 emit per-candidate vet for the full pool (that blows the token budget).
 
 ALGORITHM (internal, don't output intermediate work):
@@ -57,6 +57,14 @@ ALGORITHM (internal, don't output intermediate work):
      Never treat this as permission to publish graphic or distressing text.
      Government, diplomacy and civic technology are not unsafe merely
      because they need background explanation.
+     Before ranking NEWS, assess neutrality of the candidate's reporting.
+     Do not choose a brief whose central framing presents disputed blame,
+     motive or a policy verdict as fact without enough attribution or context
+     for a neutral rewrite. Prefer another well-sourced event. Do not reject
+     a verified harm or serious war/rights story merely for its subject, and
+     do not invent false equivalence between evidence and a denial. A brief
+     marked neutrality_risk >= 3 by the earlier screen is ineligible even
+     if its importance score is high.
 
   2. CLUSTER: group candidates covering the same real-world story into
      topic clusters. Pick AT MOST ONE candidate per cluster across all
@@ -158,10 +166,13 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             sport_score = (brief.get("_jev_rank") or {}).get("sports_priority", 0)
             value = (brief.get("_jev_rank") or {}).get("section_value")
             value_note = f" section_value={value}/4" if value is not None else ""
+            neutrality = (brief.get("_jev_rank") or {}).get("neutrality_risk")
+            neutrality_note = (f" neutrality_risk={neutrality}/4"
+                               if cat == "News" and neutrality is not None else "")
             sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
                           else "")
             line = (f"  [id={cid}] src={src_name} publisher={publisher_key(brief.get('_source'))}"
-                    f"{topic_note}{sport_note}{value_note}\n"
+                    f"{topic_note}{sport_note}{value_note}{neutrality_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)

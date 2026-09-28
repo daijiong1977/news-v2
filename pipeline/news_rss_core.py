@@ -896,17 +896,17 @@ You will receive N source articles. For EACH, produce THREE variants:
      words — the middle-schooler is scanning, not reading deeply.
 
 3. zh — 简体中文. 摘要卡片 only (no body, no quiz, no keywords).
-   · headline: 有意思的中文标题 (可保留 CEO / iPhone / iPad 等专有名词为英文)
+   · headline: 清楚、准确、中立的中文标题 (可保留 CEO / iPhone / iPad 等专有名词为英文)
    · summary: 260-300 汉字 (STRICT — count silently, must not exceed 300)
-     保持小记者的口吻 — 好奇、生动、抓住读者注意。
-     不要写成干巴巴的新闻摘要。用具体细节、用比喻、用提问。
+     保持小记者的口吻 — 好奇、生动、抓住读者注意。News 栏目要以事实和
+     明确的消息来源吸引读者，不用煽情比喻、夸张提问或替读者下结论。
 
 RULES (all variants):
   · ACCURACY — every fact must come from the source. No invented names, dates,
     numbers, or quotes.
   · NEW HEADLINE per variant — don't copy the source headline verbatim.
-  · NO dry summary tone — you're a kid reporter excited about a story,
-    not a wire-service editor.
+  · NO dry summary tone — you're a kid reporter, not a wire-service editor.
+    In News, curiosity must never turn into advocacy or sensationalism.
 
 POST-WRITE SAFETY SCORING (REQUIRED):
 Score the MIDDLE_EN body on 8 safety dimensions. Score CONSERVATIVELY —
@@ -958,7 +958,17 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "casualties briefly when essential, but omit graphic aftermath,\n"
         "fearful witness quotes and weapon or attack mechanics.\n"
         "Stay neutral — present what each side says without\n"
-        "editorializing. For important politics, diplomacy or civic technology,\n"
+        "editorializing. Apply this to ALL THREE variants, including each\n"
+        "headline, card_summary and the Chinese headline/summary. Attribute\n"
+        "disputed claims ('officials say'), include the relevant response or\n"
+        "uncertainty when the source provides it, and separate verified facts\n"
+        "from allegations. Never invent a second side or treat an unsupported\n"
+        "denial as equal to verified evidence. Avoid loaded shortcuts such as\n"
+        "calling an office a 'fairness guardian', a dismissal 'throwing away'\n"
+        "a complaint, or describing an entire city as 'about to starve' when\n"
+        "the source only documents shortages. If the source lacks a response,\n"
+        "say whose claim is being reported and what remains unverified.\n"
+        "For important politics, diplomacy or civic technology,\n"
         "explain necessary adult background in plain language rather than\n"
         "dropping the event or inventing a child-specific impact. Include\n"
         "real names, dates, and places when they\n"
@@ -987,12 +997,16 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
 def tri_variant_rewriter_input(
     articles_with_ids: list[tuple[int, dict]],
     category: str | None = None,
+    editorial_feedback: str | None = None,
 ) -> str:
     n = len(articles_with_ids)
     lines = [f"Today: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}."]
     if category and category in _REWRITE_STYLE_BY_CATEGORY:
         lines.append("")
         lines.append(_REWRITE_STYLE_BY_CATEGORY[category].rstrip())
+        lines.append("")
+    if editorial_feedback:
+        lines.append(f"EDITORIAL REVISION REQUIRED: {editorial_feedback}")
         lines.append("")
     lines.append(
         f"You will receive {n} source article{'s' if n != 1 else ''} "
@@ -1021,41 +1035,37 @@ def tri_variant_rewriter_input(
 def tri_variant_rewrite(
     articles_with_ids: list[tuple[int, dict]],
     category: str | None = None,
+    editorial_feedback: str | None = None,
 ) -> dict:
     return deepseek_call(
         TRI_VARIANT_REWRITER_PROMPT,
-        tri_variant_rewriter_input(articles_with_ids, category=category),
+        tri_variant_rewriter_input(articles_with_ids, category=category,
+                                   editorial_feedback=editorial_feedback),
         max_tokens=8000, temperature=0.5,
     )
 
 
-# Stage 3 of the mega pipeline: Python-only safety filter on the rewriter's
-# self-scored output. Stricter threshold than the source-vet (any_dim ≥ 3
-# instead of ≥ 4) because the rewriter has already softened the source
-# language for kids — anything still flagged at 3+ is a real concern.
-#
-# We only check the middle_en safety scores. The rewriter is told to
-# produce easy_en as a simplified subset (shorter sentences, plainer
-# words, same facts), so if middle passes, easy is safe by construction.
-# zh is for adult consumption (parents reading with kids) and not vetted.
+# Stage 3 uses the independent review of both English bodies and all published
+# headlines/cards, including Chinese. The rewriter's own scores are a fallback.
 # Per-dimension Stage-3 reject thresholds (admin choice 2026-07-08).
 # Kids on a NEWS site should be allowed to read age-appropriate hard news —
 # war, politics, conflict at a MODERATE level (score 3) — so those
-# "news-inherent" dims only reject at SEVERE (>=4). But sexual / substance /
-# offensive-language content is never appropriate regardless of news value, so
-# those stay strict (>=3). Bug: docs/bugs/2026-07-08-safety-threshold-per-dim.md
+# "news-inherent" harm dims only reject at SEVERE (>=4). A prominent one-sided
+# card is an editorial defect at >=3, while sexual/substance/offensive-language
+# content also stays strict (>=3). Bug: docs/bugs/2026-07-08-safety-threshold-per-dim.md
 STRICT_SAFETY_DIMS = ("sexual", "substance", "language")
 STRICT_SAFETY_THRESHOLD = 3
-NEWS_SAFETY_DIMS = ("violence", "fear", "distress", "adult_themes", "bias")
+NEWS_SAFETY_DIMS = ("violence", "fear", "distress", "adult_themes")
 NEWS_SAFETY_THRESHOLD = 4
+BIAS_SAFETY_THRESHOLD = 3  # News: a loaded published card is not rescued by a neutral body
 
 
-def evaluate_rewriter_safety(article_entry: dict) -> dict:
+def evaluate_rewriter_safety(article_entry: dict, *, category: str | None = None) -> dict:
     """For one rewriter output article, returns:
         {"verdict": "PASS"|"REJECT", "reason": "...", "scores": {...}}
-    Verdict is from middle_en's safety scores (the `safety` field). REJECT if
-    any strict dim (sexual/substance/language) >= 3, OR any news-inherent dim
-    (violence/fear/distress/adult_themes/bias) >= 4.
+    Verdict is from the independent scores (the `safety` field). REJECT if
+    sexual/substance/language >= 3, or violence/fear/distress/adult_themes >= 4.
+    News bias rejects at >= 3; other categories retain the prior >= 4 gate.
     """
     scores = article_entry.get("safety") or {}
     if not scores:
@@ -1067,6 +1077,9 @@ def evaluate_rewriter_safety(article_entry: dict) -> dict:
             for d in STRICT_SAFETY_DIMS if (scores.get(d, 0) or 0) >= STRICT_SAFETY_THRESHOLD]
     hits += [f"{d}={scores.get(d, 0) or 0}"
              for d in NEWS_SAFETY_DIMS if (scores.get(d, 0) or 0) >= NEWS_SAFETY_THRESHOLD]
+    bias_limit = BIAS_SAFETY_THRESHOLD if category == "News" else NEWS_SAFETY_THRESHOLD
+    if (scores.get("bias", 0) or 0) >= bias_limit:
+        hits.append(f"bias={scores.get('bias', 0) or 0}")
     if hits:
         return {
             "verdict": "REJECT",
@@ -1086,12 +1099,25 @@ read your scores.
 For each article you receive two rewritten variants:
   middle_en — grade 7-8 reader (age 12-14)
   easy_en   — grade 4-5 reader (age ~10)
+and a Chinese homepage card. The cards are published text, not private notes.
 
 Score 8 dimensions, each 0-5 (0=none, 5=severe), on the middle_en body:
   violence, sexual, substance, language, fear, adult_themes, distress, bias
 Then re-read easy_en imagining a 10-year-old and score fear and distress a
 second time; for those two dims report the MAX of the two readings (the same
 facts land harder on a younger reader even in simpler words).
+For bias, read ALL headlines, English card summaries, both bodies and the
+Chinese headline/summary. Report the HIGHEST bias anywhere a child or parent
+would see. Score bias 3 or above when a prominent headline/card advocates a
+side, turns a contested claim into an unqualified fact, uses an emotionally
+loaded metaphor as a verdict, or omits a relevant response that the article
+itself includes. Neutrality means accurate attribution and proportionate
+evidence, not inventing a second viewpoint or treating a denial as equally
+credible to verified facts. A serious war or civil-rights topic alone is not
+bias. Examples of loaded cards: calling a government office a 'fairness
+guardian' or dismissed complaints 'thrown away'; claiming a whole city is
+'about to starve' when the evidence describes severe shortages. Score the
+actual wording, not your political preference.
 
 Score CONSERVATIVELY — flagging a borderline story is cheap; a parent
 complaint is not.
@@ -1123,11 +1149,19 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
         sid = art.get("source_id")
         mid = (art.get("middle_en") or {}).get("body") or ""
         easy = (art.get("easy_en") or {}).get("body") or ""
+        mid_card = art.get("middle_en") or {}
+        easy_card = art.get("easy_en") or {}
+        zh_card = art.get("zh") or {}
         lines.append(f"=== ARTICLE source_id={sid} ===")
+        lines.append("--- published English headlines and cards ---")
+        lines.append(f"middle: {mid_card.get('headline') or ''} | {mid_card.get('card_summary') or ''}")
+        lines.append(f"easy: {easy_card.get('headline') or ''} | {easy_card.get('card_summary') or ''}")
         lines.append("--- middle_en body ---")
         lines.append(mid)
         lines.append("--- easy_en body ---")
         lines.append(easy)
+        lines.append("--- published Chinese headline and card ---")
+        lines.append(f"{zh_card.get('headline') or ''} | {zh_card.get('summary') or ''}")
         lines.append("")
     res = deepseek_call(SAFETY_VET_PROMPT, "\n".join(lines), max_tokens=2000)
     out: dict[int, dict] = {}
@@ -1153,8 +1187,16 @@ def independent_safety_vet(articles: list[dict]) -> dict[int, dict]:
             # for the rest of the batch. Re-ask only this article once.
             log.warning("  independent vet source_id=%s malformed (%s); retrying alone", sid, e)
             single = (f"=== ARTICLE source_id={sid} ===\n"
+                      f"--- published English headlines and cards ---\n"
+                      f"middle: {(art.get('middle_en') or {}).get('headline') or ''} | "
+                      f"{(art.get('middle_en') or {}).get('card_summary') or ''}\n"
+                      f"easy: {(art.get('easy_en') or {}).get('headline') or ''} | "
+                      f"{(art.get('easy_en') or {}).get('card_summary') or ''}\n"
                       f"--- middle_en body ---\n{(art.get('middle_en') or {}).get('body') or ''}\n"
-                      f"--- easy_en body ---\n{(art.get('easy_en') or {}).get('body') or ''}")
+                      f"--- easy_en body ---\n{(art.get('easy_en') or {}).get('body') or ''}\n"
+                      f"--- published Chinese headline and card ---\n"
+                      f"{(art.get('zh') or {}).get('headline') or ''} | "
+                      f"{(art.get('zh') or {}).get('summary') or ''}")
             try:
                 retry = deepseek_call(SAFETY_VET_PROMPT, single, max_tokens=500)
                 out[sid] = _scores(retry, sid)
@@ -1211,7 +1253,7 @@ def repair_hard_news_safety(article: dict) -> dict | None:
             return None
         revised["safety"] = new_scores
         revised["_independent_vet_status"] = "scored_after_repair"
-        revised_eval = evaluate_rewriter_safety(revised)
+        revised_eval = evaluate_rewriter_safety(revised, category="News")
         if revised_eval["verdict"] != "PASS":
             log.info("  hard-news safety repair still over threshold for source_id=%s: %s",
                      article.get("source_id"), revised_eval["reason"])
@@ -1220,6 +1262,62 @@ def repair_hard_news_safety(article: dict) -> dict | None:
     except Exception as e:  # noqa: BLE001 — failed repair cannot bypass rejection
         log.warning("  hard-news safety repair failed for source_id=%s: %s",
                     article.get("source_id"), e)
+        return None
+
+
+NEWS_NEUTRALITY_FEEDBACK = (
+    "An independent reviewer rejected the previous draft for one-sided or "
+    "emotionally loaded published wording. Rewrite ALL three variants from "
+    "the source. In the News headlines, English cards, bodies and Chinese "
+    "card, separate verified facts from each party's claims. Attribute a "
+    "disputed claim to its speaker, include the relevant response if the "
+    "source reports it, and state uncertainty where evidence is incomplete. "
+    "Do not invent a quote or viewpoint, and do not create false balance. "
+    "Keep the important event; change its presentation."
+)
+
+
+def repair_news_neutrality(article: dict, source: dict) -> dict | None:
+    """Give a valuable but one-sided News draft one source-grounded rewrite.
+
+    Only an independent review of the complete replacement can approve it.
+    If the source lacks enough facts for a neutral account, leave the draft
+    rejected so Stage 3 can use another catalog candidate.
+    """
+    from .forbidden_filter import is_forbidden
+
+    sid = article.get("source_id")
+    if not isinstance(sid, int) or not source or not source.get("body"):
+        return None
+    try:
+        result = tri_variant_rewrite(
+            [(sid, source)], category="News",
+            editorial_feedback=NEWS_NEUTRALITY_FEEDBACK)
+        rows = [a for a in result.get("articles") or [] if a.get("source_id") == sid]
+        if len(rows) != 1:
+            return None
+        revised = rows[0]
+        for level in ("easy_en", "middle_en"):
+            text = revised.get(level) or {}
+            body = text.get("body") or ""
+            if (not text.get("headline") or not text.get("card_summary")
+                    or not _wc_within_qa(level.removesuffix("_en"), len(body.split()))
+                    or is_forbidden(body)[0]):
+                return None
+        zh = revised.get("zh") or {}
+        if not zh.get("headline") or not zh.get("summary"):
+            return None
+        scores = independent_safety_vet([revised]).get(sid)
+        if not scores:
+            return None
+        revised["safety_self"] = revised.get("safety")
+        revised["safety"] = scores
+        revised["_independent_vet_status"] = "scored_after_neutrality_repair"
+        if evaluate_rewriter_safety(revised, category="News")["verdict"] != "PASS":
+            return None
+        return revised
+    except Exception as e:  # noqa: BLE001 — uncertain repair must not ship
+        log.warning("  News neutrality repair failed for source_id=%s: %s", sid, e)
         return None
 
 
@@ -1419,14 +1517,16 @@ def filter_safe_rewrites(
 
     Gates per article, in order:
       1. Independent safety vet (one extra chat call per batch) overrides
-         the rewriter's self-scores. Malformed rows are retried individually;
+         the rewriter's self-scores and reads all published cards, including
+         Chinese. Malformed rows are retried individually;
          only unavailable rows fall back to self-scores.
       2. Deterministic forbidden-term scan over the REWRITTEN easy+middle
          bodies (previously only RSS title/summary was screened, so a
          body-only self-harm mention passed every gate).
       3. Existing per-dimension thresholds on the independent scores. One
          News-only wording repair may be attempted for violence/fear/distress
-         after an independent rejection; it requires a second independent pass.
+         or for one-sided framing after an independent rejection; either
+         requires a fresh independent pass.
 
     Rejects bodies outside the digest's QA tolerance after repair, instead
     of publishing a known defect. The caller may try a safe spare.
@@ -1480,21 +1580,33 @@ def filter_safe_rewrites(
             ev = {"verdict": "REJECT", "reason": forbidden_hit,
                   "scores": art.get("safety") or {}}
         else:
-            ev = evaluate_rewriter_safety(art)
+            ev = evaluate_rewriter_safety(art, category=category)
             scores = ev.get("scores") or {}
+            if (category == "News"
+                    and art.get("_independent_vet_status") == "scored"
+                    and (scores.get("bias", 0) or 0) >= BIAS_SAFETY_THRESHOLD):
+                revised = repair_news_neutrality(
+                    art, (sources_by_id or {}).get(art.get("source_id")) or {})
+                if revised is not None:
+                    art = revised
+                    ev = evaluate_rewriter_safety(art, category=category)
+                    scores = ev.get("scores") or {}
+                    wc_flags = _wordcount_flags(art)
+                    log.info("  Stage 3 News neutrality repair passed fresh independent vet "
+                             "for source_id=%s", art.get("source_id"))
             repairable = (category == "News"
                           and art.get("_independent_vet_status") == "scored"
                           and ev["verdict"] == "REJECT"
                           and all((scores.get(d, 0) or 0) < STRICT_SAFETY_THRESHOLD
                                   for d in STRICT_SAFETY_DIMS)
-                          and (scores.get("bias", 0) or 0) < NEWS_SAFETY_THRESHOLD
+                          and (scores.get("bias", 0) or 0) < BIAS_SAFETY_THRESHOLD
                           and any((scores.get(d, 0) or 0) >= NEWS_SAFETY_THRESHOLD
                                   for d in ("violence", "fear", "distress", "adult_themes")))
             if repairable:
                 revised = repair_hard_news_safety(art)
                 if revised is not None:
                     art = revised
-                    ev = evaluate_rewriter_safety(art)
+                    ev = evaluate_rewriter_safety(art, category=category)
                     wc_flags = _wordcount_flags(art)
                     log.info("  Stage 3 hard-news safety repair passed fresh independent vet "
                              "for source_id=%s", art.get("source_id"))
