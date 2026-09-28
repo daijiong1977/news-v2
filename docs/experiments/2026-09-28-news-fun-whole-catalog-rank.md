@@ -47,13 +47,15 @@ the separate schedule PR for the run-by-run audit.
   day with >7 qualified candidates is still needed to verify model impact in
   production; until then this is a conditional feature, not a demonstrated
   improvement in published article quality.
-- Science selection, JEV call counts, and independent safety thresholds are
-  unchanged. News comparison gains one candidate at the former 29-item edge.
+- This section described the initial ranking-only experiment. The later
+  metadata-first body probe changes the number of candidates reaching JEV;
+  its actual call count and cost need a fresh replay. Independent finished-
+  article safety thresholds remain unchanged.
 
 ## First-cut tuning in this PR
 
 JEV remains the first content-aware screen: it rejects only the calibrated
-clear-cut headline classes, then the body probe and JEV editorial score create
+clear-cut headline classes, then JEV's title/summary editorial score creates
 the de-duplicated candidate catalog. News and Fun each offer at most the first
 **30** JEV-ranked candidates to the numeric DeepSeek comparison; this is **per
 section**, not 30 shared across sections. Any deeper catalog entry remains
@@ -77,13 +79,21 @@ small but nonzero. No production rerun or content replacement was performed.
 
 ## 2026-09-28 Fun source-length adjustment
 
-The production order is retained: `RSS → forbidden regex → JEV prefilter →
+The earlier September 28 replay used `RSS → forbidden regex → JEV prefilter →
 HTML body + local word count → JEV routing/ranking → conditional DeepSeek
-ranking → curator`. Fetching every full article just to count words before
-the cheap title/snippet JEV pass would add network latency and change the
-funnel's existing behavior, so that reorder was **not** kept. Source-body
-counting uses no model, but because it stays after JEV it does not save JEV
-prefilter calls. The cached body is still reused during later verification.
+ranking → curator`. That opened 97 individual article pages before ranking.
+The revised **proposal** is `RSS metadata → local/JEV screens → JEV topic,
+section and event ranking → News/Fun DeepSeek whole-list ranking → ranked
+body/image probe → curator → rewrite → independent full-text safety review`.
+The ranked probe opens the first 12 source articles per section. If fewer than
+six pass (seven for Fun's current input), it opens another six, until enough
+pass or the catalog is exhausted. Rejected originals never reach the curator;
+unfetched lower-ranked briefs remain for fully checked Stage-3 refill. The
+source-length and image rules were **moved**, not removed. Candidate ranking
+still sees only title/summary, and a fetched body is cached for later verify.
+This should reduce article-page requests on healthy days, but it may expose
+more briefs to JEV because pre-ranking no longer drops thin/long sources.
+Neither latency nor billing savings have been measured in a full new replay.
 
 Fun's source-body minimum is now 250 words, matching the downstream
 verification minimum; News/Science remain at 350. News/Fun retain the

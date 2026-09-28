@@ -1,6 +1,6 @@
-"""Stage 1.2 of the mega pipeline: cheap pre-filter between the forbidden-word
-filter and the body probe, so the probe's per-category cap (10) is spent on
-candidates that could actually ship.
+"""Stage 1.2 of the mega pipeline: cheap metadata pre-filter before JEV
+ranking and the later ranked-body probe. Individual article pages are not
+opened in this stage.
 
 Rules. Each was validated on 35 days of checkpoints (975 candidates,
 2026-08-15..09-19) before being allowed to drop anything; the numbers are in

@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T17:49:42-04:00",
+  "updated_at": "2026-09-28T19:45:09-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "拟议的 Fun 原文门槛 250 词和短稿成稿规则、Science 成稿解释篇幅上限提高并试增原文上限至 1500（JEV 顺序不变）；News/Fun 最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在富余合格候选时调用。待 PR 审核非生产。",
+      "purpose": "拟议 Fun 短原文与 Science 较长解释稿规则；News/Fun 最多 30 篇元数据候选经 DeepSeek 纯编号排序后，各栏只抓前 12 篇原文，不足六篇（Fun 七篇）再批量补抓六篇。待 PR #82 审核，非生产。",
       "status": "proposed"
     },
     {
@@ -54,7 +54,17 @@
   "files": [
     {
       "path": "pipeline/full_round.py",
-      "purpose": "每日采集、JEV 初筛、正文词数过滤（News 350–1200、Science 350–1500、Fun 250–1200）、候选补稿、安全审核和发布编排。",
+      "purpose": "每日采集、JEV/DeepSeek 标题摘要排序、排序后分批原文验证（News 350–1200、Science 350–1500、Fun 250–1200）、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/checkpoints.py",
+      "purpose": "流水线恢复点顺序；元数据阶段后新增 ranked_body_probe，按排名分批读取原文。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_source_funnel.py",
+      "purpose": "元数据优先、前 12 篇原文验证、后续每批 6 篇、跨栏目长度和失败回退测试。",
       "location": "repo"
     },
     {
@@ -299,6 +309,12 @@
       "title": "预览必须停在 DeepSeek 前且不写生产状态",
       "note": "用当前来源的只读本地回放可检查原始采集、历史/禁词过滤、JEV、正文词数、分栏和完整目录，再停止于整组 DeepSeek 排名前。17:45 ET 回放约47.5秒，News/Science/Fun 目录29/20/21；Science 1201–1500 词为零，Fun 254词 BBC Tennis 通过。JEV 排名前列仍有战争稿与偏消费 Fun，预览不能当作最终安全/编辑验证；没有创建 run/checkpoint、DeepSeek 调用或发布。第一次终端输出被截断，实际做了两次 JEV 回放，费用需从控制台核对。",
       "source_ref": "docs/experiments/2026-09-28-pre-deepseek-preview.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "原文抓取应在元数据排序后按批次进行",
+      "note": "旧预览在首次 JEV 初筛后打开了 97 篇网页，再给 JEV 和 DeepSeek 做标题摘要排名；用户确认无需这么早读取全文。PR #82 提议改为元数据 JEV/DeepSeek 排序后，每栏先抓前12篇原文并检查来源长度、图片；不足六篇（Fun七篇）再抓下一批六篇，直到够数或目录耗尽。拒绝稿不送主编，未抓稿保留供 Stage 3 安全补录；成稿独立全文儿童安全审核不变。旧 29/20/21 目录不能代表新顺序的输入或节费成果，待完整回放验证。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]
 }

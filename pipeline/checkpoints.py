@@ -7,7 +7,8 @@ Resume:   set env `RESUME_FROM=<stage>`. The pipeline loads the
           matching checkpoint at startup and skips earlier stages.
 
 Stages (in order):
-    phase_a, stage1, stage1_jev, phase_a_probe, jev_rank, stage2_picks, verify,
+    phase_a, stage1, stage1_jev, phase_a_probe, jev_rank, ranked_body_probe,
+    stage2_picks, verify,
     rewrite, stage3_safety,
     enrich, persist
 
@@ -33,8 +34,9 @@ STAGES = (
     "phase_a",         # after RSS fetch (briefs_by_cat)
     "stage1",          # after forbidden filter
     "stage1_jev",      # after Jev pre-filter on RSS briefs
-    "phase_a_probe",   # after body length gate (News/Science 350, Fun 250)
-    "jev_rank",        # after Jev ranking: top 6 per cat go to the curator, the rest are spares
+    "phase_a_probe",   # metadata-only interleave; no individual article fetch
+    "jev_rank",        # after Jev + News/Fun DeepSeek whole-list ranking
+    "ranked_body_probe",  # first 12 originals per section, then batches of 6 if needed
     "stage2_picks",    # after curator (ranked_by_cat)
     "verify",          # after body+image verify (stories_by_cat)
     "rewrite",         # after rewrite (rewrites_by_cat)

@@ -8,13 +8,22 @@ editorial whole-list ranking, curator, rewrite, full-text independent safety
 review, checkpoint/run row, email, publication or site sync was performed.
 These are unapproved editorial candidates, not safe-to-publish articles.
 
+**Historical snapshot, not the current PR funnel:** this replay was taken
+before the ranked-body-probe change. It opened 97 article pages after JEV's
+first screen (News 40, Science 27, Fun 30) to count source words. The current
+proposal first ranks RSS titles/summaries, then opens only the top 12 originals
+per section; if fewer than six pass source-body/image checks (seven for Fun's
+existing curator input), it opens the next six, repeating only as needed.
+Therefore the 29/20/21 catalog below must **not** be used as the new
+DeepSeek input or as a measured cost/quality result for the reordered funnel.
+
 | Stage | News | Science | Fun |
 | --- | ---: | ---: | ---: |
 | Raw feed briefs | 46 | 28 | 36 |
 | After prior-seven-day history | 46 | 27 | 33 |
 | After local forbidden-title screen | 42 | 27 | 32 |
 | After JEV prefilter | 40 | 27 | 30 |
-| After source-body gate | 35 | 27 | 27 |
+| After source-body gate (old order) | 35 | 27 | 27 |
 | After section routing | 34 | 28 | 27 |
 | Unique JEV catalog | 29 | 20 | 21 |
 

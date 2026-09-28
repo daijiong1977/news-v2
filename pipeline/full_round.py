@@ -792,35 +792,10 @@ def _interleave_by_source(briefs: list[dict]) -> list[dict]:
     return out
 
 
-def _partition_probe_results(results: list[dict], min_words: int,
-                             max_words: int, cap: int,
-                             ) -> tuple[list[dict], dict[str, dict[str, int]]]:
-    """Classify probe results per source and apply the per-cat cap.
-    Returns (kept_briefs, tally) with tally[src] = {in, kept, thin, long,
-    cap_cut}. Unlike the old break-at-cap loop, every brief is classified,
-    so a source starved by the cap shows up as cap_cut in telemetry
-    instead of vanishing silently."""
-    kept: list[dict] = []
-    tally: dict[str, dict[str, int]] = {}
-    for r in results:
-        src = (r["brief"].get("_source_name") or "?")
-        t = tally.setdefault(
-            src, {"in": 0, "kept": 0, "thin": 0, "long": 0, "cap_cut": 0})
-        t["in"] += 1
-        wc = r["wc"]
-        if wc < min_words:
-            t["thin"] += 1
-        elif wc > max_words:
-            t["long"] += 1
-        elif len(kept) >= cap:
-            t["cap_cut"] += 1
-        else:
-            b = r["brief"]
-            b["_probe_art"] = r["art"]
-            b["word_count"] = wc
-            kept.append(b)
-            t["kept"] += 1
-    return kept, tally
+def _metadata_catalog(briefs_by_cat: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """Interleave source briefs without opening individual article pages."""
+    return {cat: _interleave_by_source(briefs)
+            for cat, briefs in briefs_by_cat.items()}
 
 
 PROBE_MIN_WORDS_BY_CATEGORY = {"News": 350, "Science": 350, "Fun": 250}
@@ -833,6 +808,98 @@ def _probe_min_words(category: str) -> int:
 
 def _probe_max_words(category: str) -> int:
     return PROBE_MAX_WORDS_BY_CATEGORY.get(category, 1200)
+
+
+def _source_length_check(category: str, art: dict) -> tuple[bool, str | None]:
+    """Keep the source-length gate, but run it only on selected originals."""
+    wc = int(art.get("word_count") or 0)
+    lo, hi = _probe_min_words(category), _probe_max_words(category)
+    if wc < lo:
+        return False, f"body {wc}w < {lo}w for {category}"
+    if wc > hi:
+        return False, f"body {wc}w > {hi}w for {category}"
+    return True, None
+
+
+def _probe_ranked_catalog(category: str, catalog: list[dict], *,
+                          fetch=None, initial: int = 12, refill: int = 6,
+                          target: int | None = None,
+                          ) -> tuple[list[dict], list[dict], dict]:
+    """Fetch ranked originals in bounded batches until enough pass verification.
+
+    Return (valid fetched briefs, full catalog excluding rejected originals,
+    telemetry). Unfetched entries remain available for Stage-3 late refill.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from .news_rss_core import _fetch_and_enrich, verify_article_content
+
+    fetch = fetch or _fetch_and_enrich
+    needed = target if target is not None else (7 if category == "Fun" else 6)
+    valid: list[dict] = []
+    rejected: set[int] = set()
+    report = {"fetched": 0, "verified": 0, "rejected": 0, "batches": [],
+              "per_source": {}}
+    offset = 0
+    size = initial
+    while offset < len(catalog) and len(valid) < needed:
+        batch = catalog[offset:offset + size]
+        def _fetch_one(brief: dict) -> dict:
+            try:
+                return fetch(dict(brief))
+            except Exception as exc:  # noqa: BLE001 — one source must not abort the run
+                log.warning("  [%s] ranked body fetch failed for %s: %s",
+                            category, (brief.get("link") or "")[:80], exc)
+                return {"word_count": 0, "body": "", "og_image": None}
+        with ThreadPoolExecutor(max_workers=min(8, len(batch))) as ex:
+            results = list(ex.map(_fetch_one, batch))
+        report["batches"].append(len(batch))
+        for brief, art in zip(batch, results):
+            report["fetched"] += 1
+            source = brief.get("_source_name") or "?"
+            source_stats = report["per_source"].setdefault(
+                source, {"fetched": 0, "verified": 0, "rejected": 0})
+            source_stats["fetched"] += 1
+            reason = editorial_exclusion(art)
+            if not reason:
+                ok, reason = verify_article_content(art)
+                if ok:
+                    ok, reason = _source_length_check(category, art)
+            if reason:
+                rejected.add(id(brief))
+                report["rejected"] += 1
+                source_stats["rejected"] += 1
+                log.info("  [%s] ranked source rejected (%s): %s",
+                         category, reason, (brief.get("title") or "")[:80])
+                continue
+            brief["_probe_art"] = art
+            brief["word_count"] = int(art.get("word_count") or 0)
+            valid.append(brief)
+            source_stats["verified"] += 1
+        offset += len(batch)
+        size = refill
+    report["verified"] = len(valid)
+    return valid, [b for b in catalog if id(b) not in rejected], report
+
+
+def _reselect_verified_briefs(category: str, verified: list[dict]) -> list[dict]:
+    """Replace body-rejected shortlist entries without re-ranking originals."""
+    if category == "News" and any((b.get("_jev_rank") or {}).get("global_rank") for b in verified):
+        from .news_global_rank import _choose_six
+        chosen = _choose_six(verified)
+    elif category == "Fun" and any((b.get("_jev_rank") or {}).get("global_rank") for b in verified):
+        from .fun_global_rank import _choose_curator
+        chosen = _choose_curator(verified)
+    else:
+        limit = 7 if category == "Fun" else 6
+        chosen = [b for b in verified if (b.get("_jev_rank") or {}).get("send")]
+        chosen_ids = {id(b) for b in chosen}
+        chosen.extend(b for b in verified if id(b) not in chosen_ids)
+        chosen = chosen[:limit]
+    chosen_ids = {id(b) for b in chosen}
+    for brief in verified:
+        if "_jev_rank" in brief:
+            brief["_jev_rank"] = {**brief["_jev_rank"], "send": id(brief) in chosen_ids}
+    return chosen
 
 
 def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
@@ -885,6 +952,8 @@ def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
             if editorial_exclusion(art):
                 continue
             ok, reason = verify_article_content(art)
+            if ok:
+                ok, reason = _source_length_check(cat, art)
             if not ok:
                 log.info("  [%s] rank %s (%s) body-verify FAIL: %s",
                          cat, r.get("rank"),
@@ -1157,6 +1226,8 @@ def promote_spare_and_rewrite(
         if editorial_exclusion(art):
             return None, None
         ok, _ = verify_article_content(art)
+        if ok:
+            ok, _ = _source_length_check(cat, art)
         if not ok:
             return None, None
         rewrite_res = tri_variant_rewrite([(0, art)], category=cat)
@@ -2062,77 +2133,26 @@ def main_mega() -> None:
     _jev_dropped = {n for n in _pre_jev_sources
                     - {b.get("_source_name") for bs in briefs_by_cat.values() for b in bs} if n}
 
-    # ---- Stage 1.5: body probe + category-specific length gate ----
-    # Fetch each surviving brief's body in parallel, drop if word_count
-    # is outside its category's word range, then keep the first
-    # eligible briefs (RSS feed order ≈ newest first). The fetched
-    # article dict is cached on the brief as "_probe_art" so
-    # verify_picks_lazy can skip re-fetching downstream.
+    # ---- Stage 1.5: metadata-only source interleave ----
+    # JEV and DeepSeek compare titles/RSS summaries before any individual
+    # article page is opened. Keep this checkpoint name for resume support.
     PROBE_MAX_PER_CAT = 10
-    # Keep the full probed catalog so Stage 3 can continue searching after
-    # safety or event rejections; only curator input remains capped.
+    # Keep the full ranked catalog for Stage 3 refill; curator stays capped.
     from . import jev_rank
     rank_mode = jev_rank.mode()
-    probe_cap = 10_000
-    PROBE_WORKERS = 8
-
-    def _probe_one(brief: dict) -> dict:
-        from .news_rss_core import _fetch_and_enrich
-        try:
-            art = _fetch_and_enrich(dict(brief))
-        except Exception as e:  # noqa: BLE001
-            log.warning("  probe fetch failed for %s: %s",
-                        brief.get("link", "")[:80], e)
-            art = {"word_count": 0, "body": "", "og_image": None}
-        wc = int(art.get("word_count") or 0)
-        return {"brief": brief, "art": art, "wc": wc}
 
     def _stage1_5_runner():
-        from concurrent.futures import ThreadPoolExecutor
         t0 = time.monotonic()
-        log.info("=== MEGA Stage 1.5 — body probe + length gate (min %s; max %s) ===",
-                 PROBE_MIN_WORDS_BY_CATEGORY, PROBE_MAX_WORDS_BY_CATEGORY)
-        out: dict[str, list[dict]] = {}
-        kept_total = 0
-        dropped_thin = 0
-        dropped_long = 0
-        per_source: dict[str, dict] = {}
-        for cat, briefs in briefs_by_cat.items():
-            if not briefs:
-                out[cat] = []
-                continue
-            # Interleave across sources so the cap samples every source
-            # instead of eating the pool in priority order (BBC starvation,
-            # bug 2026-07-08).
-            briefs = _interleave_by_source(briefs)
-            with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
-                results = list(ex.map(_probe_one, briefs))
-            kept, tally = _partition_probe_results(
-                results, _probe_min_words(cat), _probe_max_words(cat), probe_cap)
-            out[cat] = kept
-            per_source[cat] = tally
-            kept_total += len(kept)
-            dropped_thin += sum(t["thin"] for t in tally.values())
-            dropped_long += sum(t["long"] for t in tally.values())
-            log.info("  [%s] probe: %d kept / %d input · %s",
-                     cat, len(kept), len(briefs),
-                     ", ".join(
-                         f"{s}:{t['kept']}/{t['in']}"
-                         + (f" (cap_cut {t['cap_cut']})" if t["cap_cut"] else "")
-                         for s, t in tally.items()))
-        _set_phase("phase_a_probe", t0,
+        log.info("=== MEGA Stage 1.5 — metadata-only source interleave ===")
+        out = _metadata_catalog(briefs_by_cat)
+        _set_phase("phase_a_probe", t0, mode="metadata_only",
                    counts={c: len(b) for c, b in out.items()},
-                   dropped_thin=dropped_thin,
-                   dropped_long=dropped_long,
-                   kept=kept_total,
-                   per_source=per_source)
+                   article_pages_fetched=0)
         return out
     briefs_by_cat = _load_or_run("phase_a_probe", _stage1_5_runner)
 
-    # stamp_probe_outcomes records probe_errors for a source that "produced zero
-    # briefs". It must judge that on what the probe produced — after ranking,
-    # briefs_by_cat is only the top 10 and a healthy source with no high scorer
-    # today would be booked as a fetch failure.
+    # Source-stamping distinguishes no RSS briefs from editorial rejection;
+    # do not treat an unsampled source body as a fetch failure.
     probe_pool_by_cat = {c: list(b) for c, b in briefs_by_cat.items()}
     if _jev_dropped:
         probe_pool_by_cat["_jev_prefiltered"] = [{"_source_name": n} for n in sorted(_jev_dropped)]
@@ -2221,12 +2241,40 @@ def main_mega() -> None:
     # Derived from the data, so a resumed run takes the same path as the original.
     jev_ranked = any("_jev_rank" in b for bs in briefs_by_cat.values() for b in bs)
 
+    # ---- Ranked body probe: first 12 originals per section, then batches of 6 ----
+    def _ranked_body_probe_runner():
+        t0 = time.monotonic()
+        log.info("=== MEGA ranked body probe (first 12, refill 6 if needed) ===")
+        catalog_by_cat: dict[str, list[dict]] = {}
+        verified_by_cat: dict[str, list[dict]] = {}
+        reports = {}
+        for cat, catalog in briefs_by_cat.items():
+            verified, remaining, report = _probe_ranked_catalog(cat, catalog)
+            if jev_ranked:
+                selected = _reselect_verified_briefs(cat, verified)
+                selected_ids = {id(b) for b in selected}
+                for b in remaining:
+                    if id(b) not in selected_ids and "_jev_rank" in b:
+                        b["_jev_rank"] = {**b["_jev_rank"], "send": False}
+            catalog_by_cat[cat] = remaining
+            verified_by_cat[cat] = verified
+            reports[cat] = report
+            log.info("  [%s] %d/%d originals verified in batches %s; %d sent onward",
+                     cat, report["verified"], report["fetched"], report["batches"],
+                     len(selected) if jev_ranked else min(len(verified), PROBE_MAX_PER_CAT))
+        _set_phase("ranked_body_probe", t0, per_category=reports)
+        return {"catalog": catalog_by_cat, "verified": verified_by_cat}
+
+    body_probe = _load_or_run("ranked_body_probe", _ranked_body_probe_runner)
+    briefs_by_cat = body_probe["catalog"]
+    verified_by_cat = body_probe["verified"]
+
     # ---- Stage 2: mega-curator (1 LLM call, 5 ranked per cat) ----
     def _stage2_runner():
         t0 = time.monotonic()
         log.info("=== MEGA Stage 2 — curator picks 5 ranked per cat ===")
-        curator_pool = (jev_rank.for_curator(briefs_by_cat) if jev_ranked else
-                        {cat: briefs[:PROBE_MAX_PER_CAT] for cat, briefs in briefs_by_cat.items()})
+        curator_pool = (jev_rank.for_curator(verified_by_cat) if jev_ranked else
+                        {cat: briefs[:PROBE_MAX_PER_CAT] for cat, briefs in verified_by_cat.items()})
         ranked, _vet, _reasoning = mega_curate(curator_pool)
         _set_phase("stage2_curator", t0,
                    picks={c: len(p) for c, p in ranked.items()})
