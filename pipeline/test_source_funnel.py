@@ -67,6 +67,25 @@ def test_partition_classifies_thin_long_and_cap():
     assert tally["B"] == {"in": 3, "kept": 1, "thin": 1, "long": 0, "cap_cut": 1}
 
 
+def test_fun_short_sources_pass_body_gate_but_news_and_science_do_not():
+    assert fr._probe_min_words("Fun") == 250
+    assert fr._probe_min_words("News") == fr._probe_min_words("Science") == 350
+    for category in ("Fun", "News", "Science"):
+        kept, _ = fr._partition_probe_results(
+            [_r("BBC Swimming", 0, 250), _r("BBC Tennis", 1, 254),
+             _r("DOGOnews", 2, 320), _r("BBC Tennis", 3, 349),
+             _r("DOGOnews", 4, 350)],
+            fr._probe_min_words(category), 1200, cap=10)
+        assert [b["word_count"] for b in kept] == \
+            ([250, 254, 320, 349, 350] if category == "Fun" else [350])
+
+
+def test_jev_checkpoint_precedes_body_probe_and_ranking():
+    from pipeline.checkpoints import STAGES
+    assert STAGES.index("stage1") < STAGES.index("stage1_jev") \
+        < STAGES.index("phase_a_probe") < STAGES.index("jev_rank")
+
+
 def test_interleave_plus_cap_keeps_every_source_represented():
     # The 2026-07-08 regression: 4 sources × 4 briefs, all pass the word
     # gate, cap 10 — in priority order the 4th source got zero slots.

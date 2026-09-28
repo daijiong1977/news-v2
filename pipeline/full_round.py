@@ -823,6 +823,13 @@ def _partition_probe_results(results: list[dict], min_words: int,
     return kept, tally
 
 
+PROBE_MIN_WORDS_BY_CATEGORY = {"News": 350, "Science": 350, "Fun": 250}
+
+
+def _probe_min_words(category: str) -> int:
+    return PROBE_MIN_WORDS_BY_CATEGORY.get(category, 350)
+
+
 def verify_picks_lazy(ranked_by_cat: dict[str, list[dict]],
                        max_top: int = 4,
                        min_body_words: int = 250,
@@ -1444,6 +1451,8 @@ def emit_v1_shape(stories_by_cat: dict[str, list[dict]],
                     "source_published_at": art.get("published") or "",
                     "source_name": src_name,
                     "source_url": src_url,
+                    "category": category,
+                    "source_word_count": int(art.get("word_count") or len((art.get("body") or "").split())),
                 }
                 (story_detail_dir / f"{lvl_key}.json").write_text(
                     json.dumps(detail, ensure_ascii=False, indent=2)
@@ -2022,8 +2031,7 @@ def main_mega() -> None:
     briefs_by_cat = _load_or_run("stage1", _stage1_runner)
 
     # ---- Stage 1.2: Jev pre-filter (fail-open; see jev_prefilter.py) ----
-    # Runs BEFORE the probe so its per-cat cap isn't spent on livestream
-    # pages, shopping guides or content that can never ship.
+    # This works on RSS briefs without fetching every full source article.
     def _stage1_jev_runner():
         from .jev_prefilter import prefilter_briefs
         t0 = time.monotonic()
@@ -2043,21 +2051,18 @@ def main_mega() -> None:
     try:
         briefs_by_cat = _load_or_run("stage1_jev", _stage1_jev_runner)
     except FileNotFoundError:
-        # Resuming a run that started before this stage existed (or whose
-        # stage1_jev save failed). The stage is optional: carry stage1 forward.
         log.warning("  [stage1_jev] no checkpoint for this run — skipping the pre-filter")
     # A source whose briefs the Jev pre-filter dropped did deliver; that is an
     # editorial outcome, not a fetch failure (see stamp_probe_outcomes below).
     _jev_dropped = {n for n in _pre_jev_sources
                     - {b.get("_source_name") for bs in briefs_by_cat.values() for b in bs} if n}
 
-    # ---- Stage 1.5: body probe + length gate + per-cat cap ----
+    # ---- Stage 1.5: body probe + category-specific length gate ----
     # Fetch each surviving brief's body in parallel, drop if word_count
-    # is outside [PROBE_MIN_WORDS, PROBE_MAX_WORDS], then keep the first
-    # PROBE_MAX_PER_CAT (RSS feed order ≈ newest first). The fetched
+    # is outside its category's word range, then keep the first
+    # eligible briefs (RSS feed order ≈ newest first). The fetched
     # article dict is cached on the brief as "_probe_art" so
     # verify_picks_lazy can skip re-fetching downstream.
-    PROBE_MIN_WORDS = 350
     PROBE_MAX_WORDS = 1200
     PROBE_MAX_PER_CAT = 10
     # Keep the full probed catalog so Stage 3 can continue searching after
@@ -2081,9 +2086,8 @@ def main_mega() -> None:
     def _stage1_5_runner():
         from concurrent.futures import ThreadPoolExecutor
         t0 = time.monotonic()
-        log.info("=== MEGA Stage 1.5 — body probe + length gate (%d ≤ wc ≤ %d, cap %s) ===",
-                 PROBE_MIN_WORDS, PROBE_MAX_WORDS,
-                 "none — curator input is capped later")
+        log.info("=== MEGA Stage 1.5 — body probe + length gate (%s ≤ wc ≤ %d) ===",
+                 PROBE_MIN_WORDS_BY_CATEGORY, PROBE_MAX_WORDS)
         out: dict[str, list[dict]] = {}
         kept_total = 0
         dropped_thin = 0
@@ -2100,7 +2104,7 @@ def main_mega() -> None:
             with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
                 results = list(ex.map(_probe_one, briefs))
             kept, tally = _partition_probe_results(
-                results, PROBE_MIN_WORDS, PROBE_MAX_WORDS, probe_cap)
+                results, _probe_min_words(cat), PROBE_MAX_WORDS, probe_cap)
             out[cat] = kept
             per_source[cat] = tally
             kept_total += len(kept)

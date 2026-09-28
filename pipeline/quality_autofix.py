@@ -32,6 +32,7 @@ from pipeline.quality_digest import (
     LEVELS, CATS, STORAGE_BASE,
     score_article, _fetch_json,
 )
+from pipeline.wordcount_policy import body_band
 
 log = logging.getLogger(__name__)
 
@@ -129,7 +130,8 @@ def autofix_day(date_iso: str, dry_run: bool) -> dict:
                 # overshoots are reported by the digest only — no
                 # autofix action (mechanical trim leaves mid-thought
                 # endings that ship to kids).
-                lo, hi = BODY_TARGETS[level]
+                lo, hi = body_band(level, category=payload.get("category"),
+                                   source_word_count=payload.get("source_word_count"))
                 hi_slack = hi * (1 + WC_SLACK)
                 lo_slack = lo * (1 - WC_SLACK)
                 if metrics["body_wc"] > hi_slack:

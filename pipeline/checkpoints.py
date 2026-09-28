@@ -32,8 +32,8 @@ log = logging.getLogger("checkpoint")
 STAGES = (
     "phase_a",         # after RSS fetch (briefs_by_cat)
     "stage1",          # after forbidden filter
-    "stage1_jev",      # after Jev pre-filter (livestream / shopping / extreme content)
-    "phase_a_probe",   # after body probe + length gate (+ per-cat cap when Jev ranking is off)
+    "stage1_jev",      # after Jev pre-filter on RSS briefs
+    "phase_a_probe",   # after body length gate (News/Science 350, Fun 250)
     "jev_rank",        # after Jev ranking: top 6 per cat go to the curator, the rest are spares
     "stage2_picks",    # after curator (ranked_by_cat)
     "verify",          # after body+image verify (stories_by_cat)

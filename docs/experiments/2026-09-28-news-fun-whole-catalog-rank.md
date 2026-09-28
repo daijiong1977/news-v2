@@ -74,3 +74,29 @@ reduction of the anomalous $0.04 JEV charge. The normal prefilter finished in
 about 3–4 seconds in the observed runs; billing needs a later dashboard check
 after one natural run. DeepSeek's marginal cost for the 30th News item is
 small but nonzero. No production rerun or content replacement was performed.
+
+## 2026-09-28 Fun source-length adjustment
+
+The production order is retained: `RSS → forbidden regex → JEV prefilter →
+HTML body + local word count → JEV routing/ranking → conditional DeepSeek
+ranking → curator`. Fetching every full article just to count words before
+the cheap title/snippet JEV pass would add network latency and change the
+funnel's existing behavior, so that reorder was **not** kept. Source-body
+counting uses no model, but because it stays after JEV it does not save JEV
+prefilter calls. The cached body is still reused during later verification.
+
+Fun's source-body minimum is now 250 words, matching the downstream
+verification minimum; News/Science remain at 350 and all categories retain
+the 1,200-word upper bound. This makes known 254-word BBC Tennis, 270-word
+TIME for Kids, 320-word DOGO pelican, and 334-word BBC Tennis candidates
+eligible for **later assessment**. The 223-word BBC Swimming world-record item
+still fails. For a 250–349-word Fun source, the per-item rewrite prompt targets
+135–185 words for easy and 265–315 for middle, instead of forcing a longer
+standard article. Generation QA and the published-content digest both recognize
+source-aware Fun bands (easy 120–220, middle 250–350, with the existing 15%
+tolerance); the detail payload carries the original word count so the
+next-morning digest and auto-fix use the same rule. Other sources and
+categories keep their prior bands. The rewriter and repair prompts require
+source-grounded details, and independent final safety/quality gates remain.
+No articles were republished; published quality and JEV billing impact require
+a future natural run.

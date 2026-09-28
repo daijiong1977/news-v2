@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T14:58:12-04:00",
+  "updated_at": "2026-09-28T16:29:35-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "News/Fun 各自最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在高于送审容量时调用；JEV 移除未使用的 want 判断并缩短初筛故障等待。Science 不变，待 PR 审核非生产。",
+      "purpose": "拟议的 Fun 正文门槛 250 词（News/Science 保持 350，JEV 初筛顺序不变）；News/Fun 最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在高于送审容量时调用；JEV 移除未使用的 want 判断并缩短初筛故障等待。待 PR 审核非生产。",
       "status": "proposed"
     },
     {
@@ -54,7 +54,12 @@
   "files": [
     {
       "path": "pipeline/full_round.py",
-      "purpose": "每日采集、候选补稿、安全审核和发布编排。",
+      "purpose": "每日采集、JEV 初筛、正文词数过滤（News/Science 350、Fun 250）、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/wordcount_policy.py",
+      "purpose": "标准与短原文 Fun 的 easy/middle 成稿词数区间，供生成审查、次日质量摘要和自动修复共用。",
       "location": "repo"
     },
     {
@@ -99,7 +104,7 @@
     },
     {
       "path": "pipeline/jev_prefilter.py",
-      "purpose": "采集后 JEV 第一层高置信度排除；服务变慢时 15 秒失败回退，不丢弃候选。",
+      "purpose": "正文探测前 JEV 高置信度排除；服务变慢时 15 秒失败回退，不丢弃候选。",
       "location": "repo"
     },
     {
@@ -270,6 +275,12 @@
       "date": "2026-09-28",
       "title": "Fun 整组排名只应在富余合格候选时付费",
       "note": "News 已有 JEV→最多 30 篇 DeepSeek 纯编号排序→六篇送审。Fun 9 月 26–28 日的 JEV 完整目录有 10/13/14 篇，但高于 0.50 趣味门槛仅 5/4/4 篇；额外 DeepSeek 比较无法扩充合格池，某次试排反而将消费耳机稿排第 3。拟议 Fun 只有合格稿超过七篇才整组比较，失败保留 JEV 排序，不改变 Science、七天历史去重或独立全文儿童安全复核。JEV 排名移除未使用的 want 答案，初筛超时缩短至 15 秒且失败仍保留候选；此分支尚未合并，生产质量与费用需自然运行验证。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "保持 JEV 在正文探测前，仅放宽 Fun 原文门槛至 250 词",
+      "note": "完整网页抓取会增加网络时间，故保留 RSS 标题/摘要 JEV 初筛→正文探测的原顺序；正文词数关本身不耗模型，但不会减少 JEV 初筛调用。拟议分支将 Fun 最少原文词数从 350 调为 250，News/Science 维持 350，上限 1200。250–349 词 Fun 原文改写目标缩为 easy 135–185、middle 265–315，并让发布后的质量摘要与自动修复识别同一短稿门槛；BBC Tennis 等候选可进入后续审核，223 词游泳稿仍会被挡。改写不得编造事实，仍需独立全文审核。仅完成本地测试，未合并或验证生产质量。",
       "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]

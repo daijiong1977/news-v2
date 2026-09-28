@@ -387,7 +387,9 @@ def process_row(row: dict, dry_run: bool) -> dict:
     if ptype in ("body_too_long", "body_too_short"):
         if level not in BODY_TARGETS:
             return _escalate(row, f"unknown level {level!r}", {})
-        lo, hi = BODY_TARGETS[level]
+        from pipeline.wordcount_policy import body_band
+        lo, hi = body_band(level, category=payload.get("category"),
+                           source_word_count=payload.get("source_word_count"))
         direction = "long" if ptype == "body_too_long" else "short"
         source_body = ""
         if direction == "short":
@@ -415,7 +417,9 @@ def process_row(row: dict, dry_run: bool) -> dict:
         if not ok:
             return _escalate(row, msg, det)
         if det.get("action") == "weave":
-            lo, hi = BODY_TARGETS[level]
+            from pipeline.wordcount_policy import body_band
+            lo, hi = body_band(level, category=payload.get("category"),
+                               source_word_count=payload.get("source_word_count"))
             wc = _word_count(payload["summary"])
             if not lo * (1 - WC_SLACK) <= wc <= hi * (1 + WC_SLACK):
                 return _escalate(row, f"keyword rewrite outside QA band: {wc} words", det)

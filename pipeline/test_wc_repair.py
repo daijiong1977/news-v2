@@ -4,6 +4,8 @@ that runs before the Stage 3 safety vet.
 Bug: docs/bugs/2026-09-15-middle-body-wordcount-repair.md
 """
 import pipeline.news_rss_core as core
+from pipeline.quality_digest import score_article
+from pipeline.wordcount_policy import body_band
 
 
 def _art(easy_wc: int, middle_wc: int) -> dict:
@@ -12,6 +14,28 @@ def _art(easy_wc: int, middle_wc: int) -> dict:
         "easy_en": {"headline": "h", "body": " ".join(["w"] * easy_wc)},
         "middle_en": {"headline": "h", "body": " ".join(["w"] * middle_wc)},
     }
+
+
+def test_short_fun_prompt_uses_shorter_targets_only_for_short_source():
+    short = {"title": "Tennis final", "body": "sport " * 270, "word_count": 270}
+    long = {"title": "Long feature", "body": "sport " * 450, "word_count": 450}
+    fun_prompt = core.tri_variant_rewriter_input([(0, short), (1, long)], category="Fun")
+    assert fun_prompt.count("This Fun source is short") == 1
+    assert "easy body 135–185 words; middle body 265–315 words" in fun_prompt
+    assert "This Fun source is short" not in core.tri_variant_rewriter_input(
+        [(0, short)], category="News")
+
+
+def test_short_fun_bands_align_generation_and_published_digest():
+    assert body_band("easy", category="Fun", source_word_count=270) == (120, 220)
+    assert body_band("middle", category="Fun", source_word_count=270) == (250, 350)
+    assert core._wc_within_qa("middle", 245, category="Fun", source_word_count=270)
+    assert not core._wc_within_qa("middle", 245, category="News", source_word_count=270)
+    payload = {"summary": "word " * 245, "category": "Fun", "source_word_count": 270,
+               "source_name": "BBC", "image_url": "https://example.org/image.jpg"}
+    metrics = score_article(payload, "middle")
+    assert metrics["body_ok"] and metrics["body_target"] == "250-350 (±15%)"
+    assert not score_article({**payload, "category": "News"}, "middle")["body_ok"]
 
 
 def test_repairs_long_middle_body(monkeypatch):
