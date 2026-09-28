@@ -1,8 +1,8 @@
 # News: whole-catalog editorial ranking before the six-brief curator cut
 
-Status: feature branch / PR #76, not merged into `main`. A manual full-round
-run on this branch **did publish** the 2026-09-28 content to the public site;
-that does not make the feature code the production `main` implementation.
+Status: PR #76 merged into `main` at `fac5bf5` on 2026-09-28. A prior manual
+full-round run on the feature branch **did publish** the 2026-09-28 content;
+the final merged selection repair has not had a natural Daily run yet.
 
 ## Why
 
@@ -123,8 +123,13 @@ fix those downstream interactions before another production overwrite.
   apparently leaning on JEV's low `section_value`. The curator now sees the
   global rank and is asked to value sourced explanations of US election
   administration even without a new law. Given the same six, it placed
-  Maricopa at rewrite rank 4. JEV's News value rubric was clarified too,
-  but could not be re-scored locally: `TYPESAFE_API_KEY` was unavailable.
+  Maricopa at rewrite rank 4. JEV's News value rubric was clarified too.
+  A later direct test found the KidsNews JEV credential in macOS Keychain
+  (service `ai.typesafe.jev.kidsnews`) and re-scored this saved brief without
+  exposing the key: `section_value` rose from 0.90 to 1.26 and
+  `editorial_pick` from 0.49 to 0.53. That is still below the separate
+  high-importance threshold of 2.5, so the whole-set ranking signal remains
+  necessary. This one-brief test does not validate a future full pipeline.
 - Stage-3 News refill and final choice now give topic variety a small,
   bounded bonus rather than allowing it to override a much stronger vetted
   article. The final choice also gives a bounded bonus to a high whole-set

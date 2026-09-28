@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T10:02:00-04:00",
+  "updated_at": "2026-09-28T10:04:00-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,13 +12,18 @@
     },
     {
       "name": "codex/quality-email-timeout",
-      "purpose": "质量邮件超时修复的临时 PR 分支，尚未部署。",
-      "status": "pr_pending"
+      "purpose": "质量邮件超时修复的历史 PR 分支；PR #77 已合并 main。",
+      "status": "merged_pending_retirement"
     },
     {
       "name": "codex/news-neutral-selection",
       "purpose": "News 候选中立性、整组编号排序和安全补稿的历史 PR 分支；PR #76 已合并 main。",
       "status": "merged_pending_retirement"
+    },
+    {
+      "name": "codex/jev-vault-email-confirm",
+      "purpose": "校正 JEV Keychain 验证和质量邮件交付文档、Atlas 状态的临时 PR 分支。",
+      "status": "pr_pending"
     }
   ],
   "deployments": [
@@ -144,7 +149,7 @@
     },
     {
       "path": "/Users/jiong/myprojects/news-v2-fun-source-pool",
-      "purpose": "news-v2 复用的独立工作树；目前承载 codex/news-neutral-selection 临时 PR 分支。",
+      "purpose": "news-v2 复用的独立工作树；目前承载 codex/jev-vault-email-confirm 临时 PR 分支，原 News PR #76 已合并。",
       "location": "local"
     },
     {
@@ -209,7 +214,7 @@
     {
       "date": "2026-09-28",
       "title": "快流水线暴露了质量邮件的等待与超时冲突",
-      "note": "Daily pipeline 仍完整运行并发布 9 篇，但 8 分多钟就完成；质量邮件按启动后第 92 分钟发送，任务自身只允许 75 分钟，导致邮件在等待中被取消。等待锚点与任务超时必须一起检查，并预留自动修复和发信时间；家长摘要是独立工作流，现已手动停用。",
+      "note": "Daily pipeline 仍完整运行并发布 9 篇，但 8 分多钟就完成；质量邮件按启动后第 92 分钟发送，任务自身只允许 75 分钟，导致邮件在等待中被取消。PR #77 将上限调到 120 分钟并合并 main。新版手动 digest-only run 36432840231 在 14:03 UTC 获得邮件服务 success:true；这确认服务接受，不等于收件箱验证。下一次自然运行仍需验证完整等待。家长摘要是独立工作流，现已手动停用。",
       "source_ref": "docs/bugs/2026-09-28-quality-digest-timeout.md"
     },
     {
