@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T08:21:00-04:00",
+  "updated_at": "2026-09-28T08:23:00-04:00",
   "branches": [
     {
       "name": "main",
@@ -216,7 +216,7 @@
     {
       "date": "2026-09-28",
       "title": "Fun 薄池可能把低价值游泳讣闻送给主编",
-      "note": "非发布预演中 SwimSwam 教练讣闻以 0.41 的评分进入四篇 Fun 送审池，低于常规 0.50。用户选择停用 SwimSwam 活跃来源；BBC Swimming 已启用且当日补稿使用。保留来源行和历史数据便于审计与回退，旧 seed 同步停用以免重启。",
+      "note": "非发布预演中 SwimSwam 教练讣闻以 0.41 的评分进入四篇 Fun 送审池，低于常规 0.50。2026-09-28 已核验生产来源表 SwimSwam ID 220 为 enabled=false、BBC Swimming ID 365 仍为 enabled=true；重新读取 Fun 来源池只包含后者。保留旧行和历史数据以便审计与回退，旧 seed 同步停用以免重启；PR 尚未合并。",
       "source_ref": "docs/bugs/2026-09-28-swimswam-fun-source.md"
     }
   ]
