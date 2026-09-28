@@ -3,12 +3,17 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-27T13:04:06-04:00",
+  "updated_at": "2026-09-28T08:06:00-04:00",
   "branches": [
     {
       "name": "main",
       "purpose": "当前生产流水线；由合并后的 PR 更新。",
       "status": "production"
+    },
+    {
+      "name": "codex/quality-email-timeout",
+      "purpose": "质量邮件超时修复的临时 PR 分支，尚未部署。",
+      "status": "pr_pending"
     }
   ],
   "deployments": [
@@ -35,6 +40,21 @@
     {
       "path": "pipeline/full_round.py",
       "purpose": "每日采集、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": ".github/workflows/quality-digest.yml",
+      "purpose": "Daily pipeline 完成后的质量扫描、自动修复和邮件发送；等待锚点与任务超时须兼容。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_quality_digest_workflow.py",
+      "purpose": "质量邮件等待锚点与任务超时的回归测试。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-28-quality-digest-timeout.md",
+      "purpose": "2026-09-28 质量邮件未发出的根因、实际流水线耗时和修复边界。",
       "location": "repo"
     },
     {
@@ -150,6 +170,12 @@
       "title": "main 是唯一长期入口，旧分支不能盲目合并",
       "note": "只有开放 PR #74 需要合并；其他远端历史分支即使未被 Git 识别为 main 的祖先，也不等于有待上线修复。逐一核对独有提交、PR 状态及工作树占用后再归档或删除。",
       "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "快流水线暴露了质量邮件的等待与超时冲突",
+      "note": "Daily pipeline 仍完整运行并发布 9 篇，但 8 分多钟就完成；质量邮件按启动后第 92 分钟发送，任务自身只允许 75 分钟，导致邮件在等待中被取消。等待锚点与任务超时必须一起检查，并预留自动修复和发信时间；家长摘要是独立工作流，已按用户要求暂时停用。",
+      "source_ref": "docs/bugs/2026-09-28-quality-digest-timeout.md"
     }
   ]
 }

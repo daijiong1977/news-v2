@@ -15,7 +15,6 @@ name: Quality digest email
 # Triggers:
 #   - workflow_run on Daily pipeline (primary; fires when pipeline
 #     finishes whether success or failure).
-#   - schedule (backup cron 05:30 UTC daily).
 #   - workflow_dispatch with optional skip_sleep flag for fast tests.
 #
 # Required secrets (all already set):
@@ -59,9 +58,9 @@ concurrency:
 jobs:
   fix-and-digest:
     runs-on: ubuntu-latest
-    # 1h sleep + a few minutes of work; ubuntu-latest default timeout
-    # is 360 min, so 75 here is conservative.
-    timeout-minutes: 75
+    # The post-pipeline wait can approach the full 92-minute trigger anchor
+    # when the pipeline finishes quickly. Leave time for autofix and email.
+    timeout-minutes: 120
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -125,15 +124,8 @@ jobs:
         # If pipeline ran the full 90 min, we sleep ~2 min and run.
         # If pipeline somehow ran past 92 min, we run immediately.
         #
-        # Schedule path (backup cron 05:30 UTC) is excluded — for
-        # the schedule event, `github.event.schedule` is the cron
-        # STRING (e.g. "30 5 * * *"), not a timestamp, so the
-        # fromisoformat parse below would crash. The schedule path
-        # is the backup that fires regardless of the upstream
-        # pipeline state, so it should run the digest immediately
-        # (no anchor wait). This was the root cause of the
-        # 2026-05-01 06:28 UTC failure (bug record:
-        # docs/bugs/2026-05-01-quality-digest-schedule-wait-crash.md).
+        # Manual runs skip this wait. The old schedule fallback was removed
+        # because it produced duplicate emails.
         if: ${{ steps.guard.outputs.should_run != 'false' && inputs.skip_sleep != true && github.event_name == 'workflow_run' }}
         env:
           TRIGGER_TIME: ${{ github.event.workflow_run.run_started_at }}
@@ -150,7 +142,7 @@ jobs:
           TARGET_EPOCH=$((TRIGGER_EPOCH + 92 * 60))
           REMAINING=$((TARGET_EPOCH - NOW_EPOCH))
           if [ "$REMAINING" -le 0 ]; then
-              echo "Already past trigger+90min target — running digest now"
+              echo "Already past trigger+92min target — running digest now"
               exit 0
           fi
           if [ "$REMAINING" -gt 5400 ]; then
@@ -158,7 +150,7 @@ jobs:
               REMAINING=5400
           fi
           echo "Pipeline triggered at: $TRIGGER_TIME"
-          echo "Sleeping ${REMAINING}s (= $((REMAINING/60)) min) to reach trigger+90min anchor"
+          echo "Sleeping ${REMAINING}s (= $((REMAINING/60)) min) to reach trigger+92min anchor"
           sleep "$REMAINING"
 
       - name: Run autofix scan (queue issues)
