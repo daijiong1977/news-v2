@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T09:36:18-04:00",
+  "updated_at": "2026-09-28T09:47:12-04:00",
   "branches": [
     {
       "name": "main",
@@ -197,6 +197,12 @@
       "date": "2026-09-28",
       "title": "真实 full round 暴露选稿与补稿的断层",
       "note": "PR #76 的提交 5b1fbb3 于 2026-09-28 手动运行完整流水线并覆盖当天网站内容，九篇 SAFE 且网站同步成功，但 News 没有达到期望的熊猫、美国选举核验、AI 安全三篇：选举稿在六篇之外，AI 安全稿历史复核不确定，熊猫列为主编第五名后被题材优先补稿越过；最终发布委内瑞拉释放被拘者、学校 AI 实验、缅因州参议员选战，并触发无高重要性稿告警。JEV 初筛 60 秒超时、后续打分仍完成。Actions 成功不代表编辑质量合格；PR 代码仍未合并 main。",
+      "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "整组 News 排名不能再被题材换位覆盖",
+      "note": "保存候选的只读回放发现，DeepSeek 曾把美国选举核验稿排第 1，但 JEV 送审前第二次题材换位把它换成旧暴雨；主编即使看到它也曾在六选五时忽略。临时 PR 修复为整组排名六篇直接送主编、在输入中传递 global_rank 并明确选举流程解释的公共价值；News 补稿和最终选三篇对题材多样性只给有限加分，最终选稿给高整组名次有限加分。历史不确定仍不放行，全文儿童安全审核不变。两次本地整组排序回放将选举稿排第 1；主编只读回放在新提示下将其列为改写第 4。JEV 新评分未能本地验证，因为该 checkout 未提供 TYPESAFE_API_KEY；未再次发布或验证完整流水线，不视为已上线。",
       "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
     }
   ]

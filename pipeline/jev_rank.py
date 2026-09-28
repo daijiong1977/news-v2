@@ -139,7 +139,7 @@ SECTION_VALUE_LEVELS = {
     "News": [
         "Routine spectacle or local detail with no meaningful public consequence",
         "Limited public consequence; a US place name or famous politician alone is not enough",
-        "Concrete new civic or diplomatic development worth explaining: federal oversight, public infrastructure, data centers, government AI use, or US relations, even before direct effects are known",
+        "Concrete civic or diplomatic development OR timely, fact-rich civic explainer worth understanding: how US elections are administered and verified, federal oversight, public infrastructure, data centers, government AI use, or US relations, even before direct effects are known",
         "Substantive new action affecting US public institutions, rights, communities, national security or major US diplomacy; no immediate child-specific impact is required",
         "Major verified national or world turning point with substantial US or global public consequences",
     ],
@@ -171,7 +171,7 @@ NEWS_NEUTRALITY_LEVELS = [
 def _section_questions(base, cat):
     from typesafe_sdk import Score
     questions = {**base, "section_value": Score(
-        instructions="Evaluate the actual new development for this section and US children aged 10–14. "
+        instructions="Evaluate the actual development or timely factual explainer for this section and US children aged 10–14. "
                      "Use evidence in the title/summary, not sensational wording or famous names. "
                      "For News use consequences, never political party, ideology or approval of a policy.",
         criteria=SECTION_VALUE_LEVELS.get(cat, SECTION_VALUE_LEVELS["News"]))}
@@ -574,6 +574,14 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
         selected = [b for b in catalog if (b.get("_jev_rank") or {}).get("send")]
         if not selected:
             result[cat] = []
+            continue
+        if cat == "News" and any((b.get("_jev_rank") or {}).get("global_rank") for b in selected):
+            # The whole-catalog News comparison has already made a six-item
+            # source/topic-aware choice. A second topic-only swap can remove
+            # a top civic explainer for an old storm or a weaker crime story
+            # before the curator sees it. Keep its six; later gates still
+            # verify history, bodies, safety and final diversity.
+            result[cat] = selected
             continue
         reserves = [b for b in catalog if not (b.get("_jev_rank") or {}).get("send")]
         source = lambda b: (publisher_key(b.get("_source")) or b.get("_source_name")) \

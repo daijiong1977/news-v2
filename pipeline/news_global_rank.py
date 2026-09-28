@@ -33,6 +33,11 @@ political party, dramatic language, or a famous name by itself.
 Prefer three different real-world events, topics and publishers near the top.
 Judge whether the source provides enough facts for a neutral, attributed rewrite;
 do not reject politics, war, or civil rights merely because the subject is serious.
+An explanation of how US elections are administered or checked can be more
+valuable to children than routine campaign tactics or speculation about who
+may win. Likewise, concrete government safeguards matter more than a famous
+politician's opinion about them. Rank the actual public value of the event,
+not the headline's drama or the outlet's prominence.
 Put country profiles, sport, routine commentary, duplicate events and likely
 repeats of the supplied seven-day published titles near the END. Do not invent
 facts beyond the supplied title and summary.

@@ -114,6 +114,14 @@ ALGORITHM (internal, don't output intermediate work):
      - News: when eligible, keep at least one section_value >= 2.5 story
        with concrete importance for the US or US children in the top three.
        Importance means consequences, never party preference or sensationalism.
+       A civic explainer on how elections are administered or verified can be
+       important without a new law or an immediate result. A lower Jev
+       section_value is one fallible signal, not a veto. News candidates may
+       include a global_rank from a separate whole-set comparison; treat it
+       as a useful editorial prior. If you omit a top-ranked eligible News
+       story from the five, it should be because the supplied facts show a
+       concrete safety, neutrality, repetition or comparative-value concern,
+       not just because it shares a broad editorial_topic with another pick.
      - Science: use section_value as scientific learning/discovery value.
        Fun: use section_value as genuine child-facing enjoyment, not merely
        a sports/entertainment label. Fun may supply up to seven candidates;
@@ -169,10 +177,13 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
             neutrality = (brief.get("_jev_rank") or {}).get("neutrality_risk")
             neutrality_note = (f" neutrality_risk={neutrality}/4"
                                if cat == "News" and neutrality is not None else "")
+            global_rank = (brief.get("_jev_rank") or {}).get("global_rank")
+            global_rank_note = (f" global_rank={global_rank}"
+                                if cat == "News" and global_rank is not None else "")
             sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
                           else "")
             line = (f"  [id={cid}] src={src_name} publisher={publisher_key(brief.get('_source'))}"
-                    f"{topic_note}{sport_note}{value_note}{neutrality_note}\n"
+                    f"{topic_note}{sport_note}{value_note}{neutrality_note}{global_rank_note}\n"
                     f"     title: {title}\n"
                     f"     summary: {summary}")
             by_cat_lines[cat].append(line)

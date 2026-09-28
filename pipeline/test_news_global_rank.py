@@ -2,6 +2,8 @@
 import json
 
 from pipeline.news_global_rank import rerank_news_catalog
+from pipeline.jev_rank import for_curator
+from pipeline.mega_curator import _build_mega_curator_input
 
 
 def _brief(n, source=None, pick=.7, topic=None):
@@ -65,3 +67,22 @@ def test_shortlist_does_not_take_six_from_one_source():
     sent = [b for b in out if b["_jev_rank"]["send"]]
     assert sum(b["_source_name"] == "A" for b in sent) <= 3
     assert len({b["_source_name"] for b in sent}) >= 3
+
+
+def test_global_news_shortlist_survives_later_topic_swap():
+    catalog = [_brief(i, topic="us_politics" if i <= 2 else "international_relations")
+               for i in range(1, 8)]
+    catalog[-1]["_jev_topic_group"] = "severe_weather"
+    catalog[-1]["_jev_rank"]["editorial_pick"] = .9
+    ranked, _ = rerank_news_catalog(catalog, [],
+                                    call=lambda *_a, **_k: list(range(1, 8)))
+    expected = [b for b in ranked if b["_jev_rank"]["send"]]
+    assert for_curator({"News": ranked})["News"] == expected
+
+
+def test_curator_sees_global_news_rank_without_accepting_model_titles():
+    ranked, _ = rerank_news_catalog([_brief(1), _brief(2)], [],
+                                    call=lambda *_a, **_k: [2, 1])
+    message, registry = _build_mega_curator_input({"News": for_curator({"News": ranked})["News"]})
+    assert "global_rank=1" in message and "global_rank=2" in message
+    assert {entry["brief"]["title"] for entry in registry.values()} == {"Story 1", "Story 2"}

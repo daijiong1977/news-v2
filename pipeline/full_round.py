@@ -1079,8 +1079,9 @@ def promote_spare_and_rewrite(
     on success or (None, None) if no spare survives verify+rewrite+vet.
 
     `used_source_names` is the set of source.name strings already in
-    the surviving top 3. The function prefers another topic group, then
-    follows the ranked candidate order. A repeated source is eligible
+    the surviving top 3. News uses scored editorial value with a small
+    topic bonus; the other sections prefer another topic group, then
+    follow the ranked candidate order. A repeated source is eligible
     unless `require_new_source` is set for a diversity-only pass.
 
     `used_titles` are the headlines already shipping — a probe-pool spare
@@ -1092,6 +1093,7 @@ def promote_spare_and_rewrite(
     from .jev_rank import CATEGORY_FIT_MIN
     from .mega_curator import briefs_same_event
     from .news_topics import topic_group
+    from .editorial_policy import news_editorial_strength
 
     used = set(used_source_names or ())
     shipped_briefs = list(used_briefs or ())
@@ -1169,13 +1171,19 @@ def promote_spare_and_rewrite(
             kept[0],
         )
 
-    # Try another known topic group first. Within each tier, keep the
-    # pre-ranked catalog order so the strongest remaining article wins.
+    # Topic variety is a soft preference. In News, a much stronger scored
+    # candidate from an already-used broad group must not lose to a weak one.
+    # Unscored spares and the other sections retain the existing topic tiers.
     # Failed candidates are consumed; unattempted ones remain available.
-    def _priority(spare: dict) -> int:
+    def _priority(spare: dict):
         brief = spare.get("_winner_brief") or {}
         label = topic_group(brief)
         repeats_topic = bool(topics_used) and (not label or label in topics_used)
+        if cat == "News":
+            strength = news_editorial_strength(brief)
+            if strength is not None:
+                return (0, -(strength + (0 if repeats_topic else .06)))
+            return (1, int(repeats_topic))
         return int(repeats_topic)
 
     for spare in sorted(spares, key=_priority):
