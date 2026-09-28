@@ -18,7 +18,7 @@
 
 当前发布链：`news-v2 main` 的 `.github/workflows/daily-pipeline.yml` 定时或手动运行 `pipeline/full_round.py` → 写 Supabase 故事与 `latest.zip` → GitHub `repository_dispatch` 触发 `kidsnews-v2` 的 `.github/workflows/sync-from-supabase.yml`（每两小时定时兜底）→ 下载并替换部署仓的 `site/`、有变化才 commit/push → Vercel 发布。流水线会尝试核对同步提交；仍须分别检查 Action 结果、部署仓新提交和公开页面。2026-09-27 两个公开入口 `https://kidsnews.21mins.com/`、`https://news.6ray.com/` 均返回 HTTP 200；这仅证明入口可访问，不证明某次新内容已经发布。
 
-当前 YAML 中 Daily pipeline 的定时触发为每天 **07:00 UTC**（纽约夏令时 03:00；冬令时不是同一个本地钟点），管理员配置还可能停用当次定时或改变运行 variant；手动运行不受这个停用门槛约束。Quality digest 由 Daily 完成事件触发，目标是在原流水线触发后约 92 分钟检查；Parent digest 每天 10:00 UTC 触发，函数再决定哪些家长到期。同步仓的兜底 cron 为每两小时的第 15 分。旧注释提到“30 分钟轮询”“固定睡 1 小时”等均不应盖过当前 YAML 的实际配置。
+截至 2026-09-28 提议中的调度 PR，Daily pipeline 拟改为每天 **06:10 America/New_York**，GitHub 按 EST/EDT 自动换算；**PR 合并前生产仍以 `main` 的 07:00 UTC 为准**。管理员配置仍可停用当次定时或改变运行 variant；手动运行不受这个停用门槛约束。旧 UTC cron 自动反写 `main` 的机制在提议中移除，时间修改改走 PR，管理页只保留启用与 variant 控制。Quality digest 由 Daily 完成事件触发，目标是在原流水线触发后约 92 分钟检查；Parent digest 有独立定时，需查其工作流与启用状态。同步仓的兜底 cron 为每两小时的第 15 分。旧注释提到“30 分钟轮询”“固定睡 1 小时”等均不应盖过当前 YAML 的实际配置。
 
 本机 `website/` 是打包素材与模板；部署仓远端 `site/` 是同步结果，不能把两者当成互相独立、需要手工双向合并的源码。`newdesign/` 和旧版设计说明是历史参考。旧 `news`、`kidsnews`、`kidsnews-v2-snapshot` 不在本次核对的上述工作目录中；不要仅凭名字推断它们仍参与生产。
 

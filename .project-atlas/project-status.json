@@ -3,12 +3,17 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T10:07:17-04:00",
+  "updated_at": "2026-09-28T11:06:55-04:00",
   "branches": [
     {
       "name": "main",
       "purpose": "当前生产流水线；由合并后的 PR 更新。",
       "status": "production"
+    },
+    {
+      "name": "codex/eastern-offpeak-jev-audit",
+      "purpose": "拟议将 Daily pipeline 调至每天美东 06:10，审计 JEV 用量并禁止旧 UTC cron 机器人直推 main；待 PR 审核，尚未上线。",
+      "status": "proposed"
     },
     {
       "name": "codex/quality-email-timeout",
@@ -50,6 +55,21 @@
     {
       "path": "pipeline/full_round.py",
       "purpose": "每日采集、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": ".github/workflows/daily-pipeline.yml",
+      "purpose": "每日流水线的生产调度及执行；拟改为美东 06:10，待 PR 合并后才生效。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_daily_schedule.py",
+      "purpose": "拟议的美东夏冬时调度与旧 cron 直推防回归测试。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-28-jev-spend-and-offpeak-schedule.md",
+      "purpose": "9 月 24–28 日 JEV 用量/失败对比、DeepSeek 半价时段调度及降费实验边界。",
       "location": "repo"
     },
     {
@@ -240,6 +260,12 @@
       "title": "整组 News 排名不能再被题材换位覆盖",
       "note": "保存候选的只读回放发现，DeepSeek 曾把美国选举核验稿排第 1，但 JEV 送审前第二次题材换位把它换成旧暴雨；主编即使看到它也曾在六选五时忽略。PR #76 修复为整组排名六篇直接送主编、在输入中传递 global_rank 并明确选举流程解释的公共价值；News 补稿和最终选三篇对题材多样性只给有限加分，最终选稿给高整组名次有限加分。历史不确定仍不放行，全文儿童安全审核不变。本机 Keychain 中找回 KidsNews JEV 凭据，真实重评选举核验稿得 section_value 1.26（旧 0.90），仍不足以单独达到高重要性门槛；整组排序信号继续必要。代码已合并 main，未验证下一次自然运行。",
       "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "JEV 成本对比须按运行次数和失败调用分开核算",
+      "note": "9 月 28 日有定时与手动两次完整运行；手动前筛送出 104 条后遇 503/60 秒超时，结果被忽略，后续仍对 81 条正文合格稿做 JEV 排名。日志没有逐调用价格，不能将约 $0.04 的当日账单全部归因于某一步。拟将每日调度改为美东 06:10 以落在 DeepSeek 非高峰时段；先比较单次自然运行及账单，再决定是否加入 DeepSeek 预选，不削弱独立全文儿童安全复核。此调度仍在 PR 中，非已上线。",
+      "source_ref": "docs/bugs/2026-09-28-jev-spend-and-offpeak-schedule.md"
     }
   ]
 }
