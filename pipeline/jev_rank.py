@@ -75,6 +75,7 @@ MAX_SAME_SUBJECT = 3        # News only: a cap, not a ban — see _select
 CATEGORY_FIT_MIN = 0.60     # wrong-section stories never reach curator/spares
 DEEP_DIG_BORDERLINE_MAX = 0.70  # only uncertain late backfill pays for cross-section checks
 DEEP_DIG_FIT_MARGIN = 0.05     # target must beat the best alternative, not merely pass 0.60
+NEWS_NEUTRALITY_REJECT = 3.0  # 3-4: do not shortlist or keep as a refill spare
 
 # Minimum `pick` to be sent to the curator without comment. Calibrated on 100
 # stories labelled blind for this audience (jev-probes/data/gold_labels.py):
@@ -138,7 +139,7 @@ SECTION_VALUE_LEVELS = {
     "News": [
         "Routine spectacle or local detail with no meaningful public consequence",
         "Limited public consequence; a US place name or famous politician alone is not enough",
-        "Concrete new civic or diplomatic development worth explaining: federal oversight, public infrastructure, data centers, government AI use, or US relations, even before direct effects are known",
+        "Concrete civic or diplomatic development OR timely, fact-rich civic explainer worth understanding: how US elections are administered and verified, federal oversight, public infrastructure, data centers, government AI use, or US relations, even before direct effects are known",
         "Substantive new action affecting US public institutions, rights, communities, national security or major US diplomacy; no immediate child-specific impact is required",
         "Major verified national or world turning point with substantial US or global public consequences",
     ],
@@ -158,17 +159,33 @@ SECTION_VALUE_LEVELS = {
     ],
 }
 SECTION_VALUE_BONUS = {3: .10, 4: .18}
+NEWS_NEUTRALITY_LEVELS = [
+    "Straight factual reporting; relevant claims are sourced and uncertainty is clear",
+    "Mostly factual; a mild framing issue can be removed without changing the story",
+    "A disputed claim or emotive wording needs careful attribution, but the brief gives enough context for a neutral account",
+    "One-sided or loaded framing is central: contested blame, motive or a policy verdict is asserted as fact, with too little context to write a balanced account from this brief",
+    "Propaganda, dehumanization or repeated unsupported accusations presented as established fact",
+]
 
 
 def _section_questions(base, cat):
     from typesafe_sdk import Score
     questions = {**base, "section_value": Score(
-        instructions="Evaluate the actual new development for this section and US children aged 10–14. "
+        instructions="Evaluate the actual development or timely factual explainer for this section and US children aged 10–14. "
                      "Use evidence in the title/summary, not sensational wording or famous names. "
                      "For News use consequences, never political party, ideology or approval of a policy.",
         criteria=SECTION_VALUE_LEVELS.get(cat, SECTION_VALUE_LEVELS["News"]))}
     if cat == "Fun":
         questions["sports_priority"] = Score(instructions=SPORTS_PRIORITY_Q, criteria=SPORTS_PRIORITY_LEVELS)
+    if cat == "News":
+        questions["neutrality_risk"] = Score(
+            instructions="Judge the HEADLINE and SUMMARY as source material for a children's news article. "
+                         "Can an editor report this event neutrally using only the facts and attributed claims provided? "
+                         "Flag loaded or verdict-like wording, unattributed disputed claims, and missing uncertainty. "
+                         "Do not penalize war, disability rights, politics, or a documented harm merely because the "
+                         "subject is serious. Neutrality does not require treating a demonstrably false claim as equal "
+                         "to verified evidence. Score the reporting, not whether you agree with either side.",
+            criteria=NEWS_NEUTRALITY_LEVELS)
     return questions
 CATEGORY_FIT_Q = "Does this story belong in the named section?"
 CATEGORY_FIT_CRITERIA = {
@@ -227,11 +244,13 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
     pick, want = float(ans["pick"].noul), float(ans["want"].score)
     category_fit = float(ans["category_fit"].noul)
     sports_priority = float(getattr(ans.get("sports_priority"), "score", 0) or 0)
+    neutrality_risk = float(getattr(ans.get("neutrality_risk"), "score", 0) or 0)
     value = float(ans["section_value"].score) if "section_value" in q else None
     if not (math.isfinite(pick) and 0 <= pick <= 1
             and math.isfinite(want) and 0 <= want <= len(WANT_LEVELS) - 1
             and math.isfinite(category_fit) and 0 <= category_fit <= 1
             and math.isfinite(sports_priority) and 0 <= sports_priority <= 4
+            and math.isfinite(neutrality_risk) and 0 <= neutrality_risk <= 4
             and (value is None or math.isfinite(value) and 0 <= value <= 4)):
         raise ValueError(
             f"jev returned out-of-range answers: pick={pick} want={want} "
@@ -244,6 +263,7 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
     return {"pick": round(pick, 3), "want": round(want, 2),
             **({"section_value": round(value, 2)} if value is not None else {}),
             "category_fit": round(category_fit, 3),
+            **({"neutrality_risk": round(neutrality_risk, 2)} if cat == "News" else {}),
             "sports_priority": round(sports_priority, 2) if cat == "Fun" else 0,
             "editorial_pick": round(min(1.0, pick + bonus), 3)}
 
@@ -280,6 +300,10 @@ def gate_deep_dig_category(cat: str, briefs: list[dict], client=None) -> list[di
                     score = fut.result()
                     fit = score["category_fit"]
                     b["_jev_rank"] = {**score, "floor": FLOOR.get(cat, DEFAULT_FLOOR)}
+                    if cat == "News" and score["neutrality_risk"] >= NEWS_NEUTRALITY_REJECT:
+                        log.info("  [News] deep-dig neutrality risk %.2f: %s",
+                                 score["neutrality_risk"], (b.get("title") or "")[:60])
+                        continue
                     if cat == "Fun" and low_fun_value(b):
                         continue
                 except Exception as e:  # noqa: BLE001 — unscored backfill is not safe to promote
@@ -457,6 +481,8 @@ def _select(cat: str, ranked: list[dict], pairs: _Pairs,
             return excluded
         if cat == "Fun" and low_fun_value(b):
             return "low Fun value"
+        if cat == "News" and float((b.get("_jev_rank") or {}).get("neutrality_risk", 0)) >= NEWS_NEUTRALITY_REJECT:
+            return "one-sided or unsupported framing"
         fit = float(b.get("_jev_category_fit", 1.0))
         if fit < CATEGORY_FIT_MIN:
             return f"category fit {fit:.2f} is below {CATEGORY_FIT_MIN:.2f}"
@@ -548,6 +574,14 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
         selected = [b for b in catalog if (b.get("_jev_rank") or {}).get("send")]
         if not selected:
             result[cat] = []
+            continue
+        if cat == "News" and any((b.get("_jev_rank") or {}).get("global_rank") for b in selected):
+            # The whole-catalog News comparison has already made a six-item
+            # source/topic-aware choice. A second topic-only swap can remove
+            # a top civic explainer for an old storm or a weaker crime story
+            # before the curator sees it. Keep its six; later gates still
+            # verify history, bodies, safety and final diversity.
+            result[cat] = selected
             continue
         reserves = [b for b in catalog if not (b.get("_jev_rank") or {}).get("send")]
         source = lambda b: (publisher_key(b.get("_source")) or b.get("_source_name")) \
@@ -665,6 +699,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
             dup_ids = {id(b) for b, why in skipped if "same story" in why}
             rest = [b for b in ranked if not any(b is c for c in chosen)
                     and not editorial_exclusion(b) and not (cat == "Fun" and low_fun_value(b))
+                    and not (cat == "News" and float((b.get("_jev_rank") or {}).get("neutrality_risk", 0)) >= NEWS_NEUTRALITY_REJECT)
                     and (not explicit_section(b) or explicit_section(b) == cat)
                     and float(b.get("_jev_category_fit", 1.0)) >= CATEGORY_FIT_MIN
                     and not pairs._published.get(id(b)) and id(b) not in dup_ids]
@@ -688,6 +723,7 @@ def rank_briefs(briefs_by_cat: dict[str, list[dict]], *, client=None,
                                     "raw_pick": (scores.get(id(b)) or {}).get("pick"),
                                     "sports_priority": (scores.get(id(b)) or {}).get("sports_priority"),
                                     "section_value": (scores.get(id(b)) or {}).get("section_value"),
+                                    "neutrality_risk": (scores.get(id(b)) or {}).get("neutrality_risk"),
                                     "source": b.get("_source_name"), "title": b.get("title")}
                                    for i, b in enumerate((b for b in final if id(b) in chosen_ids), start=1)]
             report["skipped"] += [{"cat": cat, "title": b.get("title"), "why": why} for b, why in skipped]
