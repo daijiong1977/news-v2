@@ -2194,6 +2194,10 @@ def main_mega() -> None:
                 ranked["News"], news_report = rerank_news_catalog(
                     ranked.get("News") or [], recent_titles_by_cat.get("News") or [])
                 _set_phase("news_global_rank", news_t0, **news_report)
+                from .fun_global_rank import rerank_fun_catalog
+                fun_t0 = time.monotonic()
+                ranked["Fun"], fun_report = rerank_fun_catalog(ranked.get("Fun") or [])
+                _set_phase("fun_global_rank", fun_t0, **fun_report)
                 return ranked
         except Exception as e:  # noqa: BLE001 — an optional stage must never break the run
             log.warning("  jev_rank stage failed (%s) — using the legacy cut", e)

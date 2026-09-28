@@ -3,12 +3,17 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T10:07:17-04:00",
+  "updated_at": "2026-09-28T14:52:01-04:00",
   "branches": [
     {
       "name": "main",
       "purpose": "当前生产流水线；由合并后的 PR 更新。",
       "status": "production"
+    },
+    {
+      "name": "codex/news-fun-rank-experiment",
+      "purpose": "Fun 在 JEV 合格候选超过送审容量时才做 DeepSeek 纯编号整组排序；News 既有逻辑不变，Science 不变，待 PR 审核非生产。",
+      "status": "proposed"
     },
     {
       "name": "codex/quality-email-timeout",
@@ -50,6 +55,21 @@
     {
       "path": "pipeline/full_round.py",
       "purpose": "每日采集、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/fun_global_rank.py",
+      "purpose": "拟议的 Fun 完整候选目录纯编号排序；仅富余合格候选时调用，失败保留 JEV 顺序。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_fun_global_rank.py",
+      "purpose": "Fun 整组排序、深层备稿保留、低质量池跳过调用及模型错误回退的回归测试。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md",
+      "purpose": "News/Fun 整组排序实验、9 月 26–28 日候选回放与安全上线边界。",
       "location": "repo"
     },
     {
@@ -240,6 +260,12 @@
       "title": "整组 News 排名不能再被题材换位覆盖",
       "note": "保存候选的只读回放发现，DeepSeek 曾把美国选举核验稿排第 1，但 JEV 送审前第二次题材换位把它换成旧暴雨；主编即使看到它也曾在六选五时忽略。PR #76 修复为整组排名六篇直接送主编、在输入中传递 global_rank 并明确选举流程解释的公共价值；News 补稿和最终选三篇对题材多样性只给有限加分，最终选稿给高整组名次有限加分。历史不确定仍不放行，全文儿童安全审核不变。本机 Keychain 中找回 KidsNews JEV 凭据，真实重评选举核验稿得 section_value 1.26（旧 0.90），仍不足以单独达到高重要性门槛；整组排序信号继续必要。代码已合并 main，未验证下一次自然运行。",
       "source_ref": "docs/bugs/2026-09-28-news-whole-catalog-ranking.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "Fun 整组排名只应在富余合格候选时付费",
+      "note": "News 已有 JEV→最多 29 篇 DeepSeek 纯编号排序→六篇送审。Fun 9 月 26–28 日的 JEV 完整目录有 10/13/14 篇，但高于 0.50 趣味门槛仅 5/4/4 篇；额外 DeepSeek 比较无法扩充合格池，某次试排反而将消费耳机稿排第 3。拟议 Fun 只有合格稿超过七篇才整组比较，失败保留 JEV 排序，不改变 Science、七天历史去重或独立全文儿童安全复核。此分支尚未合并，生产质量收益需富余候选日验证。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]
 }

@@ -125,7 +125,10 @@ ALGORITHM (internal, don't output intermediate work):
      - Science: use section_value as scientific learning/discovery value.
        Fun: use section_value as genuine child-facing enjoyment, not merely
        a sports/entertainment label. Fun may supply up to seven candidates;
-       still rank at most five, for three final stories and reserves.
+       still rank at most five, for three final stories and reserves. A Fun
+       global_rank, when supplied, is a whole-set editorial prior; omit a
+       high-ranked candidate only for a concrete safety, freshness, repetition
+       or comparative-value reason. The source and event checks still win.
      - Cross-category tiebreak (same cluster wanted by two cats):
          News × Fun     → keep the Fun pick
          News × Science → keep the Science pick
@@ -179,7 +182,7 @@ def _build_mega_curator_input(briefs_by_cat: dict[str, list[dict]]) -> tuple[str
                                if cat == "News" and neutrality is not None else "")
             global_rank = (brief.get("_jev_rank") or {}).get("global_rank")
             global_rank_note = (f" global_rank={global_rank}"
-                                if cat == "News" and global_rank is not None else "")
+                                if cat in {"News", "Fun"} and global_rank is not None else "")
             sport_note = (f" sports_priority={sport_score}" if cat == "Fun" and sport_score >= 3
                           else "")
             line = (f"  [id={cid}] src={src_name} publisher={publisher_key(brief.get('_source'))}"

@@ -575,12 +575,11 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
         if not selected:
             result[cat] = []
             continue
-        if cat == "News" and any((b.get("_jev_rank") or {}).get("global_rank") for b in selected):
-            # The whole-catalog News comparison has already made a six-item
-            # source/topic-aware choice. A second topic-only swap can remove
-            # a top civic explainer for an old storm or a weaker crime story
-            # before the curator sees it. Keep its six; later gates still
-            # verify history, bodies, safety and final diversity.
+        if cat in {"News", "Fun"} and any((b.get("_jev_rank") or {}).get("global_rank") for b in selected):
+            # A whole-catalog comparison has already made a source/topic-aware
+            # shortlist. A second topic-only swap can undo its ranking before
+            # the curator sees it. Later history, safety and diversity gates
+            # remain in force.
             result[cat] = selected
             continue
         reserves = [b for b in catalog if not (b.get("_jev_rank") or {}).get("send")]
