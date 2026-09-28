@@ -76,7 +76,7 @@ def aggregate_category(label: str, pool: list, runner,
     cadence (Polygon + 2 Smithsonians). Both Smithsonians had 0
     articles past the 5-day RSS freshness filter, so all 3 winners
     came from Polygon (gaming-only). With backfill, we'd have tried
-    DOGOnews / NG Kids / SwimSwam / etc until 3 sources contributed.
+    DOGOnews / NG Kids / BBC Swimming / etc until 3 sources contributed.
 
     Args:
       pool: full prioritized pool from db_config.load_sources(cat, n=10).

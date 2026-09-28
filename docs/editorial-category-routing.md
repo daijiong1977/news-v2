@@ -63,7 +63,7 @@ Examples: Fat Bear Week is Fun `animal_events`; a biology study of bears or a ne
 
 因此当前有证据支持的源级调整只有 Popular Science 一条；若希望至少两条，宜再找一条活跃、专门且可抓取的 AI/Tech feed，不建议把 science-heavy 的整条 feed 一起搬走。生产来源表尚未改动。
 
-Fun sports are split by sport, not by the broad `sports` label: a swimming race and a tennis match can both appear among the three published Fun articles if they are different events and pass all other gates. Diving and water polo belong to `other_sports`. This remains a preference, not a quota: no swimming story is invented or forced into an edition without a suitable candidate. SwimSwam is an enabled Fun feed in the live source registry (two-day cadence); BBC Tennis is also enabled (daily cadence). Source selection can skip either feed on a particular day.
+Fun sports are split by sport, not by the broad `sports` label: a swimming race and a tennis match can both appear among the three published Fun articles if they are different events and pass all other gates. Diving and water polo belong to `other_sports`. This remains a preference, not a quota: no swimming story is invented or forced into an edition without a suitable candidate. BBC Swimming and BBC Tennis are enabled daily Fun feeds. SwimSwam (source ID 220) was disabled on 2026-09-28 after a low-value coach obituary entered the thin Fun shortlist; its row remains for attribution and probe history. Source selection can skip either BBC feed on a particular day.
 
 ### Swimming and tennis news value
 
