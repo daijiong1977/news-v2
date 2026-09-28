@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T10:04:00-04:00",
+  "updated_at": "2026-09-28T10:07:17-04:00",
   "branches": [
     {
       "name": "main",
@@ -22,8 +22,8 @@
     },
     {
       "name": "codex/jev-vault-email-confirm",
-      "purpose": "校正 JEV Keychain 验证和质量邮件交付文档、Atlas 状态的临时 PR 分支。",
-      "status": "pr_pending"
+      "purpose": "校正 JEV Keychain 验证和质量邮件交付文档的历史 PR 分支；PR #79 已合并 main。",
+      "status": "merged_pending_retirement"
     }
   ],
   "deployments": [
@@ -149,7 +149,7 @@
     },
     {
       "path": "/Users/jiong/myprojects/news-v2-fun-source-pool",
-      "purpose": "news-v2 复用的独立工作树；目前承载 codex/jev-vault-email-confirm 临时 PR 分支，原 News PR #76 已合并。",
+      "purpose": "news-v2 复用的独立工作树；临时 PR 分支会在此切换，不是独立项目或部署来源。",
       "location": "local"
     },
     {
