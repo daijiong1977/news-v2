@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T08:06:00-04:00",
+  "updated_at": "2026-09-28T08:09:00-04:00",
   "branches": [
     {
       "name": "main",
@@ -14,6 +14,11 @@
       "name": "codex/quality-email-timeout",
       "purpose": "质量邮件超时修复的临时 PR 分支，尚未部署。",
       "status": "pr_pending"
+    },
+    {
+      "name": "codex/news-neutral-selection",
+      "purpose": "News 候选中立性与三语成稿复核的临时 PR 分支；尚未合并或部署。",
+      "status": "feature_unmerged"
     }
   ],
   "deployments": [
@@ -55,6 +60,11 @@
     {
       "path": "docs/bugs/2026-09-28-quality-digest-timeout.md",
       "purpose": "2026-09-28 质量邮件未发出的根因、实际流水线耗时和修复边界。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-28-news-neutrality-selection-and-cn-card.md",
+      "purpose": "未合并 PR #76 对 News 选文中立性及中文卡片偏向的根因和修复说明。",
       "location": "repo"
     },
     {
@@ -176,6 +186,12 @@
       "title": "快流水线暴露了质量邮件的等待与超时冲突",
       "note": "Daily pipeline 仍完整运行并发布 9 篇，但 8 分多钟就完成；质量邮件按启动后第 92 分钟发送，任务自身只允许 75 分钟，导致邮件在等待中被取消。等待锚点与任务超时必须一起检查，并预留自动修复和发信时间；家长摘要是独立工作流，已按用户要求暂时停用。",
       "source_ref": "docs/bugs/2026-09-28-quality-digest-timeout.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "中立性要同时约束选文可改写性与最终三语卡片",
+      "note": "News 候选要判断现有证据是否足以做中立报道，但不可因战争、政治或残疾权益题材一概删除；原稿有立场可据真实双方说法调整。2026-09-28 两篇投诉稿的英文材料可中立改写，失衡主要出在未被独立审核的中文标题与卡片。独立复核应覆盖所有可见语言；严重偏向仅允许一次有来源的重写并复核，否则换备稿，不能编造对立观点。此修复目前只在未合并 PR 分支，本条不表示已上线。",
+      "source_ref": "docs/bugs/2026-09-28-news-neutrality-selection-and-cn-card.md"
     }
   ]
 }
