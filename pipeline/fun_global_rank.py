@@ -18,7 +18,7 @@ from .news_topics import topic_group
 
 log = logging.getLogger("fun-global-rank")
 
-MAX_FUN_COMPARISON = 29  # strictly fewer than 30; deeper spares stay intact
+MAX_FUN_COMPARISON = 30  # one numbered batch; deeper spares stay intact
 FUN_CURATOR_SLOTS = TO_CURATOR_BY_CATEGORY["Fun"]
 FUN_PICK_FLOOR = FLOOR["Fun"]
 

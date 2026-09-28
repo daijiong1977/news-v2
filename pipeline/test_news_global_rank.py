@@ -44,18 +44,18 @@ def test_bad_or_partial_response_keeps_jev_order_and_flags():
         assert [b["_jev_rank"]["send"] for b in out] == original_flags
 
 
-def test_only_29_numbers_sent_but_deeper_refill_candidates_survive():
+def test_only_30_numbers_sent_but_deeper_refill_candidates_survive():
     catalog = [_brief(i) for i in range(1, 36)]
 
     def call(_system, user, **_kwargs):
-        assert len(json.loads(user)["candidates"]) == 29
-        return list(range(29, 0, -1))
+        assert len(json.loads(user)["candidates"]) == 30
+        return list(range(30, 0, -1))
 
     out, report = rerank_news_catalog(catalog, [], call=call)
-    assert report["compared"] == 29
+    assert report["compared"] == 30
     assert len(out) == 35
-    assert [b["title"] for b in out[-6:]] == [f"Story {i}" for i in range(30, 36)]
-    assert not any(b["_jev_rank"]["send"] for b in out[-6:])
+    assert [b["title"] for b in out[-5:]] == [f"Story {i}" for i in range(31, 36)]
+    assert not any(b["_jev_rank"]["send"] for b in out[-5:])
 
 
 def test_shortlist_does_not_take_six_from_one_source():

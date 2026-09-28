@@ -16,7 +16,7 @@ from .news_topics import topic_group
 
 log = logging.getLogger("news-global-rank")
 
-MAX_NEWS_COMPARISON = 29  # strictly fewer than 30; deeper catalog stays for refill
+MAX_NEWS_COMPARISON = 30  # one numbered batch; deeper catalog stays for refill
 NEWS_CURATOR_SLOTS = 6
 NEWS_PICK_FLOOR = 0.40
 

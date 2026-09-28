@@ -3,7 +3,7 @@
 ## Scope
 
 Keep the existing JEV screening, routing, same-event checks and full candidate
-catalog. News already sends up to 29 JEV-qualified candidates to one DeepSeek
+catalog. News already sends up to 30 JEV-qualified candidates to one DeepSeek
 numeric-only comparison, then offers six to the main curator. This change
 extends that optional comparison to **Fun only** when there are more than
 seven candidates above Fun's JEV quality floor (0.50). Science is unchanged.
@@ -41,11 +41,36 @@ the separate schedule PR for the run-by-run audit.
 
 ## Verification and risk
 
-- Unit tests cover full permutation validation, 29-item cap, preserved deep
+- Unit tests cover full permutation validation, 30-item cap, preserved deep
   spares, malformed-response fallback, thin-pool no-call, and curator input.
 - The September 26–28 checkpoints exercise the no-call path. A richer Fun
   day with >7 qualified candidates is still needed to verify model impact in
   production; until then this is a conditional feature, not a demonstrated
   improvement in published article quality.
-- News and Science selection, JEV call counts, and independent safety
-  thresholds are unchanged.
+- Science selection, JEV call counts, and independent safety thresholds are
+  unchanged. News comparison gains one candidate at the former 29-item edge.
+
+## First-cut tuning in this PR
+
+JEV remains the first content-aware screen: it rejects only the calibrated
+clear-cut headline classes, then the body probe and JEV editorial score create
+the de-duplicated candidate catalog. News and Fun each offer at most the first
+**30** JEV-ranked candidates to the numeric DeepSeek comparison; this is **per
+section**, not 30 shared across sections. Any deeper catalog entry remains
+available to safe Stage-3 refill. On the September 28 checkpoint, News had 32
+unique JEV catalog entries, while Fun had only 14; the cap affects only News
+there, and Fun's >7-qualified gate still skips the extra model call.
+
+The JEV editorial pass formerly requested a five-level `want` answer for every
+brief, then never read it for ranking, selection, routing or refill. Removing
+that question preserves every decision rule while reducing the answer work per
+scored brief. The optional prefilter previously waited up to 60 seconds before
+failing open on a degraded JEV service; its budget is now 15 seconds. On a
+timeout it keeps all candidates (other than the local live-blog regex), and
+the downstream independent full-text safety review remains mandatory.
+
+This is a bounded latency and unused-question cleanup, **not** a measured
+reduction of the anomalous $0.04 JEV charge. The normal prefilter finished in
+about 3–4 seconds in the observed runs; billing needs a later dashboard check
+after one natural run. DeepSeek's marginal cost for the 30th News item is
+small but nonzero. No production rerun or content replacement was performed.

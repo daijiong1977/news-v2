@@ -51,7 +51,9 @@ UK_DOMESTIC_MIN = 0.90      # clear-cut only; borderline ones stay for the curat
 RECRUITING_MIN = 0.90       # editorial exclusion: never restored by the soft pool floor
 MIN_KEEP_PER_CAT = 8        # soft-rule floor; explicit recruiting exclusions do not yield
 MAX_ERROR_RATE = 0.30       # above this the whole Jev pass is discarded
-TIME_BUDGET_S = 60.0
+# Healthy runs finish in a few seconds. A degraded optional service must not
+# hold the whole pipeline for a minute before the fail-open path can continue.
+TIME_BUDGET_S = 15.0
 CALL_TIMEOUT_S = 10.0
 WORKERS = 4                 # ~16 req/s, under the 1,200 req/min limit
 

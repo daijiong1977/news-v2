@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T14:52:01-04:00",
+  "updated_at": "2026-09-28T14:58:12-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "Fun 在 JEV 合格候选超过送审容量时才做 DeepSeek 纯编号整组排序；News 既有逻辑不变，Science 不变，待 PR 审核非生产。",
+      "purpose": "News/Fun 各自最多 30 篇合格候选进入 DeepSeek 纯编号整组排序，Fun 仅在高于送审容量时调用；JEV 移除未使用的 want 判断并缩短初筛故障等待。Science 不变，待 PR 审核非生产。",
       "status": "proposed"
     },
     {
@@ -94,12 +94,17 @@
     },
     {
       "path": "pipeline/jev_rank.py",
-      "purpose": "JEV 评分、News 中立可改写性判断、同事件筛选和完整候选目录。",
+      "purpose": "JEV 评分、News 中立可改写性判断、同事件筛选和完整候选目录；不再请求未使用的 want 分数。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/jev_prefilter.py",
+      "purpose": "采集后 JEV 第一层高置信度排除；服务变慢时 15 秒失败回退，不丢弃候选。",
       "location": "repo"
     },
     {
       "path": "pipeline/news_global_rank.py",
-      "purpose": "DeepSeek 对最多 29 篇合格 News 候选返回纯编号排列，并据此决定六篇送审顺序；失败时回退 JEV。",
+      "purpose": "DeepSeek 对最多 30 篇合格 News 候选返回纯编号排列，并据此决定六篇送审顺序；失败时回退 JEV。",
       "location": "repo"
     },
     {
@@ -264,7 +269,7 @@
     {
       "date": "2026-09-28",
       "title": "Fun 整组排名只应在富余合格候选时付费",
-      "note": "News 已有 JEV→最多 29 篇 DeepSeek 纯编号排序→六篇送审。Fun 9 月 26–28 日的 JEV 完整目录有 10/13/14 篇，但高于 0.50 趣味门槛仅 5/4/4 篇；额外 DeepSeek 比较无法扩充合格池，某次试排反而将消费耳机稿排第 3。拟议 Fun 只有合格稿超过七篇才整组比较，失败保留 JEV 排序，不改变 Science、七天历史去重或独立全文儿童安全复核。此分支尚未合并，生产质量收益需富余候选日验证。",
+      "note": "News 已有 JEV→最多 30 篇 DeepSeek 纯编号排序→六篇送审。Fun 9 月 26–28 日的 JEV 完整目录有 10/13/14 篇，但高于 0.50 趣味门槛仅 5/4/4 篇；额外 DeepSeek 比较无法扩充合格池，某次试排反而将消费耳机稿排第 3。拟议 Fun 只有合格稿超过七篇才整组比较，失败保留 JEV 排序，不改变 Science、七天历史去重或独立全文儿童安全复核。JEV 排名移除未使用的 want 答案，初筛超时缩短至 15 秒且失败仍保留候选；此分支尚未合并，生产质量与费用需自然运行验证。",
       "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]
