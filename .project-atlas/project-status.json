@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T19:45:09-04:00",
+  "updated_at": "2026-09-28T20:55:00-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "拟议 Fun 短原文与 Science 较长解释稿规则；News/Fun 最多 30 篇元数据候选经 DeepSeek 纯编号排序后，各栏只抓前 12 篇原文，不足六篇（Fun 七篇）再批量补抓六篇。待 PR #82 审核，非生产。",
+      "purpose": "PR #82 待审核的 Fun 短原文、Science 长解释稿与元数据优先排序/分批原文验证；2026-09-28 已从该分支手动完成一次生产内容覆盖，但分支代码尚未合并 main。",
       "status": "proposed"
     },
     {
@@ -38,8 +38,8 @@
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_article_payload_verified_after_branch_run",
-      "verified_at": "2026-09-28T09:36:18-04:00"
+      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
+      "verified_at": "2026-09-28T20:50:12-04:00"
     },
     {
       "environment": "production_alias",
@@ -47,8 +47,8 @@
       "url": "https://news.6ray.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_article_payload_verified_after_branch_run",
-      "verified_at": "2026-09-28T09:36:18-04:00"
+      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
+      "verified_at": "2026-09-28T20:50:12-04:00"
     }
   ],
   "files": [
@@ -90,6 +90,11 @@
     {
       "path": "docs/experiments/2026-09-28-pre-deepseek-preview.md",
       "purpose": "2026-09-28 只读预览采集至 JEV 完整目录、DeepSeek 输入前的 News/Fun 标题及 Science 候选和词数上限影响。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/experiments/2026-09-28-full-round-timing-and-quality.md",
+      "purpose": "2026-09-28 PR #82 分支完整生产覆盖运行的逐阶段耗时、漏选链、编辑质量警告及网站同步证据。",
       "location": "repo"
     },
     {
@@ -313,8 +318,14 @@
     {
       "date": "2026-09-28",
       "title": "原文抓取应在元数据排序后按批次进行",
-      "note": "旧预览在首次 JEV 初筛后打开了 97 篇网页，再给 JEV 和 DeepSeek 做标题摘要排名；用户确认无需这么早读取全文。PR #82 提议改为元数据 JEV/DeepSeek 排序后，每栏先抓前12篇原文并检查来源长度、图片；不足六篇（Fun七篇）再抓下一批六篇，直到够数或目录耗尽。拒绝稿不送主编，未抓稿保留供 Stage 3 安全补录；成稿独立全文儿童安全审核不变。旧 29/20/21 目录不能代表新顺序的输入或节费成果，待完整回放验证。",
-      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+      "note": "旧预览在首次 JEV 初筛后打开了 97 篇网页，再给 JEV 和 DeepSeek 做标题摘要排名；用户确认无需这么早读取全文。PR #82 改为元数据 JEV/DeepSeek 排序后，每栏先抓前12篇原文并检查长度、图片；不足六篇（Fun七篇）再批量补抓。2026-09-28 完整运行共抓36篇网页、每栏首批即足够，最终9篇发布，网站同步成功。不同批次源数据不一致，97→36 不是受控节费测量。",
+      "source_ref": "docs/experiments/2026-09-28-full-round-timing-and-quality.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "完整运行技术成功仍会漏掉重要稿",
+      "note": "PR #82 分支生产覆盖运行历时8分04秒、发布News/Science/Fun各3篇，网站同步提交84dedbf。News来源配额先取PBS排名1和2，挤掉排名3且重要性达标的油耗标准稿；排名1的Nvidia稿后被七天历史不确定判断挡下，最终News无高重要性稿且仅两家来源。Fun的223词BBC Swimming世界纪录稿被250词门槛挡下，消费导流影片稿补入。独立安全PASS不等于编辑质量达标；调整排序/准入应保留历史及安全门禁。质量邮件延迟运行仍待确认。",
+      "source_ref": "docs/experiments/2026-09-28-full-round-timing-and-quality.md"
     }
   ]
 }
