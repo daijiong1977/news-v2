@@ -3,7 +3,7 @@ import json
 
 from pipeline.news_global_rank import rerank_news_catalog
 from pipeline.jev_rank import for_curator
-from pipeline.mega_curator import _build_mega_curator_input
+from pipeline.mega_curator import MEGA_CURATOR_SYSTEM_PROMPT, _build_mega_curator_input
 
 
 def _brief(n, source=None, pick=.7, topic=None):
@@ -67,6 +67,34 @@ def test_shortlist_does_not_take_six_from_one_source():
     sent = [b for b in out if b["_jev_rank"]["send"]]
     assert sum(b["_source_name"] == "A" for b in sent) <= 3
     assert len({b["_source_name"] for b in sent}) >= 3
+
+
+def test_qualified_major_news_is_reserved_before_same_source_cap():
+    catalog = [_brief(i, source="PBS" if i <= 3 else f"Outlet {i}")
+               for i in range(1, 9)]
+    major = catalog[2]
+    major["_jev_rank"].update(section_value=2.54, category_fit=.8, floor=.4)
+    ranked, report = rerank_news_catalog(
+        catalog, [], call=lambda *_a, **_k: list(range(1, 9)))
+    sent = for_curator({"News": ranked})["News"]
+    assert report["sent"] == 6
+    assert major in sent
+    assert catalog[0] in sent and catalog[1] not in sent
+    assert [b["title"] for b in sent] == ["Story 1", "Story 3", "Story 4",
+                                           "Story 5", "Story 6", "Story 7"]
+    assert "SINGLE most" in MEGA_CURATOR_SYSTEM_PROMPT
+
+
+def test_low_quality_or_wrong_section_major_is_not_reserved():
+    for fit, pick in ((.5, .7), (.9, .3)):
+        catalog = [_brief(i, source="PBS" if i <= 3 else f"Outlet {i}")
+                   for i in range(1, 9)]
+        catalog[2]["_jev_rank"].update(section_value=4, category_fit=fit,
+                                       editorial_pick=pick, floor=.4)
+        ranked, _ = rerank_news_catalog(
+            catalog, [], call=lambda *_a, **_k: list(range(1, 9)))
+        sent = for_curator({"News": ranked})["News"]
+        assert catalog[2] not in sent
 
 
 def test_global_news_shortlist_survives_later_topic_swap():

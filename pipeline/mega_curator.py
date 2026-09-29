@@ -111,7 +111,10 @@ ALGORITHM (internal, don't output intermediate work):
      - Exclude college recruitment, verbal commitments, recruiting
        rankings and signing announcements. These are not Fun news.
        Actual college races, championships and records remain eligible.
-     - News: when eligible, keep at least one section_value >= 2.5 story
+     - News: before choosing the top three, identify the SINGLE most
+       consequential eligible News story among the supplied six. Put it in
+       the top three, then choose the other two for value and diversity.
+       When eligible, keep at least one section_value >= 2.5 story
        with concrete importance for the US or US children in the top three.
        Importance means consequences, never party preference or sensationalism.
        A civic explainer on how elections are administered or verified can be

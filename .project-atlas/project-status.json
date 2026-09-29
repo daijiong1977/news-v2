@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T20:55:00-04:00",
+  "updated_at": "2026-09-28T22:40:00-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,7 +12,7 @@
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "PR #82 待审核的 Fun 短原文、Science 长解释稿与元数据优先排序/分批原文验证；2026-09-28 已从该分支手动完成一次生产内容覆盖，但分支代码尚未合并 main。",
+      "purpose": "PR #82 待审核的 Fun 短原文、Science 长解释稿、元数据优先排序/分批原文验证及 News 重要稿送审预留；2026-09-28 已从该分支手动完成一次生产内容覆盖，但后续重要稿修复未重跑，分支代码尚未合并 main。",
       "status": "proposed"
     },
     {
@@ -129,7 +129,7 @@
     },
     {
       "path": "pipeline/news_global_rank.py",
-      "purpose": "DeepSeek 对最多 30 篇合格 News 候选返回纯编号排列，并据此决定六篇送审顺序；失败时回退 JEV。",
+      "purpose": "DeepSeek 对最多 30 篇合格 News 候选返回纯编号排列；先预留一篇 JEV 合格的高重要性稿，再按来源/题材配额决定六篇送审，失败时回退 JEV。",
       "location": "repo"
     },
     {
@@ -324,8 +324,14 @@
     {
       "date": "2026-09-28",
       "title": "完整运行技术成功仍会漏掉重要稿",
-      "note": "PR #82 分支生产覆盖运行历时8分04秒、发布News/Science/Fun各3篇，网站同步提交84dedbf。News来源配额先取PBS排名1和2，挤掉排名3且重要性达标的油耗标准稿；排名1的Nvidia稿后被七天历史不确定判断挡下，最终News无高重要性稿且仅两家来源。Fun的223词BBC Swimming世界纪录稿被250词门槛挡下，消费导流影片稿补入。独立安全PASS不等于编辑质量达标；调整排序/准入应保留历史及安全门禁。质量邮件延迟运行仍待确认。",
+      "note": "PR #82 分支生产覆盖运行历时8分04秒、发布News/Science/Fun各3篇，网站同步提交84dedbf。News来源配额先取PBS排名1和2，挤掉排名3且重要性达标的油耗标准稿；排名1的Nvidia稿后被七天历史不确定判断挡下，最终News无高重要性稿且仅两家来源。Fun的223词BBC Swimming世界纪录稿被250词门槛挡下，消费导流影片稿补入。独立安全PASS不等于编辑质量达标；调整排序/准入应保留历史及安全门禁。延迟质量邮件的发送步骤成功，但后续 cron 同步因 YAML 行尾注释解析失败，故工作流整体失败；现有定时值未改变。",
       "source_ref": "docs/experiments/2026-09-28-full-round-timing-and-quality.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "大新闻名额须在送主编前预留",
+      "note": "只在主编六选三提示和最终安全稿排序里要求一篇重要 News 不够：30选6 的同来源上限已可能把重要稿挡在主编视野外。PR #82 后续修复先在 DeepSeek 排序后的合格目录里预留最高重要性稿，再填其余五个送审名额；主编仍从六篇中选一篇最重要、另外两篇按价值与多样性选。预留不绕过正文、同栏七天历史、中立改写或独立全文儿童安全审核；修复后尚未真实重跑。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]
 }

@@ -128,3 +128,26 @@ Generation QA, the next-day digest and auto-fix use matching Science bands
 Science exception. The prompt still prohibits filler and invented facts, and
 the independent full-text child-safety review remains mandatory. This is a
 code/test change, not a measured production-quality improvement yet.
+
+## 2026-09-28 News important-story reservation after the full run
+
+The [full production-overwriting run](2026-09-28-full-round-timing-and-quality.md)
+published three safe News stories but none met the existing qualified
+high-importance predicate. The curator prompt already requested one important
+story among its top three, and final selection already preferred one among
+safe rewrites. Neither could recover the PBS fuel-economy article because the
+earlier DeepSeek 30-to-6 shortlist spent PBS's two-source cap on ranks 1 and 2;
+the third PBS story was both source-body valid and important but invisible to
+the curator.
+
+This follow-up reserves **one** highest-scoring, JEV-qualified important News
+brief among the compared catalog **before** applying ordinary source/topic
+caps. The remaining five slots follow the existing whole-list order and
+diversity rules. The curator prompt now explicitly says to identify the most
+consequential eligible story among its six and choose the other two top-three
+stories for value and diversity. The final important-story preference remains
+a separate post-safety safeguard. Reservation is not publication approval:
+body/image verification, seven-day same-section history, neutral rewrite and
+independent full-text child-safety review still apply. If the reserved item
+fails one of those gates and no other qualified important safe article remains,
+the edition may still contain no big News story and must report the warning.
