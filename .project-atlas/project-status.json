@@ -3,27 +3,27 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-29T00:08:49-04:00",
+  "updated_at": "2026-09-29T00:11:40-04:00",
   "branches": [
     {
       "name": "main",
-      "purpose": "当前生产流水线；由合并后的 PR 更新。",
+      "purpose": "生产流水线主分支；集成 PR #83 合并提交 a425dca 已包含 #78、#81、#82 的代码与工作流，首次自然运行和网站同步仍待验证。",
       "status": "production"
     },
     {
       "name": "codex/eastern-offpeak-jev-audit",
       "purpose": "PR #81 的美东 06:10 调度、JEV 成本审计和旧 cron 直推移除；已纳入 2026-09-29 集成分支，属于历史 PR 分支。",
-      "status": "integrated"
+      "status": "merged_in_main"
     },
     {
       "name": "codex/news-fun-rank-experiment",
       "purpose": "PR #82 的 Fun 短原文、Science 长解释稿、元数据优先分批原文验证及 News 重要稿预留；已纳入 2026-09-29 集成分支，早期代码手动覆盖过网站，重要稿后续修复仍待自然运行验证。",
-      "status": "integrated"
+      "status": "merged_in_main"
     },
     {
       "name": "codex/kids-news-sep28-integration",
-      "purpose": "整合 PR #78、#81、#82，解决项目状态冲突，更新项目总览并完成集成测试；作为合并 main 前的 PR 载体。",
-      "status": "integration_pr"
+      "purpose": "整合 PR #78、#81、#82，解决项目状态冲突、更新项目总览并通过 325 项离线测试；PR #83 已合并 main，提交 a425dca。",
+      "status": "merged_in_main"
     },
     {
       "name": "codex/quality-email-timeout",
@@ -43,7 +43,7 @@
     {
       "name": "codex/retire-swimswam-source",
       "purpose": "PR #78 的 SwimSwam 来源停用迁移、旧 seed 修正和文档；已纳入 2026-09-29 集成分支，生产来源表 ID 220 先前已核验为停用。",
-      "status": "integrated"
+      "status": "merged_in_main"
     }
   ],
   "deployments": [
@@ -114,7 +114,7 @@
     },
     {
       "path": ".github/workflows/daily-pipeline.yml",
-      "purpose": "每日流水线的调度及执行；集成 PR 拟改为美东 06:10，生效仍以 main 合并提交及下一次自然运行为准。",
+      "purpose": "每日流水线的调度及执行；main 已配置美东 06:10，首次自然启动仍待验证。",
       "location": "repo"
     },
     {
@@ -404,6 +404,12 @@
       "date": "2026-09-29",
       "title": "跨 PR 集成须保存各分支心得并在合并后等自然运行验证",
       "note": "集成分支合入 PR #78（SwimSwam 停用防回放）、#81（06:10 美东调度、移除旧 cron 直推）和 #82（元数据优先正文探测、News/Fun 排名、栏目词数、重要 News 预留）。冲突集中在项目状态 JSON，合并时保留各分支文件与历史心得。离线 325 项测试通过；两个需要真实 DeepSeek Key 的脚本和三个手动 feed 探测脚本未纳入该离线测试。9 月 28 日旧分支完整运行不能证明集成后的首次自然调度、独立审核或网站同步，需分别监控，且不能把安全 PASS 当成编辑质量完全达标。",
+      "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-29",
+      "title": "集成代码已合并，生产结果尚待自然验证",
+      "note": "PR #83 于 2026-09-29 00:10 EDT 合并到 news-v2/main，merge commit a425dca636385583742a0bb215902f0109307c1a；原 PR #78、#81、#82 均被 GitHub 标记为 merged。代码合并不等于内容或网站已用新版运行。下一次自然 Daily 应核对 06:10 美东调度、News 大新闻预留/最终入选、Science 出版方、Fun 选文、七天同栏去重、独立全文儿童安全、质量邮件、网站同步新提交与公开 payload，不自行重跑。",
       "source_ref": "PROJECT-OPERATIONS.md"
     }
   ]

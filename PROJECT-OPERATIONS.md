@@ -5,8 +5,10 @@
 本次集成把 [PR #81](https://github.com/daijiong1977/news-v2/pull/81)、
 [PR #78](https://github.com/daijiong1977/news-v2/pull/78) 和
 [PR #82](https://github.com/daijiong1977/news-v2/pull/82) 的代码及文档放在同一个
-PR 中测试；**是否生效以该集成 PR 实际合并至 `news-v2/main` 的提交为准**，
-不是以本机工作树或本文更新时间推断。
+PR 中测试，并经 [集成 PR #83](https://github.com/daijiong1977/news-v2/pull/83)
+于 2026-09-29 00:10 EDT 合并到 `news-v2/main`，合并提交
+`a425dca636385583742a0bb215902f0109307c1a`。这确认**代码与工作流配置**
+已在 main；不等于下一次定时运行、内容发布、邮件或网站同步已验证。
 
 - Daily pipeline 调度改为每天 **06:10 America/New_York**，由 GitHub 处理夏冬令时；
   删除质量摘要邮件末尾那个可能直推 `main` 的旧 UTC cron 同步步骤。
