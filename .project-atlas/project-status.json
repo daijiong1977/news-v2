@@ -29,6 +29,11 @@
       "name": "codex/jev-vault-email-confirm",
       "purpose": "校正 JEV Keychain 验证和质量邮件交付文档的历史 PR 分支；PR #79 已合并 main。",
       "status": "merged_pending_retirement"
+    },
+    {
+      "name": "codex/retire-swimswam-source",
+      "purpose": "移出 SwimSwam Fun 活跃来源池的临时 PR 分支。",
+      "status": "pr_pending"
     }
   ],
   "deployments": [
@@ -70,6 +75,26 @@
     {
       "path": "docs/bugs/2026-09-28-jev-spend-and-offpeak-schedule.md",
       "purpose": "9 月 24–28 日 JEV 用量/失败对比、DeepSeek 半价时段调度及降费实验边界。",
+      "location": "repo"
+    },
+    {
+      "path": "supabase/migrations/20260928_disable_swimswam_fun.sql",
+      "purpose": "精确停用 Fun 栏目 SwimSwam 来源，保留历史审计数据。",
+      "location": "repo"
+    },
+    {
+      "path": "supabase/seeds/2026-05-04-cadence-seed.sql",
+      "purpose": "来源表旧 seed；SwimSwam 默认停用以防重放时被启用。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-28-swimswam-fun-source.md",
+      "purpose": "Fun 薄池将教练讣闻送审的来源调整与回退依据。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_fun_source_retirement.py",
+      "purpose": "确保旧 seed 不会重新启用 SwimSwam，并约束迁移仅命中核实的来源行。",
       "location": "repo"
     },
     {
@@ -266,6 +291,12 @@
       "title": "JEV 成本对比须按运行次数和失败调用分开核算",
       "note": "9 月 28 日有定时与手动两次完整运行；手动前筛送出 104 条后遇 503/60 秒超时，结果被忽略，后续仍对 81 条正文合格稿做 JEV 排名。日志没有逐调用价格，不能将约 $0.04 的当日账单全部归因于某一步。拟将每日调度改为美东 06:10 以落在 DeepSeek 非高峰时段；先比较单次自然运行及账单，再决定是否加入 DeepSeek 预选，不削弱独立全文儿童安全复核。此调度仍在 PR 中，非已上线。",
       "source_ref": "docs/bugs/2026-09-28-jev-spend-and-offpeak-schedule.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "Fun 薄池可能把低价值游泳讣闻送给主编",
+      "note": "非发布预演中 SwimSwam 教练讣闻以 0.41 的评分进入四篇 Fun 送审池，低于常规 0.50。2026-09-28 已核验生产来源表 SwimSwam ID 220 为 enabled=false、BBC Swimming ID 365 仍为 enabled=true；重新读取 Fun 来源池只包含后者。保留旧行和历史数据以便审计与回退，旧 seed 同步停用以免重启；PR 尚未合并。",
+      "source_ref": "docs/bugs/2026-09-28-swimswam-fun-source.md"
     }
   ]
 }
