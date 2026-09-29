@@ -1,12 +1,8 @@
-"""Tests for per-source funnel fairness + telemetry (2026-07-08).
+"""Tests for source fairness and metadata-first, bounded body verification.
 
-Root cause found via checkpoint reconstruction of the 2026-07-08 run:
-the Stage-1.5 probe cap (PROBE_MAX_PER_CAT=10) consumed briefs in source-
-priority order, so with 4 News sources × 4 briefs the first three sources
-filled the cap and BBC (priority 4) never reached the curator — on any day
-the earlier feeds are healthy. Fix: round-robin interleave briefs across
-sources before the cap, and record a per-source tally at each funnel stage
-(probe / verify / stage-3) so the next starvation is visible in telemetry.
+The 2026-07-08 source-starvation fix interleaves briefs before JEV ranking.
+The ranked-body stage now fetches only the top 12 originals per section and
+extends in groups of six when too few survive length/image checks.
 
 Run: python -m pipeline.test_source_funnel   (also works under pytest)
 """
@@ -48,39 +44,94 @@ def test_interleave_handles_empty_and_single_source():
     assert fr._interleave_by_source(solo) == solo
 
 
-# ── 2. probe partition: classify per source, cap without silent starvation ──
-
-def _r(src: str, i: int, wc: int) -> dict:
-    return {"brief": _b(src, f"{src}{i}"), "art": {"word_count": wc}, "wc": wc}
-
-
-def test_partition_classifies_thin_long_and_cap():
-    results = [_r("A", 0, 500), _r("B", 0, 200),   # B0 thin
-               _r("A", 1, 2000), _r("B", 1, 500),  # A1 long
-               _r("A", 2, 500), _r("B", 2, 500)]   # B2 over cap
-    kept, tally = fr._partition_probe_results(results, 350, 1200, cap=3)
-    assert [b["title"] for b in kept] == ["A0", "B1", "A2"]
-    # Kept briefs carry the cached article + word_count (probe contract).
-    assert kept[0]["_probe_art"] == {"word_count": 500}
-    assert kept[0]["word_count"] == 500
-    assert tally["A"] == {"in": 3, "kept": 2, "thin": 0, "long": 1, "cap_cut": 0}
-    assert tally["B"] == {"in": 3, "kept": 1, "thin": 1, "long": 0, "cap_cut": 1}
+def test_fun_short_sources_pass_late_body_gate_but_news_and_science_do_not():
+    assert fr._probe_min_words("Fun") == 250
+    assert fr._probe_min_words("News") == fr._probe_min_words("Science") == 350
+    assert fr._source_length_check("Fun", {"word_count": 250})[0]
+    assert not fr._source_length_check("News", {"word_count": 250})[0]
+    assert not fr._source_length_check("Science", {"word_count": 349})[0]
 
 
-def test_interleave_plus_cap_keeps_every_source_represented():
-    # The 2026-07-08 regression: 4 sources × 4 briefs, all pass the word
-    # gate, cap 10 — in priority order the 4th source got zero slots.
+def test_science_source_ceiling_is_1500_after_shortlist():
+    assert fr._probe_max_words("Science") == 1500
+    assert fr._probe_max_words("News") == fr._probe_max_words("Fun") == 1200
+    assert fr._source_length_check("Science", {"word_count": 1500})[0]
+    assert not fr._source_length_check("Science", {"word_count": 1501})[0]
+    assert not fr._source_length_check("Fun", {"word_count": 1201})[0]
+
+
+def test_jev_and_deepseek_checkpoint_precede_ranked_body_probe():
+    from pipeline.checkpoints import STAGES
+    assert STAGES.index("stage1") < STAGES.index("stage1_jev") \
+        < STAGES.index("phase_a_probe") < STAGES.index("jev_rank") \
+        < STAGES.index("ranked_body_probe") < STAGES.index("stage2_picks")
+
+
+def test_metadata_interleave_keeps_every_source_without_fetching_originals():
     ordered = []
     for src in ("PBS", "NPR", "AJ", "BBC"):
         ordered += [_b(src, f"{src}-{i}") for i in range(4)]
-    inter = fr._interleave_by_source(ordered)
-    results = [{"brief": b, "art": {"word_count": 500}, "wc": 500} for b in inter]
-    kept, tally = fr._partition_probe_results(results, 350, 1200, cap=10)
-    kept_srcs = {b["_source_name"] for b in kept}
-    assert kept_srcs == {"PBS", "NPR", "AJ", "BBC"}, f"starved: {kept_srcs}"
-    # Fair split: every source lands 2-3 of the 10 slots.
-    for src in ("PBS", "NPR", "AJ", "BBC"):
-        assert 2 <= tally[src]["kept"] <= 3, tally
+    inter = fr._metadata_catalog({"News": ordered})["News"]
+    assert [b["_source_name"] for b in inter[:4]] == ["PBS", "NPR", "AJ", "BBC"]
+    assert all("_probe_art" not in b and "word_count" not in b for b in inter)
+
+
+def test_ranked_body_probe_stops_after_first_12_when_six_pass():
+    catalog = [_b("NPR", str(i)) for i in range(20)]
+    fetched = []
+    def fetch(brief):
+        fetched.append(brief["title"])
+        wc = 100 if int(brief["title"]) < 6 else 500
+        return {**brief, "word_count": wc, "og_image": "https://x/real.jpg"}
+    valid, remaining, report = fr._probe_ranked_catalog("News", catalog, fetch=fetch)
+    assert report["batches"] == [12]
+    assert report["fetched"] == 12 and len(valid) == 6
+    assert len(remaining) == 14 and len(fetched) == 12
+    assert [b["title"] for b in valid] == [str(i) for i in range(6, 12)]
+    assert all("_probe_art" not in b for b in catalog[12:])
+
+
+def test_ranked_body_probe_refills_six_then_stops():
+    catalog = [_b("NPR", str(i)) for i in range(25)]
+    def fetch(brief):
+        wc = 100 if int(brief["title"]) < 9 else 500
+        return {**brief, "word_count": wc, "og_image": "https://x/real.jpg"}
+    valid, remaining, report = fr._probe_ranked_catalog("News", catalog, fetch=fetch)
+    assert report["batches"] == [12, 6]
+    assert report["fetched"] == 18 and len(valid) == 9
+    assert len(remaining) == 16
+    assert all("_probe_art" not in b for b in catalog[18:])
+
+
+def test_ranked_body_probe_preserves_image_gate_and_fun_target_seven():
+    catalog = [_b("BBC", str(i)) for i in range(19)]
+    def fetch(brief):
+        n = int(brief["title"])
+        return {**brief, "word_count": 300, "og_image": None if n < 6 else "https://x/real.jpg"}
+    valid, _, report = fr._probe_ranked_catalog("Fun", catalog, fetch=fetch)
+    assert report["batches"] == [12, 6]
+    assert len(valid) == 12 and report["rejected"] == 6
+
+
+def test_ranked_body_probe_uses_destination_section_range():
+    brief = _b("TIME for Kids", "Animal research")
+    def fetch(b):
+        return {**b, "word_count": 339, "og_image": "https://x/real.jpg"}
+    fun_valid, _, _ = fr._probe_ranked_catalog("Fun", [dict(brief)], fetch=fetch)
+    science_valid, _, report = fr._probe_ranked_catalog("Science", [dict(brief)], fetch=fetch)
+    assert len(fun_valid) == 1
+    assert science_valid == [] and report["rejected"] == 1
+
+
+def test_ranked_body_probe_fetch_error_refills_without_abort():
+    catalog = [_b("NPR", str(i)) for i in range(15)]
+    def fetch(brief):
+        if int(brief["title"]) < 8:
+            raise TimeoutError("article page timed out")
+        return {**brief, "word_count": 500, "og_image": "https://x/real.jpg"}
+    valid, _, report = fr._probe_ranked_catalog("News", catalog, fetch=fetch)
+    assert report["batches"] == [12, 3]
+    assert len(valid) == 7 and report["rejected"] == 8
 
 
 # ── 3. verify_picks_lazy per-source stats ──

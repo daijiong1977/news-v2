@@ -26,13 +26,11 @@ on:
         type: string
         default: ''
   schedule:
-    # Hardcoded admin-configured fire time. Synced FROM
-    # `redesign_cron_config` table by the quality-digest workflow at
-    # the end of each successful run (post-92-min digest send) — if
-    # admin edits the cron in the website's admin panel, that change
-    # appears here as a `chore(cron): sync ...` commit and takes
-    # effect from the NEXT day's run. No more 30-min polling.
-    - cron: "0 7 * * *"   # 03:00 America/New_York in summer time (02:00 after the November change); the podcast builds at 05:30
+    # 06:10 Eastern year-round (GitHub handles EST/EDT). DeepSeek's
+    # weekday peak ends at 06:00 EDT / 05:00 EST. Schedule edits are
+    # production changes and must go through a PR, not the old cron bot.
+    - cron: "10 6 * * *"
+      timezone: "America/New_York"
 
 permissions:
   contents: read

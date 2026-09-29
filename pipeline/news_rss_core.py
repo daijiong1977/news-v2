@@ -31,6 +31,8 @@ import requests
 
 from .cleaner import extract_article_from_html
 from .quiz_shuffle import shuffle_quiz_options
+from .wordcount_policy import (STANDARD_BANDS, STANDARD_REPAIR_TARGETS,
+                               body_band, repair_target, is_short_fun_source)
 _REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
 
 
@@ -861,7 +863,8 @@ people are doing about it. Do not erase an essential fact or invent hope.
 You will receive N source articles. For EACH, produce THREE variants:
 
 1. easy_en — English. READER IS A 10-YEAR-OLD (grade 4).
-   · body: 150-250 words (STRICT — count before returning).
+   · body: 150-250 words (STRICT — count before returning, unless a
+     category-specific length override is supplied below).
      This is a SHORT read on purpose — a 10-year-old loses patience
      before the scroll ends. Say the thing, give one vivid detail,
      stop. Over 250 → cut the least essential paragraph, do not
@@ -878,7 +881,8 @@ You will receive N source articles. For EACH, produce THREE variants:
      punctuation. Stay under 50 words — the kid is scanning, not reading.
 
 2. middle_en — English. READER IS A MIDDLE SCHOOLER (grade 7-8, age 12-14).
-   · body: target 320-380 words; HARD MAXIMUM 400 words.
+   · body: target 320-380 words; HARD MAXIMUM 400 words unless a
+     category-specific length override is supplied below.
      STRICT — count silently before returning.
      Under 320 → add more vivid details, specific names, or a direct
      quote from the source. NEVER invent.
@@ -982,6 +986,11 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "everyday analogies — \"the size of a grain of rice\", \"like a\n"
         "1000-piece jigsaw puzzle\". Explain the concept BEFORE introducing\n"
         "the jargon. End with WHY it matters or WHAT comes next.\n"
+        "Use the normal body lengths when they explain the story clearly.\n"
+        "If the real source provides enough detail and the mechanism needs\n"
+        "more explanation, easy may be up to 300 words and middle up to\n"
+        "500 words. These Science ceilings override the general hard caps.\n"
+        "Do not add filler, unsupported analogies, or invented facts.\n"
     ),
     "Fun": (
         "CATEGORY: Fun.\n"
@@ -989,7 +998,9 @@ _REWRITE_STYLE_BY_CATEGORY: dict[str, str] = {
         "animal moment — the surprise, the twist, the underdog. Use vivid\n"
         "verbs and sensory detail (sights, sounds, textures) instead of\n"
         "abstract description. It's OK to be a bit cheeky as long as it\n"
-        "stays kind.\n"
+        "stays kind. For an original source of 250–349 words, override the\n"
+        "general body lengths: easy 135–185 words, middle 265–315 words.\n"
+        "Do not pad a short source with invented details or repeated facts.\n"
     ),
 }
 
@@ -1019,10 +1030,15 @@ def tri_variant_rewriter_input(
         host = urlparse(art.get("link") or "").netloc.replace("www.", "")
         body = art.get("body") or ""
         body_trimmed = " ".join(body.split()[:2500])
+        source_wc = int(art.get("word_count") or len(body.split()))
         lines.append(f"=== SOURCE [id: {src_id}] ===")
         lines.append(f"Title: {art.get('title','')}")
         lines.append(f"Host: {host}")
         lines.append(f"Date: {art.get('published','')}")
+        if is_short_fun_source(category, source_wc):
+            lines.append("This Fun source is short: easy body 135–185 words; "
+                         "middle body 265–315 words. These per-source targets "
+                         "override the general targets; use source facts only.")
         lines.append("")
         lines.append("Full body:")
         lines.append(body_trimmed)
@@ -1324,12 +1340,13 @@ def repair_news_neutrality(article: dict, source: dict) -> dict | None:
 # Word-count bands for generation-time measurement. Keep in sync with
 # quality_digest.BODY_TARGETS — those QA gates generate the
 # body_too_short / body_too_long tickets the morning after.
-WC_BANDS = {"easy": (140, 270), "middle": (300, 410)}
+WC_BANDS = STANDARD_BANDS
 WC_QA_SLACK = 0.15  # Same tolerance used by the post-publication digest.
 
 
-def _wc_within_qa(level: str, count: int) -> bool:
-    lo, hi = WC_BANDS[level]
+def _wc_within_qa(level: str, count: int, *, category: str | None = None,
+                  source_word_count: int | None = None) -> bool:
+    lo, hi = body_band(level, category=category, source_word_count=source_word_count)
     return lo * (1 - WC_QA_SLACK) <= count <= hi * (1 + WC_QA_SLACK)
 
 
@@ -1338,9 +1355,11 @@ def _wc_distance(count: int, lo: int, hi: int) -> int:
     return max(lo - count, count - hi, 0)
 
 
-def _wordcount_flags(art: dict) -> list[str]:
+def _wordcount_flags(art: dict, *, category: str | None = None,
+                     source_word_count: int | None = None) -> list[str]:
     flags = []
-    for level, (lo, hi) in WC_BANDS.items():
+    for level in WC_BANDS:
+        lo, hi = body_band(level, category=category, source_word_count=source_word_count)
         body = (art.get(f"{level}_en") or {}).get("body") or ""
         wc = len(body.split())
         if wc and not (lo <= wc <= hi):
@@ -1351,7 +1370,7 @@ def _wordcount_flags(art: dict) -> list[str]:
 # Repair targets sit inside WC_BANDS with margin, so a repaired body
 # that drifts a few words on the second pass still lands inside the
 # QA band that _wordcount_flags / quality_digest enforce.
-WC_REPAIR_TARGETS = {"easy": (150, 250), "middle": (320, 380)}
+WC_REPAIR_TARGETS = STANDARD_REPAIR_TARGETS
 
 WC_REPAIR_PROMPT = """You are a precise copy editor for a kids news site. You receive ONE
 article body whose length is outside the required band, and you rewrite
@@ -1426,7 +1445,8 @@ def _wc_repair_user_msg(level: str, body: str, wc: int,
 
 
 def repair_wordcounts(rewrite_result: dict,
-                      sources_by_id: dict | None = None) -> int:
+                      sources_by_id: dict | None = None,
+                      category: str | None = None) -> int:
     """Up to two targeted DeepSeek edits per out-of-band body.
 
     The second call runs only when the first still misses the ideal band.
@@ -1445,16 +1465,20 @@ def repair_wordcounts(rewrite_result: dict,
     for art in rewrite_result.get("articles") or []:
         src = sources_by_id.get(art.get("source_id")) or {}
         source_body = (src.get("body") or "") if isinstance(src, dict) else ""
-        for level, (lo, hi) in WC_BANDS.items():
+        source_wc = int(src.get("word_count") or len(source_body.split())) if isinstance(src, dict) else 0
+        for level in WC_BANDS:
+            lo, hi = body_band(level, category=category, source_word_count=source_wc)
+            target = repair_target(level, category=category, source_word_count=source_wc)
             var = art.get(f"{level}_en") or {}
             body = var.get("body") or ""
             wc = len(body.split())
             if not wc or lo <= wc <= hi:
                 continue
             base_user = _wc_repair_user_msg(
-                level, body, wc, (lo, hi), WC_REPAIR_TARGETS[level],
+                level, body, wc, (lo, hi), target,
                 source_body)
-            best_body = body if _wc_within_qa(level, wc) else ""
+            best_body = body if _wc_within_qa(level, wc, category=category,
+                                               source_word_count=source_wc) else ""
             best_wc = wc if best_body else 0
             last_wc: int | None = None
             for attempt in (1, 2):
@@ -1466,16 +1490,16 @@ def repair_wordcounts(rewrite_result: dict,
                     user = (f"RETRY: the first edit produced {previous}; it did not "
                             f"meet the ideal {lo}-{hi}-word band. Start from the "
                             f"original body below. Aim near the middle of "
-                            f"{WC_REPAIR_TARGETS[level][0]}-"
-                            f"{WC_REPAIR_TARGETS[level][1]} words. Count before "
+                            f"{target[0]}-"
+                            f"{target[1]} words. Count before "
                             f"answering.\n\n{base_user}")
                     if wc > hi:
                         system = WC_REPAIR_REWRITE_PROMPT
                         user = (f"The previous edit was {previous}, still too long. "
-                                f"Write a NEW {WC_REPAIR_TARGETS[level][0]}-"
-                                f"{WC_REPAIR_TARGETS[level][1]}-word article "
+                                f"Write a NEW {target[0]}-"
+                                f"{target[1]}-word article "
                                 f"from the original below. Omit at least "
-                                f"{max(1, wc - WC_REPAIR_TARGETS[level][1])} "
+                                f"{max(1, wc - target[1])} "
                                 f"words worth of secondary details; do not "
                                 f"follow its paragraph structure sentence by "
                                 f"sentence.\n\nORIGINAL BODY:\n{body}")
@@ -1488,7 +1512,8 @@ def repair_wordcounts(rewrite_result: dict,
                     continue
                 new_body = ((res or {}).get("body") or "").strip()
                 last_wc = len(new_body.split())
-                if new_body and _wc_within_qa(level, last_wc):
+                if new_body and _wc_within_qa(level, last_wc, category=category,
+                                               source_word_count=source_wc):
                     if not best_body or _wc_distance(last_wc, lo, hi) < _wc_distance(best_wc, lo, hi):
                         best_body, best_wc = new_body, last_wc
                 if new_body and lo <= last_wc <= hi:
@@ -1540,7 +1565,7 @@ def filter_safe_rewrites(
     # that actually ships. The rewriter prompt's hard caps are advisory to
     # the model; this pass is the deterministic enforcement.
     try:
-        repair_wordcounts(rewrite_result, sources_by_id)
+        repair_wordcounts(rewrite_result, sources_by_id, category)
     except Exception as e:  # noqa: BLE001
         log.warning("  Stage 3: wc-repair pass failed (%s) — continuing", e)
 
@@ -1565,7 +1590,9 @@ def filter_safe_rewrites(
     kept: list[dict] = []
     rejected: list[dict] = []
     for art in articles:
-        wc_flags = _wordcount_flags(art)
+        src = (sources_by_id or {}).get(art.get("source_id")) or {}
+        source_wc = int(src.get("word_count") or len((src.get("body") or "").split()))
+        wc_flags = _wordcount_flags(art, category=category, source_word_count=source_wc)
         if wc_flags:
             log.warning("  Stage 3 word-count flag source_id=%s · %s",
                         art.get("source_id"), "; ".join(wc_flags))
@@ -1591,7 +1618,8 @@ def filter_safe_rewrites(
                     art = revised
                     ev = evaluate_rewriter_safety(art, category=category)
                     scores = ev.get("scores") or {}
-                    wc_flags = _wordcount_flags(art)
+                    wc_flags = _wordcount_flags(art, category=category,
+                                                source_word_count=source_wc)
                     log.info("  Stage 3 News neutrality repair passed fresh independent vet "
                              "for source_id=%s", art.get("source_id"))
             repairable = (category == "News"
@@ -1607,14 +1635,16 @@ def filter_safe_rewrites(
                 if revised is not None:
                     art = revised
                     ev = evaluate_rewriter_safety(art, category=category)
-                    wc_flags = _wordcount_flags(art)
+                    wc_flags = _wordcount_flags(art, category=category,
+                                                source_word_count=source_wc)
                     log.info("  Stage 3 hard-news safety repair passed fresh independent vet "
                              "for source_id=%s", art.get("source_id"))
 
         qa_flags = []
         for level in WC_BANDS:
             wc = len(((art.get(f"{level}_en") or {}).get("body") or "").split())
-            if not _wc_within_qa(level, wc):
+            if not _wc_within_qa(level, wc, category=category,
+                                 source_word_count=source_wc):
                 qa_flags.append(f"{level}: {wc}w outside digest tolerance")
         if qa_flags and ev["verdict"] == "PASS":
             ev = {**ev, "verdict": "REJECT", "reason": "word-count QA: " + "; ".join(qa_flags)}

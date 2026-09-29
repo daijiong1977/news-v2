@@ -158,6 +158,9 @@ def test_new_publisher_spare_uses_safety_and_skips_same_publisher(monkeypatch):
              "_winner_brief": {"title": "A new planet",
                                "_probe_art": {"title": "A new planet"}}}
     monkeypatch.setattr(core, "verify_article_content", lambda a: (True, None))
+    # This test isolates publisher diversity and the safety gate; source
+    # length is covered by the ranked-body and spare length tests elsewhere.
+    monkeypatch.setattr(fr, "_source_length_check", lambda *_a: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda *a, **k: {"articles": [{"source_id": 0}]})
     vetted = []
     monkeypatch.setattr(fr, "filter_safe_rewrites", lambda result, sources, **kwargs: (

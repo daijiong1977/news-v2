@@ -92,8 +92,10 @@ VALUES
    'full', 10, 300, 3, 7, true, false, 'live'),
   ('Fun', 'BBC Tennis',  'https://feeds.bbci.co.uk/sport/tennis/rss.xml',
    'rss', NULL, 'full', 10, 150, 1, 1, true, false, 'live'),
+  -- Retired 2026-09-28: broad feed sent a coach obituary into a thin Fun pool.
+  -- BBC Swimming is the active swimming source; keep this row disabled for audit.
   ('Fun', 'SwimSwam',    'https://swimswam.com/feed/',
-   'rss', NULL, 'full', 10, 300, 1, 2, true, false, 'live'),
+   'rss', NULL, 'full', 10, 300, 1, 2, false, false, 'live'),
   ('Fun', 'Wired Gear',  'https://www.wired.com/feed/category/gear/latest/rss',
    'rss', NULL, 'full', 10, 300, 1, 2, true, false, 'live'),
   ('Science', 'Popular Mechanics', 'https://www.popularmechanics.com/rss/all.xml',

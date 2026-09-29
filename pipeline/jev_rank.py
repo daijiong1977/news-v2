@@ -32,7 +32,8 @@ to see more than one brief is done here, code first:
                                                   here is one it can never bring back.
 
 Ranking key is the `pick` noul. On 100 stories labelled blind for this audience
-it reached AUC 0.96 against the label; `want` is kept as an annotation.
+it reached AUC 0.96 against the label. The old `want` annotation was never
+used by selection or downstream stages, so do not pay for it on every brief.
 NOTE: that labeller also wrote AUDIENCE below, so the figure shows that Jev
 follows this brief faithfully, not that the brief is right. Edit AUDIENCE to
 change what gets picked.
@@ -113,14 +114,6 @@ PICK_CRITERIA = {
              "is only local politics of another country, or is not a single news story; "
              "adult background alone is not a reason to reject an important event",
 }
-WANT_Q = "Match this story to the reaction of the reader described in `audience`"
-WANT_LEVELS = [
-    "The reader would scroll past: it is written for adults about adult concerns",
-    "The reader could follow it but has no reason to care",
-    "The reader would read it if it were in front of them",
-    "The reader would pick it from a list of headlines",
-    "The reader would tell a friend about it afterwards",
-]
 SPORTS_PRIORITY_Q = (
     "For a CURRENT Fun story, how significant is its NEW swimming or tennis development "
     "to young fans? Score the actual new event, not just a famous name, an old match "
@@ -226,7 +219,6 @@ def _tokens(title: str) -> set[str]:
 def _questions():
     from typesafe_sdk import Noul, Score
     return ({"pick": Noul(instructions=PICK_Q, criteria=PICK_CRITERIA),
-             "want": Score(instructions=WANT_Q, criteria=WANT_LEVELS),
              "category_fit": Noul(instructions=CATEGORY_FIT_Q,
                                   criteria=CATEGORY_FIT_CRITERIA)},
             {"same_story": Noul(instructions=SAME_STORY_Q)},
@@ -241,26 +233,25 @@ def _score_one(client, q, cat: str, b: dict) -> dict:
                "story": {"section": cat, "headline": title, "summary": summary,
                          "outlet": b.get("_source_name") or ""}},
         questions=q).answers
-    pick, want = float(ans["pick"].noul), float(ans["want"].score)
+    pick = float(ans["pick"].noul)
     category_fit = float(ans["category_fit"].noul)
     sports_priority = float(getattr(ans.get("sports_priority"), "score", 0) or 0)
     neutrality_risk = float(getattr(ans.get("neutrality_risk"), "score", 0) or 0)
     value = float(ans["section_value"].score) if "section_value" in q else None
     if not (math.isfinite(pick) and 0 <= pick <= 1
-            and math.isfinite(want) and 0 <= want <= len(WANT_LEVELS) - 1
             and math.isfinite(category_fit) and 0 <= category_fit <= 1
             and math.isfinite(sports_priority) and 0 <= sports_priority <= 4
             and math.isfinite(neutrality_risk) and 0 <= neutrality_risk <= 4
             and (value is None or math.isfinite(value) and 0 <= value <= 4)):
         raise ValueError(
-            f"jev returned out-of-range answers: pick={pick} want={want} "
+            f"jev returned out-of-range answers: pick={pick} "
             f"category_fit={category_fit} sports_priority={sports_priority}"
         )
     priority_band = min(4, max(0, int(sports_priority + 0.5)))
     bonus = SPORTS_PRIORITY_BONUS.get(priority_band, 0) if cat == "Fun" else 0
     # Do not stack two bonuses for the same sporting achievement.
     bonus = max(bonus, SECTION_VALUE_BONUS.get(int(value), 0) if value is not None else 0)
-    return {"pick": round(pick, 3), "want": round(want, 2),
+    return {"pick": round(pick, 3),
             **({"section_value": round(value, 2)} if value is not None else {}),
             "category_fit": round(category_fit, 3),
             **({"neutrality_risk": round(neutrality_risk, 2)} if cat == "News" else {}),
@@ -575,12 +566,11 @@ def for_curator(pool: dict[str, list[dict]]) -> dict[str, list[dict]]:
         if not selected:
             result[cat] = []
             continue
-        if cat == "News" and any((b.get("_jev_rank") or {}).get("global_rank") for b in selected):
-            # The whole-catalog News comparison has already made a six-item
-            # source/topic-aware choice. A second topic-only swap can remove
-            # a top civic explainer for an old storm or a weaker crime story
-            # before the curator sees it. Keep its six; later gates still
-            # verify history, bodies, safety and final diversity.
+        if cat in {"News", "Fun"} and any((b.get("_jev_rank") or {}).get("global_rank") for b in selected):
+            # A whole-catalog comparison has already made a source/topic-aware
+            # shortlist. A second topic-only swap can undo its ranking before
+            # the curator sees it. Later history, safety and diversity gates
+            # remain in force.
             result[cat] = selected
             continue
         reserves = [b for b in catalog if not (b.get("_jev_rank") or {}).get("send")]

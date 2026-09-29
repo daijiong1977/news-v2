@@ -28,6 +28,8 @@ from datetime import datetime, timedelta, timezone
 from urllib import error, parse, request
 from zoneinfo import ZoneInfo
 
+from .wordcount_policy import STANDARD_BANDS, body_band
+
 # All human-readable timestamps in the digest are rendered in ET so
 # they match the project owner's wall clock — saves "is Apr 30
 # correct? UTC says yes but I'm reading this on Apr 29 evening"
@@ -106,6 +108,7 @@ BODY_TARGETS = {
     "easy":   (140, 270),
     "middle": (300, 410),
 }
+assert BODY_TARGETS == STANDARD_BANDS
 # Listing summary (short card blurb in articles_<cat>_<lvl>.json).
 SUMMARY_MAX = 80
 # Why-it-matters cap (per-story payload `why_it_matters`).
@@ -207,7 +210,9 @@ def score_article(payload: dict, level: str, listing_summary: str = "") -> dict:
     summ_wc = _word_count(listing_summary)
     why_wc  = _word_count(why)
 
-    lo, hi = BODY_TARGETS.get(level, (0, 9999))
+    lo, hi = (body_band(level, category=payload.get("category"),
+                        source_word_count=payload.get("source_word_count"))
+              if level in BODY_TARGETS else (0, 9999))
     # ±15% slack on all word-count gates — see WC_SLACK definition.
     body_ok = (lo * (1 - WC_SLACK)) <= body_wc <= (hi * (1 + WC_SLACK))
     summ_ok = summ_wc <= SUMMARY_MAX * (1 + WC_SLACK)

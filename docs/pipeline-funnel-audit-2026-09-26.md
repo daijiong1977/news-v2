@@ -264,6 +264,7 @@ Jev 相关墙钟约 4.1+9.0+1.5=14.6 秒，约占主体 4%。因此首要性能�
 | 每栏来源上限 | [full_round.py](../pipeline/full_round.py) 的 `PHASE_A_SOURCE_LIMITS` / `phase_a_source_limit` |
 | 每源条目数 | 同文件 `main_mega` 内的 `PHASE_A_PER_SOURCE`；不是表中的 `max_to_vet` |
 | 正文原文长度门槛 | 同文件 `PROBE_MIN_WORDS`、`PROBE_MAX_WORDS`；Mega 不按每源 `min_body_words` 控制这一关 |
+| 2026-09-28 待合并 Fun 词数调整 | [full_round.py](../pipeline/full_round.py) 的 `PROBE_MIN_WORDS_BY_CATEGORY`：News/Science 350、Fun 250；正文探测仍在 JEV 初筛后，沿用 1200 词上限。旧表格的历史运行数字不因此重写。 |
 | Jev 预筛与 8 条保底 | [jev_prefilter.py](../pipeline/jev_prefilter.py) 的阈值和 `MIN_KEEP_PER_CAT` |
 | 分栏路由 | [editorial_routing.py](../pipeline/editorial_routing.py)；`JEV_ROUTE` |
 | 送主编 6/6/7 / 完整候选目录补稿 / 薄池 4 / 来源限制 / 体育加分 | [jev_rank.py](../pipeline/jev_rank.py) 的 `TO_CURATOR_BY_CATEGORY`、`MIN_SEND`、`MAX_PER_SOURCE`、`FLOOR`、`SPORTS_PRIORITY_*`；补稿在 [full_round.py](../pipeline/full_round.py) |

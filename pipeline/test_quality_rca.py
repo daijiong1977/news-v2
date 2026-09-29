@@ -166,6 +166,9 @@ def test_new_source_spare_gets_normal_safety_gate(monkeypatch):
     from pipeline import news_rss_core as core
 
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    # Publisher/safety behavior is under test; source length is tested in
+    # the dedicated ranked-body and spare-length cases.
+    monkeypatch.setattr(fr, "_source_length_check", lambda *_a: (True, None))
     monkeypatch.setattr(fr, "tri_variant_rewrite", lambda articles, category: {
         "articles": [{"source_id": 0}]})
     checked = []
@@ -185,6 +188,7 @@ def test_refill_uses_best_ranked_candidate_when_topic_preference_is_equal(monkey
     from pipeline import news_rss_core as core
 
     monkeypatch.setattr(core, "verify_article_content", lambda art: (True, None))
+    monkeypatch.setattr(fr, "_source_length_check", lambda *_a: (True, None))
     attempted = []
 
     def rewrite(articles, category):

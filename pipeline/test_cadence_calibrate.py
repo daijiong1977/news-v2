@@ -52,11 +52,11 @@ def test_monthly_clamps_to_30():
     print("PASS: monthly+ source → cadence=30 (clamped)")
 
 
-def test_irregular_uses_median_not_mean():
-    """Gaps: 1d, 1d, 30d. Mean=10.7d, median=1d. Confirm median wins."""
+def test_irregular_span_guard_overrides_tiny_median():
+    """Gaps: 1d, 1d, 30d. The existing span guard prevents daily cadence."""
     pub = days_ago(0, 1, 2, 32)
-    assert compute_cadence_days(pub) == 1, compute_cadence_days(pub)
-    print("PASS: irregular gaps use median (resists outliers)")
+    assert compute_cadence_days(pub) == 11, compute_cadence_days(pub)
+    print("PASS: irregular span guard prevents daily calibration")
 
 
 def test_too_few_entries_returns_none():
@@ -89,7 +89,7 @@ def main() -> int:
         test_weekly_source,
         test_burst_publishing_clamps_to_1,
         test_monthly_clamps_to_30,
-        test_irregular_uses_median_not_mean,
+        test_irregular_span_guard_overrides_tiny_median,
         test_too_few_entries_returns_none,
         test_three_entries_minimum,
         test_zero_gap_skipped,
