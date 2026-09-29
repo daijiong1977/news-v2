@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T22:40:00-04:00",
+  "updated_at": "2026-09-29T00:08:49-04:00",
   "branches": [
     {
       "name": "main",
@@ -12,13 +12,18 @@
     },
     {
       "name": "codex/eastern-offpeak-jev-audit",
-      "purpose": "拟议将 Daily pipeline 调至每天美东 06:10，审计 JEV 用量并禁止旧 UTC cron 机器人直推 main；待 PR 审核，尚未上线。",
-      "status": "proposed"
+      "purpose": "PR #81 的美东 06:10 调度、JEV 成本审计和旧 cron 直推移除；已纳入 2026-09-29 集成分支，属于历史 PR 分支。",
+      "status": "integrated"
     },
     {
       "name": "codex/news-fun-rank-experiment",
-      "purpose": "PR #82 待审核的 Fun 短原文、Science 长解释稿、元数据优先排序/分批原文验证及 News 重要稿送审预留；2026-09-28 已从该分支手动完成一次生产内容覆盖，但后续重要稿修复未重跑，分支代码尚未合并 main。",
-      "status": "proposed"
+      "purpose": "PR #82 的 Fun 短原文、Science 长解释稿、元数据优先分批原文验证及 News 重要稿预留；已纳入 2026-09-29 集成分支，早期代码手动覆盖过网站，重要稿后续修复仍待自然运行验证。",
+      "status": "integrated"
+    },
+    {
+      "name": "codex/kids-news-sep28-integration",
+      "purpose": "整合 PR #78、#81、#82，解决项目状态冲突，更新项目总览并完成集成测试；作为合并 main 前的 PR 载体。",
+      "status": "integration_pr"
     },
     {
       "name": "codex/quality-email-timeout",
@@ -37,8 +42,8 @@
     },
     {
       "name": "codex/retire-swimswam-source",
-      "purpose": "移出 SwimSwam Fun 活跃来源池的临时 PR 分支。",
-      "status": "pr_pending"
+      "purpose": "PR #78 的 SwimSwam 来源停用迁移、旧 seed 修正和文档；已纳入 2026-09-29 集成分支，生产来源表 ID 220 先前已核验为停用。",
+      "status": "integrated"
     }
   ],
   "deployments": [
@@ -109,7 +114,7 @@
     },
     {
       "path": ".github/workflows/daily-pipeline.yml",
-      "purpose": "每日流水线的生产调度及执行；拟改为美东 06:10，待 PR 合并后才生效。",
+      "purpose": "每日流水线的调度及执行；集成 PR 拟改为美东 06:10，生效仍以 main 合并提交及下一次自然运行为准。",
       "location": "repo"
     },
     {
@@ -140,6 +145,11 @@
     {
       "path": "pipeline/test_fun_source_retirement.py",
       "purpose": "确保旧 seed 不会重新启用 SwimSwam，并约束迁移仅命中核实的来源行。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_quality_rca.py",
+      "purpose": "多来源补稿及儿童安全回归；集成时把假正文样例与独立字数门槛分开测试。",
       "location": "repo"
     },
     {
@@ -389,6 +399,12 @@
       "title": "大新闻名额须在送主编前预留",
       "note": "只在主编六选三提示和最终安全稿排序里要求一篇重要 News 不够：30选6 的同来源上限已可能把重要稿挡在主编视野外。PR #82 后续修复先在 DeepSeek 排序后的合格目录里预留最高重要性稿，再填其余五个送审名额；主编仍从六篇中选一篇最重要、另外两篇按价值与多样性选。预留不绕过正文、同栏七天历史、中立改写或独立全文儿童安全审核；修复后尚未真实重跑。",
       "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-29",
+      "title": "跨 PR 集成须保存各分支心得并在合并后等自然运行验证",
+      "note": "集成分支合入 PR #78（SwimSwam 停用防回放）、#81（06:10 美东调度、移除旧 cron 直推）和 #82（元数据优先正文探测、News/Fun 排名、栏目词数、重要 News 预留）。冲突集中在项目状态 JSON，合并时保留各分支文件与历史心得。离线 325 项测试通过；两个需要真实 DeepSeek Key 的脚本和三个手动 feed 探测脚本未纳入该离线测试。9 月 28 日旧分支完整运行不能证明集成后的首次自然调度、独立审核或网站同步，需分别监控，且不能把安全 PASS 当成编辑质量完全达标。",
+      "source_ref": "PROJECT-OPERATIONS.md"
     }
   ]
 }

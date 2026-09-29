@@ -1,5 +1,38 @@
 # Kids News 项目地图与交接（2026-09-27）
 
+## 2026-09-28 集成更新（原 9 月 27 日表格保留作历史快照）
+
+本次集成把 [PR #81](https://github.com/daijiong1977/news-v2/pull/81)、
+[PR #78](https://github.com/daijiong1977/news-v2/pull/78) 和
+[PR #82](https://github.com/daijiong1977/news-v2/pull/82) 的代码及文档放在同一个
+PR 中测试；**是否生效以该集成 PR 实际合并至 `news-v2/main` 的提交为准**，
+不是以本机工作树或本文更新时间推断。
+
+- Daily pipeline 调度改为每天 **06:10 America/New_York**，由 GitHub 处理夏冬令时；
+  删除质量摘要邮件末尾那个可能直推 `main` 的旧 UTC cron 同步步骤。
+  管理页仍可控制启用和运行 variant，改启动时间须走 PR。
+- News/Fun 在 RSS 标题摘要层完成 JEV、栏目/事件判断和整组 DeepSeek 排序后，
+  各栏首批只读取排名前 12 篇原文；合格候选不足再每批 6 篇补读。
+  News 在 30→6 送审前先预留一篇 JEV 合格的高重要性稿，主编六选三时优先
+  选最重要的一篇。正文长度、七天同栏历史、中立改写和独立全文儿童安全审核均
+  保留；未产生合格重要稿时仍报警而非强行凑稿。
+- Fun 原文下限 250 词、Science 原文上限 1,500 词；短 Fun 成稿和较长 Science
+  解释稿的生成/质量摘要/修复共用各自词数区间。Science 至少两家独立出版方。
+  SwimSwam 的生产来源行 ID 220 已单独核验为停用；集成代码使旧 seed 不再
+  重启它，BBC Swimming ID 365 保持启用。
+- 9 月 28 日从 PR #82 较早提交进行的[完整手动运行](https://github.com/daijiong1977/news-v2/actions/runs/36504334239)
+  历时 8 分 04 秒，发布九篇并同步网站；它**没有**验证随后新增的 News 重要稿
+  预留，也不能验证集成后的自然定时。逐阶段耗时、选文缺陷和改进边界见
+  `docs/experiments/2026-09-28-full-round-timing-and-quality.md`。
+- 9 月 28 日质量摘要邮件服务返回发送成功，但工作流在之后的旧 cron 同步步骤
+  失败；集成变更移除这个失败步骤。邮件服务成功不等于收件箱已验证。下次自然
+  Daily、独立安全复核、质量摘要及 `kidsnews-v2` 站点同步仍须分别观察。
+
+本项目仍是两个 Git 仓库：`news-v2` 负责生成，`kidsnews-v2` 负责把 Supabase
+内容同步到站点并由 Vercel 发布；`/Users/jiong/myprojects/news-v2-*` 是前者的
+工作树，不是额外生产项目。真实 Atlas ID 为 `kids-news-website`。下面 9 月 27 日
+的 SHA、PR 数、工作树分支名和旧漏斗顺序只供追溯，不能覆盖上面的最新规则。
+
 本文按本次核对的 Git 远端、工作树、工作流和代码记录项目结构。历史设计见 `docs/PROJECT-OVERVIEW.md`；其中仍有“kidsnews-v2 尚未创建”“30 分钟轮询”等过期描述，不能用来判断现在是否上线。运行数、来源表和分支会变化；下表的 SHA/数量、PR #74 未合并状态都是 **2026-09-27 合并前快照**，不是永久配置。长期工作入口只有 `main`；功能分支只是临时 PR 载体。
 
 项目清单的唯一现用归属是 Atlas/Brain ID **`kids-news-website`**。下文的“项目来源”指仓库和本机目录，**不是** Supabase 中供新闻采集用的 RSS/HTML 来源，也不是 AI Providers。两个 GitHub 仓库和它们的本机 checkout 应在同一项目下列出，但保留“源码”“部署同步”“历史工作树”的不同角色；不能把两个 Git 仓库合成一个仓库。

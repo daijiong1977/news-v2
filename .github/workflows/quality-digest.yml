@@ -1,10 +1,10 @@
 name: Quality digest email
 
-# Plan C autofix loop. Runs ~1 hour after daily-pipeline completes.
+# Plan C autofix loop. Runs at about 92 minutes after Daily is triggered.
 #
 # Sequence:
-#   1. Sleep 1h (the user wants the pipeline to fully settle —
-#      kidsnews-v2 sync, Vercel deploy, etc. — before we read).
+#   1. Wait until the 92-minute trigger anchor so the pipeline,
+#      kidsnews-v2 sync and Vercel deploy can settle before we read.
 #   2. Run pipeline.quality_autofix → mechanically trims body / why /
 #      summary that overshot targets, and queues complex issues
 #      (body too short, keyword miss, image missing) into
@@ -71,15 +71,9 @@ jobs:
       QUALITY_DIGEST_DAYS: ${{ inputs.days || '3' }}
     steps:
       - name: Skip if upstream pipeline was a cron-window no-op
-        # daily-pipeline polls every 30 min via `*/30 * * * *`. When
-        # the admin-configured cron window doesn't match, all real
-        # work steps SKIP but the workflow still concludes 'success'.
-        # The workflow_run trigger fires for every such no-op,
-        # spamming the user with hourly digest emails. Guard: check
-        # the upstream's `Run full_round` step status; if not 'success'
-        # (i.e. skipped or failed before getting there), abort the
-        # whole digest. Schedule path + workflow_dispatch always
-        # proceed.
+        # Only completed Daily runs that actually executed full_round
+        # should send a digest. Preserve the guard for failed or skipped
+        # upstream jobs and for historical/manual no-op runs.
         id: guard
         if: ${{ github.event_name == 'workflow_run' }}
         env:
