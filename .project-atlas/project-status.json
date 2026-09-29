@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-28T11:06:55-04:00",
+  "updated_at": "2026-09-28T22:40:00-04:00",
   "branches": [
     {
       "name": "main",
@@ -13,6 +13,11 @@
     {
       "name": "codex/eastern-offpeak-jev-audit",
       "purpose": "拟议将 Daily pipeline 调至每天美东 06:10，审计 JEV 用量并禁止旧 UTC cron 机器人直推 main；待 PR 审核，尚未上线。",
+      "status": "proposed"
+    },
+    {
+      "name": "codex/news-fun-rank-experiment",
+      "purpose": "PR #82 待审核的 Fun 短原文、Science 长解释稿、元数据优先排序/分批原文验证及 News 重要稿送审预留；2026-09-28 已从该分支手动完成一次生产内容覆盖，但后续重要稿修复未重跑，分支代码尚未合并 main。",
       "status": "proposed"
     },
     {
@@ -43,8 +48,8 @@
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_article_payload_verified_after_branch_run",
-      "verified_at": "2026-09-28T09:36:18-04:00"
+      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
+      "verified_at": "2026-09-28T20:50:12-04:00"
     },
     {
       "environment": "production_alias",
@@ -52,14 +57,54 @@
       "url": "https://news.6ray.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_article_payload_verified_after_branch_run",
-      "verified_at": "2026-09-28T09:36:18-04:00"
+      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
+      "verified_at": "2026-09-28T20:50:12-04:00"
     }
   ],
   "files": [
     {
       "path": "pipeline/full_round.py",
-      "purpose": "每日采集、候选补稿、安全审核和发布编排。",
+      "purpose": "每日采集、JEV/DeepSeek 标题摘要排序、排序后分批原文验证（News 350–1200、Science 350–1500、Fun 250–1200）、候选补稿、安全审核和发布编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/checkpoints.py",
+      "purpose": "流水线恢复点顺序；元数据阶段后新增 ranked_body_probe，按排名分批读取原文。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_source_funnel.py",
+      "purpose": "元数据优先、前 12 篇原文验证、后续每批 6 篇、跨栏目长度和失败回退测试。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/wordcount_policy.py",
+      "purpose": "标准、短原文 Fun 与可较长 Science 解释稿的 easy/middle 成稿词数区间，供生成审查、次日质量摘要和自动修复共用。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/fun_global_rank.py",
+      "purpose": "拟议的 Fun 完整候选目录纯编号排序；仅富余合格候选时调用，失败保留 JEV 顺序。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_fun_global_rank.py",
+      "purpose": "Fun 整组排序、深层备稿保留、低质量池跳过调用及模型错误回退的回归测试。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md",
+      "purpose": "News/Fun 整组排序实验、9 月 26–28 日候选回放与安全上线边界。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/experiments/2026-09-28-pre-deepseek-preview.md",
+      "purpose": "2026-09-28 只读预览采集至 JEV 完整目录、DeepSeek 输入前的 News/Fun 标题及 Science 候选和词数上限影响。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/experiments/2026-09-28-full-round-timing-and-quality.md",
+      "purpose": "2026-09-28 PR #82 分支完整生产覆盖运行的逐阶段耗时、漏选链、编辑质量警告及网站同步证据。",
       "location": "repo"
     },
     {
@@ -119,12 +164,17 @@
     },
     {
       "path": "pipeline/jev_rank.py",
-      "purpose": "JEV 评分、News 中立可改写性判断、同事件筛选和完整候选目录。",
+      "purpose": "JEV 评分、News 中立可改写性判断、同事件筛选和完整候选目录；不再请求未使用的 want 分数。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/jev_prefilter.py",
+      "purpose": "正文探测前 JEV 高置信度排除；服务变慢时 15 秒失败回退，不丢弃候选。",
       "location": "repo"
     },
     {
       "path": "pipeline/news_global_rank.py",
-      "purpose": "DeepSeek 对最多 29 篇合格 News 候选返回纯编号排列，并据此决定六篇送审顺序；失败时回退 JEV。",
+      "purpose": "DeepSeek 对最多 30 篇合格 News 候选返回纯编号排列；先预留一篇 JEV 合格的高重要性稿，再按来源/题材配额决定六篇送审，失败时回退 JEV。",
       "location": "repo"
     },
     {
@@ -297,6 +347,48 @@
       "title": "Fun 薄池可能把低价值游泳讣闻送给主编",
       "note": "非发布预演中 SwimSwam 教练讣闻以 0.41 的评分进入四篇 Fun 送审池，低于常规 0.50。2026-09-28 已核验生产来源表 SwimSwam ID 220 为 enabled=false、BBC Swimming ID 365 仍为 enabled=true；重新读取 Fun 来源池只包含后者。保留旧行和历史数据以便审计与回退，旧 seed 同步停用以免重启；PR 尚未合并。",
       "source_ref": "docs/bugs/2026-09-28-swimswam-fun-source.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "Fun 整组排名只应在富余合格候选时付费",
+      "note": "News 已有 JEV→最多 30 篇 DeepSeek 纯编号排序→六篇送审。Fun 9 月 26–28 日的 JEV 完整目录有 10/13/14 篇，但高于 0.50 趣味门槛仅 5/4/4 篇；额外 DeepSeek 比较无法扩充合格池，某次试排反而将消费耳机稿排第 3。拟议 Fun 只有合格稿超过七篇才整组比较，失败保留 JEV 排序，不改变 Science、七天历史去重或独立全文儿童安全复核。JEV 排名移除未使用的 want 答案，初筛超时缩短至 15 秒且失败仍保留候选；此分支尚未合并，生产质量与费用需自然运行验证。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "保持 JEV 在正文探测前，仅放宽 Fun 原文门槛至 250 词",
+      "note": "完整网页抓取会增加网络时间，故保留 RSS 标题/摘要 JEV 初筛→正文探测的原顺序；正文词数关本身不耗模型，但不会减少 JEV 初筛调用。拟议分支将 Fun 最少原文词数从 350 调为 250，News/Science 维持 350，上限 1200。250–349 词 Fun 原文改写目标缩为 easy 135–185、middle 265–315，并让发布后的质量摘要与自动修复识别同一短稿门槛；BBC Tennis 等候选可进入后续审核，223 词游泳稿仍会被挡。改写不得编造事实，仍需独立全文审核。仅完成本地测试，未合并或验证生产质量。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "Science 成稿先放宽，随后原文上限试增至 1500",
+      "note": "科学概念需要解释机制时，拟议分支允许 easy 最多约 300、middle 最多约 500 词；通常短篇仍按原目标，不能用编造细节凑字数。生成、次日质量摘要、自动修复共用 Science 长稿区间 easy 140–320、middle 300–520。随后仅将 Science 原文上限由 1200 提至 1500（下限仍350），News/Fun 成稿规则不受此项影响；独立全文儿童安全审核保留。9月28日预览中没有 1201–1500 词 Science 原文，故当天候选数未受影响。尚未合并或验证生产质量。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "预览必须停在 DeepSeek 前且不写生产状态",
+      "note": "用当前来源的只读本地回放可检查原始采集、历史/禁词过滤、JEV、正文词数、分栏和完整目录，再停止于整组 DeepSeek 排名前。17:45 ET 回放约47.5秒，News/Science/Fun 目录29/20/21；Science 1201–1500 词为零，Fun 254词 BBC Tennis 通过。JEV 排名前列仍有战争稿与偏消费 Fun，预览不能当作最终安全/编辑验证；没有创建 run/checkpoint、DeepSeek 调用或发布。第一次终端输出被截断，实际做了两次 JEV 回放，费用需从控制台核对。",
+      "source_ref": "docs/experiments/2026-09-28-pre-deepseek-preview.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "原文抓取应在元数据排序后按批次进行",
+      "note": "旧预览在首次 JEV 初筛后打开了 97 篇网页，再给 JEV 和 DeepSeek 做标题摘要排名；用户确认无需这么早读取全文。PR #82 改为元数据 JEV/DeepSeek 排序后，每栏先抓前12篇原文并检查长度、图片；不足六篇（Fun七篇）再批量补抓。2026-09-28 完整运行共抓36篇网页、每栏首批即足够，最终9篇发布，网站同步成功。不同批次源数据不一致，97→36 不是受控节费测量。",
+      "source_ref": "docs/experiments/2026-09-28-full-round-timing-and-quality.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "完整运行技术成功仍会漏掉重要稿",
+      "note": "PR #82 分支生产覆盖运行历时8分04秒、发布News/Science/Fun各3篇，网站同步提交84dedbf。News来源配额先取PBS排名1和2，挤掉排名3且重要性达标的油耗标准稿；排名1的Nvidia稿后被七天历史不确定判断挡下，最终News无高重要性稿且仅两家来源。Fun的223词BBC Swimming世界纪录稿被250词门槛挡下，消费导流影片稿补入。独立安全PASS不等于编辑质量达标；调整排序/准入应保留历史及安全门禁。延迟质量邮件的发送步骤成功，但后续 cron 同步因 YAML 行尾注释解析失败，故工作流整体失败；现有定时值未改变。",
+      "source_ref": "docs/experiments/2026-09-28-full-round-timing-and-quality.md"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "大新闻名额须在送主编前预留",
+      "note": "只在主编六选三提示和最终安全稿排序里要求一篇重要 News 不够：30选6 的同来源上限已可能把重要稿挡在主编视野外。PR #82 后续修复先在 DeepSeek 排序后的合格目录里预留最高重要性稿，再填其余五个送审名额；主编仍从六篇中选一篇最重要、另外两篇按价值与多样性选。预留不绕过正文、同栏七天历史、中立改写或独立全文儿童安全审核；修复后尚未真实重跑。",
+      "source_ref": "docs/experiments/2026-09-28-news-fun-whole-catalog-rank.md"
     }
   ]
 }

@@ -12,11 +12,12 @@ import re
 from collections import Counter
 from typing import Callable
 
+from .editorial_policy import important_news
 from .news_topics import topic_group
 
 log = logging.getLogger("news-global-rank")
 
-MAX_NEWS_COMPARISON = 29  # strictly fewer than 30; deeper catalog stays for refill
+MAX_NEWS_COMPARISON = 30  # one numbered batch; deeper catalog stays for refill
 NEWS_CURATOR_SLOTS = 6
 NEWS_PICK_FLOOR = 0.40
 
@@ -65,9 +66,28 @@ def _valid_permutation(answer: object, count: int) -> bool:
 
 
 def _choose_six(ordered: list[dict]) -> list[dict]:
-    """Honor source/topic breadth and JEV's quality floor after global ranking."""
-    chosen: list[dict] = []
-    seen: set[int] = set()
+    """Reserve one qualified major story, then honor source/topic breadth.
+
+    Without this reservation, the first two stories from a publisher can
+    consume its source cap before a later, more consequential story is seen.
+    This is only a curator-input preference; body, history and safety gates
+    still decide whether a story can be published.
+    """
+    major_pair = max(
+        ((i, brief) for i, brief in enumerate(ordered) if important_news(brief)),
+        key=lambda pair: (
+            float(pair[1]["_jev_rank"]["section_value"]),
+            float(pair[1]["_jev_rank"].get("editorial_pick", pair[1]["_jev_rank"].get("pick", 0))),
+            -pair[0],
+        ), default=None,
+    )
+    major = major_pair[1] if major_pair else None
+    chosen: list[dict] = [major] if major is not None else []
+    seen: set[int] = {id(major)} if major is not None else set()
+    positions = {id(brief): i for i, brief in enumerate(ordered)}
+
+    def in_rank_order() -> list[dict]:
+        return sorted(chosen, key=lambda brief: positions[id(brief)])
     for source_cap, topic_cap, floor, known_topic in (
             (2, 2, NEWS_PICK_FLOOR, True),
             (2, None, NEWS_PICK_FLOOR, True),
@@ -78,7 +98,7 @@ def _choose_six(ordered: list[dict]) -> list[dict]:
         topics = Counter(topic_group(b) for b in chosen if topic_group(b))
         for brief in ordered:
             if len(chosen) == NEWS_CURATOR_SLOTS:
-                return chosen
+                return in_rank_order()
             if id(brief) in seen:
                 continue
             rank = brief.get("_jev_rank") or {}
@@ -97,7 +117,7 @@ def _choose_six(ordered: list[dict]) -> list[dict]:
             sources[source] += 1
             if topic:
                 topics[topic] += 1
-    return chosen
+    return in_rank_order()
 
 
 def rerank_news_catalog(

@@ -137,11 +137,13 @@ def test_refill_tries_other_catalog_without_same_day_model_call(monkeypatch):
         {"_unverified_spare": True, "source": source,
          "_winner_brief": {"title": "Another weather story",
                            "_jev_topic_group": "severe_weather",
-                           "_probe_art": {"title": "Another weather story"}}},
+                               "_probe_art": {"title": "Another weather story",
+                                              "word_count": 500}}},
         {"_unverified_spare": True, "source": source,
          "_winner_brief": {"title": "Students build a new playground",
                            "_jev_topic_group": "community",
-                           "_probe_art": {"title": "Students build a new playground"}}},
+                               "_probe_art": {"title": "Students build a new playground",
+                                              "word_count": 500}}},
     ]
     existing = [{"title": "New York flood", "_jev_topic_group": "severe_weather"},
                 {"title": "Bangkok flood", "_jev_topic_group": "severe_weather"}]
@@ -168,7 +170,7 @@ def test_same_catalog_refill_uses_best_remaining_catalog_pick(monkeypatch):
     titles = ["New Jersey begins storm recovery", "Bangkok roads submerged as flood disaster declared"]
     pool = [{"_unverified_spare": True, "source": source,
              "_winner_brief": {"title": title, "_jev_topic_group": "severe_weather",
-                               "_probe_art": {"title": title}}}
+                                   "_probe_art": {"title": title, "word_count": 500}}}
             for title in titles]
     existing = [{"title": CURRENT, "_jev_topic_group": "severe_weather"},
                 {"title": "Politics in Europe", "_jev_topic_group": "international_relations"}]

@@ -159,6 +159,34 @@ def test_outside_digest_tolerance_rejected_after_failed_repair(monkeypatch):
     assert "word-count QA" in rejected[0]["_safety_eval"]["reason"]
 
 
+def test_short_fun_lower_body_passes_final_gate_but_too_short_still_fails(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
+    source = {0: {"word_count": 270, "body": "source " * 270}}
+    good = _article(sid=0, easy_words=130, middle_words=245)
+    kept, rejected = _with_fake_vet(
+        _clean_scores(0),
+        lambda: core.filter_safe_rewrites({"articles": [good]}, source, category="Fun"),
+    )
+    assert len(kept) == 1 and not rejected
+
+    too_short = _article(sid=0, easy_words=90, middle_words=200)
+    kept, rejected = _with_fake_vet(
+        _clean_scores(0),
+        lambda: core.filter_safe_rewrites({"articles": [too_short]}, source, category="Fun"),
+    )
+    assert not kept and "word-count QA" in rejected[0]["_safety_eval"]["reason"]
+
+
+def test_science_long_explainer_passes_final_length_gate(monkeypatch):
+    monkeypatch.setattr(core, "repair_wordcounts", lambda *args: 0)
+    article = _article(sid=0, easy_words=285, middle_words=480)
+    kept, rejected = _with_fake_vet(
+        _clean_scores(0),
+        lambda: core.filter_safe_rewrites({"articles": [article]}, category="Science"),
+    )
+    assert len(kept) == 1 and not rejected
+
+
 def test_easy_band_aligned_with_digest_gate():
     """The easy word band is stated in four places: the rewriter prompt, the
     repair targets, the generation-time QA band, and quality_digest's gate.

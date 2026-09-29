@@ -33,13 +33,13 @@ class Fake:
         if self.delay:
             time.sleep(self.delay)
         if "story" in state:
+            assert "want" not in questions  # unused annotation must not cost a JEV answer
             self.rank_calls += 1
             t = state["story"]["headline"]
             if any(f in t for f in self.fail):
                 raise RuntimeError("boom")
             answers = {
                 "pick": SimpleNamespace(noul=self.by_title[t]),
-                "want": SimpleNamespace(score=2.0),
                 "category_fit": SimpleNamespace(
                     noul=self.fit_by_title.get((t, state["story"]["section"]),
                                                self.fit_by_title.get(t, 0.95))),

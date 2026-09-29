@@ -72,7 +72,8 @@ def test_stage3_spare_prefers_new_topic_and_keeps_unattempted(monkeypatch):
 
     def spare(title, group, source):
         brief = {"title": title, "_jev_topic_group": group,
-                 "_probe_art": {"title": title, "link": title}}
+                     "_probe_art": {"title": title, "link": title,
+                                    "word_count": 500}}
         return {"_unverified_spare": True, "_winner_brief": brief,
                 "source": Source(source), "_rank": 4}
 
@@ -98,7 +99,8 @@ def test_news_refill_keeps_strong_safe_story_over_weak_new_topic(monkeypatch):
         brief = {"title": title, "_jev_topic_group": group,
                  "_jev_rank": {"editorial_pick": pick, "section_value": value,
                                "floor": .4},
-                 "_probe_art": {"title": title, "link": title}}
+                     "_probe_art": {"title": title, "link": title,
+                                    "word_count": 500}}
         return {"_unverified_spare": True, "_winner_brief": brief,
                 "source": Source(title), "_rank": title}
 

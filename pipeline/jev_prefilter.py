@@ -1,6 +1,6 @@
-"""Stage 1.2 of the mega pipeline: cheap pre-filter between the forbidden-word
-filter and the body probe, so the probe's per-category cap (10) is spent on
-candidates that could actually ship.
+"""Stage 1.2 of the mega pipeline: cheap metadata pre-filter before JEV
+ranking and the later ranked-body probe. Individual article pages are not
+opened in this stage.
 
 Rules. Each was validated on 35 days of checkpoints (975 candidates,
 2026-08-15..09-19) before being allowed to drop anything; the numbers are in
@@ -51,7 +51,9 @@ UK_DOMESTIC_MIN = 0.90      # clear-cut only; borderline ones stay for the curat
 RECRUITING_MIN = 0.90       # editorial exclusion: never restored by the soft pool floor
 MIN_KEEP_PER_CAT = 8        # soft-rule floor; explicit recruiting exclusions do not yield
 MAX_ERROR_RATE = 0.30       # above this the whole Jev pass is discarded
-TIME_BUDGET_S = 60.0
+# Healthy runs finish in a few seconds. A degraded optional service must not
+# hold the whole pipeline for a minute before the fail-open path can continue.
+TIME_BUDGET_S = 15.0
 CALL_TIMEOUT_S = 10.0
 WORKERS = 4                 # ~16 req/s, under the 1,200 req/min limit
 
