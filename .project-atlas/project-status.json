@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T13:54:39-04:00",
+  "updated_at": "2026-09-30T14:40:11-04:00",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -81,6 +81,21 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-STEPWISE-PIPELINE.md",
+      "purpose": "逐步运行全链路、文件交接、耗时定义及影子发布与核验边界。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_details.py",
+      "purpose": "详情 slot/关键词/测验校验、独立附加内容审核和原始图片本地优化。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_publish.py",
+      "purpose": "锁定独立影子 Vercel 项目并验证所有公开 payload/detail/image 哈希；无正式发布。",
+      "location": "repo"
+    },
     {
       "path": "pipeline/agent_shadow.py",
       "purpose": "原生 Agent 可恢复影子流程：采集、元数据排名、分批正文、六选三、改写、独立复核、补稿和导出；没有生产写操作。",
@@ -328,6 +343,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-09-30",
+      "title": "完整影子流水线必须逐步暂停，附加内容也要独立审核",
+      "note": "native Agent step/next 每次只完成一个单元：排名、延迟原文、六选三、改写、独立正文审核、补稿、详情、独立详情审核、图片、打包。新增关键词槽位/测验答案校验；不合格详情省略并告警。发布入口锁定独立 shadow Vercel project，核验公开全部 payload/detail/image 内容哈希；VM 无发布密钥，首次仍由 Mac 维护者部署。86 项离线测试通过（含假答卷分步全程恢复），不代表真实 Grok 质量或 VM 安装已验证。生产 main 未修改，代码仍在 PR。",
+      "source_ref": "docs/KIDSNEWS-STEPWISE-PIPELINE.md"
+    },
     {
       "date": "2026-09-30",
       "title": "Agent 暂停必须是可恢复交接而非失败回退",

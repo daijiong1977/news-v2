@@ -26,17 +26,28 @@ select json_build_object(
 ```
 
 3. Run `python -m pipeline.agent_shadow prepare --run-dir work/D/run-1 --date D --registry work/D/registry.json`.
-4. Run `python -m pipeline.agent_shadow next --run-dir work/D/run-1`.
+4. Run `.venv/bin/python -m pipeline.agent_shadow step --run-dir work/D/run-1`.
+   `step` and the compatibility alias `next` stop at ONE successful unit boundary.
+   Exit 0 with `completed_step` means that unit is done, NOT that the whole run is done.
+   Continue with the returned `next` command, using `.venv/bin/python` on the VM.
    - Exit 2: read the entire `read` file, follow its task messages, write JSON to `write_to`.
      Native Grok or another online Agent answers; no DeepSeek, JEV or Grok API key.
      `content` is a JSON string containing the task answer. Copy request_id exactly.
-     Rerun the SAME next command. On validation errors correct only the answer once.
+     Rerun the SAME step command (also printed as `rerun`). On validation errors correct only the answer once.
    - Exit 1: tool/code error. Stop and report; do not fix code or change rules.
    - Exit 3: already done; do not regenerate or republish.
-   - Exit 0: local reader files and review results are ready. Review the report.
-5. Give the maintainer the generated `site/`, `review-results.json`, `metrics.json` and warnings.
-   Initial shadow deployment is performed by the maintainer from the Mac.
-   No Vercel credential is needed on the shared VM.
+   - Exit 0: check `completed_step` and follow `next`. Only `pack` means local reader files are ready.
+5. See `docs/KIDSNEWS-STEPWISE-PIPELINE.md` for all units and acceptance checks.
+   Enrichment (keywords/quiz/background/viewpoints) has its OWN independent safety/fact review.
+   If enrichment fails, omit it, report the warning, retain the safe body. Images failing to download
+   are reported and omitted; never fabricate an image or fetch a replacement yourself.
+6. Publishing is a separate step. The VM has no Vercel credential. Give the maintainer the site artifact;
+   do NOT provision keys or try production publishing as a fallback. From an authenticated Mac, run
+   `python -m pipeline.agent_shadow publish --run-dir <local-run-directory>`.
+   That command is hard-pinned to the separate `kidsnews-bot-shadow` Vercel project.
+7. Run `.venv/bin/python -m pipeline.agent_shadow verify --run-dir work/D/run-1` after deployment.
+   Public verification compares the manifest AND every payload/detail/image hash. A CLI deployment
+   response is not evidence that the public site serves this run. Only verified `published.json` means deployed.
 
 The ranking request uses metadata, not full texts. Body reads are cached, up to the first twelve
 ranked candidates per section, followed by deeper ranks only if six have not survived.
@@ -51,3 +62,5 @@ If source data or histories are inaccessible, report it rather than pretending h
 
 Report date, per-section counts, important News present/missing, publisher warnings, rejected articles,
 body fetch count, measured timings, and whether the shadow was actually deployed.
+Do not create a daily routine yet. First complete one manual shadow run and inspect it with Jiong.
+Do not modify completed answers mid-run. For a fresh same-day attempt choose a new run directory.

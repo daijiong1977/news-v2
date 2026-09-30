@@ -29,7 +29,7 @@ def ship(root: Path):
         with tempfile.TemporaryDirectory() as directory:
             extra = {"GIT_INDEX_FILE": str(Path(directory) / "index")}
             git("read-tree", previous or "--empty", extra=extra)
-            for path in sorted(root.rglob("*.json")):
+            for path in sorted([*root.rglob("*.json"), *root.rglob("*.jsonl")]):
                 if path.stat().st_size > 1_500_000:
                     continue
                 relative = path.relative_to(repo / "work").as_posix()

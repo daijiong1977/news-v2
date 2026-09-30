@@ -35,6 +35,29 @@ async function render() {
           try {
             const body = await json(`/article_payloads/payload_${encodeURIComponent(item.id)}/${lvl}.json`);
             detail.append(node("p", body.summary, "body"));
+            if (body.why_it_matters) detail.append(node("h3", "为什么重要"), node("p", body.why_it_matters));
+            for (const [field, label] of [["background_read", "背景"], ["Article_Structure", "文章结构"]]) {
+              if (Array.isArray(body[field]) && body[field].length) {
+                detail.append(node("h3", label));
+                for (const text of body[field]) detail.append(node("p", text));
+              }
+            }
+            if (Array.isArray(body.keywords) && body.keywords.length) {
+              detail.append(node("h3", "关键词"));
+              for (const kw of body.keywords) detail.append(node("p", `${kw.term}: ${kw.explanation}`));
+            }
+            if (Array.isArray(body.perspectives) && body.perspectives.length) {
+              detail.append(node("h3", "不同视角"));
+              for (const view of body.perspectives) detail.append(node("p", `${view.perspective}: ${view.description}`));
+            }
+            if (Array.isArray(body.questions) && body.questions.length) {
+              detail.append(node("h3", "阅读小测"));
+              for (const q of body.questions) {
+                const quiz = node("details"); quiz.append(node("summary", q.question));
+                for (const option of q.options) quiz.append(node("p", option));
+                quiz.append(node("p", `答案：${q.correct_answer}`)); detail.append(quiz);
+              }
+            }
             if (/^https?:\/\//.test(body.source_url || "")) {
               const link = node("a", "原始来源 ↗"); link.href = body.source_url;
               link.target = "_blank"; link.rel = "noopener noreferrer"; detail.append(link);
