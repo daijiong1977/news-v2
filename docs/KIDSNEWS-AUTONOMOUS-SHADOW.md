@@ -49,6 +49,18 @@ News 三篇已通过但没有重要稿时，继续寻找 importance>=3 的合格
 - DNS 每跳检查、连接固定公共 IP，同时保留原域名 TLS 证书/SNI 校验；禁代理、凭据、私网。
 - 原图只来自抓取页面的 og:image，使用相同受控工具；最多1200边、2000万像素，失败省略并记录。
 
+### 照片必须验证（新增要求）
+
+自主模式抓图后增加独立 `review-image-*` 步骤，不把“可打开”当作“适合发布”。
+机械检查WEBP、尺寸至少160×100、2MB以内、解码正常、非符号链接、目录边界及SHA256；
+随后原生Agent必须用视觉工具打开**实际本地像素**，与文章原文核对相关性、儿童安全、
+中立呈现、隐私和是否误导。看不到图片必须 viewed=false，不能只凭URL/标题判断。
+六个布尔项全部通过且答卷绑定当前图片哈希才保留，审核后资产改动退出1。
+拒绝、答卷两次无效或无法验证的照片移至运行目录 rejected-images（不进入site），
+保留正文，清空卡片图片并告警；不自行寻找或生成替代图。
+这不能证明版权许可或照片真实性，也不能由JSON证明Agent实际使用了视觉工具，首测须查轨迹。
+九篇都有照片时会增加九个视觉审核任务；实际原生 token/费用仍须从平台核验，不假造成本。
+
 `pipeline/agent_shadow_providers.py`：至多120个不同任务、120次 HTTP 尝试；
 一轮新任务/HTTP 调用在首任务后一小时停止。该限制不是模型 dollar 预算，也不能
 强制终止已经在云端执行的原生搜索。每次不合格答卷仍只允许一次修正。
@@ -82,6 +94,7 @@ HTTP 超时/异常写 attempted 状态，不盲重试；使用新运行目录并
   "roles": {
     "editor": {"type": "native"},
     "discovery": {"type": "native"},
+    "image_review": {"type": "native"},
     "write": {
       "type": "http",
       "model": "deepseek-chat",
@@ -96,7 +109,7 @@ HTTP 超时/异常写 attempted 状态，不盲重试；使用新运行目录并
 
 HTTP 与文件交接共享答卷缓存、校验与 SHA256。配置修改必须新建运行目录。
 API Key 由调用进程环境提供，不进入请求、日志或 Git，不能把它直接放到 Bot VM。
-纯文本 HTTP 不具备搜索工具，所以 discovery 只接受 native；其他带工具的在线 Agent
+纯文本 HTTP 不具备搜索/视觉工具，所以 discovery、image_review 只接受 native；其他带工具的在线 Agent
 可按相同 request/answer 协议接入，但平台安装/能力授权不是此配置自动完成的。
 没有 native 模型 ID 的自动选型功能，使用运行 Agent 的当前模型。
 
@@ -109,7 +122,7 @@ API Key 由调用进程环境提供，不进入请求、日志或 Git，不能�
 
 主要记录：input.json、autonomous-catalog.json、autonomous-audit.json、provider-audit.json、
 bodies.json、editor-state.json、backfill.json、review-results.json、source-suggestions.json、
-metrics.json、steps.jsonl、accepted-answer-hashes.json、done.json、site/shadow-run.json。
+metrics.json、steps.jsonl、photo-reviews.json、accepted-answer-hashes.json、done.json、site/shadow-run.json。
 HTTP usage 按服务返回保存；原生没有 token 计数，不虚构。失败和部分成功均要列明。
 
 ## 离线测试
@@ -118,7 +131,7 @@ HTTP usage 按服务返回保存；原生没有 token 计数，不虚构。失�
 保留过审稿、事件淘汰、临时来源、复用深层元数据、出版方跳转、重要稿备用、正文预算、
 私网/非HTTPS/凭据/端口、固定IP和私网跳转、真实文件交接及答卷改动、HTTP缓存/未知超时、
 模型路由和安全图片 WEBP。所有模型、connector、抓取和部署均离线替身。
-与既有109项回归一起在 Python3.10.20 下运行：**132 passed**（新增23项），
+与既有109项回归一起在 Python3.10.20 下运行：**139 passed**（新增30项），
 只有已有 gotrue 弃用警告。离线运行耗时不是实际生成的模型耗时。
 
 ```sh

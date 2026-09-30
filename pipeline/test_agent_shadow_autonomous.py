@@ -342,3 +342,68 @@ def test_redirected_original_url_cannot_bypass_same_category_history(tmp_path, m
     policy.plan()
     assert policy.pool('News', 3) == []
     assert policy.audit['url_exclusions']['news00'] == 'history_or_pool_duplicate'
+
+
+@pytest.mark.parametrize('bad_field', [None, 'relevant', 'kid_safe', 'viewed', 'neutral'])
+def test_photo_review_is_mandatory_and_bad_photo_not_shown(tmp_path, monkeypatch, bad_field):
+    from PIL import Image
+    _, _, tasks, answer, original = setup(tmp_path, monkeypatch)
+    from pipeline import agent_shadow_autonomous as autonomous
+    monkeypatch.setattr(autonomous, 'fetch_original', lambda b: {**original(b), 'og_image': 'https://public.example/photo.png'})
+    def photo(url, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new('RGB', (320, 240), 'blue').save(path, 'WEBP')
+        return {'local_path': str(path), 'width': 320, 'height': 240}
+    monkeypatch.setattr(autonomous, 'safe_image', photo)
+    def review(root, key, system, material, validate, **kw):
+        if key.startswith('review-image-'):
+            tasks.append(key)
+            assert material['image']['path'].endswith('.webp')
+            with Image.open(material['image']['path']) as img:
+                assert img.size == (320, 240)
+            value = {k: True for k in ('viewed', 'relevant', 'kid_safe', 'neutral', 'privacy_safe', 'not_misleading')}
+            value['image_sha256'] = material['image']['sha256']
+            value['reasons'] = []
+            if bad_field and key == 'review-image-News-news00':
+                value[bad_field] = False
+                value['reasons'] = ['test exclusion']
+            assert not validate(value)
+            return value
+        return answer(root, key, system, material, validate, **kw)
+    monkeypatch.setattr(runner, 'ask', review)
+    result = run_steps(tmp_path)
+    assert result['counts'] == {'news': 3, 'science': 3, 'fun': 3}
+    assert len([k for k in tasks if k.startswith('review-image-')]) == 9
+    record = runner.read(tmp_path / 'photo-reviews.json')['news00']
+    assert record['status'] == ('rejected' if bad_field else 'passed')
+    final = runner.read(tmp_path / 'site/payloads/articles_news_easy.json')['articles']
+    assert bool(final[0]['image_url']) is (bad_field is None)
+    if bad_field:
+        assert (tmp_path / 'rejected-images/news00.webp').exists()
+        assert not (tmp_path / 'site/article_images/news-news00.webp').exists()
+
+
+def test_image_review_rejects_hash_mismatch_and_text_only_api(tmp_path):
+    from pipeline.agent_shadow_photos import validate_photo_review
+    value = {k: True for k in ('viewed', 'relevant', 'kid_safe', 'neutral', 'privacy_safe', 'not_misleading')}
+    value.update(image_sha256='wrong', reasons=[])
+    assert validate_photo_review(value, 'expected')
+    from pipeline.agent_shadow_providers import validate_config
+    with pytest.raises(ValueError, match='native'):
+        validate_config({'roles': {'image_review': {'type': 'http', 'model': 'text',
+            'endpoint': 'https://api.example/chat/completions', 'key_env': 'ENV'}}})
+
+
+def test_passed_photo_mutation_is_not_silently_reused(tmp_path):
+    from PIL import Image
+    import hashlib
+    from pipeline.agent_shadow_photos import review_photos
+    path = tmp_path / 'reader/article_images/photo.webp'
+    path.parent.mkdir(parents=True)
+    Image.new('RGB', (320, 240), 'blue').save(path, 'WEBP')
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    runner.write(tmp_path / 'photo-reviews.json', {'x': {'status': 'passed', 'sha256': digest}})
+    final = {'News': [{'winner': {'id': 'x'}, '_image_local': 'article_images/photo.webp'}]}
+    Image.new('RGB', (320, 240), 'red').save(path, 'WEBP')
+    with pytest.raises(RuntimeError, match='photo changed'):
+        review_photos(tmp_path, final, None, None, False)

@@ -7,6 +7,10 @@ their allowed tools/budgets; return empty if unavailable. Never enable sources o
 Autonomous plan selects three plus reserves directly (not thirty/six-choose-three). Autonomous review
 also returns event_clear for supplied same-category history and accepted events. Code routes explicitly
 configured HTTP roles; do not independently invoke extra models or paste credentials into answers.
+Autonomous review-image-* requires opening the supplied local image with a vision tool, not URL-based
+guessing. Confirm relevance to the article, child safety, neutral presentation, privacy and no misleading
+scene/event/person. All flags including viewed must be explicit booleans and copy the actual supplied
+image_sha256. If tools/evidence are insufficient, fail closed; code omits/quarantines that image.
 The outer answer is always:
 
 ```json

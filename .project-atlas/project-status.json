@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T21:21:23.859Z",
+  "updated_at": "2026-09-30T21:29:16.604Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：审查修复 + 可选自主编辑影子模式；直接三篇/备用、仅缺栏扩展元数据或公开来源、受控证据抓取、模型角色路由；Python3.10离线测试，未合并、未真实模型/部署验证。",
+      "purpose": "PR #86：审查修复 + 可选自主编辑影子模式；直接三篇/备用、仅缺栏扩展元数据或公开来源、受控证据抓取、模型角色路由；Python3.10离线测试，未合并、未真实模型/部署验证。 照片已增加实际本地像素视觉审核门禁（未真实视觉模型验证），全部离线139项。",
       "status": "review"
     },
     {
@@ -91,6 +91,11 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/agent_shadow_photos.py",
+      "purpose": "自主影子照片：像素解码/尺寸/hash，独立原生视觉复核相关性/儿童安全/中立/隐私/误导；失败移出site，审后改图阻止恢复。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md",
       "purpose": "自主影子模式使用、可调预算、模型配置、源码/Bot快照边界、首测与可复用算法。",
@@ -592,6 +597,24 @@
       "title": "跳转后的原文URL也必须机械查重",
       "note": "自主影子抓取的起始URL可能不在历史，但跳转最终URL已发布。先用失败回归复现，再对最终URL重验同栏历史/正文池，并将最终URL作为导出来源；独立事件语义复核仍保留。新增1回归，总离线132项；生产路径未改，尚未真实生成或部署。",
       "source_ref": "pipeline/test_agent_shadow_autonomous.py"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "自主编辑快照仍须与共享提交逐文件一致，不把离线测试当云端成功",
+      "note": "Bot运行分支快照来自 news-v2 a23641a45655ce725c4e25319724003e249b2e8b；source和runtime共享代码/文档逐文件比对，Python3.10离线131项通过。未merge main、未给Bot发消息、未真实AI/DB写/部署。影子页现有壳不等于自主内容上线；VM安装、原生搜索、真实TLS网络兼容、会话隔离、费用及稿件质量都留首测验收。",
+      "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "最终跳转查重补丁也要再导出并重测Bot快照",
+      "note": "UPSTREAM更新到 cec6853b464bba82ba6e598fbf763c178438de0d，补丁记录 docs/bugs/2026-09-30-shadow-final-url-history.md；自主新增23回归，加原109总132项。源码先修后runtime导出比对，无生产写或真实模型/部署。先前a23641a/131测试记录属同日历史，不代表最终快照。",
+      "source_ref": "docs/REVIEW-2026-09-30.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "照片可解码不等于适合发布：必须独立看像素并绑定资产",
+      "note": "自主模式照片增加review-image原生视觉角色：机器先检查WEBP/160x100/2MB/非symlink/目录/hash，Agent新会话看实际本地像素，相关性/儿童安全/中立/隐私/非误导及viewed六项全true才展示；不能看像素就false，哈希不一致一次修正后仍无效则排除。拒图移到rejected-images，不进入网站；保留通过正文，审后资产改动拒恢复。文本HTTP不当作视觉模型；每九图增加九任务，真实视觉工具/质量/费用须首测轨迹确认，离线139项仅证明门禁。",
+      "source_ref": "pipeline/agent_shadow_photos.py"
     }
   ]
 }

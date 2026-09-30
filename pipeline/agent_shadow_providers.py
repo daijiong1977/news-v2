@@ -20,18 +20,20 @@ def validate_config(config):
     if not isinstance(config, dict) or set(config) != {'roles'} or not isinstance(config['roles'], dict):
         raise ValueError('Provider config must contain only a roles mapping; no credentials')
     for role, choice in config['roles'].items():
-        if role not in {'editor', 'write', 'review', 'details', 'discovery'} or not isinstance(choice, dict):
+        if role not in {'editor', 'write', 'review', 'details', 'discovery', 'image_review'} or not isinstance(choice, dict):
             raise ValueError('Unknown provider role/config')
         required = {'type'} if choice.get('type') == 'native' else {'type', 'model', 'endpoint', 'key_env'}
         if set(choice) != required or choice.get('type') not in {'native', 'http'}:
             raise ValueError('Only native or HTTP environment-reference configuration allowed; no secrets')
         if any(not isinstance(v, str) or not v for v in choice.values()):
             raise ValueError('Provider fields must be nonempty strings')
-        if role == 'discovery' and choice['type'] != 'native':
-            raise ValueError('Discovery requires a native Agent with search tools')
+        if role in {'discovery', 'image_review'} and choice['type'] != 'native':
+            raise ValueError('Discovery/photo review requires a native Agent with search/vision tools')
 
 
 def task_role(key):
+    if key.startswith('review-image-'):
+        return 'image_review'
     if key.startswith('discover-'):
         return 'discovery'
     if key.startswith('review-'):

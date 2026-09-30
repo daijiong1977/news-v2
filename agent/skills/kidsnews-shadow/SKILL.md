@@ -60,6 +60,11 @@ is reported, but only all three empty is a hard stop.
    Field/question review removes only failed fields and MCQs (including wrong correct_answer).
    Images failing to download
    are reported and omitted; never fabricate an image or fetch a replacement yourself.
+   Autonomous mode adds review-image-* AFTER safe image fetch: OPEN the actual local pixels
+   in a fresh vision session, check relevance/safety/neutrality/privacy/misleading framing,
+   and bind your answer to image_sha256. If viewing is unavailable set viewed=false.
+   Failed/unverifiable photos are quarantined outside site; keep the approved body.
+   A readable image or matching hash alone is not a visual-content approval.
 6. Publishing is a separate step. The VM has no Vercel credential. Give the maintainer the site artifact;
    do NOT provision keys or try production publishing as a fallback. From an authenticated Mac, run
    `python -m pipeline.agent_shadow publish --run-dir <local-run-directory>`.

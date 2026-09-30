@@ -309,6 +309,8 @@ def advance(root: Path, *, stepwise=False):
     if policy:
         from .agent_shadow_autonomous import safe_image
         images(root, final, boundary, stepwise, fetcher=safe_image)
+        from .agent_shadow_photos import review_photos
+        review_photos(root, final, ask, boundary, stepwise)
     else:
         images(root, final, boundary, stepwise)
     detail_report = read(root / "detail-reviews.json") if (root / "detail-reviews.json").exists() else {}
