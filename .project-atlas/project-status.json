@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T14:40:11-04:00",
+  "updated_at": "2026-09-30T20:25:39Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：平台无关模型接口、Agent 文件交接、独立 Vercel 影子站及内容导出器；未切换生产编排。",
+      "purpose": "PR #86：原生 Agent 影子全链路及 2026-09-30 审查修复：按栏目补稿、保留过审稿、答卷无效降级、原子状态/锁、历史门禁、发布核验重试和答卷 SHA256；仅影子分支，未合并、未真实部署。",
       "status": "review"
     },
     {
@@ -81,6 +81,16 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/agent_shadow_editor.py",
+      "purpose": "持久化按栏目候选/通过稿/拒稿状态；单栏扩容，仅新候选补选，Science 出版方与 News 重要稿；不触碰生产编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_review_fixes.py",
+      "purpose": "审查 H1–H3、M1–M5 及小项的离线回归；24 候选/栏、假图片哈希、真实文件答卷 CLI；Python 3.10。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-STEPWISE-PIPELINE.md",
       "purpose": "逐步运行全链路、文件交接、耗时定义及影子发布与核验边界。",
@@ -510,6 +520,12 @@
       "title": "集成代码已合并，生产结果尚待自然验证",
       "note": "PR #83 于 2026-09-29 00:10 EDT 合并到 news-v2/main，merge commit a425dca636385583742a0bb215902f0109307c1a；原 PR #78、#81、#82 均被 GitHub 标记为 merged。代码合并不等于内容或网站已用新版运行。下一次自然 Daily 应核对 06:10 美东调度、News 大新闻预留/最终入选、Science 出版方、Fun 选文、七天同栏去重、独立全文儿童安全、质量邮件、网站同步新提交与公开 payload，不自行重跑。",
       "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "影子流水线审查：栏目局部补稿与答卷降级必须可恢复",
+      "note": "H1 原流程 Science 缺出版方会重抓/重选 News；修为 backfill.targets 按栏目、editor-state 存过审稿、仅新候选补选。改写含字数修正一次仍无效记 rewrite_invalid 换备用，详情复用生产 filter_keywords 后仍无效省略 extras；rank/pick 仍致命。原子 JSON +非阻塞锁、history 必填且总零拒绝（缓存亦检查）、完成答卷 SHA256、防部署超时盲重试、零篇拒发。观点仅原文归属、背景禁新增年份/数字，详情逐字段逐题审核；审核必须新会话/子 Agent，报告称同模型第二遍，代码不能证明真实会话隔离。Python 3.10.20 离线 109 项通过：初始15例及 H1 专项先失败，再修复通过，另补完整目录/备用/图片/真实 CLI 测试。两份 requirements 同版本且保留生产 fpdf2 锁定依赖。未调用模型、DB 写、Vercel 或邮件；生产 full_round/news_rss_core 未改。VM/原生质量/文件交接仍待首测，暂不合并。",
+      "source_ref": "docs/KIDSNEWS-STEPWISE-PIPELINE.md"
     }
   ]
 }

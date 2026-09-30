@@ -58,7 +58,7 @@ def test_full_shadow_round_and_resume_never_call_llm_http(tmp_path, monkeypatch,
     monkeypatch.setattr(news_rss_core, "process_entry", lambda b, **k: {**b, "body": "fact " * 400,
                        "word_count": 400, "skip_reason": None, "og_image": "https://example.invalid/image.jpg"})
     monkeypatch.setattr("pipeline.image_optimize.fetch_and_optimize", lambda *a, **k: None)
-    def answer(root, key, system, material, validate):
+    def answer(root, key, system, material, validate, **kw):
         if key == "rank":
             value = {"catalog": {b["category"]: [{"id": b["id"], "topic": b["category"],
                         "importance": 4, "initial_risk": 0, "history_status": "clear", "history_confidence": 1}]
@@ -79,9 +79,14 @@ def test_full_shadow_round_and_resume_never_call_llm_http(tmp_path, monkeypatch,
                 "background_read": ["Facts explain the world."], "Article_Structure": ["WHAT: facts"],
                 "why_it_matters": "We learn facts.", "perspectives": [{"perspective": "Readers", "description": "Learn facts."}]
             } for level in ("easy", "middle")}}
+        elif key.startswith("review-details"):
+            value = {"slots": {slot: {"fields": {field: True for field in obj if field != "questions"},
+                "questions": [True] * len(obj["questions"])} for slot, obj in material["details"].items()}}
         else:
             assert "safety" not in material["article"]
             value = {"scores": {"0": {d: 0 for d in news_rss_core.SAFETY_DIMS}}, "facts_supported": True}
+        if kw.get("normalize"):
+            value = kw["normalize"](value)
         assert not validate(value)
         return value
     monkeypatch.setattr(runner, "ask", answer)

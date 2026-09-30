@@ -10,15 +10,53 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import time
+from contextlib import contextmanager
 from dataclasses import asdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .ai_providers import AgentFilesProvider, AgentNeeded
+from .ai_providers.transport import _atomic_json
 
 CATS = ("News", "Science", "Fun")
+
+
+class AnswerRejected(RuntimeError):
+    """The one allowed answer correction was exhausted (not a tool failure)."""
+
+
+@contextmanager
+def run_lock(root):
+    import fcntl
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / ".run.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("another command is running in this run directory") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def verify_answer_hashes(root):
+    path = root / "accepted-answer-hashes.json"
+    for relative, expected in (read(path) if path.exists() else {}).items():
+        answer = root / relative
+        if not answer.exists() or hashlib.sha256(answer.read_bytes()).hexdigest() != expected:
+            raise RuntimeError(f"completed answer changed or missing: {relative}; use a fresh run directory")
+
+
+def pin_task_answers(root, key):
+    path = root / "accepted-answer-hashes.json"
+    hashes = read(path) if path.exists() else {}
+    for answer in (root / "tasks" / key).glob("*/answer.json"):
+        hashes[str(answer.relative_to(root))] = hashlib.sha256(answer.read_bytes()).hexdigest()
+    write(path, hashes)
 
 
 class StepFinished(Exception):
@@ -47,7 +85,7 @@ def boundary(root, key, stepwise, started=None):
 
 def write(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+    _atomic_json(path, data)
 
 
 def read(path):
@@ -56,8 +94,11 @@ def read(path):
 
 def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None):
     if (root / "input.json").exists():
-        if read(root / "input.json")["date"] != today:
+        cached = read(root / "input.json")
+        if cached["date"] != today:
             raise ValueError("run directory belongs to another date; choose a new directory")
+        if not any(cached.get("history", {}).get(cat) for cat in CATS):
+            raise ValueError("cached history is missing or zero; check the connector and use a fresh run directory")
         return {"ok": True, "next": "next", "input": str(root / "input.json"), "cached": True}
     if env_file:
         from dotenv import load_dotenv
@@ -69,16 +110,22 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     started_at = datetime.now(ZoneInfo("America/New_York")).isoformat()
     candidates, history, sources, seen = [], {}, {}, set()
     registry = read(registry_file) if registry_file else None
-    if registry and registry.get("date") != today:
+    if registry is not None and registry.get("date") != today:
         raise ValueError("connector registry must have the requested ET date")
+    if registry is not None and ("history" not in registry or not isinstance(registry["history"], list)):
+        raise ValueError("registry history list is required; check the Supabase connector")
+    # Validate histories before source collection; an empty connector result is not clearance.
+    start = (date.fromisoformat(today) - timedelta(days=7)).isoformat()
+    for cat in CATS:
+        history[cat] = ([r for r in registry["history"] if r.get("category") == cat
+                         and start <= r["published_date"] < today and not r.get("archived", False)]
+                        if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
+    if not any(history.values()):
+        raise ValueError("all three sections have zero history; check the Supabase connector before retrying")
     for cat in CATS:
         selected = db_config.load_sources(cat, today=date.fromisoformat(today), n=10 if cat == "Fun" else 8,
                                          source_rows=registry["sources"] if registry is not None else None)
         sources.update({s.name: asdict(s) for s in selected})
-        start = (date.fromisoformat(today) - timedelta(days=7)).isoformat()
-        history[cat] = ([r for r in registry["history"] if r.get("category") == cat
-                         and start <= r["published_date"] < today and not r.get("archived", False)]
-                        if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
         for b in phase_a_light(cat, selected, max_per_source=12 if cat == "News" else 4):
             key = _canonical_source_url(b["link"])
             if not key or key in seen:
@@ -96,7 +143,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     return {"ok": True, "next": "next", "input": str(root / "input.json"), "counts": read(root / "metrics.json")["candidate_counts"]}
 
 
-def ask(root, key, system, material, validate):
+def ask(root, key, system, material, validate, *, normalize=None):
+    verify_answer_hashes(root)
     provider = AgentFilesProvider(root / "tasks" / key)
     payload = {"model": "native-agent", "messages": [{"role": "system", "content": system},
                {"role": "user", "content": material if isinstance(material, str) else json.dumps(material, ensure_ascii=False)}]}
@@ -108,24 +156,26 @@ def ask(root, key, system, material, validate):
             attempts = needed.answer.parent / "validation-errors.json"
             previous = read(attempts) if attempts.exists() else []
             if previous:
-                raise RuntimeError(f"{key}: one correction already attempted; report these errors: {needed.errors}") from needed
+                raise AnswerRejected(f"{key}: one correction already attempted; report these errors: {needed.errors}") from needed
             write(attempts, [needed.errors])
         raise
-    if envelope["choices"][0]["finish_reason"] == "length":
-        raise RuntimeError(f"{key}: agent answer was truncated; report and rerun with a new run directory")
     raw = envelope["choices"][0]["message"]["content"]
     try:
         value = json.loads(raw)
+        if normalize:
+            value = normalize(value)
         errors = validate(value)
     except (ValueError, KeyError, TypeError, AttributeError) as exc:
         errors = [f"Invalid task answer: {exc}"]
+    if envelope["choices"][0]["finish_reason"] == "length":
+        errors = ["Answer was truncated; finish the answer once before rerunning"]
     if errors:
         rid = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
         directory = provider.work_dir / rid
         attempts = directory / "validation-errors.json"
         previous = read(attempts) if attempts.exists() else []
         if len(previous) >= 1:
-            raise RuntimeError(f"{key}: one correction already attempted; report these errors: {errors}")
+            raise AnswerRejected(f"{key}: one correction already attempted; report these errors: {errors}")
         write(attempts, previous + [errors])
         raise AgentNeeded(rid, directory / "request.json", directory / "answer.json", errors)
     metrics = read(root / "metrics.json")
@@ -138,6 +188,7 @@ def ask(root, key, system, material, validate):
                                  "handoff_seconds": max(0, round(answer_path.stat().st_mtime-request_dir.stat().st_mtime, 3)) if answer_path else None,
                                  "validation_seconds": round(time.monotonic()-t0, 3)})
         write(root / "metrics.json", metrics)
+    pin_task_answers(root, key)
     return value
 
 
@@ -227,12 +278,9 @@ def body_pool(root, snapshot, catalog, min_good=6):
 
 
 def advance(root: Path, *, stepwise=False):
-    from .news_rss_core import (TRI_VARIANT_REWRITER_PROMPT, tri_variant_rewriter_input,
-                               SAFETY_VET_PROMPT, SAFETY_DIMS, evaluate_rewriter_safety, _wordcount_flags)
     from .full_round import emit_v1_shape
-    from .news_sources import NewsSource
-    from .editorial_policy import publisher_key
     from .shadow_site import export
+    verify_answer_hashes(root)
     if (root / "done.json").exists():
         return {"ok": True, "already_done": True, **read(root / "done.json")}
     snapshot = read(root / "input.json")
@@ -240,103 +288,16 @@ def advance(root: Path, *, stepwise=False):
     ranked = ask(root, "rank", RANK_RULES, {k: snapshot[k] for k in ("date", "candidates", "history")},
                  lambda v: validate_catalog(v, ids))["catalog"]
     boundary(root, "rank", stepwise)
-    refill_file = root / "backfill.json"
-    target = read(refill_file)["target"] if refill_file.exists() else 6
-    pool_path = root / f"pool-{target}.json"
-    if not pool_path.exists():
-        t0 = time.monotonic()
-        write(pool_path, body_pool(root, snapshot, ranked, min_good=target))
-        boundary(root, f"originals-{target}", stepwise, t0)
-    boundary(root, f"originals-{target}", stepwise)
-    pool = read(pool_path)
-    final, variants, outcomes, warnings = {}, {}, [], []
-    for cat in CATS:
-        eligible = pool[cat]
-        prompt = ("Pick the best three from the first six, then rank reserves. Return JSON {\"order\":[\"c001\"]} "
-                  "listing EVERY supplied ID exactly once. Prefer distinct topic groups and independent publishers. "
-                  "For News reserve one important story (importance>=3) if supplied. Then pick the other two. "
-                  "Science needs two independent publishers; Fun must be fun. No browsing.")
-        six = eligible[:6]
-        six_ids = {b["id"] for b in six}
-        if six:
-            def check_pick(v):
-                order = v.get("order", [])
-                return [] if isinstance(order, list) and len(order) == len(six_ids) and set(order) == six_ids else ["order must list every supplied ID exactly once"]
-            order = ask(root, f"pick-{cat}", prompt,
-                        [{"id": b["id"], "title": b["article"]["title"], "excerpt": b["article"]["body"][:1800],
-                          "source": b["article"]["source"], "topic": b["topic"], "importance": b["importance"]} for b in six], check_pick)["order"]
-            boundary(root, f"pick-{cat}-{target}", stepwise)
-            lookup = {b["id"]: b for b in six}
-            eligible = [lookup[sid] for sid in order] + eligible[6:]
-        final[cat], variants[cat] = [], {}
-        while eligible and len(final[cat]) < 3:
-            topics = {s["_topic"] for s in final[cat]}
-            used = {publisher_key(s["source"]) for s in final[cat]}
-            # Reserves prefer another topic; Science also needs independent publishers.
-            def priority(item):
-                pub = publisher_key(NewsSource(**snapshot["sources"][item["article"]["source"]]))
-                return (cat == "News" and not any(s["_importance"] >= 3 for s in final[cat]) and item["importance"] >= 3,
-                        cat == "Science" and len(used) < 2 and pub not in used,
-                        item["topic"] not in topics)
-            b = max(eligible, key=priority)
-            eligible.remove(b)
-            art = b["article"]
-            def validate_rewrite(v):
-                entries = v.get("articles", [])
-                if len(entries) != 1 or entries[0].get("source_id") != 0:
-                    return ["Return exactly one article with source_id 0"]
-                entry = entries[0]
-                errors = []
-                for level in ("easy_en", "middle_en"):
-                    if any(not isinstance(entry.get(level, {}).get(k), str) or not entry[level][k].strip()
-                           for k in ("headline", "body", "card_summary")):
-                        errors.append(f"{level}: headline, body, card_summary required")
-                if any(not isinstance(entry.get("zh", {}).get(k), str) or not entry["zh"][k].strip() for k in ("headline", "summary")):
-                    errors.append("zh headline and summary required")
-                if not errors:
-                    errors += [str(flag) for flag in _wordcount_flags(entry, category=cat, source_word_count=art["word_count"])]
-                return errors
-            user = tri_variant_rewriter_input([(0, art)], category=cat)
-            user = re.sub(r"^Today: .*", f"Today: {snapshot['date']}.", user)
-            entry = ask(root, f"rewrite-{cat}-{b['id']}", TRI_VARIANT_REWRITER_PROMPT, user, validate_rewrite)["articles"][0]
-            boundary(root, f"rewrite-{cat}-{b['id']}", stepwise)
-            # Reviewer gets the final text and original, but NOT the writer's self-scores.
-            def validate_review(v):
-                scores = (v.get("scores") or {}).get("0", {})
-                return ([] if all(type(scores.get(d)) in (int, float) and 0 <= scores[d] <= 5 for d in SAFETY_DIMS)
-                        and type(v.get("facts_supported")) is bool else ["Return all eight scores for ID 0 (0..5), and facts_supported true/false"])
-            review = ask(root, f"review-{cat}-{b['id']}", SAFETY_VET_PROMPT +
-                         '\nAlso compare with the source; add "facts_supported":true/false. Never invent facts or missing viewpoints.',
-                         {"source": art["body"], "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")}}, validate_review)
-            safety = evaluate_rewriter_safety({"safety": review["scores"]["0"]}, category=cat)
-            outcomes.append({"id": b["id"], "category": cat, "safety": safety, "facts_supported": review["facts_supported"]})
-            write(root / "review-progress.json", outcomes)
-            boundary(root, f"review-{cat}-{b['id']}", stepwise)
-            if safety["verdict"] != "PASS" or not review["facts_supported"]:
-                continue
-            variants[cat][len(final[cat])] = entry
-            source = NewsSource(**snapshot["sources"][art["source"]])
-            final[cat].append({"winner": art, "source": source, "_image_local": "", "_topic": b["topic"], "_importance": b["importance"]})
-        if cat == "News" and not any(b["_importance"] >= 3 for b in final[cat]):
-            warnings.append("News has no qualified high-importance story")
-        publishers = {publisher_key(b["source"]) for b in final[cat]}
-        if cat == "Science" and len(publishers) < 2:
-            warnings.append("Science has fewer than two independent publishers")
-        if cat in ("News", "Fun") and len(publishers) < 3:
-            warnings.append(f"{cat} has fewer than three independent publishers")
-    # If safety rejected the first pool, open the next six ranked originals.
-    # Answers and body reads remain cached; never backfill from yesterday's output.
-    if target < 30 and any((len(final[c]) < 3 or (c == "Science" and
-            len({publisher_key(s["source"]) for s in final[c]}) < 2)) and len(pool[c]) >= target for c in CATS):
-        write(refill_file, {"target": min(30, target + 6)})
-        boundary(root, f"refill-{target + 6}", stepwise)
-        return advance(root, stepwise=stepwise)
+    from .agent_shadow_editor import edit
+    final, variants, outcomes, warnings = edit(root, snapshot, ranked, ask, boundary, stepwise)
     emit_dir = root / "reader"
     from .agent_shadow_details import enrich_and_review, images
     details = enrich_and_review(root, final, variants, ask, boundary, stepwise)
     images(root, final, boundary, stepwise)
     detail_report = read(root / "detail-reviews.json") if (root / "detail-reviews.json").exists() else {}
-    warnings.extend(f"Enrichment omitted after review: {key}" for key, report in detail_report.items() if not report["passed"])
+    warnings.extend((f"Enrichment fields/questions removed after review: {key}: {report['removed']}"
+                     if report.get("removed") else f"Enrichment omitted after review: {key}")
+                    for key, report in detail_report.items() if not report["passed"])
     image_report = read(root / "image-results.json") if (root / "image-results.json").exists() else {}
     warnings.extend(f"Image unavailable: {sid}" for sid, report in image_report.items() if not report["ok"])
     t0 = time.monotonic()
@@ -350,7 +311,7 @@ def advance(root: Path, *, stepwise=False):
             staged = Path(scratch) / "site"
             manifest = export(emit_dir, staged, snapshot["date"], "native-agent")
             staged.rename(root / "site")
-    write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings})
+    write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings, "review_method": "同模型第二遍审核"})
     write(root / "done.json", {"site": str(root / "site"), "counts": manifest["counts"], "warnings": warnings,
                                 "completed_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
                                 "next": "publish handoff: deploy ONLY to kidsnews-bot-shadow, then verify"})
@@ -362,34 +323,43 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("prepare", "step", "next", "status", "publish", "verify"))
     parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--date", default=datetime.now(ZoneInfo("America/New_York")).date().isoformat())
+    parser.add_argument("--date")
+    parser.add_argument("--retry-after-failed-verify", action="store_true")
     parser.add_argument("--env-file")
     parser.add_argument("--registry", type=Path, help="Supabase connector-read source/history snapshot; no VM API keys")
     args = parser.parse_args()
     root = args.run_dir.resolve()
     started = time.monotonic()
     def say(value, code):
-        print(json.dumps(value, ensure_ascii=False))
         if args.command != "status" and root.exists():
-            event = {"at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+            event = {"at": datetime.now(timezone.utc).isoformat(),
                      "cmd": args.command, "exit": code,
                      "command_seconds": round(time.monotonic() - started, 3), **value}
-            with (root / "steps.jsonl").open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps(event, ensure_ascii=False) + "\n")
+            try:
+                with (root / "steps.jsonl").open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(event, ensure_ascii=False) + "\n")
+            except OSError as exc:
+                print(f"command logging failed: {exc}", file=sys.stderr)
+        print(json.dumps(value, ensure_ascii=False))
         return code
     try:
-        if args.command == "prepare":
-            value = prepare(root, args.date, args.env_file, args.registry)
-        elif args.command in ("step", "next"):
-            value = advance(root, stepwise=True)
-        elif args.command in ("publish", "verify"):
-            from .agent_shadow_publish import publish, verify
-            value = publish(root) if args.command == "publish" else verify(root)
-        else:
-            value = {"ok": True, "input_exists": (root / "input.json").exists(), "done": (root / "done.json").exists(),
-                     "completed_steps": read(root / "completed-steps.json") if (root / "completed-steps.json").exists() else [],
-                     "published": read(root / "published.json") if (root / "published.json").exists() else None,
-                     "metrics": read(root / "metrics.json") if (root / "metrics.json").exists() else {}}
+        tz = ZoneInfo("America/New_York")
+        if args.retry_after_failed_verify and args.command != "publish":
+            raise ValueError("--retry-after-failed-verify is only allowed with publish")
+        with run_lock(root):
+            verify_answer_hashes(root)
+            if args.command == "prepare":
+                value = prepare(root, args.date or datetime.now(tz).date().isoformat(), args.env_file, args.registry)
+            elif args.command in ("step", "next"):
+                value = advance(root, stepwise=True)
+            elif args.command in ("publish", "verify"):
+                from .agent_shadow_publish import publish, verify
+                value = publish(root, retry_after_failed_verify=args.retry_after_failed_verify) if args.command == "publish" else verify(root)
+            else:
+                value = {"ok": True, "input_exists": (root / "input.json").exists(), "done": (root / "done.json").exists(),
+                         "completed_steps": read(root / "completed-steps.json") if (root / "completed-steps.json").exists() else [],
+                         "published": read(root / "published.json") if (root / "published.json").exists() else None,
+                         "metrics": read(root / "metrics.json") if (root / "metrics.json").exists() else {}}
         return say(value, 3 if value.get("already_done") else 0)
     except StepFinished as finished:
         return say(finished.result, 0)

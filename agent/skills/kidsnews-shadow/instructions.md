@@ -21,12 +21,18 @@ Judgments in order:
 3. Rewrite: one source → easy/middle English plus Chinese card, no unsupported facts or invented opposing
    views. Attribute disputed claims; remove loaded framing. Follow the task's category word bands.
 4. Separate review: inspect final English bodies/headlines/cards AND Chinese, compare the original.
+   Each review MUST run in a new session or sub-Agent with only its request, never
+   tasks/rewrite-*/answer.json or writer conversation. Report "同模型第二遍审核", not an independent model.
    Return eight scores plus facts_supported, not a self-awarded publish verdict. Code applies thresholds.
 5. Details: separate easy/middle slot content, keywords drawn from that slot's body, six MCQs with four
-   distinct options and literal matching correct answer. No unsupported dates or viewpoints.
+   distinct options and literal matching correct answer. Perspectives require attributed positions
+   in the original source and may be empty; background may be empty and cannot add specific years
+   or numbers absent from the source. No quota of invented viewpoints.
 6. Separate detail review: check every explanatory field, question and answer for safety, neutrality and
-   fact support. Reject unsupported extras, not the already-safe story body.
+   fact support. Return explicit boolean decisions for EACH field and EACH question, including whether
+   correct_answer is actually correct. Only failed fields/questions are removed; retain passing extras.
 
 When exit 2 requests a missing answer, write it then rerun. When errors flag an invalid existing answer,
-correct just those errors ONCE. A second invalid answer stops the job; report, do not loosen validation.
+correct just those errors ONCE. A second invalid rank/pick stops the job; an invalid rewrite is replaced,
+and invalid detail generation/review omits extras. Report, do not loosen validation.
 Do not rewrite a completed answer. Use a fresh run directory for another run.

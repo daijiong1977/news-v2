@@ -15,7 +15,7 @@ def test_publish_refuses_incomplete_run(tmp_path, monkeypatch):
 
 def test_publish_is_pinned_to_shadow_project_and_submits_once(tmp_path, monkeypatch):
     runner.write(tmp_path / "done.json", {})
-    runner.write(tmp_path / "site/shadow-run.json", {"content_hash": "abc"})
+    runner.write(tmp_path / "site/shadow-run.json", {"content_hash": "abc", "counts": {"news": 1}})
     calls = []
     def deploy(args, **kw):
         calls.append(args)

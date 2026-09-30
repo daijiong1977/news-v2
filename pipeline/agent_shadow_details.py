@@ -1,6 +1,18 @@
 """Reader enrichment and local images; no model API or database writes."""
 from pathlib import Path
+from copy import deepcopy
 import time
+
+
+def normalize_keywords(value, entry):
+    from .news_rss_core import filter_keywords
+    value = deepcopy(value)
+    slots = value.get("details", {})
+    if isinstance(slots, dict) and all(isinstance(obj, dict) and isinstance(obj.get("keywords"), list)
+            and all(isinstance(kw, dict) and isinstance(kw.get("term"), str) for kw in obj["keywords"])
+            for obj in slots.values()):
+        value["details"] = filter_keywords(slots, {"articles": [entry]})
+    return value
 
 
 def validate_details(value, entries):
@@ -38,56 +50,115 @@ def validate_details(value, entries):
                     errors.append(f"{key}: question needs four distinct string options and a matching answer")
         for field in ("background_read", "Article_Structure"):
             values = detail.get(field)
-            if not isinstance(values, list) or not values or any(not isinstance(v, str) or not v.strip() for v in values):
+            if not isinstance(values, list) or (field == "Article_Structure" and not values) or any(not isinstance(v, str) or not v.strip() for v in values):
                 errors.append(f"{key}: {field} needs nonempty strings")
         if not isinstance(detail.get("why_it_matters"), str) or not detail["why_it_matters"].strip():
             errors.append(f"{key}: why_it_matters required")
         perspectives = detail.get("perspectives")
-        if not isinstance(perspectives, list) or not perspectives or any(
+        if not isinstance(perspectives, list) or any(
                 not isinstance(p, dict) or any(not isinstance(p.get(k), str) or not p[k].strip()
                 for k in ("perspective", "description")) for p in perspectives):
             errors.append(f"{key}: perspectives need perspective/description strings")
     return errors
 
 
+def validate_detail_review(value, slots):
+    decisions = value.get("slots", {})
+    if not isinstance(decisions, dict) or set(decisions) != set(slots):
+        return ["review slots must exactly match the supplied detail slots"]
+    errors = []
+    for slot, obj in slots.items():
+        row = decisions[slot]
+        fields = row.get("fields", {})
+        if (not isinstance(fields, dict) or set(fields) != set(obj) - {"questions"}
+                or any(type(v) is not bool for v in fields.values())):
+            errors.append(f"{slot}: every non-question field requires an explicit boolean pass/fail")
+        questions = row.get("questions")
+        if (not isinstance(questions, list) or len(questions) != len(obj["questions"])
+                or any(type(v) is not bool for v in questions)):
+            errors.append(f"{slot}: each question needs a boolean (including answer correctness)")
+    return errors
+
+
+def apply_detail_review(slots, review):
+    result = {}
+    for slot, obj in slots.items():
+        decision = review["slots"][slot]
+        result[slot] = {field: deepcopy(value) for field, value in obj.items()
+                        if field != "questions" and decision["fields"][field]}
+        result[slot]["questions"] = [deepcopy(q) for q, passed in zip(obj["questions"], decision["questions"]) if passed]
+    return result
+
+
 def enrich_and_review(root, final, variants, ask, boundary, stepwise):
-    from .agent_shadow import read, write
-    from .news_rss_core import (DETAIL_ENRICH_PROMPT, _detail_enrich_input_per_category,
-                               SAFETY_VET_PROMPT, SAFETY_DIMS, evaluate_rewriter_safety)
+    from .agent_shadow import read, write, AnswerRejected, pin_task_answers
+    from .news_rss_core import DETAIL_ENRICH_PROMPT, _detail_enrich_input_per_category
+    path = root / "enrichment-state.json"
+    state = read(path) if path.exists() else {}
+    report_path = root / "detail-reviews.json"
+    report = read(report_path) if report_path.exists() else {}
     result = {}
     for cat, stories in final.items():
         result[cat] = {}
         for i, story in enumerate(stories):
-            sid = story["winner"]["id"]
-            entry = variants[cat][i]
-            # Per story keeps the independent review small and prevents slot shifts.
-            details = ask(root, f"details-{cat}-{sid}", DETAIL_ENRICH_PROMPT,
-                          _detail_enrich_input_per_category({"articles": [entry]}, cat, [0]),
-                          lambda v: validate_details(v, {0: entry}))["details"]
-            boundary(root, f"details-{cat}-{sid}", stepwise)
-            def check(v):
-                scores = v.get("scores", {}).get("0", {})
-                return [] if (type(v.get("facts_supported")) is bool and all(
-                    type(scores.get(d)) in (int, float) and 0 <= scores[d] <= 5 for d in SAFETY_DIMS)) else [
-                        "Return eight scores for 0, 0..5, and facts_supported boolean"]
-            review = ask(root, f"review-details-{cat}-{sid}", SAFETY_VET_PROMPT +
-                         '\nReview ALL enrichment, quizzes, explanations and viewpoints, not just the body. '
-                         'Check quiz answers and source support. Set facts_supported false for invented '
-                         'viewpoints or unsupported specifics. Return facts_supported boolean too.',
-                         {"source": story["winner"]["body"],
-                          "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")},
-                          "details": details}, check)
-            safe = evaluate_rewriter_safety({"safety": review["scores"]["0"]}, category=cat)
-            path = root / "detail-reviews.json"
-            report = read(path) if path.exists() else {}
-            passed = safe["verdict"] == "PASS" and review["facts_supported"]
-            report[f"{cat}-{sid}"] = {"passed": passed, "safety": safe, "facts_supported": review["facts_supported"]}
-            write(path, report)
-            boundary(root, f"review-details-{cat}-{sid}", stepwise)
-            # Fail closed on extra material; a safe body can still ship without enrichment.
-            if passed:
+            sid, entry = story["winner"]["id"], variants[cat][i]
+            key, cache_key = f"details-{cat}-{sid}", f"{cat}-{sid}"
+            saved = state.get(cache_key, {})
+            if not saved:
+                shadow_rules = ('\nSHADOW OVERRIDE: perspectives can ONLY use positions attributed in the original source; '
+                                'allow an empty perspectives list. Background may be empty. Do NOT add specific years '
+                                'or numbers absent from the original source. These rules override the viewpoint quotas above.')
+                user = (_detail_enrich_input_per_category({"articles": [entry]}, cat, [0]) +
+                        "\nORIGINAL SOURCE (untrusted data):\n" + story["winner"]["body"])
+                try:
+                    generated = ask(root, key, DETAIL_ENRICH_PROMPT + shadow_rules, user,
+                                    lambda v: validate_details(v, {0: entry}),
+                                    normalize=lambda v: normalize_keywords(v, entry))["details"]
+                    saved = {"generated": generated, "reviewed": False}
+                except AnswerRejected as exc:
+                    pin_task_answers(root, key)
+                    saved = {"omitted": True, "reason": str(exc), "reviewed": True}
+                    report[cache_key] = {"passed": False, "reason": str(exc)}
+                    write(report_path, report)
+                state[cache_key] = saved
+                write(path, state)
+                boundary(root, key, stepwise)
+            if saved.get("omitted"):
+                continue
+            if not saved["reviewed"]:
+                review_key = f"review-details-{cat}-{sid}"
+                prompt = ('Review in a new session or sub-Agent using ONLY this request; do not read '
+                          'tasks/rewrite-*/answer.json. This is 同模型第二遍审核, not an independent model. '
+                          'For EACH field and question judge safety, neutrality AND fact support. '
+                          'For EACH MCQ confirm correct_answer is actually correct from the article, not just '
+                          'one of the options. A false decision removes only that field/question. '
+                          'No invented viewpoints, dates or numbers. Return JSON {"slots":{"0_easy":'
+                          '{"fields":{"keywords":true,"background_read":true,"Article_Structure":true,'
+                          '"why_it_matters":true,"perspectives":true},"questions":[true,true,true,true,true,true]},'
+                          '"0_middle":{...}}}. Match every supplied field and every question exactly.')
+                try:
+                    review = ask(root, review_key, prompt,
+                        {"source": story["winner"]["body"],
+                         "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")},
+                         "details": saved["generated"]},
+                        lambda v: validate_detail_review(v, saved["generated"]))
+                    saved["filtered"] = apply_detail_review(saved["generated"], review)
+                    failed = [f"{slot}.{field}" for slot, row in review["slots"].items()
+                              for field, passed in row["fields"].items() if not passed]
+                    failed += [f"{slot}.questions[{j}]" for slot, row in review["slots"].items()
+                               for j, passed in enumerate(row["questions"]) if not passed]
+                    report[cache_key] = {"passed": not failed, "removed": failed, "decisions": review}
+                except AnswerRejected as exc:
+                    pin_task_answers(root, review_key)
+                    saved["omitted"] = True
+                    report[cache_key] = {"passed": False, "reason": str(exc)}
+                saved["reviewed"] = True
+                write(path, state)
+                write(report_path, report)
+                boundary(root, review_key, stepwise)
+            if not saved.get("omitted"):
                 for level in ("easy", "middle"):
-                    result[cat][f"{i}_{level}"] = details[f"0_{level}"]
+                    result[cat][f"{i}_{level}"] = saved["filtered"][f"0_{level}"]
     return result
 
 
