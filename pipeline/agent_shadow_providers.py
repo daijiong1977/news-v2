@@ -20,7 +20,7 @@ def validate_config(config):
     if not isinstance(config, dict) or set(config) != {'roles'} or not isinstance(config['roles'], dict):
         raise ValueError('Provider config must contain only a roles mapping; no credentials')
     for role, choice in config['roles'].items():
-        if role not in {'editor', 'write', 'review', 'details', 'discovery', 'image_review'} or not isinstance(choice, dict):
+        if role not in {'editor', 'write', 'review', 'details', 'detail_review', 'discovery', 'image_review'} or not isinstance(choice, dict):
             raise ValueError('Unknown provider role/config')
         required = {'type'} if choice.get('type') == 'native' else {'type', 'model', 'endpoint', 'key_env'}
         if set(choice) != required or choice.get('type') not in {'native', 'http'}:
@@ -36,6 +36,8 @@ def task_role(key):
         return 'image_review'
     if key.startswith('discover-'):
         return 'discovery'
+    if key.startswith('review-details-'):
+        return 'detail_review'
     if key.startswith('review-'):
         return 'review'
     if key.startswith('rewrite-'):
@@ -54,7 +56,9 @@ class TaskRouter:
         path = root / 'providers.json'
         self.config = json.loads(path.read_text()) if path.exists() else {'roles': {}}
         validate_config(self.config)
-        self.choice = self.config.get('roles', {}).get(self.role, {'type': 'native'})
+        roles = self.config.get('roles', {})
+        fallback = roles.get('review', {'type': 'native'}) if self.role == 'detail_review' else {'type': 'native'}
+        self.choice = roles.get(self.role, fallback)
 
     def prepare_payload(self, payload):
         if self.choice.get('type') == 'http':

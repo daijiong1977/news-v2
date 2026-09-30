@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T21:29:16.604Z",
+  "updated_at": "2026-09-30T23:28:00Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：审查修复 + 可选自主编辑影子模式；直接三篇/备用、仅缺栏扩展元数据或公开来源、受控证据抓取、模型角色路由；Python3.10离线测试，未合并、未真实模型/部署验证。 照片已增加实际本地像素视觉审核门禁（未真实视觉模型验证），全部离线139项。",
+      "purpose": "PR #86：影子流水线及可选自主编辑；新增 News-only DeepSeek/Bot 省额测试，正文/详情/详情复核交 DeepSeek，Bot 选文与独立全文复核。新 profile 本地打包且禁止发布，来源图仅机械检查；旧默认视觉审核保留。Python3.10相关85项通过，未合并，新混合模式未真实运行。",
       "status": "review"
     },
     {
@@ -91,6 +91,11 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md",
+      "purpose": "News单栏混合测试：VM命令、模型职责、来源图检查边界、调用/耗时/配额测量；config/shadow-news-deepseek.json仅引用环境变量。",
+      "location": "repo"
+    },
     {
       "path": "pipeline/agent_shadow_photos.py",
       "purpose": "自主影子照片：像素解码/尺寸/hash，独立原生视觉复核相关性/儿童安全/中立/隐私/误导；失败移出site，审后改图阻止恢复。",
@@ -615,6 +620,12 @@
       "title": "照片可解码不等于适合发布：必须独立看像素并绑定资产",
       "note": "自主模式照片增加review-image原生视觉角色：机器先检查WEBP/160x100/2MB/非symlink/目录/hash，Agent新会话看实际本地像素，相关性/儿童安全/中立/隐私/非误导及viewed六项全true才展示；不能看像素就false，哈希不一致一次修正后仍无效则排除。拒图移到rejected-images，不进入网站；保留通过正文，审后资产改动拒恢复。文本HTTP不当作视觉模型；每九图增加九任务，真实视觉工具/质量/费用须首测轨迹确认，离线139项仅证明门禁。",
       "source_ref": "pipeline/agent_shadow_photos.py"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "先单栏验证DeepSeek写稿，保留Bot关键判断，不把7%线性折成3%",
+      "note": "用户报告完整原生9篇耗7%周额度；上次51m11s、56任务、18次正文抓取，News全PBS，5稿事实淘汰，3图因不可看像素排除。新增news-deepseek只采News：Bot计划/独立全文审核，DeepSeek正文/详情/详情复核；仅新profile自动一次HTTP格式修正，旧协议不变。图片按用户要求来源图机械检查、非视觉批准；禁部分发布。Python3.10相关85项通过，新模式真实费用/质量待VM测试。全pipeline收集失败属于既有3.10旧feed脚本f-string和需真实key的thinking测试，未改生产测试或调用模型。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
     }
   ]
 }

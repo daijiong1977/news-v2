@@ -145,12 +145,16 @@ class AutonomousEditor:
                 errors = validate_catalog(value, ids)
                 if not errors and any(len(v) > 6 for v in value["catalog"].values()):
                     errors.append("At most six IDs per category: three selections and three reserves")
+                if not errors and any(rows for cat, rows in value["catalog"].items()
+                                      if cat not in self.snapshot.get("active_categories", ("News", "Science", "Fun"))):
+                    errors.append("Inactive sections must be empty; do not reroute into them")
                 return errors
             rules = RANK_RULES + "\nAUTONOMOUS MODE: choose the best three per category directly, then up to three reserves. " \
                 "Do NOT rank thirty or run six-choose-three. News needs one important real-world story, not just light stories. " \
                 "Science needs two independent publishers. All selections must be factual and neutrally rewritable. " \
                 "Only supplied metadata, no browsing yet; return an empty category if no qualified candidate exists. " \
                 "Explain policy through topic/importance/risk/history fields, not invented evidence."
+            rules += "\nActive sections only: " + str(self.snapshot.get("active_categories", ["News", "Science", "Fun"])) + "; inactive catalog sections must be empty."
             self.catalog = self.ask(self.root, "plan", rules,
                 {k: self.snapshot[k] for k in ("date", "candidates", "history")}, check)["catalog"]
             self.save()

@@ -92,13 +92,18 @@ def read(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None, *, editor_mode="staged"):
+def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None, *, editor_mode="staged", test_profile=None):
+    if test_profile and editor_mode != "autonomous":
+        raise ValueError("News hybrid profile requires autonomous editor mode")
+    active = ("News",) if test_profile == "news-deepseek" else CATS
     if (root / "input.json").exists():
         cached = read(root / "input.json")
         if cached["date"] != today:
             raise ValueError("run directory belongs to another date; choose a new directory")
         if cached.get("editor_mode", "staged") != editor_mode:
             raise ValueError("editor mode is frozen per run; choose a fresh directory")
+        if cached.get("test_profile") != test_profile:
+            raise ValueError("test profile is frozen per run; choose a fresh directory")
         if not any(cached.get("history", {}).get(cat) for cat in CATS):
             raise ValueError("cached history is missing or zero; check the connector and use a fresh run directory")
         return {"ok": True, "next": "next", "input": str(root / "input.json"), "cached": True}
@@ -119,12 +124,12 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     # Validate histories before source collection; an empty connector result is not clearance.
     start = (date.fromisoformat(today) - timedelta(days=7)).isoformat()
     for cat in CATS:
-        history[cat] = ([r for r in registry["history"] if r.get("category") == cat
+        history[cat] = [] if cat not in active else ([r for r in registry["history"] if r.get("category") == cat
                          and start <= r["published_date"] < today and not r.get("archived", False)]
                         if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
     if not any(history.values()):
         raise ValueError("all three sections have zero history; check the Supabase connector before retrying")
-    for cat in CATS:
+    for cat in active:
         selected = db_config.load_sources(cat, today=date.fromisoformat(today), n=10 if cat == "Fun" else 8,
                                          source_rows=registry["sources"] if registry is not None else None)
         sources.update({s.name: asdict(s) for s in selected})
@@ -137,7 +142,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                                "title": b["title"], "summary": re.sub(r"<[^>]+>", " ", b["summary"])[:600],
                                "link": b["link"], "published": b["published"], "source": b["_source_name"]})
     write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
-                               "editor_mode": editor_mode})
+                               "editor_mode": editor_mode, "test_profile": test_profile,
+                               "active_categories": list(active)})
     write(root / "metrics.json", {"prepare_seconds": round(time.monotonic()-t0, 3),
                                  "started_at": started_at,
                                  "candidate_counts": {c: sum(b["category"] == c for b in candidates) for c in CATS},
@@ -184,6 +190,11 @@ def ask(root, key, system, material, validate, *, normalize=None):
         if len(previous) >= 1:
             raise AnswerRejected(f"{key}: one correction already attempted; report these errors: {errors}")
         write(attempts, previous + [errors])
+        if (getattr(provider, "choice", {}).get("type") == "http"
+                and (root / "input.json").exists()
+                and read(root / "input.json").get("test_profile") == "news-deepseek"):
+            # HTTP writer owns its correction; do not ask the Bot to write its answer.
+            return ask(root, key, system, material, validate, normalize=normalize)
         raise AgentNeeded(rid, directory / "request.json", directory / "answer.json", errors)
     metrics = read(root / "metrics.json")
     if not any(step["key"] == key for step in metrics["steps"]):
@@ -310,7 +321,8 @@ def advance(root: Path, *, stepwise=False):
         from .agent_shadow_autonomous import safe_image
         images(root, final, boundary, stepwise, fetcher=safe_image)
         from .agent_shadow_photos import review_photos
-        review_photos(root, final, ask, boundary, stepwise)
+        if snapshot.get("test_profile") != "news-deepseek":
+            review_photos(root, final, ask, boundary, stepwise)
     else:
         images(root, final, boundary, stepwise)
     detail_report = read(root / "detail-reviews.json") if (root / "detail-reviews.json").exists() else {}
@@ -333,6 +345,8 @@ def advance(root: Path, *, stepwise=False):
     write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings,
         "review_method": "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
     write(root / "done.json", {"site": str(root / "site"), "counts": manifest["counts"], "warnings": warnings,
+                                "test_profile": snapshot.get("test_profile"),
+                                "image_policy": "source_only_mechanical_not_visual_review" if snapshot.get("test_profile") == "news-deepseek" else "default",
                                 "completed_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
                                 "next": "publish handoff: deploy ONLY to kidsnews-bot-shadow, then verify"})
     boundary(root, "pack", stepwise, t0)
@@ -345,6 +359,7 @@ def main():
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--date")
     parser.add_argument("--editor-mode", choices=("staged", "autonomous"), default="staged")
+    parser.add_argument("--test-profile", choices=("news-deepseek",), help="News-only, local-only hybrid experiment")
     parser.add_argument("--providers-config", type=Path, help="Shadow-only role map; environment-variable references, never keys")
     parser.add_argument("--retry-after-failed-verify", action="store_true")
     parser.add_argument("--env-file")
@@ -353,6 +368,9 @@ def main():
     root = args.run_dir.resolve()
     started = time.monotonic()
     def say(value, code):
+        if (root / "input.json").exists() and read(root / "input.json").get("test_profile") == "news-deepseek" and "completed_steps" in value:
+            value = {**value, "completed_step_count": len(value["completed_steps"])}
+            del value["completed_steps"]
         if args.command != "status" and root.exists():
             event = {"at": datetime.now(timezone.utc).isoformat(),
                      "cmd": args.command, "exit": code,
@@ -370,7 +388,18 @@ def main():
             raise ValueError("--retry-after-failed-verify is only allowed with publish")
         with run_lock(root):
             verify_answer_hashes(root)
+            profile = args.test_profile if args.command == "prepare" else (read(root / "input.json").get("test_profile") if (root / "input.json").exists() else None)
+            if args.env_file or profile:
+                from dotenv import load_dotenv
+                load_dotenv(args.env_file or Path(__file__).resolve().parents[1] / ".env")
             if args.command == "prepare":
+                if profile:
+                    import os
+                    if not os.environ.get("DEEPSEEK_API_KEY"):
+                        raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
+                    if args.providers_config:
+                        raise ValueError("News hybrid profile supplies its own provider config")
+                    args.providers_config = Path(__file__).resolve().parents[1] / "config/shadow-news-deepseek.json"
                 if args.providers_config:
                     from .agent_shadow_providers import validate_config
                     config = read(args.providers_config)
@@ -382,12 +411,14 @@ def main():
                         raise ValueError("Cannot add providers to an existing run")
                     write(saved, config)
                 value = prepare(root, args.date or datetime.now(tz).date().isoformat(), args.env_file, args.registry,
-                                editor_mode=args.editor_mode)
+                                editor_mode=args.editor_mode, test_profile=args.test_profile)
             elif args.command in ("step", "next"):
                 if args.providers_config:
                     raise ValueError("--providers-config belongs to prepare only")
                 value = advance(root, stepwise=True)
             elif args.command in ("publish", "verify"):
+                if profile:
+                    raise ValueError("News-only experiment is local-only; partial publication is forbidden")
                 from .agent_shadow_publish import publish, verify
                 value = publish(root, retry_after_failed_verify=args.retry_after_failed_verify) if args.command == "publish" else verify(root)
             else:

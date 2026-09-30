@@ -44,7 +44,8 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
         return (len(section["accepted"]) < 3 or (cat == "Science" and len(publishers(section)) < 2)
                 or (policy and cat == "News" and not any(a["candidate"]["importance"] >= 3 for a in section["accepted"])))
     save()
-    for cat in CATS:
+    active = snapshot.get("active_categories", CATS)
+    for cat in active:
         section = state[cat]
         while needs(cat, section):
             target = targets[cat]
@@ -175,6 +176,8 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
         final[cat] = [{"winner": a["candidate"]["article"], "source": source_of(a["candidate"]),
                        "_image_local": "", "_topic": a["candidate"]["topic"],
                        "_importance": a["candidate"]["importance"]} for a in chosen]
+        if cat not in active:
+            continue
         if cat == "News" and not any(s["_importance"] >= 3 for s in final[cat]):
             warnings.append("News has no qualified high-importance story")
         minimum = 2 if cat == "Science" else 3
