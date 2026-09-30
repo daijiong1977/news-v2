@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T13:34:22-04:00",
+  "updated_at": "2026-09-30T13:54:39-04:00",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -81,6 +81,21 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/agent_shadow.py",
+      "purpose": "原生 Agent 可恢复影子流程：采集、元数据排名、分批正文、六选三、改写、独立复核、补稿和导出；没有生产写操作。",
+      "location": "repo"
+    },
+    {
+      "path": "agent/skills/kidsnews-shadow/SKILL.md",
+      "purpose": "新 Kids News Bot 云端只读 connector、文件交接、退出码、影子发布和禁止调用生产入口的运行手册。",
+      "location": "repo"
+    },
+    {
+      "path": "https://github.com/daijiong1977/grokbot-kidsnews",
+      "purpose": "私有 Bot 运行仓库；运行 main 快照，VM 安装与首次原生模型运行尚待完成。",
+      "location": "url"
+    },
     {
       "path": "shadow/site/index.html",
       "purpose": "独立 Vercel 影子站阅读页面入口；显示日期、平台和审核状态。",
@@ -313,6 +328,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-09-30",
+      "title": "Agent 暂停必须是可恢复交接而非失败回退",
+      "note": "影子 CLI 接住 AgentNeeded，输出 request/answer 路径并退出 2，不让生产式 catch-all 把它当模型失败而绕过审核。每个阶段材料哈希绑定缓存，逐篇改写与复核分别交接，阅稿不带作者自评分；模型只给分，代码重用现有字数及安全阈值。原文/答卷缓存用于安全后补稿，补稿仍复核。78 项离线测试通过，真实采集 9.426 秒；原生 Grok 运行需安装新 Bot 仓库，当前只是停在排名请求。",
+      "source_ref": "docs/KIDSNEWS-SHADOW-SITE.md"
+    },
     {
       "date": "2026-09-30",
       "title": "新 Agent 先在独立 Vercel 影子站比较",

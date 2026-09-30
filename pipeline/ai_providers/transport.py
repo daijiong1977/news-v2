@@ -80,14 +80,16 @@ class AgentFilesProvider:
         directory = self.work_dir / request_id
         directory.mkdir(parents=True, exist_ok=True)
         request, answer = directory / "request.json", directory / "answer.json"
-        _atomic_json(request, {
+        request_data = {
             "schema_version": 1, "request_id": request_id, "task": payload,
             "instructions": "Use only the supplied material. Follow task.messages and its output schema. "
                             "Do not change code or publish. Write the answer file then rerun the calling stage.",
             "write_to": str(answer),
             "answer_example": {"request_id": request_id, "content": "{\"example\": true}",
                                "finish_reason": "stop"},
-        })
+        }
+        if not request.exists():
+            _atomic_json(request, request_data)
         if not answer.exists():
             raise AgentNeeded(request_id, request, answer, ["Read request.json and write answer.json."])
         try:

@@ -51,6 +51,27 @@ Bot 现有 Supabase 权限可以继续使用；此阶段不需要新密钥或数
 每天比较正式站和影子站的选文重要性、分类、来源、七天同栏事件重复、中文及英文中立性、
 儿童安全、字数、补稿原因、步骤耗时和模型用量。平台相关交接只放在 `pipeline/ai_providers/`。
 
-目前只完成站点和导出接口，完整 Bot 流程、新 Bot repo、VM 安装和 routine 尚未建立。
+2026-09-30 接入进展：已实现 `pipeline.agent_shadow` 可恢复 CLI，并建立私有运行仓库
+`daijiong1977/grokbot-kidsnews`，Mac `/Users/jiong/myprojects/grokbot/grokbot-kidsnews`。
+运行仓库使用本项目已测试代码的快照，快照来源写入 `UPSTREAM.json`；共享规则修改仍在
+news-v2 的 feature PR 先测试，然后更新 Bot 快照。完整的现有生产函数也包含在快照包中，
+runbook 禁止调用生产入口；VM 只运行影子 CLI，且不配置 service-role key。
+
+CLI 顺序为采集 → 原生 Agent 元数据排序/分组/历史判断 → 按排名读取正文 → 六选三 →
+逐篇三版本改写 → 独立安全/事实审核 → 候选补稿 → 阅读文件导出。
+正文首次读取前 12 个排名位置，合格稿不足六篇或安全淘汰后继续每批六个，最多查完 30 篇目录。
+补稿优先其他题材组，Science 优先另一独立出版方。已审核稿和模型答卷均缓存。
+目录耗尽允许少于三篇，重要新闻或 Science 出版方不足写入警告，不补昨日成稿。
+本版暂未做关键词/问答 enrichment 和图片下载，影子阅读器可看全文与中英文摘要。
+
+采集支持本机只读凭据，或 Bot Supabase connector 的 `--registry` 快照，无新 VM 密钥。
+首次真实采集 9.426 秒，News/Science/Fun 候选 46/27/36，每栏历史 21 条；目前停在排名请求。
+这不是原生 Grok 完成结果。78 项测试覆盖离线流程与现有校验，模拟答卷不发布到影子站。
+耗时见每个 run 的 `metrics.json`，包括抓取耗时、请求/答卷大小和文件交接等待时间。
+Bot VM 按主机名自动将 JSON 日志推到私有 `logs` 分支，本机不推日志。
+
+VM 安装和 routine 尚未建立，按
+`agent/skills/kidsnews-shadow/SKILL.md` 运行；首次需要用户给 VM 的现有 fine-grained PAT
+勾选新仓库并在 VM 终端完成 clone。生成之后由 Mac 发布者部署到影子站，无需在 VM 放 Vercel 密钥。
 真实结果连续验证后再安排生产切换，保持同一时间只有一个生产生成者。
 网站 `noindex` 避免搜索索引，但测试地址是公开阅读地址，不适合私密材料。
