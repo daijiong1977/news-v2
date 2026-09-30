@@ -329,3 +329,16 @@ def test_provider_rejects_inline_key_config_before_creating_requests(tmp_path):
     with pytest.raises(ValueError, match='no secrets'):
         TaskRouter(tmp_path, 'rewrite-News-c001')
     assert not (tmp_path / 'tasks').exists()
+
+
+def test_redirected_original_url_cannot_bypass_same_category_history(tmp_path, monkeypatch):
+    _, _, _, _, original = setup(tmp_path, monkeypatch)
+    from pipeline import agent_shadow_autonomous as autonomous
+    snapshot = runner.read(tmp_path / 'input.json')
+    snapshot['history']['News'] = [{'source_url': 'https://public.example/old-event', 'source_title': 'Old event'}]
+    monkeypatch.setattr(autonomous, 'fetch_original', lambda b: {**original(b),
+        'evidence_url': 'https://public.example/old-event'})
+    policy = autonomous.AutonomousEditor(tmp_path, snapshot, runner.ask, runner.boundary, False)
+    policy.plan()
+    assert policy.pool('News', 3) == []
+    assert policy.audit['url_exclusions']['news00'] == 'history_or_pool_duplicate'

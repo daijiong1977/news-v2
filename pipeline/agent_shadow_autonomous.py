@@ -164,6 +164,7 @@ class AutonomousEditor:
         cache = read(cache_path) if cache_path.exists() else {}
         index = {b["id"]: b for b in self.snapshot["candidates"]}
         past = {_canonical_source_url(r.get("source_url", "")) for r in self.snapshot["history"][cat]}
+        final_urls = set(past)
         good = []
         for score in self.catalog[cat][:target]:
             b = index[score["id"]]
@@ -189,6 +190,11 @@ class AutonomousEditor:
                     "seconds": round(time.monotonic()-started, 3), "word_count": art["word_count"],
                     "skip_reason": art.get("skip_reason"), "evidence_sha256": art.get("evidence_sha256")}
             art = cache[b["id"]]
+            art = {**art, "link": art.get("evidence_url") or art["link"]}
+            evidence_url = _canonical_source_url(art.get("evidence_url") or b["link"])
+            if evidence_url in final_urls:
+                self.audit.setdefault("url_exclusions", {})[b["id"]] = "history_or_pool_duplicate"
+                continue
             if art.get("evidence_url"):
                 host = urlsplit(art["evidence_url"]).hostname.lower().removeprefix("www.")
                 source_name = f"verified:{host}"
@@ -198,6 +204,7 @@ class AutonomousEditor:
                 art = {**art, "source": source_name}
             lo, hi = (250, 1200) if cat == "Fun" else (350, 1500) if cat == "Science" else (350, 1200)
             if not art.get("skip_reason") and lo <= art["word_count"] <= hi:
+                final_urls.add(evidence_url)
                 good.append({**score, "category": cat, "article": art})
         self.save()
         return good

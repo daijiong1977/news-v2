@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-09-30 | medium | shadow pipeline | [shadow-final-url-history](2026-09-30-shadow-final-url-history.md) | A new candidate URL redirected to a previously published final URL and bypassed the mechanical history check. | autonomous, redirect, final-url, history, dedup |
 | 2026-09-27 | high | pipeline | [storm-repeat-history-gate](2026-09-27-storm-repeat-history-gate.md) | Two-token history shortcut skipped the CBC/BBC storm pair; post-safety refill repeated the weather topic. | dedup, history, Jev, severe-weather, backfill |
 | 2026-09-27 | medium | pipeline | [publisher-diversity-and-recruitment](2026-09-27-publisher-diversity-and-recruitment.md) | Three ScienceDaily feeds counted as three publishers; a college commitment won a Fun swimming slot. | publisher, ScienceDaily, recruitment, Fun, carry-over |
 | 2026-09-27 | low | pipeline | [fun-source-pool](2026-09-27-fun-source-pool.md) | Fun only sampled eight of 14 enabled feeds before Jev; trial widens the first round to ten without changing publication gates. | Fun, source-pool, Jev, RSS, diversity |

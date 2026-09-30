@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T21:15:45.654Z",
+  "updated_at": "2026-09-30T21:21:23.859Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -586,6 +586,12 @@
       "title": "新来源是临时提议，出版方按最终证据地址而非AI自报核算",
       "note": "发现结果不能自带正文或出版方；工具检查公共HTTPS/443、DNS公共IP固定连接、TLS原域校验、逐跳重验、2MB/20秒限制。原图同样受控。最终原文域名结合已有品牌别名计出版方，未知集团仍需人工确认；source-suggestions仅运行目录，永不自动写来源表。快路径及补稿离线测试不证明真实网络、搜索和编辑质量，首次真实影子仍需验收。",
       "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "跳转后的原文URL也必须机械查重",
+      "note": "自主影子抓取的起始URL可能不在历史，但跳转最终URL已发布。先用失败回归复现，再对最终URL重验同栏历史/正文池，并将最终URL作为导出来源；独立事件语义复核仍保留。新增1回归，总离线132项；生产路径未改，尚未真实生成或部署。",
+      "source_ref": "pipeline/test_agent_shadow_autonomous.py"
     }
   ]
 }
