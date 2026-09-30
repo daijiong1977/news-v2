@@ -74,7 +74,9 @@ def enrich_and_review(root, final, variants, ask, boundary, stepwise):
                          '\nReview ALL enrichment, quizzes, explanations and viewpoints, not just the body. '
                          'Check quiz answers and source support. Set facts_supported false for invented '
                          'viewpoints or unsupported specifics. Return facts_supported boolean too.',
-                         {"source": story["winner"]["body"], "article": entry, "details": details}, check)
+                         {"source": story["winner"]["body"],
+                          "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")},
+                          "details": details}, check)
             safe = evaluate_rewriter_safety({"safety": review["scores"]["0"]}, category=cat)
             path = root / "detail-reviews.json"
             report = read(path) if path.exists() else {}

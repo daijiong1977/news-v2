@@ -67,6 +67,7 @@ def test_full_shadow_round_and_resume_never_call_llm_http(tmp_path, monkeypatch,
             value = {"order": [b["id"] for b in material]}
         elif key.startswith("rewrite"):
             value = {"articles": [{"source_id": 0,
+                "safety": {d: 0 for d in news_rss_core.SAFETY_DIMS},
                 "easy_en": {"headline": "Easy", "body": "fact " * 170, "card_summary": "Card"},
                 "middle_en": {"headline": "Middle", "body": "fact " * 330, "card_summary": "Card"},
                 "zh": {"headline": "标题", "summary": "摘要"}}]}
