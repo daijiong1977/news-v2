@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T20:25:39Z",
+  "updated_at": "2026-09-30T21:15:45.654Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：原生 Agent 影子全链路及 2026-09-30 审查修复：按栏目补稿、保留过审稿、答卷无效降级、原子状态/锁、历史门禁、发布核验重试和答卷 SHA256；仅影子分支，未合并、未真实部署。",
+      "purpose": "PR #86：审查修复 + 可选自主编辑影子模式；直接三篇/备用、仅缺栏扩展元数据或公开来源、受控证据抓取、模型角色路由；Python3.10离线测试，未合并、未真实模型/部署验证。",
       "status": "review"
     },
     {
@@ -49,6 +49,16 @@
       "name": "codex/retire-swimswam-source",
       "purpose": "PR #78 的 SwimSwam 来源停用迁移、旧 seed 修正和文档；已纳入 2026-09-29 集成分支，生产来源表 ID 220 先前已核验为停用。",
       "status": "merged_in_main"
+    },
+    {
+      "name": "codex/stepwise-full-shadow",
+      "purpose": "PR #1：从 news-v2 94109db 导出的原生 Agent 全流程影子运行快照，H1–H3/M1–M5 离线修复，按栏目补稿和可恢复审查；未合并、未真实运行或发布。",
+      "status": "review"
+    },
+    {
+      "name": "news-v2/main",
+      "purpose": "上游生产流水线主分支，与本仓库旧 bootstrap main 不同；本轮未改动、未合并影子逻辑。",
+      "status": "production_upstream"
     }
   ],
   "deployments": [
@@ -81,6 +91,26 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md",
+      "purpose": "自主影子模式使用、可调预算、模型配置、源码/Bot快照边界、首测与可复用算法。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_autonomous.py",
+      "purpose": "自主模式离线回归；快路径九次正文、缺栏补稿、已有深层候选、历史事件/来源/重要稿、模型缓存和安全抓取。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_providers.py",
+      "purpose": "影子模型角色适配：原生答卷默认、显式兼容HTTP环境凭据、缓存/一次修正/调用预算与超时不盲重试。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_autonomous.py",
+      "purpose": "可选自主三篇与局部发现策略、公共HTTPS固定IP/TLS抓取、原文证据及安全图片、按栏扩展与预算。",
+      "location": "repo"
+    },
     {
       "path": "pipeline/agent_shadow_editor.py",
       "purpose": "持久化按栏目候选/通过稿/拒稿状态；单栏扩容，仅新候选补选，Science 出版方与 News 重要稿；不触碰生产编排。",
@@ -526,6 +556,36 @@
       "title": "影子流水线审查：栏目局部补稿与答卷降级必须可恢复",
       "note": "H1 原流程 Science 缺出版方会重抓/重选 News；修为 backfill.targets 按栏目、editor-state 存过审稿、仅新候选补选。改写含字数修正一次仍无效记 rewrite_invalid 换备用，详情复用生产 filter_keywords 后仍无效省略 extras；rank/pick 仍致命。原子 JSON +非阻塞锁、history 必填且总零拒绝（缓存亦检查）、完成答卷 SHA256、防部署超时盲重试、零篇拒发。观点仅原文归属、背景禁新增年份/数字，详情逐字段逐题审核；审核必须新会话/子 Agent，报告称同模型第二遍，代码不能证明真实会话隔离。Python 3.10.20 离线 109 项通过：初始15例及 H1 专项先失败，再修复通过，另补完整目录/备用/图片/真实 CLI 测试。两份 requirements 同版本且保留生产 fpdf2 锁定依赖。未调用模型、DB 写、Vercel 或邮件；生产 full_round/news_rss_core 未改。VM/原生质量/文件交接仍待首测，暂不合并。",
       "source_ref": "docs/KIDSNEWS-STEPWISE-PIPELINE.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "首测前审查：生产隔离可靠，但补稿、答卷失败和状态写入会让首测中途停下",
+      "note": "只读审查确认：部署锁定影子项目、verify 重算线上哈希、共享代码与 UPSTREAM 一致、Python 3.10 下影子测试 23/23 通过。已确认 bug：补稿会重跑三栏并打乱已过审栏目（H1）；同一答卷第二次不合格即中止整轮（H2）；状态文件非原子写入（H3）。另：Bot main 仍是旧程序，首测须用 codex/stepwise-full-shadow；VM→Mac 传回 site/ 未定义。未修复，真实 VM 与 Grok 质量仍未验证。",
+      "source_ref": "docs/REVIEW-2026-09-30.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "首测前影子审查整改：共享源码先修再逐文件导出",
+      "note": "UPSTREAM 指向 news-v2 94109db51d5711a33e436303b5c69e76967ff210（代码修复98ccda8）；134个共享文件逐文件零差异。两个仓库 Python 3.10.20 各109项离线测试通过，回归先失败再通过：栏目局部补稿保留已审稿、rewrite_invalid换备用、详情过滤/省略、原子写/目录锁、历史不可全零、完成答卷SHA256、发布先记录attempt且只在明确核验失败后显式重试、零篇拒发。M1逐字段/题审核与M2新会话同模型第二遍规范已写入；真实语义与会话隔离尚未验证。README锁定codex/stepwise-full-shadow而非旧main，两份依赖一致且保留fpdf2及tzdata。未调用模型、DB写、Vercel或邮件；VM PAT/clone、真实内容/日志及完整文件下载到Mac仍待用户首测。临时失败缓存及CI暂不改，文档说明理由；两个PR不合并，不推main。",
+      "source_ref": "https://github.com/daijiong1977/grokbot-kidsnews/blob/f8a1c39266524be0ed6b213e85e52bc10ed4fa4b/docs/REVIEW-2026-09-30.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "自主编辑可以跳过固定漏斗，但不跳过证据和最终审核",
+      "note": "可选 autonomous 从元数据直接选3+最多3备用，先每栏3原文；仅缺稿栏目扩展，先用未选元数据再原生搜索，2轮每轮至多3候选，全轮正文36次。安全/中立/事实/同栏七天及同日已通过事件仍检查，已通过稿保留。重要News和Science第二出版方不足时局部找备用，不改生产。原生搜索3查询/6页面是平台指令而非工具配额代码证明。未真实模型/连接器/部署测试。",
+      "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "模型切换应集中在影子角色适配器，而不是散落编辑规则",
+      "note": "editor/write/review/details 可用native文件交接或显式兼容HTTP；discovery仅native有工具平台，纯文本API不能假装搜索。配置只含环境变量名字、不含Key；任务/HTTP各120次预算，首任务后一小时停止新增任务/HTTP，缓存和一次修正可恢复，HTTP未知超时不盲重试。原生token不可得，不能用任务数假造费用或宣称会话隔离。",
+      "source_ref": "pipeline/agent_shadow_providers.py"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "新来源是临时提议，出版方按最终证据地址而非AI自报核算",
+      "note": "发现结果不能自带正文或出版方；工具检查公共HTTPS/443、DNS公共IP固定连接、TLS原域校验、逐跳重验、2MB/20秒限制。原图同样受控。最终原文域名结合已有品牌别名计出版方，未知集团仍需人工确认；source-suggestions仅运行目录，永不自动写来源表。快路径及补稿离线测试不证明真实网络、搜索和编辑质量，首次真实影子仍需验收。",
+      "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
     }
   ]
 }

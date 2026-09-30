@@ -92,11 +92,13 @@ def read(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None):
+def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None, *, editor_mode="staged"):
     if (root / "input.json").exists():
         cached = read(root / "input.json")
         if cached["date"] != today:
             raise ValueError("run directory belongs to another date; choose a new directory")
+        if cached.get("editor_mode", "staged") != editor_mode:
+            raise ValueError("editor mode is frozen per run; choose a fresh directory")
         if not any(cached.get("history", {}).get(cat) for cat in CATS):
             raise ValueError("cached history is missing or zero; check the connector and use a fresh run directory")
         return {"ok": True, "next": "next", "input": str(root / "input.json"), "cached": True}
@@ -134,7 +136,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
             candidates.append({"id": f"c{len(candidates)+1:03d}", "category": cat,
                                "title": b["title"], "summary": re.sub(r"<[^>]+>", " ", b["summary"])[:600],
                                "link": b["link"], "published": b["published"], "source": b["_source_name"]})
-    write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources})
+    write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
+                               "editor_mode": editor_mode})
     write(root / "metrics.json", {"prepare_seconds": round(time.monotonic()-t0, 3),
                                  "started_at": started_at,
                                  "candidate_counts": {c: sum(b["category"] == c for b in candidates) for c in CATS},
@@ -148,6 +151,10 @@ def ask(root, key, system, material, validate, *, normalize=None):
     provider = AgentFilesProvider(root / "tasks" / key)
     payload = {"model": "native-agent", "messages": [{"role": "system", "content": system},
                {"role": "user", "content": material if isinstance(material, str) else json.dumps(material, ensure_ascii=False)}]}
+    if (root / "providers.json").exists() or ((root / "input.json").exists() and read(root / "input.json").get("editor_mode") == "autonomous"):
+        from .agent_shadow_providers import TaskRouter
+        provider = TaskRouter(root, key)
+        payload = provider.prepare_payload(payload)
     t0 = time.monotonic()
     try:
         envelope = provider.complete(payload, 0)
@@ -285,15 +292,25 @@ def advance(root: Path, *, stepwise=False):
         return {"ok": True, "already_done": True, **read(root / "done.json")}
     snapshot = read(root / "input.json")
     ids = {b["id"] for b in snapshot["candidates"]}
-    ranked = ask(root, "rank", RANK_RULES, {k: snapshot[k] for k in ("date", "candidates", "history")},
-                 lambda v: validate_catalog(v, ids))["catalog"]
-    boundary(root, "rank", stepwise)
+    policy = None
+    if snapshot.get("editor_mode") == "autonomous":
+        from .agent_shadow_autonomous import AutonomousEditor
+        policy = AutonomousEditor(root, snapshot, ask, boundary, stepwise)
+        ranked = policy.plan()
+    else:
+        ranked = ask(root, "rank", RANK_RULES, {k: snapshot[k] for k in ("date", "candidates", "history")},
+                     lambda v: validate_catalog(v, ids))["catalog"]
+        boundary(root, "rank", stepwise)
     from .agent_shadow_editor import edit
-    final, variants, outcomes, warnings = edit(root, snapshot, ranked, ask, boundary, stepwise)
+    final, variants, outcomes, warnings = edit(root, snapshot, ranked, ask, boundary, stepwise, policy=policy)
     emit_dir = root / "reader"
     from .agent_shadow_details import enrich_and_review, images
     details = enrich_and_review(root, final, variants, ask, boundary, stepwise)
-    images(root, final, boundary, stepwise)
+    if policy:
+        from .agent_shadow_autonomous import safe_image
+        images(root, final, boundary, stepwise, fetcher=safe_image)
+    else:
+        images(root, final, boundary, stepwise)
     detail_report = read(root / "detail-reviews.json") if (root / "detail-reviews.json").exists() else {}
     warnings.extend((f"Enrichment fields/questions removed after review: {key}: {report['removed']}"
                      if report.get("removed") else f"Enrichment omitted after review: {key}")
@@ -309,9 +326,10 @@ def advance(root: Path, *, stepwise=False):
         import tempfile
         with tempfile.TemporaryDirectory(dir=root, prefix="pack-") as scratch:
             staged = Path(scratch) / "site"
-            manifest = export(emit_dir, staged, snapshot["date"], "native-agent")
+            manifest = export(emit_dir, staged, snapshot["date"], "shadow-role-router" if (root / "providers.json").exists() else "native-agent")
             staged.rename(root / "site")
-    write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings, "review_method": "同模型第二遍审核"})
+    write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings,
+        "review_method": "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
     write(root / "done.json", {"site": str(root / "site"), "counts": manifest["counts"], "warnings": warnings,
                                 "completed_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
                                 "next": "publish handoff: deploy ONLY to kidsnews-bot-shadow, then verify"})
@@ -324,6 +342,8 @@ def main():
     parser.add_argument("command", choices=("prepare", "step", "next", "status", "publish", "verify"))
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--date")
+    parser.add_argument("--editor-mode", choices=("staged", "autonomous"), default="staged")
+    parser.add_argument("--providers-config", type=Path, help="Shadow-only role map; environment-variable references, never keys")
     parser.add_argument("--retry-after-failed-verify", action="store_true")
     parser.add_argument("--env-file")
     parser.add_argument("--registry", type=Path, help="Supabase connector-read source/history snapshot; no VM API keys")
@@ -349,8 +369,21 @@ def main():
         with run_lock(root):
             verify_answer_hashes(root)
             if args.command == "prepare":
-                value = prepare(root, args.date or datetime.now(tz).date().isoformat(), args.env_file, args.registry)
+                if args.providers_config:
+                    from .agent_shadow_providers import validate_config
+                    config = read(args.providers_config)
+                    validate_config(config)
+                    saved = root / "providers.json"
+                    if saved.exists() and read(saved) != config:
+                        raise ValueError("Provider config is frozen; use a fresh directory")
+                    if (root / "input.json").exists() and not saved.exists():
+                        raise ValueError("Cannot add providers to an existing run")
+                    write(saved, config)
+                value = prepare(root, args.date or datetime.now(tz).date().isoformat(), args.env_file, args.registry,
+                                editor_mode=args.editor_mode)
             elif args.command in ("step", "next"):
+                if args.providers_config:
+                    raise ValueError("--providers-config belongs to prepare only")
                 value = advance(root, stepwise=True)
             elif args.command in ("publish", "verify"):
                 from .agent_shadow_publish import publish, verify

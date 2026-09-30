@@ -74,3 +74,10 @@ News 最终缺重要稿、Science 少于两独立出版方仍有告警，不绕�
 明确失败才可重发、空部署拒绝及图片字节参与公开内容 hash。全部使用假抓取/答卷/部署。
 假答卷不是 Grok 真实编辑质量验证，未运行 VM 和真实稿件不能标记已验收。
 保留原生产，暂不创建例行任务、不自动切正式站。
+# Optional autonomous editor (2026-09-30)
+
+The opt-in `prepare --editor-mode autonomous` skips mandatory thirty-ranking/six-pick stages,
+starts with three originals per category, preserves approved stories, and expands only a deficient
+category using reserves, unused feed metadata or temporary public-source discovery. The default
+staged workflow below is unchanged. See [autonomous mode](KIDSNEWS-AUTONOMOUS-SHADOW.md)
+for budgets, shadow-only role routing, evidence/URL safety, offline tests and real-run limitations.

@@ -162,9 +162,10 @@ def enrich_and_review(root, final, variants, ask, boundary, stepwise):
     return result
 
 
-def images(root, final, boundary, stepwise):
+def images(root, final, boundary, stepwise, *, fetcher=None):
     from .agent_shadow import read, write
     from .image_optimize import fetch_and_optimize
+    fetcher = fetcher or fetch_and_optimize
     path = root / "image-results.json"
     cache = read(path) if path.exists() else {}
     for cat, stories in final.items():
@@ -173,7 +174,7 @@ def images(root, final, boundary, stepwise):
             relative = f"article_images/{cat.lower()}-{sid}.webp"
             if sid not in cache:
                 started = time.monotonic()
-                result = fetch_and_optimize(story["winner"].get("og_image", ""), root / "reader" / relative)
+                result = fetcher(story["winner"].get("og_image", ""), root / "reader" / relative)
                 cache[sid] = {"ok": bool(result), "info": result,
                               "seconds": round(time.monotonic() - started, 3)}
                 write(path, cache)

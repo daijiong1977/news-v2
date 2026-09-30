@@ -19,7 +19,7 @@ def validate_rewrite(value, cat, word_count):
     return errors or [str(flag) for flag in _wordcount_flags(entry, category=cat, source_word_count=word_count)]
 
 
-def edit(root, snapshot, ranked, ask, boundary, stepwise):
+def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
     from .agent_shadow import read, write, body_pool, AnswerRejected, pin_task_answers, CATS
     from .news_rss_core import (TRI_VARIANT_REWRITER_PROMPT, tri_variant_rewriter_input,
                                SAFETY_VET_PROMPT, SAFETY_DIMS, evaluate_rewriter_safety)
@@ -28,20 +28,21 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
     state_path, refill_path = root / "editor-state.json", root / "backfill.json"
     state = read(state_path) if state_path.exists() else {
         cat: {"accepted": [], "outcomes": [], "order": [], "pool_ids": [], "pick_done": False} for cat in CATS}
-    targets = read(refill_path).get("targets") if refill_path.exists() else {cat: 6 for cat in CATS}
+    targets = read(refill_path).get("targets") if refill_path.exists() else {cat: 3 if policy else 6 for cat in CATS}
     if not targets:
         raise ValueError("legacy global backfill state cannot be resumed; use a fresh run directory")
     write(refill_path, {"targets": targets})
     def save():
         write(state_path, state)
         write(root / "review-results.json", {"outcomes": [o for c in CATS for o in state[c]["outcomes"]],
-                                             "warnings": [], "review_method": "同模型第二遍审核"})
+                                             "warnings": [], "review_method": "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
     def source_of(item):
         return NewsSource(**snapshot["sources"][item["article"]["source"]])
     def publishers(section):
         return {publisher_key(source_of(a["candidate"])) for a in section["accepted"]}
     def needs(cat, section):
-        return len(section["accepted"]) < 3 or (cat == "Science" and len(publishers(section)) < 2)
+        return (len(section["accepted"]) < 3 or (cat == "Science" and len(publishers(section)) < 2)
+                or (policy and cat == "News" and not any(a["candidate"]["importance"] >= 3 for a in section["accepted"])))
     save()
     for cat in CATS:
         section = state[cat]
@@ -50,17 +51,20 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
             pool_path = root / f"pool-{cat}-{target}.json"
             started = time.monotonic()
             if not pool_path.exists():
-                write(pool_path, body_pool(root, snapshot, {cat: ranked[cat]}, min_good=target)[cat])
+                write(pool_path, policy.pool(cat, target) if policy else body_pool(root, snapshot, {cat: ranked[cat]}, min_good=target)[cat])
             boundary(root, f"originals-{cat}-{target}", stepwise, started)
             pool = read(pool_path)
             index = {b["id"]: b for b in pool}
             # Initial six are frozen; top-up ranks ONLY newly opened eligible candidates.
             new = [b for b in pool if b["id"] not in section["pool_ids"]]
             if not section["pick_done"] or new:
-                key = f"pick-{cat}" if not section["pick_done"] else f"pick-{cat}-refill-{target}"
+                key = (f"selections-{cat}-{target}" if policy else
+                       f"pick-{cat}" if not section["pick_done"] else f"pick-{cat}-refill-{target}")
                 six = new[:6]
                 ids = {b["id"] for b in six}
-                if six:
+                if policy:
+                    section["order"].extend(b["id"] for b in new)
+                elif six:
                     def check_pick(value):
                         order = value.get("order", [])
                         return [] if (isinstance(order, list) and len(order) == len(ids) and set(order) == ids) else [
@@ -81,6 +85,10 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
             eligible = [index[sid] for sid in section["order"] if sid in index and sid not in processed]
             while eligible and needs(cat, section):
                 used = publishers(section)
+                if policy and cat == "News" and len(section["accepted"]) >= 3:
+                    eligible = [b for b in eligible if b["importance"] >= 3]
+                    if not eligible:
+                        break
                 if cat == "Science" and len(section["accepted"]) >= 3 and len(used) < 2:
                     # Already-safe first three are not rewritten while seeking a second publisher.
                     eligible = [b for b in eligible if publisher_key(source_of(b)) not in used]
@@ -108,7 +116,7 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
                 boundary(root, rewrite_key, stepwise)
                 def check_review(value):
                     scores = value.get("scores", {}).get("0", {})
-                    return [] if (type(value.get("facts_supported")) is bool and all(
+                    return [] if (type(value.get("facts_supported")) is bool and (not policy or type(value.get("event_clear")) is bool) and all(
                         type(scores.get(d)) in (int, float) and 0 <= scores[d] <= 5 for d in SAFETY_DIMS)) else [
                             "Return all eight scores for 0 (0..5), and facts_supported boolean"]
                 key = f"review-{cat}-{sid}"
@@ -116,12 +124,17 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
                     review = ask(root, key, SAFETY_VET_PROMPT +
                         '\nUse a new session or sub-Agent, only this request. Do not read tasks/rewrite-*/answer.json. '
                         'This is 同模型第二遍审核, not an independent model. Compare final text with the source; '
-                        'add facts_supported true/false. Do not invent viewpoints.',
-                        {"source": art["body"], "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")}}, check_review)
+                        'add facts_supported true/false. Do not invent viewpoints.' +
+                        (' Also return event_clear boolean. Compare this event against ONLY the supplied same-category history and accepted events; uncertain or duplicate => false.' if policy else ''),
+                        {"source": art["body"], "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")},
+                         **({"history": snapshot["history"][cat], "accepted_events": [
+                             {"title": a["candidate"]["article"]["title"], "source_excerpt": a["candidate"]["article"]["body"][:1200]}
+                             for a in section["accepted"]]} if policy else {})}, check_review)
                     safety = evaluate_rewriter_safety({"safety": review["scores"]["0"]}, category=cat)
-                    passed = safety["verdict"] == "PASS" and review["facts_supported"]
+                    passed = safety["verdict"] == "PASS" and review["facts_supported"] and (not policy or review["event_clear"])
                     outcome = {"id": sid, "category": cat, "status": "accepted" if passed else "review_rejected",
-                               "safety": safety, "facts_supported": review["facts_supported"]}
+                               "safety": safety, "facts_supported": review["facts_supported"],
+                               **({"event_clear": review["event_clear"]} if policy else {})}
                 except AnswerRejected as exc:
                     pin_task_answers(root, key)
                     passed = False
@@ -131,7 +144,14 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
                     section["accepted"].append({"candidate": b, "entry": entry})
                 save()
                 boundary(root, key, stepwise)
-            if needs(cat, section) and target < 30 and len(pool) >= target:
+            if policy and needs(cat, section):
+                expanded = policy.extend(cat, target, section)
+                if expanded is not None:
+                    targets[cat] = expanded
+                    write(refill_path, {"targets": targets})
+                    boundary(root, f"refill-{cat}-{expanded}", stepwise)
+                    continue
+            if not policy and needs(cat, section) and target < 30 and len(pool) >= target:
                 targets[cat] = min(30, target + 6)
                 write(refill_path, {"targets": targets})
                 boundary(root, f"refill-{cat}-{targets[cat]}", stepwise)
@@ -141,6 +161,10 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise):
     for cat, section in state.items():
         accepted = section["accepted"]
         chosen = accepted[:3]
+        if policy and cat == "News" and len(chosen) == 3 and not any(a["candidate"]["importance"] >= 3 for a in chosen):
+            important = next((a for a in accepted[3:] if a["candidate"]["importance"] >= 3), None)
+            if important:
+                chosen = chosen[:2] + [important]
         if cat == "Science" and len(chosen) == 3:
             used = {publisher_key(source_of(a["candidate"])) for a in chosen}
             if len(used) < 2:
