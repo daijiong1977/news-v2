@@ -47,3 +47,6 @@ Agent 写 `answer.json`：
 
 本次只建立通信边界。没有启用新 Bot routine、没有改变 Supabase 权限、没有关闭现有任务。
 不会通过环境变量偷偷将生产流水线切入文件模式；完成可恢复编排后才接入该适配器。
+
+2026-09-30 后续：独立 Vercel 影子站和共享 payload 导出器已建立，见
+[KIDSNEWS-SHADOW-SITE.md](KIDSNEWS-SHADOW-SITE.md)。影子站尚在等待真实 Agent 结果。

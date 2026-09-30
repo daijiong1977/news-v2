@@ -27,3 +27,4 @@ newdesign/uploads/
 
 # Agent task/answer files and per-run state remain local to the runner
 /work/
+/shadow/site/.vercel/

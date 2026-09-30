@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T13:24:31-04:00",
+  "updated_at": "2026-09-30T13:34:22-04:00",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "建立平台无关模型通信接口及 Grok/在线 Agent 文件交接适配器；未切换生产编排。",
+      "purpose": "PR #86：平台无关模型接口、Agent 文件交接、独立 Vercel 影子站及内容导出器；未切换生产编排。",
       "status": "review"
     },
     {
@@ -53,6 +53,15 @@
   ],
   "deployments": [
     {
+      "environment": "shadow",
+      "provider": "Vercel kidsnews-bot-shadow；独立静态部署",
+      "url": "https://kidsnews-bot-shadow.vercel.app",
+      "audience": "项目维护者比较 Agent 生成质量；公开测试地址",
+      "branch": "codex/agent-provider-boundary",
+      "status": "reader_shell_verified_http_200_awaiting_real_agent_content",
+      "verified_at": "2026-09-30T13:34:22-04:00"
+    },
+    {
       "environment": "production",
       "provider": "Supabase Storage → kidsnews-v2 → Vercel",
       "url": "https://kidsnews.21mins.com",
@@ -72,6 +81,21 @@
     }
   ],
   "files": [
+    {
+      "path": "shadow/site/index.html",
+      "purpose": "独立 Vercel 影子站阅读页面入口；显示日期、平台和审核状态。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/shadow_site.py",
+      "purpose": "从生成结果导出阅读 payload 到全新测试部署目录，不写生产数据库或内容包。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-SHADOW-SITE.md",
+      "purpose": "影子站部署、项目标识、导出协议、验收和迁移边界。",
+      "location": "repo"
+    },
     {
       "path": "pipeline/ai_providers/transport.py",
       "purpose": "兼容 HTTP 模型及在线 Agent 文件交接的单一通信边界。",
@@ -289,6 +313,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-09-30",
+      "title": "新 Agent 先在独立 Vercel 影子站比较",
+      "note": "已建立 kidsnews-bot-shadow.vercel.app，独立 project prj_wAKQb7C37whe0Wi6BNvb5zYpbceg；正式 kidsnews-v2 未部署修改。复用现有 v1 payload 格式，测试导出只复制引用文件、核对日期和 ID，默认审核未知。网站 HTTP 200 已核验，真实 Bot 文章和完整 Agent 编排尚未接入，不把空测试入口当作质量验证完成。",
+      "source_ref": "docs/KIDSNEWS-SHADOW-SITE.md"
+    },
     {
       "date": "2026-09-30",
       "title": "质量邮件成功不等于自动修复成功",
