@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-29T00:11:40-04:00",
+  "updated_at": "2026-09-30T11:47:46-04:00",
   "branches": [
     {
       "name": "main",
-      "purpose": "生产流水线主分支；集成 PR #83 合并提交 a425dca 已包含 #78、#81、#82 的代码与工作流，首次自然运行和网站同步仍待验证。",
+      "purpose": "生产流水线主分支；集成 PR #83 已包含 #78、#81、#82，2026-09-29 首次自然运行和网站同步已核验。质量自动修复依赖修正仍在独立 PR，不能视为已上线。",
       "status": "production"
     },
     {
@@ -53,8 +53,8 @@
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
-      "verified_at": "2026-09-28T20:50:12-04:00"
+      "status": "public_2026-09-29_payload_verified_after_run_36555585468",
+      "verified_at": "2026-09-29T06:50:00-04:00"
     },
     {
       "environment": "production_alias",
@@ -62,8 +62,8 @@
       "url": "https://news.6ray.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
-      "verified_at": "2026-09-28T20:50:12-04:00"
+      "status": "public_2026-09-29_payload_verified_after_run_36555585468",
+      "verified_at": "2026-09-29T06:50:00-04:00"
     }
   ],
   "files": [
@@ -165,6 +165,11 @@
     {
       "path": "docs/bugs/2026-09-28-quality-digest-timeout.md",
       "purpose": "2026-09-28 质量邮件未发出的根因、实际流水线耗时和修复边界。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/bugs/2026-09-30-quality-autofix-missing-dependency.md",
+      "purpose": "2026-09-30 质量自动修复缺少 feedparser 的根因、六项升级的解释和验证边界。",
       "location": "repo"
     },
     {
@@ -411,6 +416,12 @@
       "title": "集成代码已合并，生产结果尚待自然验证",
       "note": "PR #83 于 2026-09-29 00:10 EDT 合并到 news-v2/main，merge commit a425dca636385583742a0bb215902f0109307c1a；原 PR #78、#81、#82 均被 GitHub 标记为 merged。代码合并不等于内容或网站已用新版运行。下一次自然 Daily 应核对 06:10 美东调度、News 大新闻预留/最终入选、Science 出版方、Fun 选文、七天同栏去重、独立全文儿童安全、质量邮件、网站同步新提交与公开 payload，不自行重跑。",
       "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "质量邮件成功不等于自动修复成功",
+      "note": "9 月 30 日自然质量摘要工作流 36703162747 成功发送邮件，但自动修复唯一的新排队项在独立安全复核前因 runner 未安装 feedparser 崩溃并升级。邮件六项升级中其余五项来自持久队列，不能归因于这次崩溃。质量工作流必须安装完整根 requirements.txt 并在未来自然运行确认修复结果；不能因工作流 success 就把已发布内容标为修好。",
+      "source_ref": "docs/bugs/2026-09-30-quality-autofix-missing-dependency.md"
     }
   ]
 }
