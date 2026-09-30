@@ -3,11 +3,16 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-29T00:11:40-04:00",
+  "updated_at": "2026-09-30T13:24:31-04:00",
   "branches": [
     {
+      "name": "codex/agent-provider-boundary",
+      "purpose": "建立平台无关模型通信接口及 Grok/在线 Agent 文件交接适配器；未切换生产编排。",
+      "status": "review"
+    },
+    {
       "name": "main",
-      "purpose": "生产流水线主分支；集成 PR #83 合并提交 a425dca 已包含 #78、#81、#82 的代码与工作流，首次自然运行和网站同步仍待验证。",
+      "purpose": "生产流水线主分支；集成 PR #83 已包含 #78、#81、#82，2026-09-29 首次自然运行和网站同步已核验。质量自动修复依赖修正仍在独立 PR #85，不能视为已上线。",
       "status": "production"
     },
     {
@@ -67,6 +72,16 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/ai_providers/transport.py",
+      "purpose": "兼容 HTTP 模型及在线 Agent 文件交接的单一通信边界。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/AGENT-PROVIDER-BOUNDARY.md",
+      "purpose": "可替换接口、文件协议、当前接入范围和后续完整 Bot 迁移步骤。",
+      "location": "repo"
+    },
     {
       "path": "pipeline/full_round.py",
       "purpose": "每日采集、JEV/DeepSeek 标题摘要排序、排序后分批原文验证（News 350–1200、Science 350–1500、Fun 250–1200）、候选补稿、安全审核和发布编排。",
@@ -274,6 +289,18 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-09-30",
+      "title": "质量邮件成功不等于自动修复成功",
+      "note": "9 月 30 日自然质量摘要工作流 36703162747 成功发送邮件，但自动修复唯一的新排队项在独立安全复核前因 runner 未安装 feedparser 崩溃并升级。邮件六项升级中其余五项来自持久队列，不能归因于这次崩溃。修正在独立 PR #85；不能因工作流 success 就把已发布内容标为修好。",
+      "source_ref": "https://github.com/daijiong1977/news-v2/pull/85"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "Bot 内置模型用文件交接，平台通信集中管理",
+      "note": "Grok Bot 内置模型没有供脚本调用的 API key，采用 request/answer 文件协议；模型材料哈希绑定答卷，适配器不决定编辑阈值或发布。DeepSeek HTTP 通信已移入统一接口，JEV 仍为类型化 SDK。Agent 文件适配器已离线测试，完整可恢复生产编排尚未接入；现有两 Bot 的 Supabase 权限无需重复配置。",
+      "source_ref": "docs/AGENT-PROVIDER-BOUNDARY.md"
+    },
     {
       "date": "2026-09-27",
       "title": "同事件不能只靠标题共同词筛选",
