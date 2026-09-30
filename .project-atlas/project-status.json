@@ -118,7 +118,7 @@
     },
     {
       "path": "https://github.com/daijiong1977/grokbot-kidsnews",
-      "purpose": "私有 Bot 运行仓库；运行 main 快照，VM 安装与首次原生模型运行尚待完成。",
+      "purpose": "私有 Bot 运行仓库；全流程测试分支 codex/stepwise-full-shadow（PR #1 未合并）；main 仍是旧 bootstrap，VM 安装与首次原生模型运行尚待完成。",
       "location": "url"
     },
     {
