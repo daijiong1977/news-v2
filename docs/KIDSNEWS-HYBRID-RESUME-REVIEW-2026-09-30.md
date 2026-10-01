@@ -1,5 +1,7 @@
 # Kids News 混合流水线：Spec 与实现审查（2026-09-30）
 
+> 2026-10-01修复记录：以下原始审查保留；实施提交 `66b7546cb9705febdfb3855ed06d9d2e1c025111`，仅feature分支，未生产上线。Python 3.10.20相关219项通过，真实VM首测仍待执行。
+
 只读审查 `docs/KIDSNEWS-HYBRID-RESUME-SPEC-2026-09-30.md` 及其 §2 基线。未修改代码、未 commit、未调用模型/网络/数据库/部署。
 
 **基线核对**
@@ -26,6 +28,8 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### B1　HTTP 任何异常都变成永久 "uncertain"，包括明确没执行的 401/429/5xx
 
+**实施状态：已修复（66b7546）：transport_failure分类、最多3次预算内重试、429上限120秒；错误状态可同目录恢复。测试B1三项及probe_b1。**
+
 - 位置：`pipeline/agent_shadow_providers.py:156-162`（`except Exception` → RuntimeError）、`:125-127`（state=attempting 即拒绝）。
 - 复现：假 provider 抛 `requests.HTTPError`(401) → `RuntimeError: HTTP task failed (HTTPError)`；同目录重跑 → `ValueError: HTTP attempt outcome uncertain; do not auto-retry, use a fresh run`。
 - 原因：不区分"服务器已回复错误"（请求肯定没生成内容）与"读超时/发送后连接重置"（不确定）。`http-attempt.json` 停在 `attempting`，之后永远拒绝。
@@ -38,6 +42,8 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### B2　answer.json 已落盘但 state 未到 complete 时，重跑拒绝已有答案
 
+**实施状态：已修复（66b7546）：原子answer.json是提交记录，优先于attempting；rebuild_audit重建索引。测试test_resume_after_saved_answer_before_http_complete及probe_b2。**
+
 - 位置：`pipeline/agent_shadow_providers.py:159-169`（159 写 answer.json，169 才写 complete）。
 - 复现：正常完成后把 `http-attempt.json` 改回 `attempting`（模拟在两次写之间被杀）→ 重跑报 uncertain，尽管 `answer.json` 存在、可解析、request_id 匹配。
 - Spec §5.4 已指出，确认属实。修法见 S1。
@@ -45,12 +51,16 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### B3　一小时 wall-clock 后新任务被拒
 
+**实施状态：已修复（66b7546）：取消wall-clock拒绝；超过24小时check_stale要求显式确认及fresh registry，历史重核保留日期和预算。测试test_resume_after_wall_deadline_without_resetting_budget、两项stale测试。**
+
 - 位置：`pipeline/agent_shadow_providers.py:81`、`:135`。
 - 复现：`provider-audit.json` 的 `started_unix` 回拨 3700 秒 → 下一个新任务 `Shadow run deadline exhausted; use a fresh directory`。首测 Bot 一次等答卷超一小时即触发。
 - 修法见 S2。
 - 回归：`test_resume_after_wall_deadline_without_resetting_budget`（Spec §9 已列）。
 
 ### B4　News 没有重要稿时，补稿烧光目录和抓取预算（Spec 未提）
+
+**实施状态：已修复（66b7546）：needs仅在还有未尝试改善稿时追重要News/第二Science出版方；每栏12独立抓取预算，耗尽停止该栏补稿。测试test_news_without_important_candidate_stops_after_first_batch、probe_b4及per_category_exhaustion。**
 
 - 位置：`pipeline/agent_shadow_editor.py:65-67`（`needs()` 把缺重要稿当不足）、`:114-117`（过滤后 break 进入 extend）、`pipeline/agent_shadow_batch.py:197-212`（`extend` 只看是否还有未消费候选，不看 importance）。
 - 复现（离线 fixture：News 16 篇候选全部 importance=2，其余栏目正常）：
@@ -64,6 +74,8 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### B5　`validate_batch` 的 News 首稿规则可能让整批 8 篇作废
 
+**实施状态：已修复（66b7546）：最高重要性者被选入时才必须首位；skipped ID单独消费，未选其余原文保留。测试test_batch_skipping_top_importance_does_not_consume_batch。**
+
 - 位置：`pipeline/agent_shadow_batch.py:34-37`。
 - 规则要求 DeepSeek 第一篇必须等于 8 篇里 importance 最高者。若该篇原文不适合（DeepSeek 不选它），修正两次后 `AnswerRejected` → `batch-invalid` → **8 篇全部 consumed**，再开下一批。
 - 修法：改为"importance 最高者若在 drafts 中必须排第一"，并允许 drafts 附 `skipped:[{id,reason}]`；跳过的 ID 不消费其他 7 篇。
@@ -71,12 +83,16 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### B6　Bot 看到的续跑命令是 `python -m`，不是 `.venv/bin/python`
 
+**实施状态：已修复（66b7546）：next/rerun使用sys.executable并shell quote。test_recovery_cli_single_json_and_exit_codes实际子进程验证单行JSON及exit2→0→1。**
+
 - 位置：`pipeline/agent_shadow.py:80`（`next`）、`:471`（`rerun`）。
 - Spec §6 要求恢复输出必须是 `.venv/bin/python`。SKILL 只用文字补救；Bot 照抄 JSON 里的命令会用系统 python（无依赖）。
 - 修法：用 `sys.executable` 生成命令。
 - 回归：`test_recovery_cli_single_json_and_exit_codes` 中断言 `next`/`rerun` 以 `sys.executable` 开头。
 
 ### B7　`status` 既拿锁又校验答卷哈希
+
+**实施状态：已修复（66b7546）：status不拿锁、不写状态；异常作为answer_integrity返回。test_status_without_lock_returns_answer_integrity。**
 
 - 位置：`pipeline/agent_shadow.py:427-428`（所有命令含 status 都在 `run_lock` 内并 `verify_answer_hashes`）。
 - Spec §11 把 `status` 列为"安全状态命令"，但 `step` 运行中查 `status` 得到 exit 1 "another command is running"；答卷被改时 `status` 也 exit 1。
@@ -88,11 +104,15 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### P1　入库事务删除同日期不在包里的文章，但包允许不满 9 篇
 
+**未修复：用户明确排除本轮生产项；影子验证后另开任务，不能用于批准生产启用。**
+
 - 位置：`supabase/migrations/20261001_bot_publication_handoff.sql:90-96`（delete 同日期不在包内的 stories/search_index）；`pipeline/publication_bundle.py:75`、`bundle.ts:67`（允许 1..9 篇）。
 - 注释写 "Full three-section package replaces that date"，但校验不强制。Fun=0 的包会删掉旧 writer 已发布的当日 Fun。
 - 修法：生产包强制 counts 3/3/3，或 delete 只针对包内有内容的栏目。
 
 ### P2　上传 409 没有比对；`verify` 的 ready 标记不幂等
+
+**未修复：用户明确排除本轮生产项；影子验证后另开任务，不能用于批准生产启用。**
 
 - 位置：`pipeline/publication_bundle.py:210-215`（upload `upsert:'false'`）、`:278-279`（ready 上传）。
 - 两处直接抛异常，异常只打印类型名。网络断后重跑同一包会报错，而不是"已存在且哈希一致"。Spec §7/§8 已列为生产前必须，确认未做。
@@ -100,9 +120,13 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### P3　旧生产 writer 与新 worker 并行写 `latest.zip`/站点
 
+**未修复：用户明确排除本轮生产项；影子验证后另开任务，不能用于批准生产启用。**
+
 - Spec §8(8) 已承认。生产前要么禁用 `daily-pipeline.yml` 的 pack/upload，要么 worker 拒绝在旧 writer 时间窗内运行。
 
 ### P4　live schema 未验证
+
+**未修复：用户明确排除本轮生产项；影子验证后另开任务，不能用于批准生产启用。**
 
 - `redesign_stories(published_date,category,story_slot)` 唯一约束见 `20260423_redesign_parallel_schema.sql:68`；
 - `redesign_search_index(story_id,level)` 唯一约束**在仓库迁移里没找到**（`pipeline/search_index.py:96` 用 `on_conflict=story_id,level`，说明线上应有，但不能从仓库证明）。
@@ -110,11 +134,15 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### P5　公开核验要求站点先部署再入库，runbook 没写明前置依赖
 
+**未修复：用户明确排除本轮生产项；影子验证后另开任务，不能用于批准生产启用。**
+
 - `worker.ts:14` 先 `publicMatches` 再写归档：意味着 kidsnews-v2 的 Git PR 合并与 Vercel 部署必须先完成，ready 才能上传。顺序合理，但 `KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md` 应明确这个顺序。
 
 ---
 
 ## 3. 可后续优化
+
+实施状态（66b7546）：首答卷answer.attempt-1.json、boundary日志try/except、正文_fetch_audit同原子落盘已修。未选原文沿用下一批是保留原策略，不重复抓取；MAX_TASKS仍120，未调高。两个小项回归见test_boundary_logging_failure_is_nonfatal、test_fetch_audit_survives_crash_after_body_save。
 
 - HTTP 修正覆盖第一次 `answer.json`（`agent_shadow_providers.py:159`）；Spec §5.3 想保留原答卷做质量对比，目前没有。可改名为 `answer.attempt-1.json` 保留。
 - `boundary()` 写 `steps.jsonl` 无 try/except（`agent_shadow.py:76`）：`completed-steps.json` 已写，结果不丢，但命令 exit 1 会让 Bot 误以为失败。
@@ -137,17 +165,27 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 
 ### 建议（更好的做法）
 
+**实施状态：已修复（66b7546）；答卷与哨兵重建审计，见B2。**
+
 **S1　用答案文件做提交记录，取消 `complete` 状态。**
 §5.2 的 intent / unit-result / fsync 五步协议对单进程 CLI 过重。更简单：HTTP 返回后把 `request_id`、`attempt_id`、`revision`、`usage`、`finish_reason`、`content` 原子写进**一个** `answer.json`；`provider-audit.json` 改成可从所有 `answer.json` 重建的索引。恢复规则只有一条："answer.json 存在且 request_id/revision 匹配 → 可信"。B2 自然消失，§5.4 的 raw-response.json 也不需要。`attempting` 只保留为调用前哨兵。
+
+**实施状态：已修复（66b7546）；check_stale及持久预算，见B3。**
 
 **S2　去掉 wall-clock deadline，只留预算和新鲜度。**
 任务数、HTTP 次数、抓取数已经限制费用；时间限制只应服务"内容过时"一个目的：超过 24 小时要求显式 `--confirm-stale` 并重新核对七天历史。不要做 +60 分钟 ×2 的手工续期——Bot 不会自己想到去运行它。
 
+**实施状态：分类已修（66b7546）。recover-task手工重发接口未实现：本次选择显式native兜底或同目录暂停，不授权uncertain HTTP再发。**
+
 **S3　异常分类写进代码而不是 runbook。**
 见 B1。整组五篇的 `outcome_uncertain` 保持暂停（§5.4(6) 正确）；单篇任务的 uncertain 允许 `recover-task --ack-uncertain`。
 
+**实施状态：已修复（66b7546），见B4。**
+
 **S4　补稿只认"有可能改善"的候选。**
 见 B4。抓取预算改每栏。
+
+**未修复：S5不是本次任务清单，保留现有机械校验与modifier；建议后续独立评估数字/引语规则误报。**
 
 **S5　modifier 之后加一道零成本机械校验。**
 §3.6 承认"无第三轮审核"，这是儿童站点最薄弱处。三条 Python 能做、不花模型钱：
@@ -156,7 +194,11 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 3. 最终正文出现的数字集合必须是原文数字集合的子集。
 能挡住最常见的编造引语和改数字。
 
+**未修复：属于P1生产问题，明确不在本次范围。**
+
 **S6　生产包强制 3/3/3**，或入库 SQL 只替换包内有内容的栏目（P1）。
+
+**实施状态：已修复（66b7546）。四项命名回归及fallback内容修正/四稿请求/mixed站点和ZIP标记通过。默认关；仅传输兜底，连续两轮熔断，真实VM配额未知。**
 
 **S7　DeepSeek 传输失败时由 Bot 原生模型兜底（用户确认 2026-09-30）。**
 背景：上一轮纯原生跑完整轮，配额约 10%，质量可接受。兜底是一次性事件，允许那一轮用到 10%，不受日常 ≤3% 目标约束。
@@ -196,3 +238,14 @@ Spec 方向正确，对现状的描述基本诚实：§1 表格里标"未完成"
 | B2 | 正常完成后把 `http-attempt.json` 的 status 改回 `attempting`，删 `accepted-answer-hashes.json`，重跑 | `answer.json` 存在仍报 uncertain；HTTP 未重调 |
 | B4 | `test_agent_shadow_batch.setup_batch` 基础上把 plan 的 News importance 全改 2，discover 返回空 | 4 次 rewrite-batch-News、2 次 discover、News 抓 16/16 |
 
+
+## 本次交付验收（2026-10-01）
+
+修复位置：agent_shadow_providers.py（B1/B2/B3/S7路由）、agent_shadow.py（新鲜度/CLI/status/日志/manifest）、agent_shadow_editor.py（B4及逐篇标记）、agent_shadow_autonomous.py（独立抓取预算/抓取审计）、agent_shadow_batch.py（B5及四稿来源标记）、publication_bundle.py（writer_provider）。生产full_round/news_rss_core及P1–P5未改。
+
+测试命令（专用3.10 venv）：
+```sh
+python -m pytest -q pipeline/test_agent_shadow*.py pipeline/test_batch_single_repair.py pipeline/test_publication_bundle.py pipeline/test_shadow_site.py pipeline/test_ai_providers.py pipeline/test_safety_quality.py pipeline/test_quality_rca.py pipeline/test_wc_repair.py pipeline/test_cadence_calibrate.py
+```
+
+Python3.10.20：219项通过（新增29项含参数化/三探针），2个已知依赖/runpy警告。新回归在相应修复前已观察到失败，过程摘要见docs/bugs/2026-10-01-shadow-http-resume.md。纯离线模型/网页/图片/JSON模拟，不能证明真实内容质量、网络稳定性或3%配额。已明确的VM首测前置：拉取本次运行分支、3.10依赖、真实只读7天registry、VM.env的DeepSeek key、原生新会话答题；不发布、不写DB、不发邮件。P1–P5仅阻塞生产，不阻塞本地影子pack。

@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T04:04:07.258Z",
+  "updated_at": "2026-10-01T04:06:30.318Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -710,7 +710,7 @@
     {
       "date": "2026-10-01",
       "title": "影子恢复以答卷为提交记录，按栏目和持久预算兜底而非重做",
-      "note": "B1–B7/S7离线修复：已知未执行HTTP可有限重试，429最多120秒，读超时/reset保持uncertain；匹配answer.json优先于attempting，审计可重建、原答卷保留。取消一小时限制，超24小时显式确认并重核同栏七天历史；每栏抓取12，重要News/Science第二出版方仅有未尝试改善候选才补。显式native兜底四稿3+1、两连续轮熔断、计入预算并诚实标mixed/同模型写稿自检/writer_provider。status只读无锁，CLI绝对解释器，抓取审计与正文同原子保存。Python3.10.20离线219项通过；未真实模型、DB写、部署、邮件、merge。P1–P5不在本次范围，VM质量和费用仍待首测，保留调试缓存。",
+      "note": "B1–B7/S7离线修复：已知未执行HTTP可有限重试，429最多120秒，读超时/reset保持uncertain；匹配answer.json优先于attempting，审计可重建、原答卷保留。取消一小时限制，超24小时显式确认并重核同栏七天历史；每栏抓取12，重要News/Science第二出版方仅有未尝试改善候选才补。显式native兜底四稿3+1、两连续轮熔断、计入预算并诚实标mixed/同模型写稿自检/writer_provider。status只读无锁，CLI绝对解释器，抓取审计与正文同原子保存。Python3.10.20离线219项通过；未真实模型、DB写、部署、邮件、merge。P1–P5不在本次范围，VM质量和费用仍待首测，保留调试缓存。 修复提交66b7546；Review逐项补充状态，原Spec保留且增补优先，导出前文档记录一起提交。",
       "source_ref": "docs/bugs/2026-10-01-shadow-http-resume.md"
     }
   ]
