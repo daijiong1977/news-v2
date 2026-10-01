@@ -3,12 +3,12 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T21:00:00Z",
+  "updated_at": "2026-10-01T21:42:00Z",
   "branches": [
     {
       "name": "codex/relay-dispatch-20261001",
       "purpose": "用户授权的一次性sealed-box迁移原dispatch secret到Bot环境；不合并、不发布，完成后移除临时workflow和脚本。",
-      "status": "temporary_credential_relay"
+      "status": "relay_completed_workflow_removed_do_not_merge"
     },
     {
       "name": "main",
@@ -420,7 +420,7 @@
     {
       "date": "2026-10-01",
       "title": "已有GitHub secret只能使用，不能读回；跨仓库复用通过目标公钥密封迁移",
-      "note": "用户批准原news-v2的KIDSNEWS_DISPATCH_TOKEN复用到Bot kidsnews-production。临时分支CI只把原secret加密为目标GitHub公钥可解的密文，并GET验证Actions读权限；本机维护者上传密文，不输出/下载明文、不触发生产、DB或邮件。临时流程完成后移除，不合并main。",
+      "note": "用户批准原dispatch token复用到Bot kidsnews-production。临时CI run36930276663成功密封加密，本机校验源commit/目标key_id后目标secret PUT成功，GitHub列表确认21:41:48Z；两仓库Actions读均HTTP200。原secret没有明文输出或下载；临时workflow/script已从完成提交移除，PR87不合并。没有触发生产、DB或邮件，视觉与真实发布恢复仍待验证。",
       "source_ref": "docs/DISPATCH-SECRET-RELAY-2026-10-01.md"
     }
   ]
