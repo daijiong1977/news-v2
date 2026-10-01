@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T14:29:59.612Z",
+  "updated_at": "2026-10-01T14:32:24.750Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -750,6 +750,12 @@
       "date": "2026-10-01",
       "title": "独立测试域名拼写已确认news.21mins.com",
       "note": "用户确认news.21mins.com为计划测试域名，不是news.21min.com。计划独立测试项目配正式reader、旧kidsnews.21mins.com继续生产；DNS/所有权/绑定尚未核验，未更改或部署。现worker白名单不含测试域名，不能为测试绕过并写生产归档；隔离DB/Storage配置另行评审。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "中午候选先批准再晋升，回滚必须同步内容而非整库恢复",
+      "note": "用户提议中午生成满意则正式用新稿，否则旧流程备用。当前06:10早于中午，初期保留当日早上包作退路；条件备用/截止时间仅计划，未改调度。回滚需不可变包+模板版本、公开哈希、定向DB/搜索/归档/current一致；旧包直接重发被superseded检查挡住，必须显式rollback操作/互斥/幂等。不能仅Git revert称全链路回滚，不恢复账号/阅读整库，不盲退来源cadence，不重发邮件。粗估增加1–2日，整个过渡4–6工程日+观察，未实现/部署。",
       "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
     }
   ]
