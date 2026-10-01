@@ -162,6 +162,7 @@ def build(root: Path, output: Path, shell: Path | None = None):
                 'source_title': match['candidate']['article']['title'],
                 'source_config_id': src_id if src_id is not None and src_id > 0 else None,
                 'topic': match['candidate']['topic'], 'importance': match['candidate']['importance'],
+                'writer_provider': match['candidate'].get('writer_provider', 'deepseek'),
                 'safety_scores': outcome['safety']['scores'], 'facts_supported': outcome['facts_supported'],
                 'event_clear': outcome['event_clear'], 'primary_image_local': body['image_url'].lstrip('/'),
                 'primary_image_url': photos.get(candidate_id, {}).get('source_url') or None,

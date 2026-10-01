@@ -15,7 +15,7 @@ DeepSeek：每栏一次八选五+五篇正文；最终稿详情和逐字段/逐�
 绝不整组重新写：单篇长度异常由该篇 modifier 修；单篇结构异常只修该 ID。
 整份 JSON 格式坏由原生 Agent 只修语法/恢复完整行，不再向 DeepSeek 发整组重写请求。
 已有合格稿不重写，局部补稿不重新处理已满足的栏目；仍不合格换备用。
-初始每栏最多八篇合格原文，整轮正文抓取预算 36；必要时沿用最多两轮/栏、每轮三 URL
+初始每栏最多八篇合格原文，每栏正文抓取预算独立为12（失败也计数，恢复不清零）；必要时沿用最多两轮/栏、每轮三 URL
 的受限发现，新增来源只记建议，不启用来源表。预算耗尽可少于三篇并告警，不搬昨天成品。
 
 图片与原文是按需共同资格单元：选中候选原页只访问一次，获取原文及图片元信息；
@@ -44,6 +44,33 @@ git pull --ff-only origin codex/stepwise-full-shadow
 
 一次一个 step：退出2按 JSON 指定路径写原生答卷后重跑；退出0继续下一步；
 退出1停报真正工具/身份/锁/哈希错误，不反复重跑；done 后停止生成。
+
+### 恢复合同（本次 B1–B7/S7 优先于原 Spec 的旧一小时限制）
+
+- 所有 JSON 的 next/rerun 使用当前解释器绝对路径（VM 即 .venv/bin/python）。
+  exit0完成一个单元，exit2按指定文件答题并在**同目录**继续，exit1暂停，exit3已完成。
+- HTTP 有 response 的错误及可确认发送前连接失败记 failed_not_executed，单次命令最多
+  三次传输尝试，受整轮120 HTTP调用预算限制；429读取Retry-After，上限120秒。
+  修好身份后可同目录继续。读超时/发送后reset记outcome_uncertain，不自动HTTP重发。
+- HTTP答卷是原子提交记录：answer.json含request_id、revision、attempt_id、usage、content、
+  finish_reason。答卷匹配优先于attempting哨兵；provider-audit可从答卷/哨兵重建，不是唯一权威。
+  第一次答卷保存在answer.attempt-1.json。禁止删状态、缓存或答卷，禁止整组重发/改完成答卷。
+- 不再限制一小时wall-clock；任务120、HTTP120、各栏正文12的持久预算仍有效。
+  超24小时用新只读registry加step --confirm-stale --registry；先重核同栏七天历史，
+  duplicate/uncertain从候选和已接纳稿移除，日期不变。status不拿锁，answer_integrity列出异常。
+- 只有缺篇数，或目录中有未尝试且可补重要News/不同Science出版方的稿，才扩大本栏。
+  找不到可改善稿时保留安全正文并告警，不能为quota耗光其他栏目。News最高importance稿
+  若被选入drafts必须排首位；否则用skipped:[{id,reason}]说明，不消费其余未选原文。
+- 可选prepare --http-fallback native（默认关，input冻结）：仅传输失败用原生答题，
+  单任务只兜底一次，原生批量4篇(3+1)、无8192 max_tokens；内容错误仍单篇修复。
+  同一request_id和校验不变；native request隐藏运输字段，必须复制指定ID，不能自行重算。
+  兜底计入MAX_TASKS并记fallback_tasks；work父目录的.http-fallback-runs.json检测连续两轮，
+  连续兜底退出1要求查key/账户。uncertain兜底可能双重付费，必须报告。
+- 兜底正文标记“同模型写稿并自检”；done/manifest provider=mixed；ZIP records带
+  writer_provider。详情角色兜底也应报告，不把混合运行称全部DeepSeek或独立审核。
+- 原文抓取证据与_fetch_audit同一次原子写入bodies.json；日志写失败不推翻已完成单元。
+- 本轮只修影子。Review P1–P5均未实现：部分包删除风险、409/ready幂等、旧writer竞态、
+  live schema及上线次序需影子通过后另开任务，不能凭离线绿灯开启生产消费者。
 正文 modifier 用新会话/子 Agent，仅看本任务，返回修后稿和最终事实/安全/事件评分；
 称“第二模型修稿并自检”，没有第三轮审核，不把自检称独立审稿。
 不可修改已完成答卷、源代码或阈值；不部署、不入库、不发邮件。

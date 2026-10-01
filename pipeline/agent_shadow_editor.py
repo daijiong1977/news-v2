@@ -63,8 +63,19 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
     def publishers(section):
         return {publisher_key(source_of(a["candidate"])) for a in section["accepted"]}
     def needs(cat, section):
-        return (len(section["accepted"]) < 3 or (cat == "Science" and len(publishers(section)) < 2)
-                or (policy and cat == "News" and not any(a["candidate"]["importance"] >= 3 for a in section["accepted"])))
+        if len(section['accepted']) < 3:
+            return True
+        tried = {o['id'] for o in section['outcomes']}
+        remaining = [b for b in ranked[cat] if b['id'] not in tried
+                     and b['history_status'] == 'clear' and b['history_confidence'] >= .7
+                     and b['initial_risk'] < 4]
+        if policy and cat == 'News' and not any(a['candidate']['importance'] >= 3 for a in section['accepted']):
+            return any(b['importance'] >= 3 for b in remaining)
+        if cat == 'Science' and len(publishers(section)) < 2:
+            index = {b['id']: b for b in snapshot['candidates']}
+            return any(publisher_key(NewsSource(**snapshot['sources'][index[b['id']]['source']]))
+                       not in publishers(section) for b in remaining if b['id'] in index)
+        return False
     save()
     active = snapshot.get("active_categories", CATS)
     for cat in active:
@@ -140,6 +151,10 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
                     save()
                     boundary(root, f"rewrite-invalid-{cat}-{sid}", stepwise)
                     continue
+                audit_path = root / 'provider-audit.json'
+                if audit_path.exists() and any(token.startswith(rewrite_key + ':') and r.get('fallback') == 'native'
+                    for token, r in read(audit_path).get('requests', {}).items()):
+                    b['writer_provider'] = 'native'
                 boundary(root, rewrite_key, stepwise)
                 def check_review(value):
                     scores = value.get("scores", {}).get("0", {})
@@ -175,6 +190,8 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
                     safety = evaluate_rewriter_safety({"safety": review["scores"]["0"]}, category=cat)
                     passed = safety["verdict"] == "PASS" and review["facts_supported"] and (not policy or review["event_clear"])
                     outcome = {"id": sid, "category": cat, "status": "accepted" if passed else "review_rejected",
+                               'writer_provider': b.get('writer_provider', 'deepseek' if hybrid else 'native'),
+                               'review_method': '同模型写稿并自检' if b.get('writer_provider') == 'native' or not hybrid else '第二模型修稿并自检；无第三轮审核',
                                "safety": safety, "facts_supported": review["facts_supported"],
                                **({'modifier_attempted': modifier_attempted, 'notes': review.get('notes', '')}
                                   if hybrid else {}),

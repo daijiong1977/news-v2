@@ -113,7 +113,10 @@ def test_batch_invalid_objects_and_news_priority():
     pool = [{'id': str(i), 'importance': i, 'article': {'word_count': 400}} for i in range(8)]
     assert batch.validate_batch({'drafts': [None] * 5}, pool, 'News')
     rows = [{'id': str(i), 'reason': 'Good', 'article': draft()} for i in range(5)]
+    assert not batch.validate_batch({'drafts': rows}, pool, 'News')
+    rows[-1]['id'] = '7'
     assert batch.validate_batch({'drafts': rows}, pool, 'News')
+    rows[-1]['id'] = '4'
     rows[0]['id'] = '7'
     assert not batch.validate_batch({'drafts': rows}, pool, 'News')
     assert batch.validate_order({'order': ['0', '0']}, pool, 'Fun')

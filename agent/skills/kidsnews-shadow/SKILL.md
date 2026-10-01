@@ -25,6 +25,40 @@ Use `.venv/bin/python`; follow exit2 tasks, not a blind shell loop. This profile
 authorize deployment, ready upload, database writes, scheduled function activation or emails.
 The ZIP commands in the runbook are separate handoff tools, not permission to publish.
 
+### Same-directory recovery and native transport fallback (2026-09-30)
+
+Prepare may explicitly add `--http-fallback native`; default is OFF, and the choice is
+frozen in input.json. Only a failed HTTP transport (bounded pre-execution retries exhausted,
+or uncertain delivery) can hand off to native files. Content/length/schema failures NEVER
+activate this fallback. Native batch fallback writes FOUR drafts (3+1), not five; its
+request omits HTTP max_tokens while retaining the original request_id/validation contract.
+Never recompute request_id from the displayed fallback task; copy the supplied ID.
+
+Exit 2 is a task handoff, NOT a failed run. Read request.json, write answer.json, and run
+the exact returned rerun command in the SAME directory. Never delete answer/state/cache,
+reset counters, change providers/date, or resend the entire group. Exit 1 pauses a genuine
+error; check error_class/http_status/retry_after and report instead of blindly looping.
+HTTP errors with a response and confirmed pre-send connection failures retry at most three
+times per invocation within the persistent HTTP budget; 429 waits up to 120 seconds.
+Read timeouts/resets never auto-resend HTTP. Without explicit fallback, uncertain tasks
+remain paused. A corrected key can recover failed_not_executed in the same directory.
+
+answer.json is the atomic HTTP commit record (request_id/revision/attempt_id/usage/content).
+An attempting sentinel cannot invalidate a matching answer. First corrections retain
+answer.attempt-1.json; do not edit that archive or completed answers.
+Task/HTTP/fetch budgets persist across restarts; there is NO one-hour deadline.
+After 24 hours, obtain a fresh read-only connector registry and run
+`step --confirm-stale --registry /absolute/path/fresh-registry.json`; follow its history
+recheck task first. Original publication date remains frozen. status is lock-free and
+read-only; inspect answer_integrity without trying to repair accepted answer hashes.
+
+Each native fallback consumes another task and increments fallback_tasks. The runtime
+parent ledger .http-fallback-runs.json is state too: never delete it to reset the circuit
+breaker. Two consecutive fallback runs exit 1: ask the maintainer to check key/account.
+Report fallback task IDs/reasons, possible double billing for uncertain delivery, and
+writer_provider. Native-written pieces are “同模型写稿并自检”, not second-model review;
+done.json/site manifest report provider=mixed, and ZIP records retain writer_provider.
+
 For `--editor-mode autonomous --test-profile news-deepseek` OR `science-fun-deepseek`, follow
 `docs/KIDSNEWS-NEWS-HYBRID-TEST.md` instead of full-round publishing below.
 The first profile runs only News; the second runs only Science/Fun, never News. DeepSeek writes bodies/details and reviews details using the user-supplied
@@ -108,8 +142,12 @@ is reported, but only all three empty is a hard stop.
    Public verification compares the manifest AND every payload/detail/image hash. A CLI deployment
    response is not evidence that the public site serves this run. Only verified `published.json` means deployed.
 
-The ranking request uses metadata, not full texts. Body reads are cached, up to the first twelve
-ranked candidates per section, followed by deeper ranks only if six have not survived.
+The ranking request uses metadata, not full texts. Autonomous shadow body reads are cached
+and capped at TWELVE fetch attempts per section (News/Science/Fun independently), including
+failed fetches. Batch mode first seeks eight qualified originals; expansion uses the remaining
+per-section budget. Missing important News/second Science publisher triggers expansion ONLY
+while an untried qualified improving catalog candidate remains; otherwise keep safe drafts
+and report the warning, not an endless quota chase.
 Each draft is reviewed in a separate request without writer self-scores. Review all English bodies,
 headlines/cards and the Chinese card, using the original source for fact support.
 Separate review prompts are a second pass, not proof of a separate model/provider.

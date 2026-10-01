@@ -111,13 +111,14 @@ def test_budget_stops_before_additional_fetch(tmp_path, monkeypatch):
     setup(tmp_path, monkeypatch)
     from pipeline.agent_shadow_autonomous import AutonomousEditor
     metrics = runner.read(tmp_path / 'metrics.json')
-    metrics['body_fetches'] = 36
+    metrics['body_fetches'] = 12
+    metrics['body_fetches_by_category'] = {'News': 12, 'Science': 0, 'Fun': 0}
     runner.write(tmp_path / 'metrics.json', metrics)
     snapshot = runner.read(tmp_path / 'input.json')
     policy = AutonomousEditor(tmp_path, snapshot, runner.ask, runner.boundary, False)
     policy.plan()
     assert policy.pool('News', 3) == []
-    assert runner.read(tmp_path / 'autonomous-audit.json')['budget_exhausted']
+    assert runner.read(tmp_path / 'autonomous-audit.json')['exhausted_categories']['News']
 
 
 def test_router_native_discovery_permission_is_narrow_and_budgeted(tmp_path):
@@ -222,7 +223,7 @@ def test_router_correction_once_and_unknown_http_outcome_not_retried(tmp_path, m
         raise TimeoutError('unknown delivery')
     monkeypatch.setattr(OpenAICompatibleProvider, 'complete', fail)
     router = TaskRouter(tmp_path, 'plan')
-    with pytest.raises(RuntimeError, match='do not blindly retry'):
+    with pytest.raises(RuntimeError, match='outcome_uncertain'):
         router.complete({'model': 'test', 'messages': []}, 0)
     with pytest.raises(ValueError, match='uncertain'):
         router.complete({'model': 'test', 'messages': []}, 0)

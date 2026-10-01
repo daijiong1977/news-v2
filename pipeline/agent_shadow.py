@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import sys
 import time
 from contextlib import contextmanager
@@ -73,11 +74,14 @@ def boundary(root, key, stepwise, started=None):
     event = {"step": key, "cmd": key, "exit": 0,
              "at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
              "seconds": round(time.monotonic() - started, 3) if started is not None else None}
-    with (root / "steps.jsonl").open("a", encoding="utf-8") as stream:
-        stream.write(json.dumps(event) + "\n")
+    try:
+        with (root / "steps.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(event) + "\n")
+    except OSError as exc:
+        print(f'boundary logging failed: {exc}', file=sys.stderr)
     if stepwise:
         raise StepFinished({"ok": True, "completed_step": key,
-                            "next": f"python -m pipeline.agent_shadow step --run-dir {root}",
+                            "next": resume_command(root),
                             "run_dir": str(root), "completed_steps": completed})
 
 
@@ -90,7 +94,74 @@ def read(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None, *, editor_mode="staged", test_profile=None):
+def resume_command(root):
+    return f'{shlex.quote(sys.executable)} -m pipeline.agent_shadow step --run-dir {shlex.quote(str(root))}'
+
+
+def check_stale(root, confirm, registry):
+    """No elapsed-time cost budget; stale editorial context requires explicit refresh."""
+    metrics_path = root / 'metrics.json'
+    if not metrics_path.exists() or (root / 'done.json').exists():
+        return
+    metrics = read(metrics_path)
+    started = metrics.get('history_rechecked_at') or metrics.get('started_at')
+    if not started or (datetime.now(timezone.utc) - datetime.fromisoformat(started)).total_seconds() <= 86400:
+        return
+    if not confirm:
+        raise ValueError('stale_run: use step --confirm-stale --registry FRESH_CONNECTOR_SNAPSHOT; date stays frozen')
+    if registry is None:
+        raise ValueError('--confirm-stale requires a fresh connector-read --registry')
+    fresh, snapshot = read(registry), read(root / 'input.json')
+    now = datetime.now(ZoneInfo('America/New_York')).date()
+    if fresh.get('date') != now.isoformat() or not isinstance(fresh.get('history'), list):
+        raise ValueError('stale registry must have today ET date and a history list')
+    history = {c: [r for r in fresh['history'] if r.get('category') == c
+                  and (now-timedelta(days=7)).isoformat() <= r.get('published_date', '') < now.isoformat()
+                  and r.get('published_date') != snapshot['date'] and not r.get('is_archived')]
+               for c in CATS}
+    if not any(history.values()):
+        raise ValueError('stale registry history is zero; check connector')
+    ids = {b['id'] for b in snapshot['candidates']}
+    catalog_path = root / 'autonomous-catalog.json'
+    final_category = {b['id']: cat for cat, rows in read(catalog_path)['catalog'].items() for b in rows} if catalog_path.exists() else {}
+    key = 'review-history-stale-' + hashlib.sha256(json.dumps(history, sort_keys=True).encode()).hexdigest()[:16]
+    def validate(v):
+        rows = v.get('blocked_ids')
+        return [] if isinstance(rows, list) and len(rows) == len(set(rows)) and set(rows) <= ids else ['blocked_ids must be unique supplied IDs']
+    blocked = set(ask(root, key,
+        'Recheck every candidate against ONLY its own section previous-seven-day event/URL history. '
+        'Return {"blocked_ids":[...]}; include duplicate AND uncertain candidates. No browsing or writing articles.',
+        {'candidates': [{**b, 'category': final_category.get(b['id'], b['category'])} for b in snapshot['candidates']],
+         'history': history}, validate)['blocked_ids'])
+    for path in root.glob('pool-*.json'):
+        write(path, [b for b in read(path) if b['id'] not in blocked])
+    for path in root.glob('batch-*.json'):
+        batch = read(path)
+        batch['pool'] = [b for b in batch['pool'] if b['id'] not in blocked]
+        write(path, batch)
+    catalog_path = root / 'autonomous-catalog.json'
+    if catalog_path.exists():
+        catalog = read(catalog_path)
+        for c in CATS:
+            catalog['catalog'][c] = [b for b in catalog['catalog'][c] if b['id'] not in blocked]
+        write(catalog_path, catalog)
+    state_path = root / 'editor-state.json'
+    if state_path.exists():
+        state = read(state_path)
+        for c in CATS:
+            state[c]['accepted'] = [a for a in state[c]['accepted'] if a['candidate']['id'] not in blocked]
+            state[c]['outcomes'].extend({'id': sid, 'category': c, 'status': 'stale_history_rejected'}
+                for sid in blocked if any(b['id'] == sid and b['category'] == c for b in snapshot['candidates']))
+        write(state_path, state)
+    snapshot['history'] = history
+    write(root / 'input.json', snapshot)
+    metrics = read(metrics_path)
+    metrics.update(history_rechecked_at=datetime.now(timezone.utc).isoformat(),
+                   history_counts={c: len(history[c]) for c in CATS}, stale_blocked_ids=sorted(blocked))
+    write(metrics_path, metrics)
+
+
+def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None, *, editor_mode="staged", test_profile=None, http_fallback=None):
     if test_profile and editor_mode != "autonomous":
         raise ValueError("Hybrid profile requires autonomous editor mode")
     if test_profile and test_profile not in HYBRID_PROFILES:
@@ -104,6 +175,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
             raise ValueError("editor mode is frozen per run; choose a fresh directory")
         if cached.get("test_profile") != test_profile:
             raise ValueError("test profile is frozen per run; choose a fresh directory")
+        if cached.get('http_fallback') != http_fallback:
+            raise ValueError('HTTP fallback is frozen per run')
         if not any(cached.get("history", {}).get(cat) for cat in CATS):
             raise ValueError("cached history is missing or zero; check the connector and use a fresh run directory")
         return {"ok": True, "next": "next", "input": str(root / "input.json"), "cached": True}
@@ -149,7 +222,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                                "title": b["title"], "summary": re.sub(r"<[^>]+>", " ", b["summary"])[:600],
                                "link": b["link"], "published": b["published"], "source": b["_source_name"]})
     write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
-                               "editor_mode": editor_mode, "test_profile": test_profile,
+                               "editor_mode": editor_mode, "test_profile": test_profile, "http_fallback": http_fallback,
                                "active_categories": list(active),
                                "review_mode": "modifier" if test_profile in HYBRID_PROFILES else "audit"})
     write(root / "metrics.json", {"prepare_seconds": round(time.monotonic()-t0, 3),
@@ -194,7 +267,9 @@ def ask(root, key, system, material, validate, *, normalize=None):
     if envelope["choices"][0]["finish_reason"] == "length":
         errors = ["Answer was truncated; finish the answer once before rerunning"]
     if errors:
-        if key.startswith('rewrite-batch-') and getattr(provider, 'choice', {}).get('type') == 'http':
+        fallback = any(p.exists() and read(p).get('status') == 'fallback_native'
+                       for p in provider.work_dir.glob('*/http-attempt.json'))
+        if key.startswith('rewrite-batch-') and getattr(provider, 'choice', {}).get('type') == 'http' and not fallback:
             # Never ask the HTTP writer to regenerate the five-story batch.
             # Recover syntax only; per-story content repair happens separately.
             pin_task_answers(root, key)
@@ -219,6 +294,9 @@ def ask(root, key, system, material, validate, *, normalize=None):
         hybrid_http = (getattr(provider, "choice", {}).get("type") == "http"
                        and (root / "input.json").exists()
                        and is_hybrid(read(root / "input.json")))
+        state_path = directory / 'http-attempt.json'
+        if state_path.exists() and read(state_path).get('status') == 'fallback_native':
+            hybrid_http = False
         exhausted = (any(correction_kind(p) == correction_kind(errors) for p in previous)
                      or len(previous) >= 2) if hybrid_http else len(previous) >= 1
         if exhausted:
@@ -378,11 +456,14 @@ def advance(root: Path, *, stepwise=False):
         import tempfile
         with tempfile.TemporaryDirectory(dir=root, prefix="pack-") as scratch:
             staged = Path(scratch) / "site"
-            manifest = export(emit_dir, staged, snapshot["date"], "shadow-role-router" if (root / "providers.json").exists() else "native-agent")
+            audit = read(root / 'provider-audit.json') if (root / 'provider-audit.json').exists() else {}
+            provider_label = 'mixed' if audit.get('fallback_tasks') else 'shadow-role-router' if (root / 'providers.json').exists() else 'native-agent'
+            manifest = export(emit_dir, staged, snapshot["date"], provider_label)
             staged.rename(root / "site")
     write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings,
-        "review_method": "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
+        "review_method": "逐篇见 outcomes.review_method；兜底为同模型写稿并自检" if manifest['provider'] == 'mixed' else "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
     write(root / "done.json", {"site": str(root / "site"), "counts": manifest["counts"], "warnings": warnings,
+                                "provider": manifest['provider'],
                                 "test_profile": snapshot.get("test_profile"),
                                 "image_policy": "source_only_mechanical_not_visual_review" if is_hybrid(snapshot) else "default",
                                 "completed_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
@@ -400,13 +481,19 @@ def main():
     parser.add_argument("--test-profile", choices=tuple(HYBRID_PROFILES), help="Local-only DeepSeek/Bot hybrid scope")
     parser.add_argument("--providers-config", type=Path, help="Shadow-only role map; environment-variable references, never keys")
     parser.add_argument("--retry-after-failed-verify", action="store_true")
+    parser.add_argument('--http-fallback', choices=('native',))
+    parser.add_argument('--confirm-stale', action='store_true')
     parser.add_argument("--env-file")
     parser.add_argument("--registry", type=Path, help="Supabase connector-read source/history snapshot; no VM API keys")
     args = parser.parse_args()
     root = args.run_dir.resolve()
     started = time.monotonic()
     def say(value, code):
-        if (root / "input.json").exists() and is_hybrid(read(root / "input.json")) and "completed_steps" in value:
+        try:
+            hybrid = (root / 'input.json').exists() and is_hybrid(read(root / 'input.json'))
+        except (OSError, ValueError):
+            hybrid = False
+        if hybrid and "completed_steps" in value:
             value = {**value, "completed_step_count": len(value["completed_steps"])}
             del value["completed_steps"]
         if args.command != "status" and root.exists():
@@ -422,6 +509,22 @@ def main():
         return code
     try:
         tz = ZoneInfo("America/New_York")
+        if args.command == 'status':
+            integrity = {'ok': True, 'errors': []}
+            try:
+                verify_answer_hashes(root)
+            except (OSError, ValueError, RuntimeError) as exc:
+                integrity = {'ok': False, 'errors': [str(exc)]}
+            value = {'ok': True, 'input_exists': (root / 'input.json').exists(),
+                     'done': (root / 'done.json').exists(), 'answer_integrity': integrity}
+            for name in ('metrics', 'completed-steps', 'published'):
+                try:
+                    value[name.replace('-', '_')] = read(root / f'{name}.json') if (root / f'{name}.json').exists() else None
+                except (OSError, ValueError) as exc:
+                    value[name.replace('-', '_')] = {'read_error': str(exc)}
+            return say(value, 0)
+        if args.http_fallback and args.command != 'prepare':
+            raise ValueError('--http-fallback belongs to prepare only')
         if args.retry_after_failed_verify and args.command != "publish":
             raise ValueError("--retry-after-failed-verify is only allowed with publish")
         with run_lock(root):
@@ -449,10 +552,11 @@ def main():
                         raise ValueError("Cannot add providers to an existing run")
                     write(saved, config)
                 value = prepare(root, args.date or datetime.now(tz).date().isoformat(), args.env_file, args.registry,
-                                editor_mode=args.editor_mode, test_profile=args.test_profile)
+                                editor_mode=args.editor_mode, test_profile=args.test_profile, http_fallback=args.http_fallback)
             elif args.command in ("step", "next"):
                 if args.providers_config:
                     raise ValueError("--providers-config belongs to prepare only")
+                check_stale(root, args.confirm_stale, args.registry)
                 value = advance(root, stepwise=True)
             elif args.command in ("publish", "verify"):
                 if profile:
@@ -468,7 +572,10 @@ def main():
     except StepFinished as finished:
         return say(finished.result, 0)
     except AgentNeeded as needed:
-        return say({**needed.as_dict(), "rerun": f"python -m pipeline.agent_shadow step --run-dir {root}"}, 2)
+        rerun = resume_command(root)
+        if args.confirm_stale and args.registry:
+            rerun += f' --confirm-stale --registry {shlex.quote(str(args.registry.resolve()))}'
+        return say({**needed.as_dict(), "rerun": rerun}, 2)
     except Exception as exc:
         return say({"ok": False, "error": str(exc)}, 1)
     finally:

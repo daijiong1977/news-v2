@@ -15,7 +15,7 @@ import requests
 
 from .news_sources import NewsSource
 
-LIMITS = {"body_fetches": 36, "discovery_rounds_per_category": 2,
+LIMITS = {"body_fetches": 12, "discovery_rounds_per_category": 2,
           "discovery_urls_per_round": 3, "max_bytes": 2_000_000,
           "redirects": 4, "fetch_seconds": 20}
 
@@ -130,6 +130,10 @@ class AutonomousEditor:
         self.audit = read(self.audit_path) if self.audit_path.exists() else {
             "limits": dict(LIMITS), "discoveries": {}, "budget_exhausted": False,
             "fetch_results": {}, "mode": "autonomous"}
+        cache_path = root / 'bodies.json'
+        if cache_path.exists():
+            self.audit['fetch_results'].update({sid: art['_fetch_audit'] for sid, art in read(cache_path).items()
+                                                if '_fetch_audit' in art})
 
     def save(self):
         from .agent_shadow import write
@@ -170,6 +174,10 @@ class AutonomousEditor:
         from .full_round import _canonical_source_url
         cache_path = self.root / "bodies.json"
         cache = read(cache_path) if cache_path.exists() else {}
+        # Fetch audit travels in the same atomic cache record as the evidence.
+        for sid, art in cache.items():
+            if '_fetch_audit' in art:
+                self.audit['fetch_results'][sid] = art['_fetch_audit']
         index = {b["id"]: b for b in self.snapshot["candidates"]}
         past = {_canonical_source_url(r.get("source_url", "")) for r in self.snapshot["history"][cat]}
         final_urls = set(past)
@@ -181,22 +189,26 @@ class AutonomousEditor:
                 continue
             if b["id"] not in cache:
                 metrics = read(self.root / "metrics.json")
-                if metrics["body_fetches"] >= LIMITS["body_fetches"]:
-                    self.audit["budget_exhausted"] = True
+                counts = metrics.setdefault('body_fetches_by_category', {
+                    c: sum(a.get('category') == c for a in cache.values()) for c in ('News', 'Science', 'Fun')})
+                if counts[cat] >= LIMITS["body_fetches"]:
+                    self.audit.setdefault('exhausted_categories', {})[cat] = True
                     break
                 # Reserve budget BEFORE networking; failure/restart cannot refund it.
                 metrics["body_fetches"] += 1
+                counts[cat] += 1
                 write(self.root / "metrics.json", metrics)
                 started = time.monotonic()
                 try:
                     art = fetch_original(b)
                 except (ValueError, OSError, requests.RequestException) as exc:
                     art = {**b, "body": "", "word_count": 0, "skip_reason": type(exc).__name__, "og_image": None}
-                cache[b["id"]] = art
-                write(cache_path, cache)
-                self.audit["fetch_results"][b["id"]] = {
+                art['_fetch_audit'] = {
                     "seconds": round(time.monotonic()-started, 3), "word_count": art["word_count"],
                     "skip_reason": art.get("skip_reason"), "evidence_sha256": art.get("evidence_sha256")}
+                cache[b["id"]] = art
+                write(cache_path, cache)
+                self.audit["fetch_results"][b["id"]] = art['_fetch_audit']
             art = cache[b["id"]]
             art = {**art, "link": art.get("evidence_url") or art["link"]}
             evidence_url = _canonical_source_url(art.get("evidence_url") or b["link"])
@@ -251,7 +263,7 @@ class AutonomousEditor:
         """Expand only exhausted category, preserving all accepted drafts."""
         from .agent_shadow import read, write, CATS, AnswerRejected
         from .full_round import _canonical_source_url
-        if self.audit["budget_exhausted"]:
+        if self.audit["budget_exhausted"] or self.audit.get('exhausted_categories', {}).get(cat):
             return None
         if target < len(self.catalog[cat]):
             return min(len(self.catalog[cat]), target + 3)

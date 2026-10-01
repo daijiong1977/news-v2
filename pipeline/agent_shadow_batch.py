@@ -33,8 +33,19 @@ def validate_batch(value, pool, category):
         # length errors NEVER trigger regeneration of the other four drafts.
     if category == 'News' and rows:
         highest = max(b['importance'] for b in pool)
-        if isinstance(rows[0], dict) and rows[0].get('id') in index and index[rows[0]['id']]['importance'] != highest:
+        included_highest = any(isinstance(r, dict) and r.get('id') in index and index[r['id']]['importance'] == highest for r in rows)
+        if included_highest and isinstance(rows[0], dict) and rows[0].get('id') in index and index[rows[0]['id']]['importance'] != highest:
             errors.append('News first draft must be a highest-importance eligible candidate')
+    skipped = value.get('skipped', [])
+    if not isinstance(skipped, list):
+        errors.append('skipped must be a list')
+    else:
+        for row in skipped:
+            if (not isinstance(row, dict) or row.get('id') not in index or row.get('id') in seen
+                    or not isinstance(row.get('reason'), str) or not row['reason'].strip()):
+                errors.append('skipped needs a unique supplied ID, reason, and no overlap with drafts')
+            else:
+                seen.add(row['id'])
     return errors
 
 
@@ -139,7 +150,8 @@ BATCH OVERRIDE: select the best min(5, candidate count) articles AND write all s
 Return {"drafts":[{"id":"supplied ID","reason":"why chosen","article":{...}}]}.
 Each article uses source_id 0, easy_en/middle_en headline/body/card_summary, zh headline/summary.
 The per-candidate body_word_bands override generic length rules. Do not generate details or quizzes.
-News first selection MUST have the highest supplied importance, then fill four others.
+News: if a highest-importance candidate is included, put it first. Unsuitable sources may be
+skipped with skipped:[{id,reason}]; do not invent facts to satisfy importance.
 Prefer varied topics and independent publishers without displacing important News or inventing facts.
 Only supplied original texts support facts/quotes/attribution. Do not add unsupported viewpoints.
 '''
@@ -148,11 +160,16 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
                               lambda v: validate_batch(v, originals, cat))
         except AnswerRejected as exc:
             pin_task_answers(self.root, key)
-            write(path, {'pool': [], 'drafts': [], 'considered': [b['id'] for b in originals],
+            write(path, {'pool': [], 'drafts': [], 'considered': [],
                          'reason': str(exc)})
             self.boundary(self.root, f'batch-invalid-{cat}-{target}', self.stepwise)
             return []
         index = {b['id']: b for b in originals}
+        audit = read(self.root / 'provider-audit.json') if (self.root / 'provider-audit.json').exists() else {}
+        native = any(token.startswith(key + ':') and r.get('fallback') == 'native'
+                     for token, r in audit.get('requests', {}).items())
+        for row in result['drafts']:
+            index[row['id']]['writer_provider'] = 'native' if native else 'deepseek'
         pool = [index[row['id']] for row in result['drafts']]
         choice = self.ask(self.root, f'select-batch-{cat}-{target}',
             'Read five drafts and source metadata. Rank best three then every reserve. '
@@ -167,7 +184,8 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
             lambda v: validate_order(v, pool, cat))
         pool = [index[sid] for sid in choice['order']]
         write(path, {'pool': pool, 'drafts': result['drafts'],
-                     'considered': [row['id'] for row in result['drafts']],
+                     'considered': [row['id'] for row in result['drafts']] + [row['id'] for row in result.get('skipped', [])],
+                     'skipped': result.get('skipped', []),
                      'eight_ids': [b['id'] for b in originals], 'order': choice['order']})
         self.boundary(self.root, f'batch-select-{cat}-{target}', self.stepwise)
         return pool
@@ -197,6 +215,8 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
     def extend(self, cat, target, section):
         from .agent_shadow import read
         from .agent_shadow_lengths import original_band
+        if self.audit.get('exhausted_categories', {}).get(cat):
+            return None
         consumed = {sid for p in self.root.glob(f'batch-{cat}-*.json') for sid in read(p)['considered']}
         cache = read(self.root / 'bodies.json') if (self.root / 'bodies.json').exists() else {}
         lo, hi = original_band(cat)
