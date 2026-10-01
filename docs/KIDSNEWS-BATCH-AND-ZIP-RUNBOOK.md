@@ -2,6 +2,13 @@
 
 2026-09-30 ET；feature PR #86（共享代码）/ #1（Bot 导出快照），不是生产上线记录。
 
+2026-10-01 当前新轮使用 `batch-grok-details`，完整总结与测试消息见
+`docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md`。DeepSeek只做每栏八选五+正文（正常3次）；
+Grok选五选三、定点修稿、最终每篇原生详情（正常9次详情，无详情模型审核）。
+Python严格结构/关键词、选项洗牌和最长答案告警；不改冻结正文/标题/中文。
+News两出版方不告警（Science两/Fun三保留）；旧batch-deepseek恢复时仍用下面的原路由。
+以下命令如用于新轮，将test-profile换为batch-grok-details并使用全新目录，不改旧input。
+
 ## 模型与代码职责
 
 Python：来源/历史只读快照、URL/完全相同标题去重、公共网页按需取证、原文词数、

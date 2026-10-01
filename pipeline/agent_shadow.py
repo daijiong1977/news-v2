@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from .ai_providers import AgentFilesProvider, AgentNeeded
 from .ai_providers.transport import _atomic_json
 from .agent_shadow_errors import AnswerRejected, correction_kind
-from .agent_shadow_profiles import HYBRID_PROFILES, is_hybrid
+from .agent_shadow_profiles import HYBRID_PROFILES, is_hybrid, is_batch
 
 CATS = ("News", "Science", "Fun")
 
@@ -221,7 +221,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
             key = _canonical_source_url(b["link"])
             if not key or key in seen:
                 continue
-            if test_profile == 'batch-deepseek':
+            if is_batch({'test_profile': test_profile}):
                 from .full_round import _normalize_title
                 title_key = _normalize_title(b['title'])
                 if not title_key or title_key in seen_titles:
@@ -432,7 +432,7 @@ def advance(root: Path, *, stepwise=False):
     if snapshot.get("editor_mode") == "autonomous":
         from .agent_shadow_autonomous import AutonomousEditor
         editor_class = AutonomousEditor
-        if snapshot.get('test_profile') == 'batch-deepseek':
+        if is_batch(snapshot):
             from .agent_shadow_batch import BatchEditor
             editor_class = BatchEditor
         policy = editor_class(root, snapshot, ask, boundary, stepwise)
@@ -442,7 +442,7 @@ def advance(root: Path, *, stepwise=False):
                      lambda v: validate_catalog(v, ids))["catalog"]
         boundary(root, "rank", stepwise)
     from .agent_shadow_editor import edit
-    editor_ask = policy.dispatch if snapshot.get('test_profile') == 'batch-deepseek' else ask
+    editor_ask = policy.dispatch if is_batch(snapshot) else ask
     final, variants, outcomes, warnings = edit(root, snapshot, ranked, editor_ask, boundary, stepwise, policy=policy)
     emit_dir = root / "reader"
     from .agent_shadow_details import enrich_and_review, images
@@ -459,6 +459,8 @@ def advance(root: Path, *, stepwise=False):
     warnings.extend((f"Enrichment fields/questions removed after review: {key}: {report['removed']}"
                      if report.get("removed") else f"Enrichment omitted after review: {key}")
                     for key, report in detail_report.items() if not report["passed"])
+    warnings.extend(f"Enrichment quality warning: {key}: {note}"
+                    for key, report in detail_report.items() for note in report.get('warnings', []))
     image_report = read(root / "image-results.json") if (root / "image-results.json").exists() else {}
     warnings.extend(f"Image unavailable: {sid}" for sid, report in image_report.items() if not report["ok"])
     t0 = time.monotonic()
@@ -554,7 +556,9 @@ def main():
                         raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
                     if args.providers_config:
                         raise ValueError("Hybrid profile supplies its own provider config")
-                    args.providers_config = Path(__file__).resolve().parents[1] / "config/shadow-news-deepseek.json"
+                    config_name = ('shadow-batch-grok-details.json' if profile == 'batch-grok-details'
+                                   else 'shadow-news-deepseek.json')
+                    args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
                 if args.providers_config:
                     from .agent_shadow_providers import validate_config
                     config = read(args.providers_config)

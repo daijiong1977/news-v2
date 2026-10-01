@@ -124,8 +124,9 @@ def build(root: Path, output: Path, shell: Path | None = None):
     from .agent_shadow import verify_answer_hashes
     verify_answer_hashes(root)
     done, snapshot, state = (read(root / n) for n in ('done.json', 'input.json', 'editor-state.json'))
-    if done.get('test_profile') != 'batch-deepseek':
-        raise ValueError('Publication handoff requires completed batch-deepseek run')
+    from .agent_shadow_profiles import is_batch
+    if not is_batch(done):
+        raise ValueError('Publication handoff requires a completed batch profile run')
     files = {}
     site = root / 'site'
     for path in sorted(site.rglob('*')):

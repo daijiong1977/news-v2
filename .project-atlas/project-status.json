@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T11:25:15.456Z",
+  "updated_at": "2026-10-01T14:02:30.227Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86影子恢复与Grok后续四类修复：兜底pending隔离旧HTTP答卷、原生四稿硬校验、discover跨日历史及归档字段、预算满后缓存补稿；Python3.10.20离线227项通过。未合并/真实模型/DB写/部署；P1–P5仍阻塞生产，Bot快照须按UPSTREAM复测。",
+      "purpose": "PR #86：opt-in batch-grok-details；DeepSeek八选五正文，Grok选三/修稿/最终详情，无额外详情模型审核；正文标题冻结、最长答案告警、News两出版方。旧profile与生产不变，Python3.10离线235项待复测导出；VM新轮待测，P1–P5仍阻塞生产。",
       "status": "review"
     },
     {
@@ -91,6 +91,11 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md",
+      "purpose": "21次DeepSeek调用拆解、用户详情POC、新8→5→3完整职责与Bot ZIP测试消息。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md",
       "purpose": "已实现的opt-in 8→5→3混合流程与验收边界；离线通过，不代表真实Bot运行或生产上线。",
@@ -723,6 +728,12 @@
       "title": "Grok复核发现的恢复窗口必须故障注入，不把测试绿灯当全部完成",
       "note": "四类后续整改：fallback_pending先隔离旧HTTP答卷，恢复不重标旧答卷来源；原生四稿在消息和校验中同时落实，原request_id不变；24小时复核并入discover和最终分栏，归档字段统一，冻结目标日排除仍保留；正文抓取上限只禁新增下载，已缓存未消费稿仍可补录。新增8个测试实例先全部失败、修后通过，Python3.10相关227项通过。保留同目录身份修复重试及持久120次预算，不盲目采纳Grok禁止二次调用建议。未真实模型/DB写/发布/merge，P1–P5延期，缓存保留。",
       "source_ref": "docs/KIDSNEWS-GROK-FOLLOWUP-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "最终修稿后原生详情，冻结正文避免重复审核",
+      "note": "旧日志21次DeepSeek=3正文+9详情+9详情审核，共159954token。新模式正常3正文HTTP+9原生详情，无独立详情审核；Python结构校验/洗牌/最长答案告警不等于事实证明。旧profile冻结兼容；News两出版方接受，Science/Fun不加独立严格audit但仍修实质事实。用户POC附件未在Mac独立读取；约3%配额是用户观察，不承诺新轮成本。",
+      "source_ref": "docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md"
     }
   ]
 }

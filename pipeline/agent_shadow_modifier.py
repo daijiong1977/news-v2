@@ -34,6 +34,17 @@ Compare final event only with supplied same-category history and accepted events
 There will be NO third audit: do not claim pass unless final text actually meets every rule.
 '''
     from .agent_shadow_lengths import rewrite_rules
+    from .agent_shadow import read
+    from .agent_shadow_profiles import uses_native_details
+    if (root / 'input.json').exists() and uses_native_details(read(root / 'input.json')):
+        prompt += '''
+Remove editorial workflow comments (such as "not included in source material") from reader text.
+For News, explain serious events calmly: remove repetitive attack detail, panic and vivid suffering.
+For Science/Fun, correct material facts, names, dates and quotes, but do not reject fixable
+wording or missing optional background just to match News-level political scrutiny.
+There is no additional standalone Science/Fun fact-audit task; your final facts_supported
+judgment still cannot approve invented results, false quotes or unsupported claims.
+'''
     value = ask(root, key, prompt + rewrite_rules(cat, art['word_count']), {'source': art['body'],
         'article': {k: entry[k] for k in ('source_id', 'easy_en', 'middle_en', 'zh')},
         'issues': issues, 'history': history, 'accepted_events': accepted}, validate)

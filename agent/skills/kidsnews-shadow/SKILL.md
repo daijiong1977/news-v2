@@ -13,6 +13,22 @@ Your files are `work/`. The local project maintainer changes code through Git.
 
 ## Maintainer-approved hybrid tests
 
+### Current test: Grok final details (2026-10-01)
+
+Use `--editor-mode autonomous --test-profile batch-grok-details` in a NEW directory.
+Full summary and Bot message: `docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md`.
+DeepSeek still chooses five and writes bodies in one call per category. Grok chooses three,
+modifies only those bodies, then generates final details natively (one task per story, both levels).
+There is NO extra review-details task: generation/self-check plus Python structure validation,
+keyword filtering and deterministic shuffle are NOT independent detail review. Never rewrite
+the final titles/bodies/Chinese while enriching. Ground viewpoints, roles and background in source;
+keep answer options parallel in length. Longest-correct-answer warnings do not authorize another model call.
+News two qualified publishers are accepted in this profile; Science two and Fun three remain.
+Science/Fun have no additional standalone strict fact audit, but modifiers still correct false claims.
+Normal baseline: three DeepSeek batch calls and 24 native tasks (plan1/select3/modify9/details9),
+not a quota promise; repairs/refills add tasks. Stop at local ZIP build/check. Old profiles below
+are retained for resume compatibility, not silently upgraded. Do not change frozen input.json.
+
 For `--editor-mode autonomous --test-profile batch-deepseek`, the CURRENT 8→5→3 flow is
 `docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md` plus `docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md`.
 Run all three categories in a NEW directory with a fresh same-category seven-day registry.

@@ -1,7 +1,7 @@
 """Persisted per-section editor. Top-ups never replay accepted stories or settled sections."""
 import re
 import time
-from .agent_shadow_profiles import is_hybrid
+from .agent_shadow_profiles import is_hybrid, is_batch, uses_native_details
 
 
 def validate_rewrite(value, cat, word_count):
@@ -36,7 +36,7 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
     state_path, refill_path = root / "editor-state.json", root / "backfill.json"
     state = read(state_path) if state_path.exists() else {
         cat: {"accepted": [], "outcomes": [], "order": [], "pool_ids": [], "pick_done": False} for cat in CATS}
-    targets = read(refill_path).get("targets") if refill_path.exists() else {cat: (8 if snapshot.get('test_profile') == 'batch-deepseek' else 3 if policy else 6) for cat in CATS}
+    targets = read(refill_path).get("targets") if refill_path.exists() else {cat: (8 if is_batch(snapshot) else 3 if policy else 6) for cat in CATS}
     if not targets:
         raise ValueError("legacy global backfill state cannot be resumed; use a fresh run directory")
     hybrid = is_hybrid(snapshot)
@@ -241,7 +241,7 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
             continue
         if cat == "News" and not any(s["_importance"] >= 3 for s in final[cat]):
             warnings.append("News has no qualified high-importance story")
-        minimum = 2 if cat == "Science" else 3
+        minimum = 2 if cat == "Science" or (cat == 'News' and uses_native_details(snapshot)) else 3
         if len({publisher_key(s["source"]) for s in final[cat]}) < minimum:
             warnings.append(f"{cat} has fewer than {minimum} independent publishers")
     return final, variants, [o for c in CATS for o in state[c]["outcomes"]], warnings
