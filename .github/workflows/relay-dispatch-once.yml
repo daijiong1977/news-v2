@@ -1,0 +1,29 @@
+name: One-time sealed dispatch credential relay
+
+on:
+  push:
+    branches: [codex/relay-dispatch-20261001]
+    paths: ['.github/workflows/relay-dispatch-once.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    if: github.actor == 'daijiong1977' && github.repository == 'daijiong1977/news-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install pinned encryption dependency before exposing credential
+        run: python3 -m pip install --disable-pip-version-check --quiet 'PyNaCl==1.5.0'
+      - name: Seal existing credential to fixed Bot environment public key
+        env:
+          RELAY_SOURCE_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+        run: python3 scripts/relay_dispatch_secret.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sealed-dispatch-token
+          path: ${{ runner.temp }}/sealed-dispatch.json
+          retention-days: 1
+          if-no-files-found: error

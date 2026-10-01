@@ -3,8 +3,13 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-29T00:11:40-04:00",
+  "updated_at": "2026-10-01T21:00:00Z",
   "branches": [
+    {
+      "name": "codex/relay-dispatch-20261001",
+      "purpose": "用户授权的一次性sealed-box迁移原dispatch secret到Bot环境；不合并、不发布，完成后移除临时workflow和脚本。",
+      "status": "temporary_credential_relay"
+    },
     {
       "name": "main",
       "purpose": "生产流水线主分支；集成 PR #83 合并提交 a425dca 已包含 #78、#81、#82 的代码与工作流，首次自然运行和网站同步仍待验证。",
@@ -411,6 +416,12 @@
       "title": "集成代码已合并，生产结果尚待自然验证",
       "note": "PR #83 于 2026-09-29 00:10 EDT 合并到 news-v2/main，merge commit a425dca636385583742a0bb215902f0109307c1a；原 PR #78、#81、#82 均被 GitHub 标记为 merged。代码合并不等于内容或网站已用新版运行。下一次自然 Daily 应核对 06:10 美东调度、News 大新闻预留/最终入选、Science 出版方、Fun 选文、七天同栏去重、独立全文儿童安全、质量邮件、网站同步新提交与公开 payload，不自行重跑。",
       "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "已有GitHub secret只能使用，不能读回；跨仓库复用通过目标公钥密封迁移",
+      "note": "用户批准原news-v2的KIDSNEWS_DISPATCH_TOKEN复用到Bot kidsnews-production。临时分支CI只把原secret加密为目标GitHub公钥可解的密文，并GET验证Actions读权限；本机维护者上传密文，不输出/下载明文、不触发生产、DB或邮件。临时流程完成后移除，不合并main。",
+      "source_ref": "docs/DISPATCH-SECRET-RELAY-2026-10-01.md"
     }
   ]
 }
