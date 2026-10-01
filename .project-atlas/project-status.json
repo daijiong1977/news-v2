@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T01:48:04Z",
+  "updated_at": "2026-10-01T03:00:00Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：影子流水线及可选自主编辑；新增 News-only DeepSeek/Bot 省额测试，正文/详情/详情复核交 DeepSeek，Bot 选文与独立全文复核。新 profile 本地打包且禁止发布，来源图仅机械检查；旧默认视觉审核保留。Python3.10相关85项通过，未合并，新混合模式未真实运行。 最新News混合修稿补丁：第二模型modifier、分离格式/内容修正预算、CLI异常恢复；仅feature测试，未生产上线。 新增Science/Fun-only混合测试入口，News不重复；161项离线回归通过，真实双栏运行待测。",
+      "purpose": "影子 batch-deepseek 8→5→3：Grok元数据计划/五选三/单篇modifier，DeepSeek每栏一次选五写正文，最终三篇才生成详情。禁止整组五篇重新生成；损坏JSON由原生Agent仅修格式，坏稿仅修该ID。实现私有ZIP/ready回执与定时Supabase事务处理，不改变生产Action；Python3.10 190项及Deno 7项通过，仅离线完整9篇，真实Bot整轮与Edge部署尚待核验。",
       "status": "review"
     },
     {
@@ -93,7 +93,7 @@
   "files": [
     {
       "path": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md",
-      "purpose": "2026-09-30用户确认的待实现8→5→3完整混合流程；物理/化学等分组、搬栏、重要News首篇、来源/题材软偏好、图片提前、模型/Python职责与补选。不是已上线运行手册。",
+      "purpose": "已实现的opt-in 8→5→3混合流程与验收边界；离线通过，不代表真实Bot运行或生产上线。",
       "location": "repo"
     },
     {
@@ -395,6 +395,36 @@
       "path": "/Users/jiong/myprojects/kidsnews-v2",
       "purpose": "kidsnews-v2 部署仓的本机 checkout；本次落后远端且有未提交修改，勿直接覆盖。",
       "location": "local"
+    },
+    {
+      "path": "docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md",
+      "purpose": "新模式职责、VM命令、ZIP契约、部署启用前提和回滚/同步边界",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_batch.py",
+      "purpose": "每栏八篇原文和图片缓存、一次选五改写、三篇加备用、单ID修正",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_bundle.py",
+      "purpose": "成品/图片/hash校验，确定性ZIP，独立stage与私有upload/ready，不写DB",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/registry_snapshot.py",
+      "purpose": "只读获取启用来源和同栏目过去七天历史",
+      "location": "repo"
+    },
+    {
+      "path": "supabase/functions/finalize-news-publication/index.ts",
+      "purpose": "默认禁用的定时消费者，租约/幂等/公开证明/归档/数据库事务",
+      "location": "repo"
+    },
+    {
+      "path": "supabase/migrations/20261001_bot_publication_handoff.sql",
+      "purpose": "与核验过的真实schema对应的最终稿事务、来源使用更新和受限上传策略；尚未上线",
+      "location": "repo"
     }
   ],
   "lessons": [
@@ -655,6 +685,12 @@
       "title": "8→5→3混合方案：重要News先选首篇，题材与出版方分别记录",
       "note": "用户确认Grok初筛/搬栏/同栏七天事件去重，Python在步骤3抓图验尺寸、按需抓原文凑8；DeepSeek每栏一次8选五并写正文无详情；Grok五选三精修，坏稿先从另两篇补，再扩备用；DeepSeek基于修后最终9篇生成详情。Science明确physics、chemistry_materials等，优先多题材与至少两出版方；News第一篇最重要合格稿优先于多样性换位，另外两篇再兼顾组合；不绕过事实/安全/中立/事件门禁。仅文档确认，新批量/图片提前/缓存同步编排尚未实现或真实测试，不把旧命令称新流程，不改生产或发布。",
       "source_ref": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "8→5→3已实现；失败只修单篇，不重新生成整组",
+      "note": "Python3.10 190项与Deno 7项通过，离线全轮三栏各3篇，24次原文抓取与图片缓存成功。DeepSeek每栏一次选五写稿，坏JSON只修语法、坏字段只修ID，字数交单篇modifier；没有整组重写。实际只读刷新32个启用来源和各栏21条七日历史；实采元数据46/27/35，停在原生计划请求，未调用真实模型或写库/部署。新增ZIP私有upload/ready与定时Edge事务代码，但未部署/启用；GitHub Action保持不变。真实VM全轮及生产启用需单独验收，不把离线假稿称真实质量提升。",
+      "source_ref": "docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md"
     }
   ]
 }

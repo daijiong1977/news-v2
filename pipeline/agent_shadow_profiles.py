@@ -1,5 +1,6 @@
 """Explicit opt-in local-only hybrid experiments; production defaults unchanged."""
 HYBRID_PROFILES = {
+    'batch-deepseek': ('News', 'Science', 'Fun'),
     'news-deepseek': ('News',),
     'science-fun-deepseek': ('Science', 'Fun'),
 }

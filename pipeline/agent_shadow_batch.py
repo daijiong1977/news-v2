@@ -1,0 +1,212 @@
+"""Opt-in 8 originals -> one HTTP five-draft batch -> native three + modifier.
+
+Every batch is frozen before the next handoff. Accepted sections are never replayed.
+No publication or Supabase writes happen here.
+"""
+from copy import deepcopy
+import hashlib
+
+from .agent_shadow_autonomous import AutonomousEditor, safe_image
+from .agent_shadow_editor import validate_rewrite
+from .editorial_policy import publisher_key
+from .news_sources import NewsSource
+
+
+def validate_batch(value, pool, category):
+    index = {b['id']: b for b in pool}
+    rows = value.get('drafts', [])
+    if not isinstance(rows, list) or not 1 <= len(rows) <= min(5, len(pool)):
+        return ['drafts must contain one to min(5, supplied candidates) recoverable entries; normally five']
+    seen, errors = set(), []
+    for row in rows:
+        if not isinstance(row, dict):
+            errors.append('Each draft must be an object')
+            continue
+        sid = row.get('id')
+        if sid not in index or sid in seen:
+            errors.append('Unknown or duplicate draft ID')
+            continue
+        seen.add(sid)
+        if not isinstance(row.get('reason'), str) or not row['reason'].strip():
+            errors.append(f'{sid}: selection reason required')
+        # The batch envelope identifies articles; individual malformed fields or
+        # length errors NEVER trigger regeneration of the other four drafts.
+    if category == 'News' and rows:
+        highest = max(b['importance'] for b in pool)
+        if isinstance(rows[0], dict) and rows[0].get('id') in index and index[rows[0]['id']]['importance'] != highest:
+            errors.append('News first draft must be a highest-importance eligible candidate')
+    return errors
+
+
+def validate_order(value, pool, category):
+    ids = {b['id'] for b in pool}
+    order = value.get('order', [])
+    if not isinstance(order, list) or len(order) != len(ids) or set(order) != ids:
+        return ['order must contain every supplied draft ID exactly once: three winners then reserves']
+    if category == 'News' and pool:
+        index = {b['id']: b for b in pool}
+        if index[order[0]]['importance'] != max(b['importance'] for b in pool):
+            return ['News first winner must be a highest-importance eligible draft']
+    return []
+
+
+class BatchEditor(AutonomousEditor):
+    def plan(self):
+        from .agent_shadow import read, write, RANK_RULES, validate_catalog
+        if self.path.exists():
+            data = read(self.path)
+            self.catalog = data['catalog']
+            self.snapshot.update({k: data[k] for k in ('candidates', 'sources')})
+        else:
+            from .news_topics import TOPICS_BY_CATEGORY
+            ids = {b['id'] for b in self.snapshot['candidates']}
+            rules = RANK_RULES + '\nBATCH MODE: retain the full eligible reserve catalog up to 30/section. '
+            rules += ('Order first eight for quality, varied topics and publishers. News highest importance first, '
+                      'before source/topic diversity. Science physics/chemistry/astronomy/biology remain distinct. '
+                      'Use canonical topic labels supplied in material. Never invent a source. No browsing.')
+            def check_plan(value):
+                errors = validate_catalog(value, ids)
+                if not errors:
+                    errors += ['Use canonical topic labels and at most 30 candidates per section'
+                               for cat, rows in value['catalog'].items()
+                               if len(rows) > 30 or any(b['topic'] not in TOPICS_BY_CATEGORY[cat] for b in rows)]
+                return errors
+            self.catalog = self.ask(self.root, 'plan', rules,
+                {**{k: self.snapshot[k] for k in ('date', 'candidates', 'history')},
+                 'topic_labels': {cat: list(labels) for cat, labels in TOPICS_BY_CATEGORY.items()}},
+                check_plan)['catalog']
+            # Importance is a mechanical first-slot invariant, not only a prompt.
+            self.catalog['News'].sort(key=lambda b: -b['importance'])
+            self.save()
+        self.boundary(self.root, 'plan', self.stepwise)
+        return self.catalog
+
+    def pool(self, cat, target):
+        from .agent_shadow import read, write, AnswerRejected, pin_task_answers
+        path = self.root / f'batch-{cat}-{target}.json'
+        if path.exists():
+            return read(path)['pool']
+        prior = [read(p) for p in sorted(self.root.glob(f'batch-{cat}-*.json'))]
+        consumed = {sid for batch in prior for sid in batch['considered']}
+        original_catalog = self.catalog[cat]
+        # Previous valid-but-unselected originals remain available; only generated drafts
+        # and structurally invalid drafts are consumed. No duplicate rewriting of them.
+        self.catalog[cat] = [b for b in original_catalog if b['id'] not in consumed]
+        try:
+            originals = super().pool(cat, len(self.catalog[cat]), limit=8)
+        finally:
+            self.catalog[cat] = original_catalog
+            self.save()
+        photo_path = self.root / 'candidate-images.json'
+        photos = read(photo_path) if photo_path.exists() else {}
+        for b in originals:
+            sid, art = b['id'], b['article']
+            if sid not in photos:
+                dest = self.root / 'candidate-images' / f'{sid}.webp'
+                dest.parent.mkdir(exist_ok=True)
+                import time
+                started = time.monotonic()
+                try:
+                    info, image_url = None, ''
+                    for url in dict.fromkeys([art.get('og_image')] + art.get('image_candidates', [])):
+                        if url:
+                            info = safe_image(url, dest)
+                            if info:
+                                image_url = url
+                                break
+                    photos[sid] = {'ok': bool(info), 'path': str(dest) if info else '', 'source_url': image_url,
+                                   'width': info.get('width') if isinstance(info, dict) else None,
+                                   'height': info.get('height') if isinstance(info, dict) else None,
+                                   'sha256': hashlib.sha256(dest.read_bytes()).hexdigest() if info else ''}
+                except Exception as exc:
+                    photos[sid] = {'ok': False, 'path': '', 'reason': type(exc).__name__}
+                photos[sid]['seconds'] = round(time.monotonic()-started, 3)
+                write(photo_path, photos)
+        self.boundary(self.root, f'originals-images-{cat}-{target}', self.stepwise)
+        if not originals:
+            write(path, {'pool': [], 'drafts': [], 'considered': []})
+            return []
+        from .news_rss_core import TRI_VARIANT_REWRITER_PROMPT
+        from .agent_shadow_lengths import rewrite_band
+        key = f'rewrite-batch-{cat}-{target}'
+        material = {'date': self.snapshot['date'], 'category': cat, 'candidates': [
+            {**b, 'image_ok': photos[b['id']]['ok'], 'publisher': publisher_key(
+                NewsSource(**self.snapshot['sources'][b['article']['source']])),
+             'body_word_bands': {level: rewrite_band(level, cat, b['article']['word_count'])
+                                 for level in ('easy', 'middle')}} for b in originals]}
+        prompt = TRI_VARIANT_REWRITER_PROMPT + '''
+BATCH OVERRIDE: select the best min(5, candidate count) articles AND write all selected drafts in ONE answer.
+Return {"drafts":[{"id":"supplied ID","reason":"why chosen","article":{...}}]}.
+Each article uses source_id 0, easy_en/middle_en headline/body/card_summary, zh headline/summary.
+The per-candidate body_word_bands override generic length rules. Do not generate details or quizzes.
+News first selection MUST have the highest supplied importance, then fill four others.
+Prefer varied topics and independent publishers without displacing important News or inventing facts.
+Only supplied original texts support facts/quotes/attribution. Do not add unsupported viewpoints.
+'''
+        try:
+            result = self.ask(self.root, key, prompt, material,
+                              lambda v: validate_batch(v, originals, cat))
+        except AnswerRejected as exc:
+            pin_task_answers(self.root, key)
+            write(path, {'pool': [], 'drafts': [], 'considered': [b['id'] for b in originals],
+                         'reason': str(exc)})
+            self.boundary(self.root, f'batch-invalid-{cat}-{target}', self.stepwise)
+            return []
+        index = {b['id']: b for b in originals}
+        pool = [index[row['id']] for row in result['drafts']]
+        choice = self.ask(self.root, f'select-batch-{cat}-{target}',
+            'Read five drafts and source metadata. Rank best three then every reserve. '
+            'Return {"order":["id",...]}, every ID once. News highest importance first; '
+            'Science prefer physics/chemistry/astronomy/biology diversity and two independent publishers; '
+            'Fun prioritize actual fun, swimming/tennis/other sports distinct. Prefer quality over quotas. '
+            'Selection only: modifier will correct selected bodies next. No browsing, writing details or publishing.',
+            {'category': cat, 'drafts': result['drafts'], 'sources': [
+                {k: b[k] for k in ('id', 'topic', 'importance')} | {
+                    'title': b['article']['title'], 'source': b['article']['source'],
+                    'url': b['article']['link']} for b in pool]},
+            lambda v: validate_order(v, pool, cat))
+        pool = [index[sid] for sid in choice['order']]
+        write(path, {'pool': pool, 'drafts': result['drafts'],
+                     'considered': [row['id'] for row in result['drafts']],
+                     'eight_ids': [b['id'] for b in originals], 'order': choice['order']})
+        self.boundary(self.root, f'batch-select-{cat}-{target}', self.stepwise)
+        return pool
+
+    def dispatch(self, root, key, system, material, validate, **kwargs):
+        from .agent_shadow import read
+        if key.startswith('rewrite-') and not key.startswith('rewrite-batch-'):
+            _, cat, sid = key.split('-', 2)
+            for path in self.root.glob(f'batch-{cat}-*.json'):
+                for row in read(path)['drafts']:
+                    if row['id'] == sid:
+                        result = {'articles': [deepcopy(row.get('article'))]}
+                        try:
+                            errors = validate(result)
+                        except (TypeError, AttributeError, KeyError):
+                            errors = ['Malformed individual article']
+                        if any('w outside ' not in error for error in errors):
+                            result = self.ask(root, f'review-repair-draft-{cat}-{sid}',
+                                system + '\nREPAIR OVERRIDE: Repair ONLY this one draft using its original source. Do not touch other drafts. '
+                                'Return {"articles":[one corrected article with source_id 0, easy_en, middle_en, zh]}. '
+                                'Restore required fields, valid structure and requested body lengths; never invent facts.',
+                                {'article': row.get('article'), 'errors': errors, 'original': material}, validate)
+                        return result
+            raise ValueError('Selected draft is missing from frozen batch')
+        return self.ask(root, key, system, material, validate, **kwargs)
+
+    def extend(self, cat, target, section):
+        from .agent_shadow import read
+        from .agent_shadow_lengths import original_band
+        consumed = {sid for p in self.root.glob(f'batch-{cat}-*.json') for sid in read(p)['considered']}
+        cache = read(self.root / 'bodies.json') if (self.root / 'bodies.json').exists() else {}
+        lo, hi = original_band(cat)
+        def available(b):
+            if (b['id'] in consumed or b['history_status'] != 'clear' or b['history_confidence'] < .7
+                    or b['initial_risk'] >= 4 or b['id'] in self.audit.get('url_exclusions', {})):
+                return False
+            art = cache.get(b['id'])
+            return not art or (not art.get('skip_reason') and lo <= art['word_count'] <= hi)
+        if any(available(b) for b in self.catalog[cat]) and not self.audit['budget_exhausted']:
+            return target + 8
+        # Existing discovery guardrails and finite search budget are retained.
+        return super().extend(cat, max(target, len(self.catalog[cat])), section)

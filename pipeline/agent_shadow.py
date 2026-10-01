@@ -116,6 +116,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     t0 = time.monotonic()
     started_at = datetime.now(ZoneInfo("America/New_York")).isoformat()
     candidates, history, sources, seen = [], {}, {}, set()
+    seen_titles = set()
     registry = read(registry_file) if registry_file else None
     if registry is not None and registry.get("date") != today:
         raise ValueError("connector registry must have the requested ET date")
@@ -137,6 +138,12 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
             key = _canonical_source_url(b["link"])
             if not key or key in seen:
                 continue
+            if test_profile == 'batch-deepseek':
+                from .full_round import _normalize_title
+                title_key = _normalize_title(b['title'])
+                if not title_key or title_key in seen_titles:
+                    continue
+                seen_titles.add(title_key)
             seen.add(key)
             candidates.append({"id": f"c{len(candidates)+1:03d}", "category": cat,
                                "title": b["title"], "summary": re.sub(r"<[^>]+>", " ", b["summary"])[:600],
@@ -158,6 +165,9 @@ def ask(root, key, system, material, validate, *, normalize=None):
     provider = AgentFilesProvider(root / "tasks" / key)
     payload = {"model": "native-agent", "messages": [{"role": "system", "content": system},
                {"role": "user", "content": material if isinstance(material, str) else json.dumps(material, ensure_ascii=False)}]}
+    if key.startswith('rewrite-batch-'):
+        # Five bilingual drafts need more output than a single-story request.
+        payload['max_tokens'] = 8192
     if (root / "providers.json").exists() or ((root / "input.json").exists() and read(root / "input.json").get("editor_mode") == "autonomous"):
         from .agent_shadow_providers import TaskRouter
         provider = TaskRouter(root, key)
@@ -184,6 +194,24 @@ def ask(root, key, system, material, validate, *, normalize=None):
     if envelope["choices"][0]["finish_reason"] == "length":
         errors = ["Answer was truncated; finish the answer once before rerunning"]
     if errors:
+        if key.startswith('rewrite-batch-') and getattr(provider, 'choice', {}).get('type') == 'http':
+            # Never ask the HTTP writer to regenerate the five-story batch.
+            # Recover syntax only; per-story content repair happens separately.
+            pin_task_answers(root, key)
+            repaired = ask(root, key.replace('rewrite-batch-', 'review-format-batch-', 1),
+                'Repair JSON syntax/envelope ONLY. Preserve every existing article word and ID. '
+                'Do not rewrite articles, add facts or complete a truncated article. '
+                'Return only {"drafts":[...]} containing recoverable complete rows. '
+                'Content/schema issues inside one article are repaired in a separate per-ID task.',
+                {'raw_answer': raw, 'errors': errors}, validate, normalize=normalize)
+            metrics = read(root / 'metrics.json')
+            if not any(s['key'] == key for s in metrics['steps']):
+                metrics['steps'].append({'key': key, 'answer_bytes': len(raw.encode()),
+                    'input_bytes': len(json.dumps(payload, ensure_ascii=False).encode()),
+                    'format_repaired_by_native': True,
+                    'validation_seconds': round(time.monotonic()-t0, 3), 'handoff_seconds': None})
+                write(root / 'metrics.json', metrics)
+            return repaired
         rid = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
         directory = provider.work_dir / rid
         attempts = directory / "validation-errors.json"
@@ -311,14 +339,19 @@ def advance(root: Path, *, stepwise=False):
     policy = None
     if snapshot.get("editor_mode") == "autonomous":
         from .agent_shadow_autonomous import AutonomousEditor
-        policy = AutonomousEditor(root, snapshot, ask, boundary, stepwise)
+        editor_class = AutonomousEditor
+        if snapshot.get('test_profile') == 'batch-deepseek':
+            from .agent_shadow_batch import BatchEditor
+            editor_class = BatchEditor
+        policy = editor_class(root, snapshot, ask, boundary, stepwise)
         ranked = policy.plan()
     else:
         ranked = ask(root, "rank", RANK_RULES, {k: snapshot[k] for k in ("date", "candidates", "history")},
                      lambda v: validate_catalog(v, ids))["catalog"]
         boundary(root, "rank", stepwise)
     from .agent_shadow_editor import edit
-    final, variants, outcomes, warnings = edit(root, snapshot, ranked, ask, boundary, stepwise, policy=policy)
+    editor_ask = policy.dispatch if snapshot.get('test_profile') == 'batch-deepseek' else ask
+    final, variants, outcomes, warnings = edit(root, snapshot, ranked, editor_ask, boundary, stepwise, policy=policy)
     emit_dir = root / "reader"
     from .agent_shadow_details import enrich_and_review, images
     details = enrich_and_review(root, final, variants, ask, boundary, stepwise)

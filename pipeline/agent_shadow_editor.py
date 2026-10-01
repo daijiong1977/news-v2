@@ -36,7 +36,7 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
     state_path, refill_path = root / "editor-state.json", root / "backfill.json"
     state = read(state_path) if state_path.exists() else {
         cat: {"accepted": [], "outcomes": [], "order": [], "pool_ids": [], "pick_done": False} for cat in CATS}
-    targets = read(refill_path).get("targets") if refill_path.exists() else {cat: 3 if policy else 6 for cat in CATS}
+    targets = read(refill_path).get("targets") if refill_path.exists() else {cat: (8 if snapshot.get('test_profile') == 'batch-deepseek' else 3 if policy else 6) for cat in CATS}
     if not targets:
         raise ValueError("legacy global backfill state cannot be resumed; use a fresh run directory")
     hybrid = is_hybrid(snapshot)

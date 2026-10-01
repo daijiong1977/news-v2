@@ -1,5 +1,9 @@
 # Kids News Bot：完整、分步影子流水线
 
+最新 8→5→3 全三栏模式仅用 `--test-profile batch-deepseek`，见
+[执行与ZIP手册](KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md)。下表保留旧 staged/default 模式，
+不把它的12/6抓取或逐篇改写当作新模式。新模式遇坏稿只修一篇，绝不重写整组五篇。
+
 2026-09-30。生产仍是 `news-v2/main` → Supabase → `kidsnews-v2`。
 新 Bot 在独立仓库 `grokbot-kidsnews`、VM `/workspace/kidsnews-shadow` 运行。
 测试站仅为 https://kidsnews-bot-shadow.vercel.app，不覆盖正式网站。

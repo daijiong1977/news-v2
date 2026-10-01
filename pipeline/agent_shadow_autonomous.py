@@ -90,9 +90,13 @@ def fetch_original(candidate):
     from .news_rss_core import extract_article_from_html
     data, url, encoding = fetch_bytes(candidate["link"], ("text/html", "application/xhtml+xml"))
     extracted = extract_article_from_html(url, data.decode(encoding, errors="replace"))
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(data.decode(encoding, errors='replace'), 'html.parser')
+    alternates = [urljoin(url, node.get('content', '')) for node in soup.select(
+        'meta[property="og:image"], meta[name="twitter:image"]') if node.get('content')]
     body = extracted.get("cleaned_body") or ""
     return {**candidate, "body": body, "word_count": len(body.split()), "og_image": extracted.get("og_image"),
-            "paragraphs": extracted.get("paragraphs", []), "highlights": [],
+            "paragraphs": extracted.get("paragraphs", []), "highlights": [], "image_candidates": list(dict.fromkeys(alternates))[:3],
             "skip_reason": None if body else "empty original", "evidence_url": url,
             "evidence_sha256": hashlib.sha256(body.encode()).hexdigest()}
 
@@ -161,7 +165,7 @@ class AutonomousEditor:
         self.boundary(self.root, "plan", self.stepwise)
         return self.catalog
 
-    def pool(self, cat, target):
+    def pool(self, cat, target, *, limit=None):
         from .agent_shadow import read, write
         from .full_round import _canonical_source_url
         cache_path = self.root / "bodies.json"
@@ -211,6 +215,8 @@ class AutonomousEditor:
             if not art.get("skip_reason") and lo <= art["word_count"] <= hi:
                 final_urls.add(evidence_url)
                 good.append({**score, "category": cat, "article": art})
+                if limit is not None and len(good) >= limit:
+                    break
         self.save()
         return good
 

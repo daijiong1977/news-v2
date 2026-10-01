@@ -13,6 +13,18 @@ Your files are `work/`. The local project maintainer changes code through Git.
 
 ## Maintainer-approved hybrid tests
 
+For `--editor-mode autonomous --test-profile batch-deepseek`, the CURRENT 8→5→3 flow is
+`docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md` plus `docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md`.
+Run all three categories in a NEW directory with a fresh same-category seven-day registry.
+DeepSeek writes five drafts in ONE HTTP call per category; Bot selects three and modifies
+only selected bodies. NEVER regenerate all five to fix one bad draft: repair that ID only,
+or use its modifier; whole-answer JSON recovery repairs syntax only via native files.
+Accepted drafts and settled categories remain fixed. Source-image mechanical checking happens
+before the batch writer, with cached final reuse and no extra visual model calls.
+Use `.venv/bin/python`; follow exit2 tasks, not a blind shell loop. This profile does NOT
+authorize deployment, ready upload, database writes, scheduled function activation or emails.
+The ZIP commands in the runbook are separate handoff tools, not permission to publish.
+
 For `--editor-mode autonomous --test-profile news-deepseek` OR `science-fun-deepseek`, follow
 `docs/KIDSNEWS-NEWS-HYBRID-TEST.md` instead of full-round publishing below.
 The first profile runs only News; the second runs only Science/Fun, never News. DeepSeek writes bodies/details and reviews details using the user-supplied

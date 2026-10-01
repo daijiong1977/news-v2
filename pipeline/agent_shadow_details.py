@@ -143,6 +143,9 @@ def enrich_and_review(root, final, variants, ask, boundary, stepwise):
                          "details": saved["generated"]},
                         lambda v: validate_detail_review(v, saved["generated"]))
                     saved["filtered"] = apply_detail_review(saved["generated"], review)
+                    if (root / 'input.json').exists() and read(root / 'input.json').get('test_profile') == 'batch-deepseek':
+                        from .quiz_shuffle import shuffle_quiz_options
+                        shuffle_quiz_options(saved['filtered'], seed=cache_key)
                     failed = [f"{slot}.{field}" for slot, row in review["slots"].items()
                               for field, passed in row["fields"].items() if not passed]
                     failed += [f"{slot}.questions[{j}]" for slot, row in review["slots"].items()
@@ -168,13 +171,29 @@ def images(root, final, boundary, stepwise, *, fetcher=None):
     fetcher = fetcher or fetch_and_optimize
     path = root / "image-results.json"
     cache = read(path) if path.exists() else {}
+    candidate_path = root / 'candidate-images.json'
+    candidate_cache = read(candidate_path) if candidate_path.exists() else {}
     for cat, stories in final.items():
         for story in stories:
             sid = story["winner"]["id"]
             relative = f"article_images/{cat.lower()}-{sid}.webp"
             if sid not in cache:
                 started = time.monotonic()
-                result = fetcher(story["winner"].get("og_image", ""), root / "reader" / relative)
+                if sid in candidate_cache:
+                    import hashlib
+                    import shutil
+                    photo = candidate_cache[sid]
+                    result = False
+                    if photo['ok']:
+                        original = Path(photo['path'])
+                        if not original.is_file() or hashlib.sha256(original.read_bytes()).hexdigest() != photo['sha256']:
+                            raise ValueError('Candidate image cache changed after selection')
+                        dest = root / 'reader' / relative
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(original, dest)
+                        result = True
+                else:
+                    result = fetcher(story["winner"].get("og_image", ""), root / "reader" / relative)
                 cache[sid] = {"ok": bool(result), "info": result,
                               "seconds": round(time.monotonic() - started, 3)}
                 write(path, cache)
