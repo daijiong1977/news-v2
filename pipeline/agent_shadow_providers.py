@@ -114,7 +114,9 @@ class TaskRouter:
             raise ValueError('Configured provider credential environment variable is missing')
         errors_path = directory / 'validation-errors.json'
         errors = json.loads(errors_path.read_text()) if errors_path.exists() else []
-        if len(errors) > 1:
+        snapshot = self.root / 'input.json'
+        hybrid = snapshot.exists() and json.loads(snapshot.read_text()).get('test_profile') == 'news-deepseek'
+        if len(errors) > (2 if hybrid else 1):
             raise ValueError('HTTP task correction budget exhausted')
         revision = hashlib.sha256(json.dumps(errors, sort_keys=True).encode()).hexdigest()
         state_path = directory / 'http-attempt.json'
@@ -136,8 +138,19 @@ class TaskRouter:
         _atomic_json(state_path, {'revision': revision, 'status': 'attempting'})
         sent = payload
         if errors:
-            sent = {**payload, 'messages': payload['messages'] + [{'role': 'user',
-                    'content': 'Correct your previous answer once: ' + json.dumps(errors[-1])}]}
+            correction = 'Correct your previous answer once: ' + json.dumps(errors[-1])
+            previous_messages = []
+            if hybrid:
+                from .agent_shadow_errors import correction_kind
+                if correction_kind(errors[-1]) == 'format':
+                    correction = ('Repair JSON format only. Preserve wording, values, attribution and facts; '
+                                  'return only the complete JSON object, no fences or commentary. Errors: ' + json.dumps(errors[-1]))
+                else:
+                    correction = ('Fix only the listed schema/word-count errors using the supplied source; '
+                                  'preserve other fields and do not invent facts. Return complete JSON. Errors: ' + json.dumps(errors[-1]))
+                if envelope is not None:
+                    previous_messages = [{'role': 'assistant', 'content': envelope['choices'][0]['message']['content']}]
+            sent = {**payload, 'messages': payload['messages'] + previous_messages + [{'role': 'user', 'content': correction}]}
         started = time.monotonic()
         try:
             result = OpenAICompatibleProvider(endpoint=endpoint, api_key=os.environ[key_env]).complete(sent, 120)
@@ -146,8 +159,11 @@ class TaskRouter:
                                                     'finish_reason': choice['finish_reason']})
         except Exception as exc:
             raise RuntimeError(f'HTTP task failed ({type(exc).__name__}); do not blindly retry') from None
-        audit['requests'][token].update({'seconds': round(time.monotonic()-started, 3),
-                                          'usage': result.get('usage', {}), 'model': payload['model']})
+        attempt = {'revision': revision, 'seconds': round(time.monotonic()-started, 3),
+                   'usage': result.get('usage', {}), 'model': payload['model']}
+        audit['requests'][token].update({k: attempt[k] for k in ('seconds', 'usage', 'model')})
+        if hybrid:
+            audit['requests'][token].setdefault('attempts', []).append(attempt)
         _atomic_json(audit_path, audit)
         _atomic_json(state_path, {'revision': revision, 'status': 'complete'})
         return self.files.complete(payload, 0)

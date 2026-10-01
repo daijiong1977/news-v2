@@ -20,12 +20,9 @@ from zoneinfo import ZoneInfo
 
 from .ai_providers import AgentFilesProvider, AgentNeeded
 from .ai_providers.transport import _atomic_json
+from .agent_shadow_errors import AnswerRejected, correction_kind
 
 CATS = ("News", "Science", "Fun")
-
-
-class AnswerRejected(RuntimeError):
-    """The one allowed answer correction was exhausted (not a tool failure)."""
 
 
 @contextmanager
@@ -143,7 +140,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                                "link": b["link"], "published": b["published"], "source": b["_source_name"]})
     write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
                                "editor_mode": editor_mode, "test_profile": test_profile,
-                               "active_categories": list(active)})
+                               "active_categories": list(active),
+                               "review_mode": "modifier" if test_profile == "news-deepseek" else "audit"})
     write(root / "metrics.json", {"prepare_seconds": round(time.monotonic()-t0, 3),
                                  "started_at": started_at,
                                  "candidate_counts": {c: sum(b["category"] == c for b in candidates) for c in CATS},
@@ -187,12 +185,15 @@ def ask(root, key, system, material, validate, *, normalize=None):
         directory = provider.work_dir / rid
         attempts = directory / "validation-errors.json"
         previous = read(attempts) if attempts.exists() else []
-        if len(previous) >= 1:
+        hybrid_http = (getattr(provider, "choice", {}).get("type") == "http"
+                       and (root / "input.json").exists()
+                       and read(root / "input.json").get("test_profile") == "news-deepseek")
+        exhausted = (any(correction_kind(p) == correction_kind(errors) for p in previous)
+                     or len(previous) >= 2) if hybrid_http else len(previous) >= 1
+        if exhausted:
             raise AnswerRejected(f"{key}: one correction already attempted; report these errors: {errors}")
         write(attempts, previous + [errors])
-        if (getattr(provider, "choice", {}).get("type") == "http"
-                and (root / "input.json").exists()
-                and read(root / "input.json").get("test_profile") == "news-deepseek"):
+        if hybrid_http:
             # HTTP writer owns its correction; do not ask the Bot to write its answer.
             return ask(root, key, system, material, validate, normalize=normalize)
         raise AgentNeeded(rid, directory / "request.json", directory / "answer.json", errors)

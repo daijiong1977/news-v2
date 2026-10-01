@@ -17,7 +17,11 @@ For `--editor-mode autonomous --test-profile news-deepseek`, follow
 `docs/KIDSNEWS-NEWS-HYBRID-TEST.md` instead of full-round publishing below.
 Only News runs. DeepSeek writes bodies/details and reviews details using the user-supplied
 `DEEPSEEK_API_KEY` in local `.env`; scripts load it without exposing it. Bot only plans and
-independently reviews full bodies (or bounded discovery). Do not read/print `.env`, manually
+modifies full bodies against the source and judges its FINAL corrected draft (or bounded discovery).
+For news-deepseek there is no third AI audit; label this second-model editing/self-check.
+Return corrected_article, scores, facts_supported and event_clear. Failed final quality replaces the draft.
+HTTP correction budgets are one formatting repair plus one content repair, at most three attempts.
+Do not read/print `.env`, manually
 answer HTTP tasks, run Science/Fun, deploy, write databases or send email. HTTP corrections
 are bounded and automatic. Images use source downloads/technical checks, **not** visual
 approval; no review-image tasks in this profile. Stop after local pack and report once.

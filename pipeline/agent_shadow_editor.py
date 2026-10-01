@@ -31,11 +31,25 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
     targets = read(refill_path).get("targets") if refill_path.exists() else {cat: 3 if policy else 6 for cat in CATS}
     if not targets:
         raise ValueError("legacy global backfill state cannot be resumed; use a fresh run directory")
+    hybrid = snapshot.get("test_profile") == "news-deepseek"
+    if hybrid:
+        from .agent_shadow_modifier import english_errors
+        # Resume the already accepted mixed-language draft without changing its pinned answer.
+        for section in state.values():
+            retained = []
+            for accepted in section["accepted"]:
+                if english_errors(accepted["entry"]):
+                    sid = accepted['candidate']['id']
+                    section['outcomes'].append({'id': sid, 'category': 'News',
+                        'status': 'needs_modifier', 'facts_supported': False, 'event_clear': True})
+                else:
+                    retained.append(accepted)
+            section['accepted'] = retained
     write(refill_path, {"targets": targets})
     def save():
         write(state_path, state)
         write(root / "review-results.json", {"outcomes": [o for c in CATS for o in state[c]["outcomes"]],
-                                             "warnings": [], "review_method": "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
+                                             "warnings": [], "review_method": "第二模型修稿并自检；无第三轮审核" if hybrid else ("第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核")})
     def source_of(item):
         return NewsSource(**snapshot["sources"][item["article"]["source"]])
     def publishers(section):
@@ -82,7 +96,10 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
                 section["pick_done"] = True
                 save()
                 boundary(root, key, stepwise)
-            processed = {o["id"] for o in section["outcomes"]}
+            last_outcomes = {o['id']: o for o in section['outcomes']}
+            processed = {sid for sid, o in last_outcomes.items() if not (hybrid and
+                o.get('status') in ('review_rejected', 'needs_modifier') and o.get('facts_supported') is False
+                and o.get('event_clear', True) and not o.get('modifier_attempted'))}
             eligible = [index[sid] for sid in section["order"] if sid in index and sid not in processed]
             while eligible and needs(cat, section):
                 used = publishers(section)
@@ -121,25 +138,43 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
                         type(scores.get(d)) in (int, float) and 0 <= scores[d] <= 5 for d in SAFETY_DIMS)) else [
                             "Return all eight scores for 0 (0..5), and facts_supported boolean"]
                 key = f"review-{cat}-{sid}"
+                modifier_attempted = False
                 try:
-                    review = ask(root, key, SAFETY_VET_PROMPT +
+                    review_prompt = (SAFETY_VET_PROMPT +
                         '\nUse a new session or sub-Agent, only this request. Do not read tasks/rewrite-*/answer.json. '
                         'This is 同模型第二遍审核, not an independent model. Compare final text with the source; '
                         'add facts_supported true/false. Do not invent viewpoints.' +
-                        (' Also return event_clear boolean. Compare this event against ONLY the supplied same-category history and accepted events; uncertain or duplicate => false.' if policy else ''),
-                        {"source": art["body"], "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")},
+                        (' Also return event_clear boolean. Compare this event against ONLY the supplied same-category history and accepted events; uncertain or duplicate => false.' if policy else ''))
+                    material = {"source": art["body"], "article": {k: entry[k] for k in ("source_id", "easy_en", "middle_en", "zh")},
                          **({"history": snapshot["history"][cat], "accepted_events": [
                              {"title": a["candidate"]["article"]["title"], "source_excerpt": a["candidate"]["article"]["body"][:1200]}
-                             for a in section["accepted"]]} if policy else {})}, check_review)
+                             for a in section["accepted"]]} if policy else {})}
+                    previous = last_outcomes.get(sid, {})
+                    recovering = hybrid and previous.get('status') in ('review_rejected', 'needs_modifier') and not previous.get('modifier_attempted')
+                    if hybrid and (snapshot.get('review_mode') == 'modifier' or recovering):
+                        review = None
+                    else:
+                        review = ask(root, key, review_prompt, material, check_review)
+                    if hybrid and (review is None or
+                        (review.get('event_clear', True) and (not review['facts_supported'] or english_errors(entry)))):
+                        from .agent_shadow_modifier import modify
+                        modifier_attempted = True
+                        key = f'review-modify-{cat}-{sid}'
+                        issues = {'review': review or previous, 'language': english_errors(entry)}
+                        key, entry, review = modify(root, cat, sid, art, entry, issues,
+                            snapshot['history'][cat], material.get('accepted_events', []), ask, check_review)
                     safety = evaluate_rewriter_safety({"safety": review["scores"]["0"]}, category=cat)
                     passed = safety["verdict"] == "PASS" and review["facts_supported"] and (not policy or review["event_clear"])
                     outcome = {"id": sid, "category": cat, "status": "accepted" if passed else "review_rejected",
                                "safety": safety, "facts_supported": review["facts_supported"],
+                               **({'modifier_attempted': modifier_attempted, 'notes': review.get('notes', '')}
+                                  if hybrid else {}),
                                **({"event_clear": review["event_clear"]} if policy else {})}
                 except AnswerRejected as exc:
                     pin_task_answers(root, key)
                     passed = False
-                    outcome = {"id": sid, "category": cat, "status": "review_invalid", "reason": str(exc)}
+                    outcome = {"id": sid, "category": cat, "status": "review_invalid", "reason": str(exc),
+                               **({'modifier_attempted': modifier_attempted} if hybrid else {})}
                 section["outcomes"].append(outcome)
                 if passed:
                     section["accepted"].append({"candidate": b, "entry": entry})
