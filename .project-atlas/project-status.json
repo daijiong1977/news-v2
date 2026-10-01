@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T14:27:32.973Z",
+  "updated_at": "2026-10-01T14:29:59.612Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -744,6 +744,12 @@
       "date": "2026-10-01",
       "title": "明星偏好贯穿选文，生产过渡先模板和环境隔离",
       "note": "真实日志c077/c079都历史clear、importance3且入五稿，最终退役胜过比赛是提示偏好而非查重漏抓。新profile同一Fun偏好传计划/DeepSeek五稿/Grok三选，旧profile冻结；不加调用不强凑体育。现ZIP为shadow shell，正式.jsx依赖仍待模板修复验证。DB优先复用、隔离测试不更新生产history/cadence/latest；P1–P5与单writer/回退未验收不能上线。news.21min.com未核验，不当现成测试域名。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "独立测试域名拼写已确认news.21mins.com",
+      "note": "用户确认news.21mins.com为计划测试域名，不是news.21min.com。计划独立测试项目配正式reader、旧kidsnews.21mins.com继续生产；DNS/所有权/绑定尚未核验，未更改或部署。现worker白名单不含测试域名，不能为测试绕过并写生产归档；隔离DB/Storage配置另行评审。",
       "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
     }
   ]
