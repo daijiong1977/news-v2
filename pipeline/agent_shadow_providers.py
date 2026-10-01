@@ -115,7 +115,8 @@ class TaskRouter:
         errors_path = directory / 'validation-errors.json'
         errors = json.loads(errors_path.read_text()) if errors_path.exists() else []
         snapshot = self.root / 'input.json'
-        hybrid = snapshot.exists() and json.loads(snapshot.read_text()).get('test_profile') == 'news-deepseek'
+        from .agent_shadow_profiles import is_hybrid
+        hybrid = snapshot.exists() and is_hybrid(json.loads(snapshot.read_text()))
         if len(errors) > (2 if hybrid else 1):
             raise ValueError('HTTP task correction budget exhausted')
         revision = hashlib.sha256(json.dumps(errors, sort_keys=True).encode()).hexdigest()

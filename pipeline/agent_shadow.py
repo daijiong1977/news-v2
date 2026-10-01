@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from .ai_providers import AgentFilesProvider, AgentNeeded
 from .ai_providers.transport import _atomic_json
 from .agent_shadow_errors import AnswerRejected, correction_kind
+from .agent_shadow_profiles import HYBRID_PROFILES, is_hybrid
 
 CATS = ("News", "Science", "Fun")
 
@@ -91,8 +92,10 @@ def read(path):
 
 def prepare(root: Path, today: str, env_file: str | None = None, registry_file: Path | None = None, *, editor_mode="staged", test_profile=None):
     if test_profile and editor_mode != "autonomous":
-        raise ValueError("News hybrid profile requires autonomous editor mode")
-    active = ("News",) if test_profile == "news-deepseek" else CATS
+        raise ValueError("Hybrid profile requires autonomous editor mode")
+    if test_profile and test_profile not in HYBRID_PROFILES:
+        raise ValueError("Unknown hybrid test profile")
+    active = HYBRID_PROFILES.get(test_profile, CATS)
     if (root / "input.json").exists():
         cached = read(root / "input.json")
         if cached["date"] != today:
@@ -141,7 +144,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
                                "editor_mode": editor_mode, "test_profile": test_profile,
                                "active_categories": list(active),
-                               "review_mode": "modifier" if test_profile == "news-deepseek" else "audit"})
+                               "review_mode": "modifier" if test_profile in HYBRID_PROFILES else "audit"})
     write(root / "metrics.json", {"prepare_seconds": round(time.monotonic()-t0, 3),
                                  "started_at": started_at,
                                  "candidate_counts": {c: sum(b["category"] == c for b in candidates) for c in CATS},
@@ -187,7 +190,7 @@ def ask(root, key, system, material, validate, *, normalize=None):
         previous = read(attempts) if attempts.exists() else []
         hybrid_http = (getattr(provider, "choice", {}).get("type") == "http"
                        and (root / "input.json").exists()
-                       and read(root / "input.json").get("test_profile") == "news-deepseek")
+                       and is_hybrid(read(root / "input.json")))
         exhausted = (any(correction_kind(p) == correction_kind(errors) for p in previous)
                      or len(previous) >= 2) if hybrid_http else len(previous) >= 1
         if exhausted:
@@ -322,7 +325,7 @@ def advance(root: Path, *, stepwise=False):
         from .agent_shadow_autonomous import safe_image
         images(root, final, boundary, stepwise, fetcher=safe_image)
         from .agent_shadow_photos import review_photos
-        if snapshot.get("test_profile") != "news-deepseek":
+        if not is_hybrid(snapshot):
             review_photos(root, final, ask, boundary, stepwise)
     else:
         images(root, final, boundary, stepwise)
@@ -347,7 +350,7 @@ def advance(root: Path, *, stepwise=False):
         "review_method": "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
     write(root / "done.json", {"site": str(root / "site"), "counts": manifest["counts"], "warnings": warnings,
                                 "test_profile": snapshot.get("test_profile"),
-                                "image_policy": "source_only_mechanical_not_visual_review" if snapshot.get("test_profile") == "news-deepseek" else "default",
+                                "image_policy": "source_only_mechanical_not_visual_review" if is_hybrid(snapshot) else "default",
                                 "completed_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
                                 "next": "publish handoff: deploy ONLY to kidsnews-bot-shadow, then verify"})
     boundary(root, "pack", stepwise, t0)
@@ -360,7 +363,7 @@ def main():
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--date")
     parser.add_argument("--editor-mode", choices=("staged", "autonomous"), default="staged")
-    parser.add_argument("--test-profile", choices=("news-deepseek",), help="News-only, local-only hybrid experiment")
+    parser.add_argument("--test-profile", choices=tuple(HYBRID_PROFILES), help="Local-only DeepSeek/Bot hybrid scope")
     parser.add_argument("--providers-config", type=Path, help="Shadow-only role map; environment-variable references, never keys")
     parser.add_argument("--retry-after-failed-verify", action="store_true")
     parser.add_argument("--env-file")
@@ -369,7 +372,7 @@ def main():
     root = args.run_dir.resolve()
     started = time.monotonic()
     def say(value, code):
-        if (root / "input.json").exists() and read(root / "input.json").get("test_profile") == "news-deepseek" and "completed_steps" in value:
+        if (root / "input.json").exists() and is_hybrid(read(root / "input.json")) and "completed_steps" in value:
             value = {**value, "completed_step_count": len(value["completed_steps"])}
             del value["completed_steps"]
         if args.command != "status" and root.exists():
@@ -399,7 +402,7 @@ def main():
                     if not os.environ.get("DEEPSEEK_API_KEY"):
                         raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
                     if args.providers_config:
-                        raise ValueError("News hybrid profile supplies its own provider config")
+                        raise ValueError("Hybrid profile supplies its own provider config")
                     args.providers_config = Path(__file__).resolve().parents[1] / "config/shadow-news-deepseek.json"
                 if args.providers_config:
                     from .agent_shadow_providers import validate_config
@@ -419,7 +422,7 @@ def main():
                 value = advance(root, stepwise=True)
             elif args.command in ("publish", "verify"):
                 if profile:
-                    raise ValueError("News-only experiment is local-only; partial publication is forbidden")
+                    raise ValueError("Hybrid experiment is local-only; partial publication is forbidden")
                 from .agent_shadow_publish import publish, verify
                 value = publish(root, retry_after_failed_verify=args.retry_after_failed_verify) if args.command == "publish" else verify(root)
             else:

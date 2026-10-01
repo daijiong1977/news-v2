@@ -1,6 +1,7 @@
 """Persisted per-section editor. Top-ups never replay accepted stories or settled sections."""
 import re
 import time
+from .agent_shadow_profiles import is_hybrid
 
 
 def validate_rewrite(value, cat, word_count):
@@ -31,16 +32,16 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
     targets = read(refill_path).get("targets") if refill_path.exists() else {cat: 3 if policy else 6 for cat in CATS}
     if not targets:
         raise ValueError("legacy global backfill state cannot be resumed; use a fresh run directory")
-    hybrid = snapshot.get("test_profile") == "news-deepseek"
+    hybrid = is_hybrid(snapshot)
     if hybrid:
         from .agent_shadow_modifier import english_errors
         # Resume the already accepted mixed-language draft without changing its pinned answer.
-        for section in state.values():
+        for cat, section in state.items():
             retained = []
             for accepted in section["accepted"]:
                 if english_errors(accepted["entry"]):
                     sid = accepted['candidate']['id']
-                    section['outcomes'].append({'id': sid, 'category': 'News',
+                    section['outcomes'].append({'id': sid, 'category': cat,
                         'status': 'needs_modifier', 'facts_supported': False, 'event_clear': True})
                 else:
                     retained.append(accepted)

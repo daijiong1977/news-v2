@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-30T23:55:00Z",
+  "updated_at": "2026-10-01T00:24:30Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：影子流水线及可选自主编辑；新增 News-only DeepSeek/Bot 省额测试，正文/详情/详情复核交 DeepSeek，Bot 选文与独立全文复核。新 profile 本地打包且禁止发布，来源图仅机械检查；旧默认视觉审核保留。Python3.10相关85项通过，未合并，新混合模式未真实运行。 最新News混合修稿补丁：第二模型modifier、分离格式/内容修正预算、CLI异常恢复；仅feature测试，未生产上线。",
+      "purpose": "PR #86：影子流水线及可选自主编辑；新增 News-only DeepSeek/Bot 省额测试，正文/详情/详情复核交 DeepSeek，Bot 选文与独立全文复核。新 profile 本地打包且禁止发布，来源图仅机械检查；旧默认视觉审核保留。Python3.10相关85项通过，未合并，新混合模式未真实运行。 最新News混合修稿补丁：第二模型modifier、分离格式/内容修正预算、CLI异常恢复；仅feature测试，未生产上线。 新增Science/Fun-only混合测试入口，News不重复；161项离线回归通过，真实双栏运行待测。",
       "status": "review"
     },
     {
@@ -631,6 +631,12 @@
       "date": "2026-09-30",
       "title": "第二模型直接修稿并自检，不为可修正的事实问题增加第三轮审核",
       "note": "news-deepseek显式改为modifier：Grok基于原文修归因/引语/限定语/中立/语言，并给修后稿事实、安全和事件评分；代码查字数/格式/英文混入中文，仍不合格换备用稿。无第三轮审核，不把修稿者自检称独立审核。HTTP格式一次+内容一次，最多三调用且逐次记录token。修复python -m重复异常类导致单篇失败中断整轮。旧接受稿缓存保留，旧事实淘汰可尝试modifier；一小时预算仍保留，超时必须停报。离线测试不证明VM修稿质量或3%费用目标；未真实AI/DB写/部署/merge。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "Science和Fun复用低额混合测试，不重做已成功News",
+      "note": "News hybrid恢复完成3篇NPR/PBS/BBC，修后正文逐字保留；恢复约6m39s，3个modifier任务和6次HTTP共30622新增DeepSeek token。详情年份/限定语小问题仅观察，不加修正轮次。新增science-fun-deepseek显式只收集Science/Fun历史和feed，DeepSeek生成+原生Bot修稿并自检，图片来源机械检查，publish/verify禁止。Science两出版方和Fun短文/题材规则保持；Python3.10离线161项通过，真实Science/Fun质量/费用待VM测试，未部署或merge。",
       "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
     }
   ]

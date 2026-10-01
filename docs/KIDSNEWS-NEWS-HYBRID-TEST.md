@@ -1,5 +1,36 @@
 # News-only DeepSeek/Bot experiment — 2026-09-30
 
+## Science + Fun follow-up (2026-09-30)
+
+Use `--test-profile science-fun-deepseek` in a NEW directory. This profile reuses
+config/shadow-news-deepseek.json (historical filename, shared role map). Only Science/Fun
+sources/history are collected; News has no output, model work or body fetching.
+DeepSeek writes bodies/details and performs the existing details review; Bot plans and modifies
+the final bodies from original sources. No extra details repair or third body audit is added.
+All hybrid profiles forbid publish/verify; production/default autonomous behavior is unchanged.
+
+```sh
+.venv/bin/python -m pipeline.agent_shadow prepare --run-dir work/2026-09-30/science-fun-hybrid-1 --date 2026-09-30 --editor-mode autonomous --test-profile science-fun-deepseek --registry work/2026-09-30/registry.json
+.venv/bin/python -m pipeline.agent_shadow step --run-dir work/2026-09-30/science-fun-hybrid-1
+```
+
+Confirm registry date and both Science/Fun source/history records exist first. If missing,
+obtain the runbook's connector SELECT-only snapshot; do not substitute News history or write DB.
+Science keeps existing word limits and two-independent-publisher goal; biology stays Science.
+Fun keeps short-story limits, swimming/tennis/other_sports priorities, playful technology and
+non-research animal stories; exclude college recruitment, dull routine sports and sales pitches.
+These are editorial rules, not promises that live candidates will supply every desired topic.
+Stop after local pack. Report article/title/publisher/topic/word counts, modifications/rejections,
+body fetches, native tasks, DeepSeek calls/tokens and ET times separately per section where available.
+Shared plan cost stays shared; never invent quota or per-section timing. Images receive mechanical
+checks, not visual approval. Preserve warnings and existing one-hour/call budgets.
+
+News baseline: logs show 3 final stories (NPR/PBS/BBC), corrected bodies identical to final
+payload, recovery 20:08:21–20:15:00 ET (~6m39s), 3 modifier tasks + 6 new HTTP calls
+(30,622 new DeepSeek tokens). Total 38m includes old failures/pause, not pure new-flow time.
+Details retain known year/number/qualifier issues despite all-pass review; user chose observation,
+not an additional correction pass. Do not claim full detail verification or under-3% quota proven.
+
 Opt-in local shadow test. Production and the previous full autonomous run are unchanged.
 
 | Work | Owner |
