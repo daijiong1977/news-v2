@@ -1,7 +1,8 @@
 # Kids News 网站先行：运行与审核说明
 
 日期 2026-10-01。配套合同：KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md。
-**现在可跑到影子 ZIP；正式 reader 转换/网站专用发布/历史 overlay 尚待实现。**
+**本文件为审查前历史运行说明；修复后的完整执行入口已移到
+KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md，请只用新文件中的命令。**
 本文不是让 Bot 现在上传的 prompt，不使用虚构的 publish-latest/rollback CLI。
 
 ## 1. Cloud 先审，再运行

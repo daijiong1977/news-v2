@@ -1,6 +1,7 @@
 # Kids News 两阶段迁移：网站先行 Spec
 
-日期：2026-10-01。状态：**待 Cloud 审核，非执行发布授权**。
+日期：2026-10-01。状态：**Cloud P0 修复已实现，离线验收；CI 权限配置与首次真实发布仍待验证**。
+当前可执行合同见 `KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md`；本页描述阶段边界。
 项目：kids-news-website。第一阶段不要求实现数据库/archive 的全链路回滚。
 本文和配套 RUNBOOK 是本次最新合同；旧 SAFE-TRANSITION 中关于独立测试域名、
 先同步数据库再完成试用的方案保留作历史/第二阶段参考，不作为第一阶段必做项。
@@ -16,8 +17,9 @@
 | daijiong1977/grokbot-kidsnews | /Users/jiong/myprojects/grokbot/grokbot-kidsnews；VM /workspace/kidsnews-shadow | codex/stepwise-full-shadow，最后导出运行快照；PR #1；main 仍不是当前运行入口 |
 | daijiong1977/kidsnews-v2 | /Users/jiong/myprojects/kidsnews-v2 | 正式网站 main，原 Action 管理 site/；本次不改其工作流 |
 
-审查前代码基线：共享 72b38b28b219d1ecc3c4e7cf0ad99665f7c4d40a；
-Bot 8928c0a94d08b86b425c52994917b1c3ad733a3a。后续文档提交并不表示新增发布功能已实现。
+共享代码版本以 Bot `UPSTREAM.json` 为准，运行时记录实际 git HEAD。
+正式模板固定 kidsnews-v2 commit `b9592e02faeabf9fa906aaa22b00770b8796273e`，
+22 个文件（14 根目录文件 + assets/components），清单与哈希见 config/reader-shell.json。
 正式域名 kidsnews.21mins.com / news.6ray.com。news.21mins.com 是历史测试域名提议，
 本方案不要求创建它，也未核验其 DNS / 归属 / 绑定。
 
@@ -40,6 +42,8 @@ Bot 8928c0a94d08b86b425c52994917b1c3ad733a3a。后续文档提交并不表示新
 - 调用 finalize-news-publication，上传 pending ZIP/ready 标记，启用新消费者/迁移/cron。
 - 改现有网站 Action、DNS、Vercel 配置；Bot 直接提交网站 main；运行生产 full_round。
 - 自动发送额外邮件，删除缓存/答卷，或者擅自合并 PR、改代码/阈值。
+- 调用 agent_shadow publish 或 publication_bundle upload；它们不是本阶段发布入口。
+- 中途改 profile/provider；传输兜底只能使用 prepare 显式冻结的选项。
 
 第一阶段是网站内容试用，**不是 DB/archive 一致性切换完成**。历史页和搜索仍可能
 展示旧内容；同日 slot ID 对应不同稿件的阅读记录、搜索跳转和自动修复风险必须抽查。
@@ -120,7 +124,7 @@ repository_dispatch(news-v2-uploaded) / workflow_dispatch / 每两小时 UTC :15
 Action 不读 manifest，也不核验业务完整性，因此这些门禁须在上传前的 Bot 脚本完成。
 同步 Action 成功不等于公开站正确：须读回部署后的列表/详情/图片逐文件比对。
 
-## 6. 发布与恢复状态（待实现的网站专用适配器）
+## 6. 发布与恢复状态（网站专用适配器）
 
 运行目录保存 release.json：日期、package/ZIP hash、source commit、template commit、
 备份 ZIP/manifest hash、批准的精确包、各阶段时间、Action run/站点验证、失败原因。
@@ -137,7 +141,8 @@ Action 不读 manifest，也不核验业务完整性，因此这些门禁须在�
 读回双 hash；失败可从备份恢复并验证。Cloud 审查需决定可接受的有限窗口/操作窗口策略。
 超时先查远端，已匹配则继续，不盲重发；相同包恢复是幂等操作。
 
-旧 Daily、republish-bundle、quality/autofix 都可能写 latest；本机锁不能阻止它们。
+旧 Daily、republish-bundle 可能写 latest；quality/autofix 写日期内容，不写 latest。
+本机锁不能阻止旧 writer；新 CI 的 concurrency 也不跨仓库排锁。
 首试只在明确的无冲突窗口、确认无在途 writer 时执行；保持早上旧流程作为备用。
 不自动关闭旧调度。如无法证明试用/回滚期间没有竞争，停止等待人工安排。
 新后台消费者必须保持停用且无 pending 投递。
@@ -155,7 +160,7 @@ Action 不读 manifest，也不核验业务完整性，因此这些门禁须在�
 不可变保证（旧上传 upsert=true）。本阶段不改日期包，独立备份仍是首要退路。
 不从 DB 重新生成，不绕过新 worker 的 revision 检查（本阶段根本不启用 worker）。
 
-## 8. 几天试用的历史/来源记录（待实现）
+## 8. 几天试用的历史/来源记录
 
 DB 未入库不能让 Bot 忘记已发稿。维护可恢复的网站有效发布账本：按日期/栏目
 替换该日有效发布集合，而不是将旧 DB 与 Bot 同日稿重复累加；未批准/失败/仅影子
@@ -163,16 +168,19 @@ DB 未入库不能让 Bot 忘记已发稿。维护可恢复的网站有效发布
 靠日志里的 done 或曾生成过就算已发布。
 
 下一轮 registry = DB 本栏目七日历史 + 账本中覆盖的有效日集合；仍排除目标日 D。
-原 URL/source title/event/topic 信息须足够原有判重用。来源实际使用记录仅本地
-覆盖有效 last-use，不更新 Supabase。多 VM/目录并行时必须同一账本所有者。
+原 URL/source title/topic 保留在 records。私有 website-effective-history 分支保存
+effective-publications.json，只有公开核验成功后写入；每次 registry 显式 overlay。
+来源 last-use 轮换仍用 DB 既有记录，本阶段没有写回或覆盖 last-use，属于过渡限制。
 旧生产流水线暂不读取该账本，故早上旧稿可能重复 Bot 昨日内容；这是过渡限制，
 应人工观察，不误称全系统历史已同步。搜索/历史 archive 也仍旧，不伪造同步状态。
 
 ## 9. 权限与执行身份
 
-VM DeepSeek key 只在 .env；Storage latest 写权限与 GitHub dispatch 权限需要实际
-核验。现仅覆盖 grokbot-* 的 PAT 不代表可触发 kidsnews-v2。可复用经批准的发布
-执行身份/连接器，不能为方便泄露服务密钥、让浏览器持有它、或打印全部环境变量。
+VM DeepSeek key 只在 .env。VM PAT 仅用于 Bot 仓库的 artifact 分支写入。
+新增 Bot 仓库 publish-reader Action 持有环境 secrets SUPABASE_SERVICE_KEY 和
+KIDSNEWS_DISPATCH_TOKEN，负责 latest-only 上传/dispatch/恢复；不改 Storage RLS。
+CI token 须能读取 news-v2/kidsnews-v2 Actions、向 kidsnews-v2 发 repository_dispatch。
+2026-10-01 检查 Bot repo secrets/environment 均为空；配置前只能生成/推送包，不能发布。
 实现需明确“由谁上传/由谁发送事件”；未就绪则停在 ZIP，不让 Bot 自行扩大权限。
 更新代码走 PR，正式包批准与代码合并批准分开；不把 spec 认可当发布授权。
 
@@ -184,17 +192,17 @@ VM DeepSeek key 只在 .env；Storage latest 写权限与 GitHub dispatch 权限
 | 原生详情一次生成自检 | agent_shadow_details.py、config/shadow-batch-grok-details.json | 已实现；无额外 review-details；Python 校验非独立审稿 |
 | 来源图机械检查、长度 | agent_shadow_photos.py、agent_shadow_lengths.py | 已实现；不是视觉批准 |
 | 同目录恢复/持久预算 | agent_shadow.py、agent_shadow_providers.py、ai_providers/transport.py | 已有回归；不得删状态重置预算 |
-| 正式模板复制 | publication_bundle.py build(shell=...) | 部分入口已有，但漏 .jsx；阻塞正式发布 |
-| 公开 reader ZIP / 旧 manifest 生成 | publication_bundle.py；旧 pack_and_upload.py 参考 | 尚无本阶段专用转换器，内部包不能直接顶替 |
-| latest-only 上传与备份/批准/恢复状态 | 当前 publication_bundle upload | **未实现**；现 upload 是 pending handoff，不可调用 |
+| 正式模板复制 | publication_bundle.py / reader-shell / config/reader-shell.json | JSX 已修；固定远端提交导出，不取脏 checkout；视觉验收待完成 |
+| 公开 reader ZIP / 旧 manifest 生成 | website_release.py build/check | 已实现：去除内部/临时文件，9+18 payload，旧字段/ZIP hash/依赖校验 |
+| latest-only 上传与备份/批准/恢复状态 | website_release.py / website_delivery.py / agent/github/publish-reader.yml | 已实现 fake 测试；真实 CI secrets 与回滚演练待验证 |
 | 旧同步触发和日期恢复 | kidsnews-v2 sync-from-supabase.yml；news-v2 republish-bundle.yml | main 机制已读；实际权限/安全门禁/恢复演练待验证 |
-| 公开文件匹配 | publication_bundle.py verify_site | 有基础函数；正式包/域名目标与完整 reader 验收待接入 |
-| 有效网站历史与来源 overlay | registry_snapshot.py、publication_history.py 参考 | **未实现**，现 registry 仍只依赖传入历史 |
+| 公开文件匹配 | website_release.py verify | 正式域名全文件哈希比对；真实部署待验证 |
+| 有效网站历史 overlay | website_ledger.py / website_release.py overlay | 已实现；按有效日期替换历史，排除同日；来源 last-use 未同步 |
 | 旧新 writer 协调 | 旧 Daily/republish/quality 工作流 | 未实现跨 writer 锁；需人工确认运行窗口，不能声称原子 |
 | DB/archive 同步、P1–P5 | finalize-news-publication、迁移、旧 REVIEW | 第二阶段，暂不启用、不修成第一阶段依赖 |
 
 路径默认相对于共享 repo，pipeline/ 前缀略写。原影子 237 项通过记录不证明上述
-未实现发布功能通过。此次文档修订不改 runtime 行为。
+发布功能在本轮新增，fake 验收不等于已正式上线。
 
 ## 11. 验收清单与第二阶段
 

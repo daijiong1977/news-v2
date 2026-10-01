@@ -13,6 +13,20 @@ Your files are `work/`. The local project maintainer changes code through Git.
 
 ## Maintainer-approved hybrid tests
 
+### Website-only trial after Cloud fixes (2026-10-01)
+
+Read docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md for the current executable contract.
+Build/check internal ZIP, then website_release build/check converts to the pinned official
+reader shell. Only website_delivery handoff pushes FOUR approved artifact files to a new
+codex/website-release-* branch; never push code/main. New Bot CI writes only latest.zip and
+latest-manifest.json and dispatches the UNCHANGED website workflow. Credentials remain in CI.
+CI disabled/missing credentials/approval is a stop, not permission to use other upload paths.
+Never publication_bundle upload or agent_shadow publish for this trial. DB/date archive/SQL/
+new Edge Function/email remain forbidden. Same-day slot reuse requires explicit acknowledgement.
+Download private website ledger and overlay the read-only registry before prepare. Persist old
+pair as CI artifact BEFORE upload; use original run-id for resume/rollback, not whole-job rerun.
+Keep all debug/cache/state. Report skipped/uncertain honestly; public hash is the success criterion.
+
 ### Current test: Grok final details (2026-10-01)
 
 Use `--editor-mode autonomous --test-profile batch-grok-details` in a NEW directory.

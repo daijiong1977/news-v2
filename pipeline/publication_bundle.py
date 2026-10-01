@@ -140,7 +140,7 @@ def build(root: Path, output: Path, shell: Path | None = None):
             if path.is_symlink():
                 raise ValueError('Symlink in reader shell')
             parts = path.relative_to(shell).parts
-            if (path.is_file() and path.suffix.lower() in {'.html', '.js', '.css', '.json', '.svg', '.webp', '.png', '.jpg', '.jpeg', '.ico', '.txt', '.woff', '.woff2', '.ttf'}
+            if (path.is_file() and path.suffix.lower() in {'.html', '.js', '.jsx', '.css', '.json', '.svg', '.webp', '.png', '.jpg', '.jpeg', '.ico', '.txt', '.woff', '.woff2', '.ttf'}
                     and not any(x.startswith('.') or x in ('payloads', 'article_payloads', 'article_images', 'node_modules', 'work') for x in parts)):
                 files[path.relative_to(shell).as_posix()] = path.read_bytes()
     records = []
@@ -156,6 +156,11 @@ def build(root: Path, output: Path, shell: Path | None = None):
             if not match:
                 raise ValueError('No accepted source matches payload')
             candidate_id = match['candidate']['id']
+            from .website_release import evidence_gate
+            original_text = match['candidate']['article']['body']
+            for level in ('easy', 'middle'):
+                payload = json.loads(files[f'article_payloads/payload_{sid}/{level}.json'])
+                evidence_gate(payload['summary'], original_text)
             outcome = next(o for o in reversed(state[cat]['outcomes']) if o['id'] == candidate_id)
             src_id = source_by_id.get(candidate_id)
             records.append({'category': cat, 'story_slot': slot, 'published_date': snapshot['date'],

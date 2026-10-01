@@ -182,7 +182,7 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
                               lambda v: validate_batch(v, originals, cat))
         except AnswerRejected as exc:
             pin_task_answers(self.root, key)
-            write(path, {'pool': [], 'drafts': [], 'considered': [],
+            write(path, {'pool': [], 'drafts': [], 'considered': [b['id'] for b in originals],
                          'reason': str(exc)})
             self.boundary(self.root, f'batch-invalid-{cat}-{target}', self.stepwise)
             return []
