@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T14:33:47.618Z",
+  "updated_at": "2026-10-01T15:54:54.769Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -91,6 +91,16 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-WEBSITE-ONLY-RUNBOOK-2026-10-01.md",
+      "purpose": "现有ZIP生成命令、待实现发布/恢复操作单及Cloud只读审查prompt；非发布授权。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md",
+      "purpose": "最新网站先行阶段合同、代码匹配矩阵、待实现门禁；仅latest包试用，DB/日期archive/新function延后。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md",
       "purpose": "正式模板/独立测试站/DB归档/单writer切换与回退、粗估工期；非部署授权。",
@@ -763,6 +773,12 @@
       "title": "直接正式站试一天是缩短观察，不省略模板及回滚门槛",
       "note": "用户提出更快直接发布选项，尚未执行或批准具体包。当前shadow ZIP不能覆盖正式模板；要已核验正式reader、备份当前内容/Git/DB归档、唯一writer、受控内容更新与公开哈希，未验收消费者不得启用。可以先一次手动交接+已演练手动回退，不必先做完整自动rollback；账号/阅读数据不整库恢复。",
       "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "网站先行与后台归档分阶段，Spec不能把计划功能写成完工",
+      "note": "用户决定第一阶段仅latest.zip和匹配manifest，经原news-v2-uploaded事件由旧Action解包部署；日期包/flat archive/DB/新consumer不写。正式.jsx转换、独立备份批准恢复状态、有效发布history overlay及writer协调待实现/验收。网站已发但DB未入库时需要本地有效历史账本；旧registry不会自动包含Bot稿。此次仅文档，不修改生产或调用模型，Cloud先审Spec再核对代码。",
+      "source_ref": "docs/KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md"
     }
   ]
 }

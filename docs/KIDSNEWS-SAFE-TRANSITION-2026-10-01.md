@@ -1,5 +1,10 @@
 # Kids News：明星优先与正式模板平稳过渡计划
 
+> 后续用户决定以网站先行试用：最新合同见
+> `KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md` 及配套 RUNBOOK。
+> 第一阶段只替换 latest.zip/manifest，DB/日期archive/新function延后。
+> 本文独立域名及全链路回滚安排保留作历史/第二阶段，不作为第一阶段执行命令。
+
 2026-10-01，项目 kids-news-website。本文是实施计划，不是部署/迁移验收。
 本轮只落实影子选稿规则、测试与文档；不创建域名/数据库表，不启用worker，不发布。
 
