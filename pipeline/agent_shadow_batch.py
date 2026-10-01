@@ -215,8 +215,6 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
     def extend(self, cat, target, section):
         from .agent_shadow import read
         from .agent_shadow_lengths import original_band
-        if self.audit.get('exhausted_categories', {}).get(cat):
-            return None
         consumed = {sid for p in self.root.glob(f'batch-{cat}-*.json') for sid in read(p)['considered']}
         cache = read(self.root / 'bodies.json') if (self.root / 'bodies.json').exists() else {}
         lo, hi = original_band(cat)
@@ -226,7 +224,12 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
                 return False
             art = cache.get(b['id'])
             return not art or (not art.get('skip_reason') and lo <= art['word_count'] <= hi)
-        if any(available(b) for b in self.catalog[cat]) and not self.audit['budget_exhausted']:
+        remaining = [b for b in self.catalog[cat] if available(b)]
+        if any(b['id'] in cache for b in remaining):
+            return target + 8
+        if self.audit['budget_exhausted'] or self.audit.get('exhausted_categories', {}).get(cat):
+            return None
+        if remaining:
             return target + 8
         # Existing discovery guardrails and finite search budget are retained.
         return super().extend(cat, max(target, len(self.catalog[cat])), section)

@@ -157,6 +157,13 @@ done/索引最后写与重试用于恢复。旧生产 writer 不参加新worker�
 
 ## 离线验证
 
+2026-10-01 Grok后续整改：兜底切换先写fallback_pending并隔离旧HTTP答卷，恢复不得
+把旧答卷重标为原生；原生批量四稿同时约束可见消息和Python校验；跨24小时复核
+合并discover目录/最终分栏，统一archived字段（兼容is_archived），仍排除覆盖目标日；
+正文预算到顶只跳过未缓存稿，补稿可继续消耗已缓存且未消费的合格原文。
+8项新故障回归先失败后通过，Python3.10完整相关227项通过；详见
+`docs/KIDSNEWS-GROK-FOLLOWUP-2026-10-01.md`。这不是VM真实生成或生产验证。
+
 Python3.10测试：`pipeline/test_agent_shadow_batch.py`、`test_batch_single_repair.py`、
 `test_publication_bundle.py`，加原影子及生产纯函数回归。
 Deno `bundle_test.ts` 测试 Python ZIP互通、公开核验失败零写、版本保护、索引失败恢复、幂等；

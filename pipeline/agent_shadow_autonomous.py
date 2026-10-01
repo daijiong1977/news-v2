@@ -193,7 +193,9 @@ class AutonomousEditor:
                     c: sum(a.get('category') == c for a in cache.values()) for c in ('News', 'Science', 'Fun')})
                 if counts[cat] >= LIMITS["body_fetches"]:
                     self.audit.setdefault('exhausted_categories', {})[cat] = True
-                    break
+                    # Can't fetch more, but later candidates may already have
+                    # paid-for evidence. Do not discard those cached originals.
+                    continue
                 # Reserve budget BEFORE networking; failure/restart cannot refund it.
                 metrics["body_fetches"] += 1
                 counts[cat] += 1
@@ -263,10 +265,21 @@ class AutonomousEditor:
         """Expand only exhausted category, preserving all accepted drafts."""
         from .agent_shadow import read, write, CATS, AnswerRejected
         from .full_round import _canonical_source_url
-        if self.audit["budget_exhausted"] or self.audit.get('exhausted_categories', {}).get(cat):
-            return None
+        exhausted = self.audit['budget_exhausted'] or self.audit.get('exhausted_categories', {}).get(cat)
         if target < len(self.catalog[cat]):
+            if exhausted:
+                cache = read(self.root / 'bodies.json') if (self.root / 'bodies.json').exists() else {}
+                from .agent_shadow_lengths import original_band
+                lo, hi = original_band(cat)
+                if not any(b['id'] in cache and not cache[b['id']].get('skip_reason')
+                           and lo <= cache[b['id']]['word_count'] <= hi
+                           and b['history_status'] == 'clear' and b['history_confidence'] >= .7
+                           and b['initial_risk'] < 4 and b['id'] not in self.audit.get('url_exclusions', {})
+                           for b in self.catalog[cat][target:]):
+                    return None
             return min(len(self.catalog[cat]), target + 3)
+        if exhausted:
+            return None
         rounds = self.audit["discoveries"].get(cat, 0)
         if rounds >= LIMITS["discovery_rounds_per_category"]:
             return None

@@ -59,7 +59,7 @@ def rebuild_audit(root, config_hash):
         entry = audit['requests'].setdefault(token, {'role': task_role(directory.parent.name)})
         state_path, answer_path = directory / 'http-attempt.json', directory / 'answer.json'
         state = json.loads(state_path.read_text()) if state_path.exists() else {}
-        if state.get('status') == 'fallback_native':
+        if state.get('status') in ('fallback_pending', 'fallback_native'):
             entry.update(fallback='native', original_failure=state.get('original_failure'))
         audit['http_calls'] = max(audit['http_calls'], state.get('http_call_number', 0))
         for saved in directory.glob('answer*.json'):
@@ -203,28 +203,39 @@ class TaskRouter:
         state = json.loads(state_path.read_text()) if state_path.exists() else None
         answer_path = directory / 'answer.json'
         data = json.loads(answer_path.read_text()) if envelope is not None else {}
-        if envelope is not None and data.get('request_id') == rid and data.get('revision') == revision:
+        falling_back = state and state.get('status') in ('fallback_pending', 'fallback_native')
+        if (envelope is not None and data.get('request_id') == rid and data.get('revision') == revision
+                and (not falling_back or data.get('fallback') == 'native')):
             _atomic_json(audit_path, audit)
             return {**envelope, 'usage': data.get('usage', {})}
         snapshot_data = json.loads(snapshot.read_text()) if snapshot.exists() else {}
         def native_fallback(failure):
             nonlocal state, needed, envelope
-            if not state or state.get('status') != 'fallback_native':
+            if not state or state.get('status') not in ('fallback_pending', 'fallback_native'):
                 if audit['task_count'] >= MAX_TASKS:
                     raise ValueError('Shadow fallback task budget exhausted')
                 fallback_run(self.root)
                 audit['task_count'] += 1
                 audit['fallback_tasks'] = audit.get('fallback_tasks', 0) + 1
                 audit['requests'][token].update(fallback='native', original_failure=failure)
-                state = {**(state or {}), 'status': 'fallback_native', 'revision': revision,
+                # Pending is durable BEFORE quarantine: every crash point resumes
+                # cleanup rather than relabelling an older HTTP answer as native.
+                state = {**(state or {}), 'status': 'fallback_pending', 'revision': revision,
                          'original_failure': failure}
                 _atomic_json(state_path, state)
-                if answer_path.exists():
-                    _atomic_json(directory / 'answer.before-fallback.json', json.loads(answer_path.read_text()))
-                    answer_path.unlink()
                 envelope = None
                 needed = AgentNeeded(rid, directory / 'request.json', answer_path,
                                      ['Transport fallback: write native answer.json in this directory.'])
+            if answer_path.exists():
+                saved = json.loads(answer_path.read_text())
+                if 'revision' in saved and saved.get('fallback') != 'native':
+                    # Also repair the old fallback_native crash window. Native
+                    # handoff answers have no revision until provenance is pinned.
+                    _atomic_json(directory / 'answer.before-fallback.json', saved)
+                    answer_path.unlink()
+                    envelope = None
+                    needed = AgentNeeded(rid, directory / 'request.json', answer_path,
+                                         ['Transport fallback: write a NEW native answer.json.'])
             _atomic_json(audit_path, audit)
             request_path = directory / 'request.json'
             request = json.loads(request_path.read_text())
@@ -234,8 +245,16 @@ class TaskRouter:
                 'This is same-model writing/self-check, NOT a second-model audit. '
                 'Write answer.json and rerun in the SAME directory.')
             request['task'].pop('max_tokens', None)
+            if self.key.startswith('rewrite-batch-'):
+                override = ('NATIVE FALLBACK BATCH OVERRIDE: write at most FOUR drafts (3+1), '
+                            'or fewer if fewer eligible candidates. This overrides any five-draft instruction.')
+                messages = request['task'].setdefault('messages', [])
+                if not any(m.get('content') == override for m in messages):
+                    messages.append({'role': 'user', 'content': override})
             request['fallback'] = 'native'
             _atomic_json(request_path, request)
+            state = {**state, 'status': 'fallback_native'}
+            _atomic_json(state_path, state)
             if needed:
                 raise needed
             # Pin provenance only after the native agent has delivered its answer.
@@ -246,7 +265,7 @@ class TaskRouter:
             if native_answer != json.loads(answer_path.read_text()):
                 _atomic_json(answer_path, native_answer)
             return envelope
-        if state and state.get('status') == 'fallback_native':
+        if falling_back:
             return native_fallback(state.get('original_failure'))
         if state and state.get('revision') == revision and state.get('status') == 'response_invalid':
             raise ValueError('HTTP response_invalid; not a transport failure, native fallback forbidden')

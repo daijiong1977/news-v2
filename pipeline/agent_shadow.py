@@ -98,6 +98,15 @@ def resume_command(root):
     return f'{shlex.quote(sys.executable)} -m pipeline.agent_shadow step --run-dir {shlex.quote(str(root))}'
 
 
+def registry_history(rows, category, today, *, exclude_date=None):
+    """One shadow connector schema/window, including the older archive alias."""
+    start = (date.fromisoformat(today) - timedelta(days=7)).isoformat()
+    return [r for r in rows if r.get('category') == category
+            and start <= r.get('published_date', '') < today
+            and r.get('published_date') != exclude_date
+            and not r.get('archived') and not r.get('is_archived')]
+
+
 def check_stale(root, confirm, registry):
     """No elapsed-time cost budget; stale editorial context requires explicit refresh."""
     metrics_path = root / 'metrics.json'
@@ -115,15 +124,18 @@ def check_stale(root, confirm, registry):
     now = datetime.now(ZoneInfo('America/New_York')).date()
     if fresh.get('date') != now.isoformat() or not isinstance(fresh.get('history'), list):
         raise ValueError('stale registry must have today ET date and a history list')
-    history = {c: [r for r in fresh['history'] if r.get('category') == c
-                  and (now-timedelta(days=7)).isoformat() <= r.get('published_date', '') < now.isoformat()
-                  and r.get('published_date') != snapshot['date'] and not r.get('is_archived')]
+    history = {c: registry_history(fresh['history'], c, now.isoformat(), exclude_date=snapshot['date'])
                for c in CATS}
     if not any(history.values()):
         raise ValueError('stale registry history is zero; check connector')
-    ids = {b['id'] for b in snapshot['candidates']}
     catalog_path = root / 'autonomous-catalog.json'
-    final_category = {b['id']: cat for cat, rows in read(catalog_path)['catalog'].items() for b in rows} if catalog_path.exists() else {}
+    catalog = read(catalog_path) if catalog_path.exists() else {}
+    candidates = {b['id']: b for b in snapshot['candidates']}
+    candidates.update({b['id']: b for b in catalog.get('candidates', [])})
+    snapshot['candidates'] = list(candidates.values())
+    snapshot['sources'] = {**snapshot.get('sources', {}), **catalog.get('sources', {})}
+    ids = set(candidates)
+    final_category = {b['id']: cat for cat, rows in catalog.get('catalog', {}).items() for b in rows}
     key = 'review-history-stale-' + hashlib.sha256(json.dumps(history, sort_keys=True).encode()).hexdigest()[:16]
     def validate(v):
         rows = v.get('blocked_ids')
@@ -151,7 +163,7 @@ def check_stale(root, confirm, registry):
         for c in CATS:
             state[c]['accepted'] = [a for a in state[c]['accepted'] if a['candidate']['id'] not in blocked]
             state[c]['outcomes'].extend({'id': sid, 'category': c, 'status': 'stale_history_rejected'}
-                for sid in blocked if any(b['id'] == sid and b['category'] == c for b in snapshot['candidates']))
+                for sid in blocked if final_category.get(sid, candidates[sid]['category']) == c)
         write(state_path, state)
     snapshot['history'] = history
     write(root / 'input.json', snapshot)
@@ -196,10 +208,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     if registry is not None and ("history" not in registry or not isinstance(registry["history"], list)):
         raise ValueError("registry history list is required; check the Supabase connector")
     # Validate histories before source collection; an empty connector result is not clearance.
-    start = (date.fromisoformat(today) - timedelta(days=7)).isoformat()
     for cat in CATS:
-        history[cat] = [] if cat not in active else ([r for r in registry["history"] if r.get("category") == cat
-                         and start <= r["published_date"] < today and not r.get("archived", False)]
+        history[cat] = [] if cat not in active else (registry_history(registry['history'], cat, today)
                         if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
     if not any(history.values()):
         raise ValueError("all three sections have zero history; check the Supabase connector before retrying")
@@ -257,18 +267,22 @@ def ask(root, key, system, material, validate, *, normalize=None):
             write(attempts, [needed.errors])
         raise
     raw = envelope["choices"][0]["message"]["content"]
+    rid = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    fallback_path = provider.work_dir / rid / 'http-attempt.json'
+    fallback = fallback_path.exists() and read(fallback_path).get('status') == 'fallback_native'
     try:
         value = json.loads(raw)
         if normalize:
             value = normalize(value)
         errors = validate(value)
+        if (fallback and key.startswith('rewrite-batch-') and isinstance(value.get('drafts'), list)
+                and len(value['drafts']) > 4):
+            errors = list(errors) + ['Native fallback batch must contain at most FOUR drafts (3+1), not five']
     except (ValueError, KeyError, TypeError, AttributeError) as exc:
         errors = [f"Invalid task answer: {exc}"]
     if envelope["choices"][0]["finish_reason"] == "length":
         errors = ["Answer was truncated; finish the answer once before rerunning"]
     if errors:
-        fallback = any(p.exists() and read(p).get('status') == 'fallback_native'
-                       for p in provider.work_dir.glob('*/http-attempt.json'))
         if key.startswith('rewrite-batch-') and getattr(provider, 'choice', {}).get('type') == 'http' and not fallback:
             # Never ask the HTTP writer to regenerate the five-story batch.
             # Recover syntax only; per-story content repair happens separately.

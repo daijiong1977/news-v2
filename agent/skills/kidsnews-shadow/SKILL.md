@@ -33,6 +33,9 @@ or uncertain delivery) can hand off to native files. Content/length/schema failu
 activate this fallback. Native batch fallback writes FOUR drafts (3+1), not five; its
 request omits HTTP max_tokens while retaining the original request_id/validation contract.
 Never recompute request_id from the displayed fallback task; copy the supplied ID.
+The displayed batch messages AND Python validation cap native fallback at four drafts
+(fewer are allowed). fallback_pending is an interrupted quarantine, not a native answer:
+rerun resumes local cleanup without HTTP; never copy the archived HTTP draft back.
 
 Exit 2 is a task handoff, NOT a failed run. Read request.json, write answer.json, and run
 the exact returned rerun command in the SAME directory. Never delete answer/state/cache,
@@ -51,6 +54,9 @@ After 24 hours, obtain a fresh read-only connector registry and run
 `step --confirm-stale --registry /absolute/path/fresh-registry.json`; follow its history
 recheck task first. Original publication date remains frozen. status is lock-free and
 read-only; inspect answer_integrity without trying to repair accepted answer hashes.
+Rechecking includes the current discovered catalog and its final section routing;
+archived rows are excluded, and the original date being overwritten remains excluded.
+Fetch exhaustion prevents NEW downloads, not use of previously cached eligible originals.
 
 Each native fallback consumes another task and increments fallback_tasks. The runtime
 parent ledger .http-fallback-runs.json is state too: never delete it to reset the circuit

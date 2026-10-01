@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T04:06:30.318Z",
+  "updated_at": "2026-10-01T11:25:15.456Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86影子恢复修复：B1–B7与S7显式原生传输兜底、答卷原子提交、同目录恢复、持久预算及24小时历史重核；Python3.10.20离线219项通过。待导出Bot VM首测，未合并、未真实模型/DB写/部署；P1–P5仍是生产前待办。",
+      "purpose": "PR #86影子恢复与Grok后续四类修复：兜底pending隔离旧HTTP答卷、原生四稿硬校验、discover跨日历史及归档字段、预算满后缓存补稿；Python3.10.20离线227项通过。未合并/真实模型/DB写/部署；P1–P5仍阻塞生产，Bot快照须按UPSTREAM复测。",
       "status": "review"
     },
     {
@@ -440,6 +440,11 @@
       "path": "docs/KIDSNEWS-HYBRID-RESUME-SPEC-2026-09-30.md",
       "purpose": "原Spec保留及实施增补",
       "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_grok_fixes.py",
+      "purpose": "Grok后续四类问题8项先红后绿回归；断点兜底来源、四稿约束、发现稿历史及缓存预算。",
+      "location": "repo"
     }
   ],
   "lessons": [
@@ -712,6 +717,12 @@
       "title": "影子恢复以答卷为提交记录，按栏目和持久预算兜底而非重做",
       "note": "B1–B7/S7离线修复：已知未执行HTTP可有限重试，429最多120秒，读超时/reset保持uncertain；匹配answer.json优先于attempting，审计可重建、原答卷保留。取消一小时限制，超24小时显式确认并重核同栏七天历史；每栏抓取12，重要News/Science第二出版方仅有未尝试改善候选才补。显式native兜底四稿3+1、两连续轮熔断、计入预算并诚实标mixed/同模型写稿自检/writer_provider。status只读无锁，CLI绝对解释器，抓取审计与正文同原子保存。Python3.10.20离线219项通过；未真实模型、DB写、部署、邮件、merge。P1–P5不在本次范围，VM质量和费用仍待首测，保留调试缓存。 修复提交66b7546；Review逐项补充状态，原Spec保留且增补优先，导出前文档记录一起提交。",
       "source_ref": "docs/bugs/2026-10-01-shadow-http-resume.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "Grok复核发现的恢复窗口必须故障注入，不把测试绿灯当全部完成",
+      "note": "四类后续整改：fallback_pending先隔离旧HTTP答卷，恢复不重标旧答卷来源；原生四稿在消息和校验中同时落实，原request_id不变；24小时复核并入discover和最终分栏，归档字段统一，冻结目标日排除仍保留；正文抓取上限只禁新增下载，已缓存未消费稿仍可补录。新增8个测试实例先全部失败、修后通过，Python3.10相关227项通过。保留同目录身份修复重试及持久120次预算，不盲目采纳Grok禁止二次调用建议。未真实模型/DB写/发布/merge，P1–P5延期，缓存保留。",
+      "source_ref": "docs/KIDSNEWS-GROK-FOLLOWUP-2026-10-01.md"
     }
   ]
 }
