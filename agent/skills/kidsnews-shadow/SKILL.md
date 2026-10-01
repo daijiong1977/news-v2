@@ -28,6 +28,12 @@ Science/Fun have no additional standalone strict fact audit, but modifiers still
 Normal baseline: three DeepSeek batch calls and 24 native tasks (plan1/select3/modify9/details9),
 not a quota promise; repairs/refills add tasks. Stop at local ZIP build/check. Old profiles below
 are retained for resume compatibility, not silently upgraded. Do not change frozen input.json.
+2026-10-01 family preference: famous tennis/swimming champions and engaging current matches,
+comebacks or records take priority among comparably good eligible Fun stories. Do not favor
+tearful retirement just for its emotional arc. Follow this in plan, DeepSeek five-draft choice
+and final three; never override safety/history/source support or invent favorite names.
+Official-reader transition plan (not deployment authorization):
+`docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md`.
 
 For `--editor-mode autonomous --test-profile batch-deepseek`, the CURRENT 8→5→3 flow is
 `docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md` plus `docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md`.

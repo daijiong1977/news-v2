@@ -12,6 +12,26 @@ from .editorial_policy import publisher_key
 from .news_sources import NewsSource
 
 
+# 2026-10-01: family preference was lost between metadata rank and final pick.
+FAMILY_SPORTS_PREFERENCE = '''
+FAMILY SPORTS PREFERENCE (Fun only): these children are fans of famous tennis and swimming
+stars. Among eligible, comparably good stories, prioritize widely recognized champions/stars
+and meaningful current matches, comebacks, exciting performances and records (e.g. Djokovic).
+Prefer these to general sports reports or career retrospectives; do not automatically rank
+a tearful retirement above an engaging current match just for its emotional arc or milestone.
+Keep an eligible star story in the first original-text pool and five-draft shortlist when possible,
+then carry this preference into the final three. Do not let it displace News importance or
+Science diversity. Safety, source support and same-section historical deduplication still win.
+Do not invent family favorite names or events absent from the supplied candidates. No forced
+sports quota when there is no suitable story. Compare child interest, not celebrity alone.
+'''
+
+
+def sports_preference(snapshot, category=None):
+    from .agent_shadow_profiles import uses_native_details
+    return FAMILY_SPORTS_PREFERENCE if uses_native_details(snapshot) and category in (None, 'Fun') else ''
+
+
 def validate_batch(value, pool, category):
     index = {b['id']: b for b in pool}
     rows = value.get('drafts', [])
@@ -75,6 +95,7 @@ class BatchEditor(AutonomousEditor):
             rules += ('Order first eight for quality, varied topics and publishers. News highest importance first, '
                       'before source/topic diversity. Science physics/chemistry/astronomy/biology remain distinct. '
                       'Use canonical topic labels supplied in material. Never invent a source. No browsing.')
+            rules += sports_preference(self.snapshot)
             def check_plan(value):
                 errors = validate_catalog(value, ids)
                 if not errors:
@@ -155,6 +176,7 @@ skipped with skipped:[{id,reason}]; do not invent facts to satisfy importance.
 Prefer varied topics and independent publishers without displacing important News or inventing facts.
 Only supplied original texts support facts/quotes/attribution. Do not add unsupported viewpoints.
 '''
+        prompt += sports_preference(self.snapshot, cat)
         try:
             result = self.ask(self.root, key, prompt, material,
                               lambda v: validate_batch(v, originals, cat))
@@ -176,7 +198,8 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
             'Return {"order":["id",...]}, every ID once. News highest importance first; '
             'Science prefer physics/chemistry/astronomy/biology diversity and two independent publishers; '
             'Fun prioritize actual fun, swimming/tennis/other sports distinct. Prefer quality over quotas. '
-            'Selection only: modifier will correct selected bodies next. No browsing, writing details or publishing.',
+            'Selection only: modifier will correct selected bodies next. No browsing, writing details or publishing.'
+            + sports_preference(self.snapshot, cat),
             {'category': cat, 'drafts': result['drafts'], 'sources': [
                 {k: b[k] for k in ('id', 'topic', 'importance')} | {
                     'title': b['article']['title'], 'source': b['article']['source'],

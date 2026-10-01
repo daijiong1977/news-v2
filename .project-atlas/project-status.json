@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T14:02:30.227Z",
+  "updated_at": "2026-10-01T14:27:32.973Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR #86：opt-in batch-grok-details；DeepSeek八选五正文，Grok选三/修稿/最终详情，无额外详情模型审核；正文标题冻结、最长答案告警、News两出版方。旧profile与生产不变，Python3.10离线235项待复测导出；VM新轮待测，P1–P5仍阻塞生产。",
+      "purpose": "PR86影子batch-grok-details：明星网球/游泳偏好贯穿计划、五稿、三选，无额外模型调用；正文DeepSeek/修稿与详情Grok。237项Py3.10回归，过渡计划先正式模板本地、隔离测试站、DB归档/P1–P5、单writer切换。未发布/写库/域名变更，main不动。",
       "status": "review"
     },
     {
@@ -91,6 +91,11 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md",
+      "purpose": "正式模板/独立测试站/DB归档/单writer切换与回退、粗估工期；非部署授权。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md",
       "purpose": "21次DeepSeek调用拆解、用户详情POC、新8→5→3完整职责与Bot ZIP测试消息。",
@@ -734,6 +739,12 @@
       "title": "最终修稿后原生详情，冻结正文避免重复审核",
       "note": "旧日志21次DeepSeek=3正文+9详情+9详情审核，共159954token。新模式正常3正文HTTP+9原生详情，无独立详情审核；Python结构校验/洗牌/最长答案告警不等于事实证明。旧profile冻结兼容；News两出版方接受，Science/Fun不加独立严格audit但仍修实质事实。用户POC附件未在Mac独立读取；约3%配额是用户观察，不承诺新轮成本。",
       "source_ref": "docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "明星偏好贯穿选文，生产过渡先模板和环境隔离",
+      "note": "真实日志c077/c079都历史clear、importance3且入五稿，最终退役胜过比赛是提示偏好而非查重漏抓。新profile同一Fun偏好传计划/DeepSeek五稿/Grok三选，旧profile冻结；不加调用不强凑体育。现ZIP为shadow shell，正式.jsx依赖仍待模板修复验证。DB优先复用、隔离测试不更新生产history/cadence/latest；P1–P5与单writer/回退未验收不能上线。news.21min.com未核验，不当现成测试域名。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
     }
   ]
 }
