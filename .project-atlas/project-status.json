@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T01:23:43Z",
+  "updated_at": "2026-10-01T01:48:04Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -91,6 +91,11 @@
     }
   ],
   "files": [
+    {
+      "path": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md",
+      "purpose": "2026-09-30用户确认的待实现8→5→3完整混合流程；物理/化学等分组、搬栏、重要News首篇、来源/题材软偏好、图片提前、模型/Python职责与补选。不是已上线运行手册。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md",
       "purpose": "News单栏混合测试：VM命令、模型职责、来源图检查边界、调用/耗时/配额测量；config/shadow-news-deepseek.json仅引用环境变量。",
@@ -644,6 +649,12 @@
       "title": "影子Fun不因短稿补字凑篇幅，生产保持原策略",
       "note": "Science/Fun实测完成各3篇，流水线19m20s、15次抓正文、8个原生任务、27次DeepSeek调用共123889 token；详情全PASS仍漏因果、数字矛盾及无来源观点，未证明质量全面提升。用户确认来源配图很好，保持现有图片步骤。用户批准Fun下限180：影子原文180–1200、middle180–350或180–410；easy短源120–220，否则140–270。四个先失败的长度回归修后通过；Python3.10相关163项通过。生成及modifier提示与校验一致，生产wordcount_policy不改。未重新调用模型、写库、部署或merge；新规则用新运行目录。",
       "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "8→5→3混合方案：重要News先选首篇，题材与出版方分别记录",
+      "note": "用户确认Grok初筛/搬栏/同栏七天事件去重，Python在步骤3抓图验尺寸、按需抓原文凑8；DeepSeek每栏一次8选五并写正文无详情；Grok五选三精修，坏稿先从另两篇补，再扩备用；DeepSeek基于修后最终9篇生成详情。Science明确physics、chemistry_materials等，优先多题材与至少两出版方；News第一篇最重要合格稿优先于多样性换位，另外两篇再兼顾组合；不绕过事实/安全/中立/事件门禁。仅文档确认，新批量/图片提前/缓存同步编排尚未实现或真实测试，不把旧命令称新流程，不改生产或发布。",
+      "source_ref": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md"
     }
   ]
 }

@@ -1,5 +1,9 @@
 # News-only DeepSeek/Bot experiment — 2026-09-30
 
+后续用户确认的完整方案见 [8→5→3 流程](KIDSNEWS-HYBRID-8-5-3-FLOW.md)：
+包含物理/化学等细分题材、来源与题材软偏好、News重要首篇、图片提前和模型分工。
+该方案尚待实现；本页现有命令仍运行原混合测试，不是新批量流程。
+
 ## Science + Fun follow-up (2026-09-30)
 
 Use `--test-profile science-fun-deepseek` in a NEW directory. This profile reuses
