@@ -11,7 +11,7 @@
 | 跨日历史复核漏discover及归档字段不一致 | check_stale合并input与当前autonomous目录候选/来源，按最终栏目校验；registry_history统一archived及旧is_archived字段 | test_stale_recheck_includes_discovered_ids_and_archive_schema |
 | 预算已满导致后部缓存及缓存补稿不可用 | AutonomousEditor.pool只continue未缓存项；两种extend允许符合资格的未消费缓存，不再抓新原文 | test_fetch_cap_skips_uncached_but_keeps_later_cached_original、test_batch_refill_uses_unconsumed_cached_original_at_cap、test_staged_autonomous_extends_to_cached_original_at_cap |
 
-状态：上述四类已在本轮实现；实施提交将在推送后的审查记录中列明。
+状态：上述四类已修复，实施提交 `ca546c011db3a7017d8df08275be0d336083cc0e`。
 `pipeline/test_agent_shadow_grok_fixes.py`共8个测试实例，修复前全部失败，修复后全部通过。
 兜底故障测试只模拟HTTP和磁盘中断，不调用真实模型。
 
