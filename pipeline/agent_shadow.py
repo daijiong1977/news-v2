@@ -283,7 +283,8 @@ def body_pool(root, snapshot, catalog, min_good=6):
                 write(root / "metrics.json", metrics)
                 write(cache_path, cache)
             art = cache[b["id"]]
-            lo, hi = (250, 1200) if cat == "Fun" else (350, 1500) if cat == "Science" else (350, 1200)
+            from .agent_shadow_lengths import original_band
+            lo, hi = original_band(cat)
             if not art.get("skip_reason") and lo <= art["word_count"] <= hi:
                 good.append({**score, "category": cat, "article": art})
         # Diverse topics first, then remaining ranks; News important story is reserved.

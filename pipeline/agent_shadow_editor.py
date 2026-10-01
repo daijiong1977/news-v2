@@ -5,7 +5,7 @@ from .agent_shadow_profiles import is_hybrid
 
 
 def validate_rewrite(value, cat, word_count):
-    from .news_rss_core import _wordcount_flags
+    from .agent_shadow_lengths import rewrite_band
     entries = value.get("articles", [])
     if len(entries) != 1 or entries[0].get("source_id") != 0:
         return ["Return exactly one article with source_id 0"]
@@ -17,7 +17,14 @@ def validate_rewrite(value, cat, word_count):
     if any(not isinstance(entry.get("zh", {}).get(k), str) or not entry["zh"][k].strip()
            for k in ("headline", "summary")):
         errors.append("zh headline and summary required")
-    return errors or [str(flag) for flag in _wordcount_flags(entry, category=cat, source_word_count=word_count)]
+    if errors:
+        return errors
+    for level in ('easy', 'middle'):
+        lo, hi = rewrite_band(level, cat, word_count)
+        count = len(entry[f'{level}_en']['body'].split())
+        if not lo <= count <= hi:
+            errors.append(f'{level}: {count}w outside {lo}-{hi}')
+    return errors
 
 
 def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
@@ -124,7 +131,8 @@ def edit(root, snapshot, ranked, ask, boundary, stepwise, *, policy=None):
                 user = re.sub(r"^Today: .*", f"Today: {snapshot['date']}.", tri_variant_rewriter_input([(0, art)], category=cat))
                 rewrite_key = f"rewrite-{cat}-{sid}"
                 try:
-                    entry = ask(root, rewrite_key, TRI_VARIANT_REWRITER_PROMPT, user,
+                    from .agent_shadow_lengths import rewrite_rules
+                    entry = ask(root, rewrite_key, TRI_VARIANT_REWRITER_PROMPT + rewrite_rules(cat, art['word_count']), user,
                                 lambda value: validate_rewrite(value, cat, art["word_count"]))["articles"][0]
                 except AnswerRejected as exc:
                     pin_task_answers(root, rewrite_key)

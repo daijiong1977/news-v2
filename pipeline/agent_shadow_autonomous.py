@@ -206,7 +206,8 @@ class AutonomousEditor:
                     self.snapshot["sources"][source_name] = asdict(NewsSource(
                         -len(self.snapshot["sources"])-1, source_name, f"https://{host}/", "full", 3, 0, 1, False, False))
                 art = {**art, "source": source_name}
-            lo, hi = (250, 1200) if cat == "Fun" else (350, 1500) if cat == "Science" else (350, 1200)
+            from .agent_shadow_lengths import original_band
+            lo, hi = original_band(cat)
             if not art.get("skip_reason") and lo <= art["word_count"] <= hi:
                 final_urls.add(evidence_url)
                 good.append({**score, "category": cat, "article": art})

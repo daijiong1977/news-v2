@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T00:24:30Z",
+  "updated_at": "2026-10-01T01:23:43Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -637,6 +637,12 @@
       "date": "2026-09-30",
       "title": "Science和Fun复用低额混合测试，不重做已成功News",
       "note": "News hybrid恢复完成3篇NPR/PBS/BBC，修后正文逐字保留；恢复约6m39s，3个modifier任务和6次HTTP共30622新增DeepSeek token。详情年份/限定语小问题仅观察，不加修正轮次。新增science-fun-deepseek显式只收集Science/Fun历史和feed，DeepSeek生成+原生Bot修稿并自检，图片来源机械检查，publish/verify禁止。Science两出版方和Fun短文/题材规则保持；Python3.10离线161项通过，真实Science/Fun质量/费用待VM测试，未部署或merge。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "影子Fun不因短稿补字凑篇幅，生产保持原策略",
+      "note": "Science/Fun实测完成各3篇，流水线19m20s、15次抓正文、8个原生任务、27次DeepSeek调用共123889 token；详情全PASS仍漏因果、数字矛盾及无来源观点，未证明质量全面提升。用户确认来源配图很好，保持现有图片步骤。用户批准Fun下限180：影子原文180–1200、middle180–350或180–410；easy短源120–220，否则140–270。四个先失败的长度回归修后通过；Python3.10相关163项通过。生成及modifier提示与校验一致，生产wordcount_policy不改。未重新调用模型、写库、部署或merge；新规则用新运行目录。",
       "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
     }
   ]

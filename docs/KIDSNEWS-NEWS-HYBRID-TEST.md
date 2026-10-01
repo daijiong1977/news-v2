@@ -74,3 +74,14 @@ On pack completion stop. Inspect `done.json`, `review-results.json`, `metrics.js
 Previous full native run: 51m11s, 56 AI tasks, 18 body fetches, 9 final stories; observed user quota 7% weekly (not measured model tokens). Three News stories were all PBS; five drafts were rejected for unsupported facts; three images were removed when reviewers could not view pixels. Avoid fabricating a 7%→3% linear estimate.
 
 This experiment targets only News, normally one native planning task + three independent body reviews, plus rejected-story/discovery/correction tasks if needed. DeepSeek normally performs nine requests: three rewrites, three details, three detail reviews. Actual usage and per-call seconds are recorded in provider-audit; native tokens are unavailable, so user console must measure quota. Compare News-specific quality and costs, not this three-story cost against the previous nine-story total. Record start/end ET, full wall time (including Bot handoffs), body fetches, native/HTTP calls, tokens, retries, rejection reasons, source mix, importance and manual assessment. Do not claim the under-3% target achieved before console evidence.
+## 2026-09-30 Fun short-story adjustment (shadow only)
+
+User approved a 180-word floor after Science/Fun hybrid completed. Source originals
+may be 180–1200 words. Fun middle output may be 180–350 words for 180–349-word
+sources, otherwise 180–410; easy remains 120–220 for short sources and 140–270
+otherwise. Both writer and modifier receive the same ranges enforced in code.
+No padding with invented facts; safety, fact support and history checks remain.
+Use a fresh run directory: do not mutate accepted answers in a completed run.
+Production `wordcount_policy.py` is unchanged. The four observed length-only
+rejections (191/247/287/291 words) no longer fail solely on middle length.
+Photos are retained per user's visual confirmation; no extra visual AI stage.

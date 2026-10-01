@@ -33,7 +33,8 @@ Check every final claim against the source. If unable to fix safely, set facts_s
 Compare final event only with supplied same-category history and accepted events; uncertainty => event_clear false.
 There will be NO third audit: do not claim pass unless final text actually meets every rule.
 '''
-    value = ask(root, key, prompt, {'source': art['body'],
+    from .agent_shadow_lengths import rewrite_rules
+    value = ask(root, key, prompt + rewrite_rules(cat, art['word_count']), {'source': art['body'],
         'article': {k: entry[k] for k in ('source_id', 'easy_en', 'middle_en', 'zh')},
         'issues': issues, 'history': history, 'accepted_events': accepted}, validate)
     return key, value['corrected_article'], value
