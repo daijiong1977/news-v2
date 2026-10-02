@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-10-01 | high | shadow-release | [latest-readback-wait](2026-10-01-latest-readback-wait.md) | Immediate readback leaves new ZIP with old manifest | storage, CDN, resume, bounded-GET |
 | 2026-10-01 | high | shadow | [quote-punctuation-and-science-fetch](2026-10-01-shadow-quote-punctuation-and-science-fetch.md) | Verbatim quote typography blocks packaging; failed host starves other Science publishers | quotes, publisher, fetch-budget, resume |
 | 2026-10-01 | high | shadow / website | [shadow-website-release](2026-10-01-shadow-website-release.md) | Rejected groups resent; JSX missing; latest-only CI/backup/recovery added, real activation pending. | batch, JSX, reader, latest, rollback, CI |
 | 2026-10-01 | high | shadow pipeline | [shadow-http-resume](2026-10-01-shadow-http-resume.md) | HTTP errors/crash windows blocked same-directory resume; quota chasing starved other sections. | resume, HTTP, fallback, budget, stale, batch |

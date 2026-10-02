@@ -133,6 +133,17 @@ class LatestRelease:
     def __init__(self, root, storage):
         self.root = Path(root); self.root.mkdir(parents=True, exist_ok=True); self.storage = storage
     def state(self): return read(self.root/'release.json') if (self.root/'release.json').exists() else {}
+    def _wait_readback(self, key, blob, manifest):
+        # 2026-10-01: successful ZIP PUT read stale cache immediately; manifest
+        # never ran. Retry GET only for up to 75 seconds, never repeat a PUT.
+        for attempt in range(16):
+            remote = self.storage.download(key)
+            equal = sha(remote) == sha(blob) if key.endswith('.zip') else json.loads(remote) == manifest
+            if equal:
+                return
+            if attempt < 15:
+                time.sleep(5)
+        raise ValueError('Latest readback mismatch after 75 seconds: '+key+'; inspect before retry')
     def backup(self):
         with run_lock(self.root):
             if (self.root/'backup.json').exists():
@@ -155,17 +166,13 @@ class LatestRelease:
             state = {}
         state.update({'mode':mode,'target_sha':sha(data)})
         for key, blob, content_type in [('latest.zip',data,'application/zip'),('latest-manifest.json',encoded(manifest),'application/json')]:
-            digest = sha(blob); marker = state.get(key)
+            marker = state.get(key)
             if marker in ('attempting','complete'):
-                remote = self.storage.download(key)
-                equal = sha(remote) == digest if key.endswith('.zip') else json.loads(remote) == manifest
-                if not equal: raise ValueError('Uncertain upload or competing writer: inspect before retry')
+                self._wait_readback(key, blob, manifest)
             else:
                 state[key] = 'attempting'; write(self.root/'release.json',state)
                 self.storage.upload(path=key,file=blob,file_options={'content-type':content_type,'upsert':'true'})
-                remote = self.storage.download(key)
-                equal = sha(remote) == digest if key.endswith('.zip') else json.loads(remote) == manifest
-                if not equal: raise ValueError('Latest readback mismatch')
+                self._wait_readback(key, blob, manifest)
             state[key] = 'complete'; write(self.root/'release.json',state)
         if sha(self.storage.download('latest.zip')) != sha(data) or json.loads(self.storage.download('latest-manifest.json')) != manifest:
             raise ValueError('Competing writer during final readback')

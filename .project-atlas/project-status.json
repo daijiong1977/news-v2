@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T00:10:45Z",
+  "updated_at": "2026-10-02T00:37:38Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -474,6 +474,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-01",
+      "title": "latest 两对象半写后的恢复",
+      "note": "CI36945154027已写新ZIP但未写manifest，公开网站仍匹配备份；修复仅对回读GET每5秒有限等待至75秒，不重复PUT。使用原CI备份和状态执行resume，不重做文章、不把半写pair当备份。真实恢复发布由Bot执行，仍待核验。",
+      "source_ref": "docs/bugs/2026-10-01-latest-readback-wait.md"
+    },
     {
       "date": "2026-10-01",
       "title": "影子发布引语标点误拦和 Science 抓取公平性",

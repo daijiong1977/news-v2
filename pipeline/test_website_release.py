@@ -105,6 +105,49 @@ def test_uncertain_upload_reads_back_without_resend(tmp_path, monkeypatch):
     assert calls.count('latest.zip') == 1
 
 
+@pytest.mark.parametrize('resume', [False, True])
+def test_latest_waits_for_stale_reads_without_reupload(tmp_path, monkeypatch, resume):
+    from pipeline import website_release as wr
+    internal, _ = full_bundle(tmp_path, monkeypatch)
+    shell = tmp_path/'shell'; shell.mkdir(); (shell/'index.html').write_text('official')
+    package = wr.build_reader(internal.read_bytes(), shell, 'a'*40)
+    objects = {'latest.zip': package['zip'], 'latest-manifest.json': json.dumps(package['manifest']).encode()}
+    stale, remaining, calls, waits = {}, {}, [], []
+    class Storage:
+        def download(self, key):
+            if remaining.get(key, 0):
+                remaining[key] -= 1
+                return stale[key]
+            return objects[key]
+        def upload(self, path, file, file_options):
+            calls.append(path)
+            stale[path] = b'old cached zip' if path.endswith('.zip') else b'{}'
+            objects[path] = file; remaining[path] = 2
+    release = wr.LatestRelease(tmp_path/'release', Storage()); release.backup()
+    if resume:
+        runner.write(release.root/'release.json', {'mode':'publish', 'target_sha':wr.sha(package['zip']), 'latest.zip':'attempting'})
+        stale['latest.zip'] = b'old cached zip'; remaining['latest.zip'] = 2
+    monkeypatch.setattr(wr.time, 'sleep', waits.append)
+    release.publish(package['zip'], package['manifest'], acknowledge_slots=True)
+    assert release.state()['storage_verified'] is True
+    assert calls == (['latest-manifest.json'] if resume else ['latest.zip', 'latest-manifest.json'])
+    assert len(waits) == 4
+
+
+def test_latest_readback_timeout_keeps_attempt_marker_and_never_resends(tmp_path, monkeypatch):
+    from pipeline import website_release as wr
+    runner.write(tmp_path/'release.json', {'mode':'publish', 'target_sha':wr.sha(b'target'), 'latest.zip':'attempting'})
+    class Storage:
+        def download(self, key): return b'foreign writer'
+        def upload(self, **kw): pytest.fail('Uncertain PUT must not be resent')
+    waits=[]; monkeypatch.setattr(wr.time, 'sleep', waits.append)
+    release=wr.LatestRelease(tmp_path, Storage())
+    with pytest.raises(ValueError, match='readback'):
+        release._replace(b'target', {}, 'publish')
+    assert release.state()['latest.zip'] == 'attempting'
+    assert len(waits) == 15
+
+
 def test_rollback_refuses_corrupt_backup(tmp_path, monkeypatch):
     from pipeline.website_release import build_reader, LatestRelease
     internal, _ = full_bundle(tmp_path, monkeypatch)
