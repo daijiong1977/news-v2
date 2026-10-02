@@ -23,6 +23,11 @@ Do NOT run intermediate Python or read old tasks/review-finish answers. Then run
 kidsnews_bot --stage finalize, preserving the same directory and explicit publication
 parameters. Finalize calls NO model; exit2 is a specific targeted file repair only.
 Requests define exact schemas/paths; completed files are hash-pinned and cannot change.
+New runs use Pro for ID/summary ranking and Flash for five-draft writing, both with
+thinking disabled. Integer rank IDs are mapped by Python; Grok group IDs stay unchanged.
+See docs/KIDSNEWS-PRO-RANK-2026-10-02.md. shortlist_shortfall means fewer than five
+suitable candidates before writing: report it, never change cached ranks or weaken
+rules to force five. Old directories retain their frozen provider/configuration.
 No backfill/sixth candidate, DB/archive/email writes or cache deletion. Existing official
 template and publishing CI only; push means CI pending, not public verification.
 Older-than24h finalize needs --confirm-stale --registry fresh snapshot; it yields a

@@ -232,6 +232,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
             selected = {cat: db_config.load_sources(cat, today=date.fromisoformat(today), n=1000,
                         source_rows=registry['sources'] if registry is not None else None) for cat in active}
             context = {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback,
+                       'shortlist_contract': 'indices-v1' if test_profile == 'source-first-deepseek' else None,
                        'started_at': started_at,
                        'history': history, 'sources': {c: [asdict(s) for s in rows] for c, rows in selected.items()}}
             write(context_path, context)
@@ -262,6 +263,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                                "title": b["title"], "summary": re.sub(r"<[^>]+>", " ", b["summary"])[:600],
                                "link": b["link"], "published": b["published"], "source": b["_source_name"]})
     write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
+                               "shortlist_contract": context.get('shortlist_contract') if context else None,
                                "editor_mode": editor_mode, "test_profile": test_profile, "http_fallback": http_fallback,
                                "active_categories": list(active),
                                "review_mode": "modifier" if test_profile in HYBRID_PROFILES else "audit"})
@@ -302,11 +304,11 @@ def ask(root, key, system, material, validate, *, normalize=None):
     fallback_path = provider.work_dir / rid / 'http-attempt.json'
     fallback = fallback_path.exists() and read(fallback_path).get('status') == 'fallback_native'
     try:
-        if key.startswith('rewrite-batch-'):
-            from .agent_shadow_batch_json import decode_batch
-            value, format_actions = decode_batch(raw)
+        if key.startswith(('rewrite-batch-', 'rank-shortlist-')):
+            from .agent_shadow_batch_json import decode_batch, decode_json_object
+            value, format_actions = (decode_batch if key.startswith('rewrite-batch-') else decode_json_object)(raw)
             if format_actions:
-                recovery_path = root / 'batch-format-recovery.json'
+                recovery_path = root / ('batch-format-recovery.json' if key.startswith('rewrite-batch-') else 'rank-format-recovery.json')
                 recovery = read(recovery_path) if recovery_path.exists() else {}
                 recovery[key + ':' + rid] = {'raw_sha256': hashlib.sha256(raw.encode()).hexdigest(),
                     'actions': format_actions, 'content_policy': 'text unchanged; envelope only'}
@@ -628,9 +630,11 @@ def main():
                     args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
                 if args.providers_config:
                     from .agent_shadow_providers import validate_config
-                    config = read(args.providers_config)
-                    validate_config(config)
                     saved = root / "providers.json"
+                    # Profile defaults apply only when the run is first created.
+                    # A pull must not replace the model of an interrupted run.
+                    config = read(saved) if profile and saved.exists() else read(args.providers_config)
+                    validate_config(config)
                     if saved.exists() and read(saved) != config:
                         raise ValueError("Provider config is frozen; use a fresh directory")
                     if (root / "input.json").exists() and not saved.exists():

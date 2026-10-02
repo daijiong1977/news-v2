@@ -15,7 +15,9 @@ pipeline/kidsnews_groups.py。两条命令不是伪装旧逐任务循环。
 .venv/bin/python -m pipeline.kidsnews_bot --stage prepare --date D --registry work/D/RUN/registry.json --run-dir work/D/RUN
 ```
 
-Python抓全文/图、执行机械过滤；DeepSeek每栏一次 ID/摘要前8排序、一次选五写稿。
+Python抓全文/图、执行机械过滤；DeepSeek Pro每栏一次编号/摘要前8排序，Flash一次选五写稿，两者均关闭thinking。
+新目录使用indices-v1编号映射和统一ranked JSON；详情见KIDSNEWS-PRO-RANK-2026-10-02.md。
+Python过滤明确不适龄/错栏摘要、重复事件和模型标记的历史重复；少于5篇先报告shortlist_shortfall，不付费写不完整组。
 正常基线6次DeepSeek；只抓缓存缺失内容，不让Grok另做plan或浏览。
 输出drafts-for-grok.json（每栏5篇，共15篇Easy/Middle英文稿和中文标题/摘要），
 groups/manifest.json，以及groups/News-request.json、Science-request.json、Fun-request.json。

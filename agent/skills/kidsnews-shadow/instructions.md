@@ -3,6 +3,9 @@
 ## Current three-stage file workspace
 
 For NEW source-first-deepseek runs, docs/KIDSNEWS-THREE-STAGES-2026-10-02.md wins.
+Python uses Pro for summary ranking and Flash for draft generation; both disable
+thinking. Follow the frozen request and IDs, not the model's temporary numeric rank
+IDs. Do not repair source shortfalls by editing ranks or inventing new candidates.
 After --stage prepare, read the three self-contained groups/*-request.json files,
 one category at a time. Write selection envelopes with request_id/order/reason and
 one combined answer envelope per chosen article with request_id/id/value (an object).

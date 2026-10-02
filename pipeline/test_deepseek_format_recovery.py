@@ -46,3 +46,15 @@ def test_ask_recovers_envelope_without_rewriting_answer_or_native_handoff(tmp_pa
     journal = runner.read(tmp_path / 'batch-format-recovery.json')
     assert next(iter(journal.values()))['content_policy'] == 'text unchanged; envelope only'
     assert len(runner.read(tmp_path / 'metrics.json')['steps']) == 1
+
+
+def test_fence_and_trailing_comma_recovery_never_changes_article_strings():
+    from pipeline.agent_shadow_batch_json import decode_json_object
+    raw = '```json\n{"ranked":[{"id":1,"text":"Keep ,} and \\\"quotes\\\"",},],}\n```'
+    value, actions = decode_json_object(raw)
+    assert value == {'ranked': [{'id': 1, 'text': 'Keep ,} and "quotes"'}]}
+    assert actions == ['strip_json_fence', 'drop_trailing_comma', 'drop_trailing_comma', 'drop_trailing_comma']
+    for bad in ('prefix {"ranked":[]}', '{"ranked":[],"ranked":[1]}',
+                '{"ranked":[{"id":1}', '{"ranked":[1,,2]}', '{"ranked":NaN}'):
+        with pytest.raises(ValueError):
+            decode_json_object(bad)

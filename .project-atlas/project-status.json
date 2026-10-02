@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T19:38:05Z",
+  "updated_at": "2026-10-02T20:07:14Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR86三阶段影子共享源码：摘要排序/五稿、Grok成品详情、Python reader交付；274项3.10测试，15%词数容差、排序关闭thinking、窄JSON恢复和News儿童意义规则。新补丁尚未VM真实运行，不改main/DB/archive。",
+      "purpose": "PR86三阶段共享源码：新目录Pro摘要排序＋Flash五稿，均关闭thinking；整数编号映射、适龄/栏目/同事件过滤、JSON机械恢复，旧目录冻结配置恢复。真实三栏排序协议已测；完整新轮VM/发布未验证，不改main/DB/archive。",
       "status": "review"
     },
     {
@@ -553,6 +553,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-02",
+      "title": "摘要排序改Pro；数字编号和Python过滤比只加提示词可靠",
+      "note": "同摘要A/B中Pro格式更稳，闲时三栏排序约0.0083美元；新目录仅rank改deepseek-v4-pro，Flash写稿不变，均disabled thinking。indices-v1精确映射长ID，过滤模型明示重复/风险及同event_key；明确性侵/处决、Fun研究/悼念/投票等先Python排除。JSON围栏/尾逗号/多余右括号可机械恢复，不改文字，旧provider/prepare上下文保留。三次真实Pro协议调用一次通过；旧池News4/Fun约2是候选不足，写稿前shortfall报出。来源扩充仍待办，未新发布。",
+      "source_ref": "docs/KIDSNEWS-PRO-RANK-2026-10-02.md"
+    },
     {
       "date": "2026-10-02",
       "title": "摘要排序也须关闭默认thinking；伤亡量不等于儿童新闻重要性",

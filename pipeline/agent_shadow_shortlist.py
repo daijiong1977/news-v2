@@ -46,10 +46,13 @@ class DeepSeekSourceEditor(SourceFirstEditor):
             eligible = self.originals(cat, limit=None)
         finally:
             self.catalog[cat] = saved
-        if cat == 'News':
+        compact = self.snapshot.get('shortlist_contract') == 'indices-v1'
+        if cat == 'News' or compact:
             from .agent_shadow_news_audience import news_exclusion
-            rejected = {b['id']: news_exclusion(candidates[b['id']]) for b in eligible
-                        if news_exclusion(candidates[b['id']])}
+            from .agent_shadow_rank_contract import metadata_exclusion
+            reasons = {b['id']: (metadata_exclusion(candidates[b['id']], cat) if compact
+                                else news_exclusion(candidates[b['id']])) for b in eligible}
+            rejected = {sid: reason for sid, reason in reasons.items() if reason}
             write(self.root / f'shortlist-exclusions-{cat}-{target}.json', rejected)
             eligible = [b for b in eligible if b['id'] not in rejected]
         ids = {b['id'] for b in eligible}
@@ -65,6 +68,25 @@ class DeepSeekSourceEditor(SourceFirstEditor):
                     'topic_labels': list(TOPICS_BY_CATEGORY[cat]),
                     'accepted': [{'title': a['title'], 'topic': a['topic']} for a in self.accepted_context(cat)]}
         key = f'rank-shortlist-{cat}-{target}'
+        if compact:
+            from .agent_shadow_rank_contract import rank_prompt, normalize_rank
+            index_to_id = {i: b['id'] for i, b in enumerate(eligible, 1)}
+            for i, item in enumerate(material['candidates'], 1):
+                item['id'] = i
+            material['topic_labels'] = dict(TOPICS_BY_CATEGORY[cat])
+            value = self.ask(self.root, key, rank_prompt(self.snapshot, cat), material,
+                lambda v: validate_shortlist(v, ids, cat),
+                normalize=lambda v: normalize_rank(v, index_to_id, cat))
+            rows = value['catalog'][cat]
+            if cat == 'News':
+                rows.sort(key=lambda r: -r['importance'])
+            write(self.root / f'shortlist-{cat}-{target}.json', {
+                'contract': 'indices-v1', 'rows': rows, 'index_to_id': index_to_id,
+                'filtered': value['shortlist_audit'], 'metadata_ids': list(index_to_id.values()),
+                'target': target, 'input_sha256': hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()})
+            for row in rows:
+                candidates[row['id']]['planned_category'] = cat
+            return rows
         rules = RANK_RULES + sports_preference(self.snapshot, cat) + '''
 SHORTLIST OVERRIDE: Return only the requested final category, other arrays empty.
 Select and rank the best AT MOST EIGHT eligible IDs for that category, using ID and
@@ -148,6 +170,12 @@ def build_drafts(root):
         return {'ok': True, 'counts': saved['counts'], 'read': str(output), 'next': resume_command(root)}
     policy = DeepSeekSourceEditor(root, snapshot, ask, boundary, False)
     policy.plan()
+    if snapshot.get('shortlist_contract') == 'indices-v1':
+        shortfalls = {c: 5 - len(policy.catalog[c]) for c in CATS if len(policy.catalog[c]) < 5}
+        write(root / 'shortlist-shortfalls.json', shortfalls)
+        if shortfalls:
+            raise ValueError('shortlist_shortfall: fewer than five suitable candidates; '
+                             'inspect shortlist-shortfalls.json and source collection; no writer called')
     articles, counts = [], {}
     for cat in CATS:
         result = policy.pool(cat, 8, draft_only=True)

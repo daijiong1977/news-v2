@@ -1,5 +1,6 @@
 """Narrow, text-preserving batch envelope recovery; never finish truncated prose."""
 import json
+import re
 
 
 def _unique_object(pairs):
@@ -49,15 +50,54 @@ def _drop_unmatched_closers(raw):
     return ''.join(result), actions
 
 
-def decode_batch(raw):
+def _drop_trailing_commas(raw):
+    result, actions = [], []
+    quoted = escaped = False
+    for i, char in enumerate(raw):
+        if quoted:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == '"':
+                quoted = False
+            continue
+        if char == '"':
+            quoted = True
+        if char == ',' and raw[i + 1:].lstrip().startswith(('}', ']')):
+            actions.append('drop_trailing_comma')
+            continue
+        result.append(char)
+    return ''.join(result), actions
+
+
+def _invalid_constant(value):
+    raise ValueError('Nonfinite JSON value: ' + value)
+
+
+def decode_json_object(raw):
+    """Recover only mechanical envelope errors; reject duplicate/ambiguous keys."""
     actions = []
+    raw = raw.strip()
+    fence = re.fullmatch(r'```(?:json)?\s*\n([\s\S]*?)\n```', raw)
+    if fence:
+        raw = fence[1]
+        actions.append('strip_json_fence')
     try:
-        value = json.loads(raw, object_pairs_hook=_unique_object)
+        value = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
     except json.JSONDecodeError:
-        repaired, actions = _drop_unmatched_closers(raw)
-        value = json.loads(repaired, object_pairs_hook=_unique_object)
+        repaired, closers = _drop_unmatched_closers(raw)
+        repaired, commas = _drop_trailing_commas(repaired)
+        actions.extend(closers + commas)
+        value = json.loads(repaired, object_pairs_hook=_unique_object, parse_constant=_invalid_constant)
     if not isinstance(value, dict):
-        raise ValueError('Batch JSON object required')
+        raise ValueError('JSON object required')
+    return value, actions
+
+
+def decode_batch(raw):
+    value, actions = decode_json_object(raw)
     for row in value.get('drafts', []):
         if not isinstance(row, dict) or 'zh' not in row:
             continue
