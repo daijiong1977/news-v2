@@ -494,8 +494,7 @@ def advance(root: Path, *, stepwise=False):
     t0 = time.monotonic()
     emit_v1_shape(final, variants, details, snapshot["date"], emit_dir)
     if is_source_first(snapshot):
-        # Official reader already tolerates empty arrays/strings. Explicit status
-        # distinguishes a deliberately omitted module from corrupt/missing JSON.
+        # The package-only official reader adapter handles explicit omitted levels.
         for cat, stories in final.items():
             for i, story in enumerate(stories, 1):
                 for level in ('easy', 'middle'):
@@ -521,7 +520,8 @@ def advance(root: Path, *, stepwise=False):
                                 "test_profile": snapshot.get("test_profile"),
                                 "image_policy": "source_only_mechanical_not_visual_review" if is_hybrid(snapshot) else "default",
                                 "completed_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
-                                "next": "publish handoff: deploy ONLY to kidsnews-bot-shadow, then verify"})
+                                "next": (f"{sys.executable} -m pipeline.publication_bundle build --run-dir {root} --zip {root / 'publication.zip'}; check ZIP and get approval before website_delivery"
+                                         if is_source_first(snapshot) else "publish handoff: deploy ONLY to kidsnews-bot-shadow, then verify")})
     boundary(root, "pack", stepwise, t0)
     return {"ok": True, **read(root / "done.json")}
 

@@ -481,7 +481,7 @@
   "lessons": [
     {
       "date": "2026-10-02",
-      "title": "来源前置单篇成品与可恢复发布",
+        "title": "来源前置单篇成品与可恢复发布（pack后仅交接ZIP，不误导Vercel发布）",
       "note": "显式source-first-grok实现，每源最多12、4篇即停、首六全坏本轮暂停，至少三源十稿；Science跨publisher轮询；Python正文/图片先筛，WebP>=20000字节。正常DeepSeek3＋native13任务。facts false只告警，安全/证据仍硬门禁；精修和两级详情自检合并，有限修复后坏详情合法省略。固定模板包内省略详情适配避免0/0奖励；旧模式不升级，缓存保留。只读验证旧包resume36948143776和网站36948187869成功，58公网文件hash全部吻合；新模式未真实发布，真实回滚未执行。",
       "source_ref": "docs/KIDSNEWS-SOURCE-FIRST-2026-10-01.md"
     },

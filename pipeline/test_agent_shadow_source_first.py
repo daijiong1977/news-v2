@@ -189,6 +189,7 @@ def test_source_first_full_nine_zip_warning_policy_no_refetch(tmp_path, monkeypa
     snapshot, calls, tasks, _ = full_fixture(tmp_path, monkeypatch)
     result = run_steps(tmp_path)
     assert result['counts'] == {'news': 3, 'science': 3, 'fun': 3}
+    assert 'publication_bundle build' in result['next'] and 'get approval' in result['next']
     assert len([k for k in tasks if k.startswith('review-finish')]) == 9
     assert len(set(k for k in tasks if k.startswith('rewrite-batch'))) == 3
     assert not any(k.startswith('details-') or k.startswith('review-details-') for k in tasks)
