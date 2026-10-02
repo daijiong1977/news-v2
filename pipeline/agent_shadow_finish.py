@@ -357,7 +357,7 @@ def edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy):
                        '_topic': a['candidate']['topic'], '_importance': a['candidate']['importance'],
                        '_details': a['details'], '_ready_status': a['ready_status']} for a in chosen]
         minimum = 3 if cat == 'Fun' else 2
-        if len({publisher(a['candidate']) for a in chosen}) < minimum:
+        if snapshot.get('selection_policy') != 'twelve-five-three-v1' and len({publisher(a['candidate']) for a in chosen}) < minimum:
             warnings.append(f'{cat} has fewer than {minimum} independent publishers')
         if len(chosen) < 3:
             warnings.append(f'{cat}: only {len(chosen)} qualified articles; sources exhausted, no yesterday fallback')

@@ -127,6 +127,23 @@ if candidates are unsuitable; do not claim to have read full texts. Sources are 
             if cat not in progress['completed']:
                 self.catalog[cat] = self._rank(cat, 8)
                 self.save()
+                if self.snapshot.get('selection_policy') == 'twelve-five-three-v1':
+                    from .agent_shadow_source_first import collect
+                    collection_path = self.root / 'source-collection.json'
+                    # Expand only before the fixed-five handoff. Frozen sources,
+                    # source budgets and completed categories remain unchanged.
+                    while len(self.catalog[cat]) < 5 and collection_path.exists():
+                        state = read(collection_path)
+                        if not any(s['status'] == 'pending' for s in state['sections'][cat]['sources']):
+                            break
+                        candidates = collect(self.root, {}, self.snapshot['date'], expand=cat)
+                        known = {b['id'] for b in self.snapshot['candidates']}
+                        fresh = [b for b in candidates if b['id'] not in known]
+                        if fresh:
+                            self.snapshot['candidates'].extend(fresh)
+                            self.save()  # resume includes cached new candidates
+                            self.catalog[cat] = self._rank(cat, 8)
+                            self.save()
                 progress['completed'].append(cat)
                 write(progress_path, progress)
         self.boundary(self.root, 'plan', self.stepwise)

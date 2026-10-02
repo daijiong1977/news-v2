@@ -17,7 +17,8 @@ pipeline/kidsnews_groups.py。两条命令不是伪装旧逐任务循环。
 
 Python抓全文/图、执行机械过滤；DeepSeek Pro每栏一次编号/摘要前8排序，Flash一次选五写稿，两者均关闭thinking。
 新目录使用indices-v1编号映射和统一ranked JSON；详情见KIDSNEWS-PRO-RANK-2026-10-02.md。
-Python过滤明确不适龄/错栏摘要、重复事件和模型标记的历史重复；少于5篇先报告shortlist_shortfall，不付费写不完整组。
+Python每栏首批目标12篇机械合格；同一来源/学科允许，来源分组只影响优先顺序。新目录冻结selection_policy=twelve-five-three-v1，旧目录不改。
+Pro按最好到备用返回5–8个合格不同事件。Python过滤明确不适龄/错栏摘要、重复事件和模型标记的历史重复；不足5篇先补采该栏下一配置源并重排，保存正文/图片、其他栏不重跑。冻结合规来源耗尽仍不足，记录shortlist_shortfall，不虚构或重复事件。
 正常基线6次DeepSeek；只抓缓存缺失内容，不让Grok另做plan或浏览。
 输出drafts-for-grok.json（每栏5篇，共15篇Easy/Middle英文稿和中文标题/摘要），
 groups/manifest.json，以及groups/News-request.json、Science-request.json、Fun-request.json。
@@ -37,6 +38,7 @@ groups/manifest.json，以及groups/News-request.json、Science-request.json、F
 > 阅读该栏目request。DeepSeek排序和python_audit供参考；你从固定5篇完成最好的3篇。
 > News重要适龄新闻第一；Science尽量学科/出版方不同；Fun优先真正趣味与当前游泳/网球明星。
 > 这些是软偏好，必要时放宽；不能后补第六篇。逐篇完成正文精修＋Easy/Middle详情＋自检。
+> 每栏必须在固定五篇里完成三篇；同一来源、同一学科、相近题材都可以，同一事件/研究/发现不可以重复，同栏七天历史去重继续执行。
 > 保留Easy、Middle和中文标题/摘要。删不适龄细节、修归因和限定语；必要时加入准确通用解释，
 > 但不能编新闻事实、数字、年份、引语或无出处的另一方观点。背景/观点可以为空。
 > 各级题目只依据对应最终正文；选项长度平衡。按request的schema保存，每篇写完立即存盘。

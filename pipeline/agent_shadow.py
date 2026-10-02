@@ -233,6 +233,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                         source_rows=registry['sources'] if registry is not None else None) for cat in active}
             context = {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback,
                        'shortlist_contract': 'indices-v1' if test_profile == 'source-first-deepseek' else None,
+                       'selection_policy': 'twelve-five-three-v1' if test_profile == 'source-first-deepseek' else None,
                        'started_at': started_at,
                        'history': history, 'sources': {c: [asdict(s) for s in rows] for c, rows in selected.items()}}
             write(context_path, context)
@@ -264,6 +265,7 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                                "link": b["link"], "published": b["published"], "source": b["_source_name"]})
     write(root / "input.json", {"date": today, "candidates": candidates, "history": history, "sources": sources,
                                "shortlist_contract": context.get('shortlist_contract') if context else None,
+                               "selection_policy": context.get('selection_policy') if context else None,
                                "editor_mode": editor_mode, "test_profile": test_profile, "http_fallback": http_fallback,
                                "active_categories": list(active),
                                "review_mode": "modifier" if test_profile in HYBRID_PROFILES else "audit"})

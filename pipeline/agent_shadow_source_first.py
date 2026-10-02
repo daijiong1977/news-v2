@@ -97,6 +97,8 @@ def collect(root, sources_by_cat, today, *, expand=None):
         if state['date'] != today:
             raise ValueError('source checkpoint date is frozen')
     else:
+        context_path = root / 'prepare-context.json'
+        fixed = context_path.exists() and read(context_path).get('selection_policy') == 'twelve-five-three-v1'
         sections = {}
         for cat, rows in sources_by_cat.items():
             selected = group_sources(rows, today) if cat == 'Science' else rows
@@ -105,7 +107,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
             sections[cat] = {'sources': [{'source': asdict(s), 'publisher': publisher_key(s),
                 'results': [], 'windows': [], 'status': 'pending'} for s in selected], 'complete': False}
         state = {'version': 1, 'date': today, 'sections': sections,
-                 'limits': {'per_source': 12, 'pass_target': 4, 'min_groups': 3, 'min_good': 10,
+                 'limits': {'per_source': 12, 'pass_target': 4, 'min_groups': 0 if fixed else 3, 'min_good': 12 if fixed else 10,
                             'max_unique_articles': 12 * sum(len(c['sources']) for c in sections.values())},
                  'unique_attempts': 0}
         write(path, state)
@@ -141,7 +143,8 @@ def collect(root, sources_by_cat, today, *, expand=None):
                 good += sum(r.get('qualified', False) for r in source_state['results'])
                 continue
             # Initial stop respects group opportunities; incremental stop finishes one new source.
-            if (not expand and len(done_groups) >= 3 and good >= 10) or (expand and newly_processed >= 1):
+            if (not expand and len(done_groups) >= state['limits']['min_groups']
+                    and good >= state['limits']['min_good']) or (expand and newly_processed >= 1):
                 break
             source = NewsSource(**source_state['source'])
             if 'entries' not in source_state:
@@ -236,7 +239,8 @@ def collect(root, sources_by_cat, today, *, expand=None):
             newly_processed += 1
             sync()
         section.update(complete=True, qualified=good, attempted_groups=len(done_groups),
-                       shortfall=max(0, 10 - good), groups_shortfall=max(0, 3 - len(done_groups)))
+                       shortfall=max(0, state['limits']['min_good'] - good),
+                       groups_shortfall=max(0, state['limits']['min_groups'] - len(done_groups)))
         sync()
     return [r['candidate'] for r in all_results() if r.get('qualified')]
 

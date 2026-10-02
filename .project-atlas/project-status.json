@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T20:07:14Z",
+  "updated_at": "2026-10-02T21:10:03Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -553,6 +553,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-02",
+      "title": "十二候选选五再成三；来源学科允许重复，事件仍去重",
+      "note": "新目录冻结twelve-five-three-v1：每栏首批目标12篇机械合格，取消不同出版方数量门槛；Pro摘要选五到八，Flash写五稿。短名单不足五时仅补采缺少栏目下一配置源并重排，缓存和其他栏目保留；Grok固定五篇完成三篇，同源同学科允许，同事件/同研究/七天历史仍排除。303项Python3.10离线测试通过，未新调用模型或部署。真实来源耗尽仍不足不制造重复，保存缺口供维护者处理。",
+      "source_ref": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md"
+    },
     {
       "date": "2026-10-02",
       "title": "摘要排序改Pro；数字编号和Python过滤比只加提示词可靠",

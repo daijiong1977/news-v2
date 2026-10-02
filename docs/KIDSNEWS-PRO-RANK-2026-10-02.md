@@ -44,3 +44,6 @@ pipeline/agent_shadow_batch_json.py统一机械JSON解码：可去除独立JSON�
 Python3.10回归覆盖数字编号精确映射、坏ID拒绝、同事件/历史/风险过滤、新旧目录恢复、三栏排序到15稿及断点复用、JSON字面字符串保护和坏格式拒绝。完整测试结果写入本次PR。
 
 价格来源：https://api-docs.deepseek.com/quick_start/pricing/ 。费用按返回用量和官方价格估算，账单以服务端为准。
+# 数量规则后续更新
+
+新目录的 selection_policy=twelve-five-three-v1 以每栏首批12篇为目标，Pro选5–8个不同合格事件，不足时由Python补采该栏下一配置源并重排。允许同来源、同学科；同事件与七天历史去重不放宽。固定五篇交给Grok完成三篇。以下旧样本的4/2缺口是当时测试证据；入口补采代码现已补齐，新的真实VM全轮仍需验收。

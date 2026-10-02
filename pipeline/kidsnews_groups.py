@@ -125,6 +125,11 @@ Return all five IDs in order, the three completed winners FIRST and two reserves
 News: important suitable story first. Science: prefer different disciplines and
 publishers. Fun: genuine fun, current swimming/tennis stars, then other topics.
 These are soft preferences; relax them to complete three, never add a sixth.
+Exactly three finished stories per category is the goal. Science can have all
+three from one publisher and one discipline. Similar topics are allowed, but
+the same event/research/discovery is NOT allowed twice, including seven-day history.
+Complete the best three by removing unsuitable details and adding accurate general
+explanations when needed; record relaxed preferences. Never invent news facts.
 One article at a time: correct body, create Easy/Middle details and self-check
 together. Save each answer immediately. Do NOT run intermediate Python, search,
 change code, call external models, deploy, write databases or delete checkpoints.

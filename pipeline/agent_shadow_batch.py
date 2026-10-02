@@ -131,6 +131,8 @@ highest-importance candidate in skipped. Source diversity is secondary to
 important News, factual support, safety and same-category historical deduplication.
 Avoid duplicate events within the five; use the supplied selection/history flags.
 '''
+    if snapshot.get('selection_policy') == 'twelve-five-three-v1':
+        prompt += '\nComplete exactly FIVE drafts. Repeated publishers and disciplines are allowed; never skip a good story just for source/topic variety. Keep all five events distinct.\n'
     return prompt + sports_preference(snapshot, category) + (NEWS_AUDIENCE_RULE if category == 'News' else '')
 
 

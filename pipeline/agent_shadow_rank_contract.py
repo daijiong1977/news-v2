@@ -91,6 +91,18 @@ items with a warning: leave them out. Preserve uncertainty and planned-event dat
 '''
     if category == 'News':
         prompt += NEWS_AUDIENCE_RULE
+    if snapshot.get('selection_policy') == 'twelve-five-three-v1':
+        prompt += '''
+FIXED FIVE GOAL: Return FIVE to EIGHT best distinct eligible events whenever
+at least five are available. Repeated publishers and repeated disciplines/topics
+are fully allowed, including five biology stories from the same science outlet.
+Do not exclude a candidate for being less exciting, less important, or similar in
+topic to another. Those qualities affect order only. Use the best remaining
+eligible events to reach five. The SAME EVENT is never a different candidate:
+preserve within-section seven-day and current-pool event deduplication.
+If fewer than five distinct safe events really exist, return all of them honestly;
+Python will collect additional sources before writing the fixed five.
+'''
     return prompt + sports_preference(snapshot, category)
 
 
