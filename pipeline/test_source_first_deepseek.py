@@ -71,6 +71,27 @@ def test_shortlist_cannot_invent_id_duplicate_or_wrong_section(tmp_path, monkeyp
     assert validate_shortlist({'catalog': {'News': [{**row, 'history_status': 'uncertain'}], 'Science': [], 'Fun': []}}, {'a'}, 'News')
 
 
+def test_casualty_outbreak_removed_before_paid_news_ranking(tmp_path, monkeypatch):
+    from pipeline.agent_shadow_shortlist import DeepSeekSourceEditor
+    from pipeline.agent_shadow_news_audience import NEWS_AUDIENCE_RULE
+    snapshot, _, _, _, ask = fixture(tmp_path, monkeypatch)
+    target = next(c for c in snapshot['candidates'] if c['category'] == 'News')
+    target['title'] = "Congo's Ebola outbreak passes 4,000 deaths"
+    policy = DeepSeekSourceEditor(tmp_path, snapshot, ask, lambda *a: None, False)
+    policy.catalog = {c: [] for c in runner.CATS}
+    originals = [{'id': target['id']}, {'id': next(c['id'] for c in snapshot['candidates']
+                  if c['category'] == 'News' and c['id'] != target['id'])}]
+    monkeypatch.setattr(policy, 'originals', lambda *a, **kw: originals)
+    def rank(root, key, prompt, material, validate):
+        assert NEWS_AUDIENCE_RULE in prompt
+        assert target['id'] not in {c['id'] for c in material['candidates']}
+        return {'catalog': {'News': [], 'Science': [], 'Fun': []}}
+    policy.ask = rank
+    assert policy._rank('News', 8) == []
+    assert runner.read(tmp_path / 'shortlist-exclusions-News-8.json')[target['id']]
+    assert target['id'] in {c['id'] for c in snapshot['candidates']}
+
+
 def test_rank_role_and_new_profile_do_not_change_old_routing():
     from pipeline.agent_shadow_providers import task_role, validate_config
     from pipeline.agent_shadow_profiles import is_source_first, is_batch, uses_native_details

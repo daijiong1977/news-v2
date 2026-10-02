@@ -12,6 +12,7 @@ from .agent_shadow_modifier import english_errors
 from .agent_shadow_details import NATIVE_DETAILS_PROMPT, validate_details, quiz_quality_warnings
 from .news_rss_core import SAFETY_DIMS, evaluate_rewriter_safety, keyword_in_body
 from .agent_shadow_lengths import WORD_TOLERANCE_RULE
+from .agent_shadow_news_audience import NEWS_AUDIENCE_RULE
 
 METHOD = '第二模型精修＋详情生成并自检；Python校验；无独立审核'
 PROMPT = '''You are the final Kids News editor. ONE article at a time, ONE answer.
@@ -38,7 +39,7 @@ facts_supported false is a warning in this initial release, NOT a request to dis
 fixable work. Still correct clear errors now. event_clear must be true: compare ONLY
 supplied final-section previous-seven-day history and accepted same-round events;
 duplicate or uncertain => false. Source reputation is not proof of each generated claim.
-''' + WORD_TOLERANCE_RULE + '\n' + NATIVE_DETAILS_PROMPT + '''
+''' + WORD_TOLERANCE_RULE + '\n' + NEWS_AUDIENCE_RULE + '\n' + NATIVE_DETAILS_PROMPT + '''
 COMBINED ANSWER OVERRIDE: return the combined object above, not just {details:...}.
 Details must correspond to the final corrected article and use the six specified fields.
 '''

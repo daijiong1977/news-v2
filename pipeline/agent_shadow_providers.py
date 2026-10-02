@@ -148,6 +148,12 @@ class TaskRouter:
 
     def prepare_payload(self, payload):
         if self.choice.get('type') == 'http':
+            if self.key.startswith('rank-shortlist-'):
+                # DeepSeek now defaults to high-effort thinking. Compact ID
+                # ranking must not silently spend thousands of reasoning tokens.
+                return {**payload, 'model': self.choice['model'],
+                        'max_tokens': 4096, 'response_format': {'type': 'json_object'},
+                        'thinking': {'type': 'disabled'}, 'temperature': 0.2}
             if self.key.startswith('rewrite-batch-'):
                 # Context capacity is separate from completion capacity. Five
                 # bilingual drafts previously hit the caller's 8192-token cap.

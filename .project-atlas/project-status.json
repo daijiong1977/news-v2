@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T17:09:04.146Z",
+  "updated_at": "2026-10-02T19:38:05Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR86真正三阶段：Python/DeepSeek先输出15稿，Grok连续五选三及修稿详情自检，Python统一校验和正式reader/现有CI交付；3.10离线255项通过，不改main/DB/archive，真实VM发布待验收。",
+      "purpose": "PR86三阶段影子共享源码：摘要排序/五稿、Grok成品详情、Python reader交付；274项3.10测试，15%词数容差、排序关闭thinking、窄JSON恢复和News儿童意义规则。新补丁尚未VM真实运行，不改main/DB/archive。",
       "status": "review"
     },
     {
@@ -553,6 +553,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-02",
+      "title": "摘要排序也须关闭默认thinking；伤亡量不等于儿童新闻重要性",
+      "note": "three-stage-2四次排序仅ID/标题/RSS摘要却花24424 reasoning tokens；参数补JSON/4096/disabled。Science/Fun原始JSON未截断，sibling zh及多余右括号可Python恢复，文字与原答卷不改，274项3.10回归。刚果埃博拉死亡数字稿在News排序前排除，国际稿需儿童意义；法国暴力表达、NASA旧计划日期、Science全生物及体育源未尝试已记录。真实日志cfb418c，三栏公开中文payload哈希吻合；本补丁未重发布。",
+      "source_ref": "docs/KIDSNEWS-THREE-STAGE-2-REVIEW-2026-10-02.md"
+    },
     {
       "date": "2026-10-02",
       "title": "英文正文上下限允许15%容差，避免无意义定点修稿",

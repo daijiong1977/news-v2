@@ -302,7 +302,17 @@ def ask(root, key, system, material, validate, *, normalize=None):
     fallback_path = provider.work_dir / rid / 'http-attempt.json'
     fallback = fallback_path.exists() and read(fallback_path).get('status') == 'fallback_native'
     try:
-        value = json.loads(raw)
+        if key.startswith('rewrite-batch-'):
+            from .agent_shadow_batch_json import decode_batch
+            value, format_actions = decode_batch(raw)
+            if format_actions:
+                recovery_path = root / 'batch-format-recovery.json'
+                recovery = read(recovery_path) if recovery_path.exists() else {}
+                recovery[key + ':' + rid] = {'raw_sha256': hashlib.sha256(raw.encode()).hexdigest(),
+                    'actions': format_actions, 'content_policy': 'text unchanged; envelope only'}
+                write(recovery_path, recovery)
+        else:
+            value = json.loads(raw)
         if normalize:
             value = normalize(value)
         errors = validate(value)

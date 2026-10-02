@@ -52,3 +52,27 @@ def test_batch_material_has_full_text_once_and_exact_count():
     assert all('paragraphs' not in r['article'] for r in material['candidates'])
     assert material['candidates'][0]['target_words'] == {'easy': 205, 'middle': 295}
     assert rows[0]['article']['paragraphs'] == ['original text']
+
+
+def test_rank_http_also_disables_default_reasoning_and_enables_json(tmp_path):
+    write(tmp_path / 'providers.json', {'roles': {'rank': {
+        'type': 'http', 'model': 'deepseek-flash',
+        'endpoint': 'https://api.deepseek.com/chat/completions', 'key_env': 'TEST_KEY'}}})
+    sent = TaskRouter(tmp_path, 'rank-shortlist-News-8').prepare_payload({'messages': []})
+    assert sent['thinking'] == {'type': 'disabled'}
+    assert sent['response_format'] == {'type': 'json_object'}
+    assert sent['max_tokens'] == 4096
+
+
+def test_news_audience_rule_in_both_writer_and_final_editor():
+    from pipeline.agent_shadow_finish import PROMPT
+    assert 'death toll is NOT importance' in batch_prompt({}, 'News')
+    assert 'death toll is NOT importance' in PROMPT
+
+
+def test_death_count_outbreak_is_not_news_shortlist_but_response_can_be():
+    from pipeline.agent_shadow_news_audience import news_exclusion
+    assert news_exclusion({'title': "Congo's Ebola outbreak passes 4,000 deaths"})
+    assert not news_exclusion({'title': 'Scientists test a new Ebola vaccine'})
+    assert not news_exclusion({'title': 'US schools prepare for flu season with vaccination clinics'})
+    assert not news_exclusion({'title': 'Shooting stars light up the sky'})
