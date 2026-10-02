@@ -181,7 +181,11 @@ def build(root: Path, output: Path, shell: Path | None = None):
             evidence_warnings = []
             for level in ('easy', 'middle'):
                 payload = json.loads(files[f'article_payloads/payload_{sid}/{level}.json'])
-                evidence_warnings.extend(f'{level}: {warning}' for warning in evidence_gate(payload['summary'], original_text))
+                level_listing = json.loads(files[f'payloads/articles_{cat.lower()}_{level}.json'])['articles']
+                level_card = next(c for c in level_listing if c['id'] == sid)
+                for field, text in (('body', payload['summary']), ('title', payload['title']),
+                                    ('card_title', level_card['title']), ('card_summary', level_card['summary'])):
+                    evidence_warnings.extend(f'{level}.{field}: {warning}' for warning in evidence_gate(text, original_text))
             outcome = next(o for o in reversed(state[cat]['outcomes']) if o['id'] == candidate_id)
             src_id = source_by_id.get(candidate_id)
             records.append({'category': cat, 'story_slot': slot, 'published_date': snapshot['date'],

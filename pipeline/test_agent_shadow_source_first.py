@@ -232,7 +232,7 @@ def test_detail_only_failures_extra_repair_and_zip_degrade_not_replace_article(t
     (shell / 'article.jsx').write_text(template())
     reader = build_reader((tmp_path / 'publication.zip').read_bytes(), shell, 'a' * 40)
     public = check_reader(reader['zip'], reader['manifest'])
-    assert reader['manifest']['template_adapter'] == 'source-first-detail-availability-v1'
+    assert reader['manifest']['template_adapter'] == 'source-first-detail-availability-v2'
     assert b"detail.detail_status !== 'omitted' && tab === 'quiz'" in public['article.jsx']
     assert not any(n.startswith('finished-articles/') for n in public)
 

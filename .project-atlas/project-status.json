@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T04:17:23.721Z",
+  "updated_at": "2026-10-02T05:09:37.134Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR86 source-first-grok：来源前置6/3/3、4篇即停、20KB图门槛、Science分组、DeepSeek正文和Grok成品/详情；217项Py3.10离线通过，新模式真实质量待验收，生产main/DB/archive不动。",
+      "purpose": "PR86 source-first-grok已完成三Agent最终复核；17项新增回归，Python3.10相关235项通过。来源前置、逐篇修稿/详情、reader与发布恢复已修；新模式真实质量仍待VM验证，未改main/DB/archive。",
       "status": "review"
     },
     {
@@ -479,6 +479,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-02",
+      "title": "最终复核须检查真实reader映射及恢复不变量",
+      "note": "三Agent直接修复：冻结prepare不依赖原连接器且不重置起时；feed与跳转URL双查重、正文缓存hash、补选ready上下文、30项目录退役保留最终栏目；详情修复保正文/另一有效级别、坏JSON降级、空答卷恢复及清理日志；真实article.jsx mapper传detail_status；发布resume/rollback锁定ZIP和manifest；标题卡片证据纳入pack且引语只告警。17项回归先失败后通过，共235项Python3.10离线通过。Spec消除待实现矛盾；正式reader仍须九篇。未真实模型、写库、部署、merge；保留缓存。",
+      "source_ref": "docs/KIDSNEWS-SOURCE-FIRST-FINAL-REVIEW-2026-10-02.md"
+    },
     {"date":"2026-10-02","title":"引语启发式不再阻止发布","note":"用户要求上次Unsupported quoted sentence类门禁改为warning。引语逐字不匹配返回告警，逐篇精修不因此修稿/拒稿；ZIP记录和manifest以及公开latest-manifest保存evidence_warnings。不代表引语准确，数字/英文结构/儿童安全及其他发布完整性门禁不变。未调用模型或实际发布，feature PR同步Bot。","source_ref":"pipeline/website_release.py"},
     {
       "date": "2026-10-02",

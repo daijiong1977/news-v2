@@ -3,7 +3,8 @@ import pytest
 
 
 def template():
-    return '''const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'];
+    return '''const mapped = { body: d.summary };
+const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'];
   const stages = [
     { id:'read', label:'Read & Words', emoji:'📖' },
     { id:'analyze', label:'Background', emoji:'🔍' },

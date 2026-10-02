@@ -143,7 +143,7 @@ def check_stale(root, confirm, registry):
     blocked = set(ask(root, key,
         'Recheck every candidate against ONLY its own section previous-seven-day event/URL history. '
         'Return {"blocked_ids":[...]}; include duplicate AND uncertain candidates. No browsing or writing articles.',
-        {'candidates': [{**b, 'category': final_category.get(b['id'], b['category'])} for b in snapshot['candidates']],
+        {'candidates': [{**b, 'category': final_category.get(b['id'], b.get('planned_category', b['category']))} for b in snapshot['candidates']],
          'history': history}, validate)['blocked_ids'])
     for path in root.glob('pool-*.json'):
         write(path, [b for b in read(path) if b['id'] not in blocked])
@@ -163,7 +163,7 @@ def check_stale(root, confirm, registry):
         for c in CATS:
             state[c]['accepted'] = [a for a in state[c]['accepted'] if a['candidate']['id'] not in blocked]
             state[c]['outcomes'].extend({'id': sid, 'category': c, 'status': 'stale_history_rejected'}
-                for sid in blocked if final_category.get(sid, candidates[sid]['category']) == c)
+                for sid in blocked if final_category.get(sid, candidates[sid].get('planned_category', candidates[sid]['category'])) == c)
         write(state_path, state)
     snapshot['history'] = history
     write(root / 'input.json', snapshot)
@@ -202,30 +202,40 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     started_at = datetime.now(ZoneInfo("America/New_York")).isoformat()
     candidates, history, sources, seen = [], {}, {}, set()
     seen_titles = set()
-    registry = read(registry_file) if registry_file else None
-    if registry is not None and registry.get("date") != today:
-        raise ValueError("connector registry must have the requested ET date")
-    if registry is not None and ("history" not in registry or not isinstance(registry["history"], list)):
-        raise ValueError("registry history list is required; check the Supabase connector")
-    # Validate histories before source collection; an empty connector result is not clearance.
-    for cat in CATS:
-        history[cat] = [] if cat not in active else (registry_history(registry['history'], cat, today)
-                        if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
+    context_path = root / 'prepare-context.json'
+    context = read(context_path) if is_source_first({'test_profile': test_profile}) and context_path.exists() else None
+    registry = None
+    if context is not None:
+        if any(context.get(k) != v for k, v in {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback}.items()):
+            raise ValueError('Interrupted prepare context is frozen; use same date/profile/fallback')
+        history = context.get('history', {})
+        if set(history) != set(CATS) or any(not isinstance(rows, list) for rows in history.values()):
+            raise ValueError('frozen prepare history is missing or malformed; check the connector snapshot')
+        # Preserve age across interrupted collection. The next step still enforces
+        # explicit stale confirmation and fresh-history review after 24 hours.
+        started_at = context.get('started_at') or datetime.fromtimestamp(context_path.stat().st_mtime, ZoneInfo('America/New_York')).isoformat()
+    else:
+        registry = read(registry_file) if registry_file else None
+        if registry is not None and registry.get("date") != today:
+            raise ValueError("connector registry must have the requested ET date")
+        if registry is not None and ("history" not in registry or not isinstance(registry["history"], list)):
+            raise ValueError("registry history list is required; check the Supabase connector")
+        # Validate histories before source collection; an empty connector result is not clearance.
+        for cat in CATS:
+            history[cat] = [] if cat not in active else (registry_history(registry['history'], cat, today)
+                            if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
     if not any(history.values()):
         raise ValueError("all three sections have zero history; check the Supabase connector before retrying")
     if is_source_first({'test_profile': test_profile}):
         from .agent_shadow_source_first import collect
-        context_path = root / 'prepare-context.json'
-        context = read(context_path) if context_path.exists() else None
         if context is None:
             selected = {cat: db_config.load_sources(cat, today=date.fromisoformat(today), n=1000,
                         source_rows=registry['sources'] if registry is not None else None) for cat in active}
             context = {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback,
+                       'started_at': started_at,
                        'history': history, 'sources': {c: [asdict(s) for s in rows] for c, rows in selected.items()}}
             write(context_path, context)
         else:
-            if any(context.get(k) != v for k, v in {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback}.items()):
-                raise ValueError('Interrupted prepare context is frozen; use same date/profile/fallback')
             from .news_sources import NewsSource
             selected = {c: [NewsSource(**s) for s in rows] for c, rows in context['sources'].items()}
             history = context['history']

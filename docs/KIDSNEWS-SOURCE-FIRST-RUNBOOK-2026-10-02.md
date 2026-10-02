@@ -32,3 +32,11 @@ git pull --ff-only origin codex/stepwise-full-shadow
 8. 如果 latest 读回失败，保留 release.json 和首次备份 artifact。用同一包和原 backup_run_id 走明确 resume；不得 whole-job rerun 重备份半写状态。回滚使用原备份对；不得口头称回滚已验收。日志推送遵循 BOT.md 的私有 logs 分支规则。
 
 部署实证：旧包恢复发布36948143776、网站Action36948187869成功，58文件公开hash一致。新模式离线测试不是已发布证明，真实新轮质量/回滚仍需验收。
+
+最终复核补充（2026-10-02）：
+
+- prepare 中断后重跑相同命令，优先使用已冻结 prepare-context.json，不重新依赖连接器；开始时间不重置，超过24小时仍须重核历史。
+- 详情修复只返回脚本要求的失败详情，不能修改已通过正文/自检，也不能覆盖另一已合格阅读级别。坏格式仍走有限补修或详情降级，不把好正文丢掉。
+- 只读 status/日志不等于生产发布成功。网站reader仍必须三栏各三篇；缺稿可保留本地结果，不以不完整reader覆盖网站。
+- resume 同时锁定 reader.zip 和 latest-manifest.json；不得手改manifest后沿用同一发布状态。rollback遇到不属于原包/备份的manifest会停止，避免覆盖其他写入者。
+- 正式模板省略详情适配器为v2，传递detail_status到页面状态；省略详情的稿件只保留阅读，不展示空测验。

@@ -149,18 +149,19 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
         return ask(root, key, prompt, data, lambda v: [] if isinstance(v, dict) else ['JSON object required'])
     while 'result' not in state:
         phase = state['phase']
+        detail_only = phase == 'detail_fix' or (phase == 'fix' and not checked_body(state['value'], cat, art))
         key = f'review-finish-{cat}-{sid}' if phase == 'initial' else f'review-finish-fix-{cat}-{sid}' if phase == 'fix' else f'review-detail-fix-{cat}-{sid}'
-        if phase == 'detail_fix':
+        if detail_only:
             prompt = NATIVE_DETAILS_PROMPT + '\nRepair ONLY failed details. The supplied final article is immutable. Return ONLY {"details":{...}}.'
             data = {'source': art['body'], 'article': state['value']['corrected_article'], 'details': state['value'].get('details'), 'errors': state['errors']}
         else:
             prompt = PROMPT + ('\nTARGETED FIX ONLY: correct listed failures in this ONE article. Keep all passing fields unchanged; if body changes update affected details.' if phase == 'fix' else '')
             data = {**material, **({'previous': state['value'], 'errors': state['errors']} if phase == 'fix' else {})}
         try:
-            value = state.get('pending_value') or request(key, prompt, data)
+            value = state['pending_value'] if 'pending_value' in state else request(key, prompt, data)
         except AnswerRejected as exc:
             pin_task_answers(root, key)
-            if phase == 'detail_fix':
+            if detail_only:
                 value = {'details': state['value'].get('details')}
                 state['detail_repair_error'] = str(exc)
             else:
@@ -168,11 +169,22 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
                 save(); break
         state['pending_value'] = value
         save()  # answer committed before checks or next handoff
-        if phase == 'detail_fix':
-            if set(value) != {'details'}:
-                state['detail_repair_error'] = 'Detail-only repair attempted to change passed body; ignored'
+        if detail_only:
+            # Freeze an already passing article and complete detail levels. A
+            # repair cannot invalidate them, even when its JSON is malformed.
+            # Accept older combined answers only if all article/review fields
+            # exactly match; never adopt details generated for a changed body.
+            previous = state['value']
+            compatible = set(value) == {'details'} or (set(value) == set(previous) and
+                all(value[k] == previous[k] for k in previous if k != 'details'))
+            if not compatible:
+                state['detail_repair_error'] = 'Detail-only repair attempted to change passed body/self-check; ignored'
             else:
-                state['value']['details'] = value['details']
+                passing, cleaned_items = sanitize_details(previous.get('details'), previous['corrected_article'])
+                retained_cleanups = [item for item in cleaned_items if any(item.startswith(slot + '.') for slot in passing)]
+                state['removed'] = list(dict.fromkeys(state.get('removed', []) + retained_cleanups))
+                replacement = value.get('details')
+                previous['details'] = {**(replacement if isinstance(replacement, dict) else {}), **passing}
             value = state['value']
         else:
             state['value'] = value
@@ -201,6 +213,8 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
         slots, removed = sanitize_details(value.get('details'), value['corrected_article'])
         from .quiz_shuffle import shuffle_quiz_options
         warnings = quiz_quality_warnings(slots)
+        if state.get('detail_repair_error'):
+            warnings.append(state['detail_repair_error'])
         from .website_release import evidence_gate
         for level in ('easy_en', 'middle_en'):
             for field in ('headline', 'body', 'card_summary'):

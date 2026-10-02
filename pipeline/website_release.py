@@ -176,8 +176,11 @@ class LatestRelease:
         state = self.state()
         if state.get('target_sha') and (state['target_sha'] != sha(data) or state.get('mode') != mode):
             if mode != 'rollback': raise ValueError('Frozen release target differs')
-            state = {}
-        state.update({'mode':mode,'target_sha':sha(data)})
+            state = {'rollback_from_manifest_sha': state.get('rollback_from_manifest_sha') or state.get('target_manifest_sha')}
+        manifest_hash = sha(encoded(manifest))
+        if state.get('target_manifest_sha') and state['target_manifest_sha'] != manifest_hash:
+            raise ValueError('Frozen release manifest differs')
+        state.update({'mode':mode,'target_sha':sha(data),'target_manifest_sha':manifest_hash})
         for key, blob, content_type in [('latest.zip',data,'application/zip'),('latest-manifest.json',encoded(manifest),'application/json')]:
             marker = state.get(key)
             if marker in ('attempting','complete'):
@@ -207,6 +210,20 @@ class LatestRelease:
             remote_hash = sha(self.storage.download('latest.zip'))
             if remote_hash not in {state.get('target_sha'),sha((self.root/'backup.zip').read_bytes())}:
                 raise ValueError('Competing latest writer; rollback requires inspection')
+            remote_manifest_hash = sha(encoded(json.loads(self.storage.download('latest-manifest.json'))))
+            allowed_manifests = {read(self.root/'backup.json')['manifest'], state.get('target_manifest_sha'),
+                                 state.get('rollback_from_manifest_sha')}
+            # Older saved CI states predate the explicit manifest fingerprint.
+            # They contain the original approved manifest alongside reader.zip.
+            if not state.get('target_manifest_sha') and state.get('target_sha') and (self.root/'latest-manifest.json').exists():
+                prior_manifest = read(self.root/'latest-manifest.json')
+                if prior_manifest.get('zip_sha256') == state['target_sha']:
+                    allowed_manifests.add(sha(encoded(prior_manifest)))
+            if remote_manifest_hash not in allowed_manifests:
+                raise ValueError('Competing latest manifest writer; rollback requires inspection')
+            if state.get('mode') != 'rollback':
+                state['rollback_from_manifest_sha'] = remote_manifest_hash
+                write(self.root/'release.json', state)
             self._replace((self.root/'backup.zip').read_bytes(),read(self.root/'backup-manifest.json'),'rollback')
 
 

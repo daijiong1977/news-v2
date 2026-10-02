@@ -27,8 +27,12 @@ class SourceFirstEditor(BatchEditor):
             art = cache.get(sid)
             if not art or not lo <= art['word_count'] <= hi:
                 continue
-            if _canonical_source_url(art.get('evidence_url') or art['link']) in past:
+            if {_canonical_source_url(art.get('evidence_url') or art['link']),
+                    _canonical_source_url(art['link'])} & past:
                 continue
+            digest = art.get('evidence_sha256')
+            if digest and hashlib.sha256(art['body'].encode()).hexdigest() != digest:
+                raise ValueError('Qualified body cache changed: ' + sid)
             photo = photos[sid]
             asset = Path(photo['path'])
             if asset.is_symlink() or not asset.is_file() or asset.stat().st_size < 20000 or hashlib.sha256(asset.read_bytes()).hexdigest() != photo['sha256']:
@@ -83,16 +87,31 @@ class SourceFirstEditor(BatchEditor):
         result = self.ask(self.root, key, RANK_RULES + sports_preference(self.snapshot, cat) +
             '\nINCREMENTAL: Only requested section may be nonempty. These candidates passed Python body/photo checks. Keep ready articles unchanged.',
             {'category': cat, 'date': self.snapshot['date'], 'candidates': fresh,
-             'history': self.snapshot['history'], 'accepted': [
-                 {'id': a['candidate']['id'], 'title': a['entry'].get('headline', ''),
-                  'topic': a['candidate']['topic'], 'publisher': a['candidate'].get('publisher', ''),
-                  'source_excerpt': a['candidate']['article']['body'][:1200]}
-                 for a in read(self.root / 'editor-state.json')[cat]['accepted']],
+             'history': self.snapshot['history'], 'accepted': self.accepted_context(cat),
              'topic_labels': list(TOPICS_BY_CATEGORY[cat])}, check)['catalog'][cat]
         known = {b['id'] for b in self.snapshot['candidates']}
         self.snapshot['candidates'].extend(b for b in fresh if b['id'] not in known)
         catalog_ids = {b['id'] for b in self.catalog[cat]}
         self.catalog[cat].extend(b for b in result if b['id'] not in catalog_ids)
+        excess = len(self.catalog[cat]) - 30
+        if excess > 0:
+            consumed = {sid for p in self.root.glob(f'batch-{cat}-*.json') for sid in read(p)['considered']}
+            retired = [b for b in self.catalog[cat] if b['id'] in consumed][:excess]
+            if len(retired) < excess:
+                usable = {b['id'] for b in self.originals(cat, limit=None)}
+                retired += [b for b in self.catalog[cat] if b['id'] not in consumed and b['id'] not in usable][:excess - len(retired)]
+            if len(retired) != excess:
+                raise ValueError('Active source-first catalog exceeds 30 eligible reserves; consume cached reserves before new sources')
+            retired_ids = {b['id'] for b in retired}
+            archive = self.audit.setdefault('retired_catalog', {}).setdefault(cat, [])
+            archived_ids = {b['id'] for b in archive}
+            archive.extend(b for b in retired if b['id'] not in archived_ids)
+            self.catalog[cat] = [b for b in self.catalog[cat] if b['id'] not in retired_ids]
+            # The source feed's category can differ from its final routed section.
+            # Retiring a consumed rank must not erase that section for stale-history checks.
+            for candidate in self.snapshot['candidates']:
+                if candidate['id'] in retired_ids:
+                    candidate['planned_category'] = cat
         if cat == 'News':
             self.catalog[cat].sort(key=lambda b: -b['importance'])
         self.save()

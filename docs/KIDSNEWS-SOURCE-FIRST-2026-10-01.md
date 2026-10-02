@@ -9,7 +9,7 @@
 
 ## 术语与目标
 
-### 2026-10-02 实现口径（优先于下文历史代码对照）
+### 2026-10-02 当前实现口径
 
 - 入口宽字数已采用 180–1,500；规划搬栏后严格 News 350–1,200、Science 350–1,500、Fun 180–1,200。避免短动物趣事在搬 Fun 前被删。
 - 来源配置和抓取队列冻结；每栏最多40个已配置可用 feed，超出明确停止而非截断。每源最多12个唯一候选、4篇即停；首六全坏只本轮暂停。Science 三源按三个独立出版方组尝试。
@@ -19,7 +19,7 @@
 - 分维度安全阈值继续现有3/4口径，不擅自改为统一2分。自检覆盖最终正文、中文与详情；明确标为“无独立审核”。原生写稿兜底则标为同模型写稿/自检。引语逐字匹配启发式只告警，保留于精修结果、publication-records、publication-manifest 和 latest-manifest 的 evidence_warnings；数字/安全/结构校验不放宽。
 - 正文最多定点修一次；只剩详情问题可额外修一次。可机械清除的坏关键词/背景/观点先删掉；仍坏则省略该阅读级别整组详情，保留正文与另一有效级别。`detail_status=omitted` 是合法降级，不冒充完整详情。
 - 固定正式模板仍从完整 commit 获取。只有新模式存在省略详情时，包内 article.jsx 加显式 availability 适配并记录 template_adapter，隐藏无效详情/空题目，防止“0/0全对”。未知模板锚点在发布前 fail-closed；不改网站仓库或 Action。
-- 下文“尚需批准/待实现/现有代码对照”保留为设计时历史记录；上述已实现项和本节覆盖旧状态。未批准的统一2分安全阈值仍不采用。
+- 本文描述当前显式新模式；历史草稿不作为相反的运行指令。统一2分安全阈值未采用，继续下文分维度3/4门禁。
 
 | 实现 | 文件 |
 | --- | --- |
@@ -39,7 +39,7 @@
 - ready：单篇最终正文和详情经Grok生成/修改及自检、Python校验后已冻结；不是已发布。
 - 正文包括Easy/Middle英文标题、正文、卡片摘要及中文标题/摘要；详情含关键词、题目、背景、结构、重要性说明、观点。
 - 新模式不使用JEV。DeepSeek负责批量正文；Grok负责目录规划、五选三和单篇最终成品；Python负责网络获取、机械检查、状态、打包。
-- 本稿只设计新Bot/batch路径。生产main、旧非batch实验、文章DB和archive不自动变化。
+- 本稿限定新Bot/batch路径。生产main、旧非batch实验、文章DB和archive不自动变化。
 
 ## 完整流程
 
@@ -51,7 +51,7 @@
 | 4 栏目候选池 | Python | 各来源机械合格稿 | 至少三源且至少十篇，或明确不足；不调用模型补网络 |
 | 5 编辑规划：分栏/去重/重要性/题材 | Grok一次正常规划＋Python校验 | 标题摘要、来源、缓存证据标记及历史 | 排序目录、最多八篇写稿输入＋完整备用 |
 | 6 八选五并写正文 | DeepSeek，每栏一次正常调用＋Python校验 | 缓存原文及标签 | 每栏最多五篇正文和理由，不生成详情 |
-| 7 五选三并排备用顺序 | Grok，每栏一次正常选择＋Python校验 | 五篇正文、原文、已ready稿（补稿时） | 三篇优先、两篇备用；不冻结未校验成品 |
+| 7 五选三并排备用顺序 | Grok，每栏一次正常选择＋Python校验 | 五篇草稿、元数据、已ready稿信息（补稿时）；逐篇精修再给对应原文 | 三篇优先、两篇备用；不冻结未校验成品 |
 | 8 逐篇精修＋详情＋自检 | Grok同一任务→Python→必要时定点修正；详情可额外修一次或降级 | 当前单篇草稿、原文、政策、缓存图片信息 | ready完整/降级，或正文不合格淘汰，再开始下一篇 |
 | 9 组合、正式模板、ZIP验收 | Python；发布需另批准 | 各栏ready成品、固定模板、图片 | 内容包、报告、人工预览；批准后旧发布链 |
 
@@ -84,7 +84,7 @@ Science：
 - ScienceDaily All/Top Technology/Top Environment/Strange & Offbeat/Most Popular为一组；其他出版方各自成组。
 - 组内保持既有可用性/优先排序；主/备用层内跨组轮询：每组先取一个source，下一轮再各组取第二个。
 - 不把feed名字当真实学科标签；如Top Technology也可能包含物理/化学研究，留给步骤5。
-- 至少三源在Science建议按三个独立publisher组尝试；这是本地分组设计，不保证三组均成功。
+- 至少三源在Science按三个独立publisher组尝试；这是采集机会约束，不保证三组均成功。
 - 首六全坏只暂停当前feed本轮，整个publisher group不自动永久封禁。要整group暂停须另确认。
 - 当日是否可用以新registry为准。此前核对的启用名单仅是快照，不能当永久状态。
 
@@ -100,13 +100,13 @@ Science：
 3. 首六只有一至三篇合格，再检查后三篇；第四篇合格立即停。
 4. 前九仍不足四篇，再检查后三篇；最多十二个不同候选。
 5. feed实际不足六/九/十二，按真实耗尽处理；已有合格稿保留，不重复抓。
-6. URL/标题明显重复可在开网页前排除，并记录尝试槽；HTTP重试次数与唯一文章数必须分开计数。具体网络重试预算待实现审查确认。
+6. URL/标题明显重复可在开网页前排除，并记录尝试槽；HTTP重试次数与唯一文章数必须分开计数。网络失败或中断不退回该尝试槽，不无限重抓；抓取预算按冻结来源数乘12计算，模型HTTP重试另计。
 
 每篇机械检查：
 - feed时效和现有明确排除项；非空有效URL/标题；规范化URL和完全相同标题去重。
 - 安全获取原网页与重定向，提取真实报道正文；排除导航、署名、图注、相关推荐。
 - 逐字稿、音视频主体页不作为报道；正式文字报道有可选audio不因此淘汰。NPR需要页面结构适配，而不是特殊质量门槛。
-- 原文字数：现有News350–1,200；Science350–1,500；Fun180–1,200词。跨栏字数问题见文末待确认项，不偷偷放宽。
+- 原文字数：搬栏前入口180–1,500；搬栏后严格News350–1,200、Science350–1,500、Fun180–1,200词。
 - 正式文章配图只试一次；图片下载、解码、资源上限和既有WebP压缩后，文件必须至少20,000字节。
 - 低于20,000、无图或抓图失败直接淘汰整个候选；不找第二张图、不跨网站补图、不为了凑稿放宽。
 - 这是压缩后字节门槛，不是只看宽高；既有像素预算是防资源异常，不代表内容质量评分。
@@ -277,7 +277,7 @@ News topic沿用：us_politics、international_relations、war_security、severe
 
 ## 9. 汇总、ZIP与发布边界
 
-- 每栏三篇ready；某篇gone后从备用取；不足时按仅该栏补稿原则；无合格候选允许少于三篇，明确报告。
+- 每栏三篇ready；某篇gone后从备用取；不足时按仅该栏补稿原则；无合格候选可保留不足三篇的本地结果并明确报告。但正式网站reader构建仍要求三栏各三篇，不发布部分结果。
 - Python核对组合事件重复、重要News缺口、Science/Fun来源与topic缺口；语义部分按已记录判断，不能以Python当新语义模型。
 - 固定已核验commit取正式模板；包含.jsx和全部依赖，不能复制落后的本地checkout。标题/摘要/详情/图片一致。
 - 验证文章及详情结构、最终词数、图片压缩字节、哈希、manifest与包一致；公开包不得包含密钥或内部日志。
@@ -304,18 +304,18 @@ News topic沿用：us_politics、international_relations、war_security、severe
 
 | 检查项 | 数值/判据 | 边界与动作 | 状态 |
 | --- | --- | --- | --- |
-| 每源唯一候选上限 | 12篇，窗口6→3→3 | 达到4篇机械合格立即停该源；不是必须抓完6篇 | 新设计待实现 |
-| 来源暂停 | 首6篇合格数=0 | 本轮暂停该feed，换源，不永久改DB | 新设计待实现 |
-| 栏目采集目标 | 至少3个来源尝试，至少10篇合格 | 不足继续下一源；耗尽则报告不足，不强造候选 | 新设计待实现 |
+| 每源唯一候选上限 | 12篇，窗口6→3→3 | 达到4篇机械合格立即停该源；不是必须抓完6篇 | source-first已实现 |
+| 来源暂停 | 首6篇合格数=0 | 本轮暂停该feed，换源，不永久改DB | source-first已实现 |
+| 栏目采集目标 | 至少3个来源尝试，至少10篇合格 | 不足继续下一源；耗尽则报告不足，不强造候选 | source-first已实现 |
 | RSS时效 | 已知发布时间年龄>5天排除 | 恰好5天可留；日期无法解析保留并标未知；HTML/sitemap不能冒称已有同等日期保证 | 现有fetch_rss_entries |
 | News原文词数 | 350≤words≤1,200 | 区间外不进该最终栏写稿 | 现有original_band |
 | Science原文词数 | 350≤words≤1,500 | 同上 | 现有original_band |
 | Fun原文词数 | 180≤words≤1,200 | 同上；短稿不是自动低质量 | 现有影子original_band |
-| 图片最终WebP | bytes≥20,000 | 19,999失败；20,000通过；入口失败淘汰候选，不补图 | 字节门槛已有；前置整篇淘汰待实现 |
-| URL/标题重复 | 规范化完全匹配 | 排除，非语义评分；不拿同topic代替同事件 | 现有机械规则，新顺序待实现 |
+| 图片最终WebP | bytes≥20,000 | 19,999失败；20,000通过；入口失败淘汰候选，不补图 | source-first前置整篇淘汰 |
+| URL/标题重复 | 规范化完全匹配 | 排除，非语义评分；不拿同topic代替同事件 | source-first前置执行 |
 | history完整性 | 必需字段存在且活动栏历史非异常全零 | 缺失/失败阻断，不给零分或当clear | 现有prepare校验 |
 
-原文统计按现有Python空白分词len(body.split())；字符长度不是英文词数。搬栏前采用哪个原文字数范围仍待批准，不能把180–1,500宽入口建议写成当前硬门禁。
+原文统计按现有Python空白分词len(body.split())；字符长度不是英文词数。搬栏前180–1,500宽入口与搬栏后各栏长度是两道不同门禁。
 
 ### 步骤5：编辑目录分数与资格
 
@@ -337,7 +337,7 @@ Fun趣味性/明星、Science学科多样性、来源可靠性和适龄可解释
 
 - 八篇是模型输入上限，不是达到八篇就自动合格；源/历史/风险和最终栏长度资格先成立。
 - DeepSeek草稿数量为1至min(5,输入数)，正常五篇；ID不重复，理由非空，结构符合要求。
-- 当前validate_batch仅要求“最高importance候选若在草稿中，则必须排第一”；不是强制该候选一定入选五。新Spec要求重要稿贯穿输入/五稿/三稿，此缺口待实现补齐。
+- 新模式要求最高importance候选进入草稿且排第一，或在skipped中给出具体跳过理由。不以重要性强迫不合格文章入选。
 - Grok选稿返回所有五稿ID各一次，前三优先后两备用。News首位必须是已提供草稿中最高importance者；这不能弥补DeepSeek之前遗漏重要稿。
 - 最终来源目标：News≥2个publisher；Science≥2；Fun≥3。这是组合目标/告警，不是某篇低质量也必须硬凑。
 - 未满足重要News或第二Science publisher时，仅有未尝试合格对应候选才补；否则告警结束。来源不足不能引发无限HTTP或整组重写。
@@ -359,8 +359,8 @@ Grok对最终修后稿返回完整八维scores，每维0–5：0=无问题，5=�
 | bias | 倾向性/断言争议说法/煽情评价 | ≥3 | ≥4 |
 
 例如News bias=2可过这一维，bias=3不过；violence=3可过这一维，violence=4不过。通过某一维不代表整篇通过。
-当前评分prompt主要评Middle正文；fear/distress对Easy再评，取两级最高；bias覆盖全部英文标题/卡片/两级正文和中文标题摘要，取最高。不能中立正文配倾向标题后仍判通过。
-这是评分方法说明，不为新合并任务增加独立模型审核；新schema必须让自检覆盖最终正文与详情。详情也应安全中立，但现有分数prompt没有完整量化详情内容，新任务覆盖范围待实现明确。
+新合并任务自检覆盖最终两级正文、英文标题/卡片、中文标题摘要及两级详情，各维按最不利内容判断。不能中立正文配倾向标题后仍判通过。
+这不增加独立模型审核，也不声称Python可以证明模型已完整检查语义；报告明确是同次生成/修稿自检。
 
 此前用户讨论过“初筛4分、改后2分拦截”，但当前feature分支evaluate_rewriter_safety并非统一≥2拦截。本文保留现有分维度事实，将是否改为新2分门槛列为待批准项；未批准不偷偷改变阈值。
 旧生产apply_vet_thresholds的“任一≥4或总分>6拒绝”是另一条路径，不能混作本Bot初筛或最终门槛。vetter通用总分也不替换本项目代码。
@@ -406,37 +406,29 @@ ready条件是其余硬条件的AND，facts_supported的true/false不参与初�
 ### 配额/重试上限与安全门禁分开
 
 现有TaskRouter为MAX_TASKS=120、MAX_HTTP_CALLS=120；MAX_TRANSPORT_RETRIES=3，429 Retry-After最多等待120秒。它们是运行预算，不是文章质量分数，也不是应当耗尽的目标。
-现有影子AutonomousEditor旧正文抓取预算12/栏，与新设计12/源不同，新流程预算替换未实现。新每源4篇即停不能冒称现有代码已如此。
+旧AutonomousEditor正文抓取预算12/栏保持不变。source-first采用每源12次唯一候选尝试、每栏最多40个冻结feed、每源4篇即停；状态持久化，恢复不清零。
 超过24小时是显式stale确认及重查历史，不再用一小时wall-clock直接否决完成稿。正文修一次、详情最多两次与传输重试分开计数，均保存同目录状态，不删预算重跑。
 
-## 尚需批准的设计边界
+## 当前边界与实现位置
 
-1. 搬栏前字数：建议入口宽范围180–1,500并标记各栏适配，搬栏后严格News350–1,200、Science350–1,500、Fun180–1,200。否则250词Science来源动物趣事提前被删，无法搬Fun。未批准不改现有阈值。
-2. Science三个来源按独立publisher group尝试；suspend先仅当前feed，不封整group。
-3. 八选五三仍保留，但新采集池十至十二篇不是直接全部写五篇；是否改成全池DeepSeek挑选五篇须单独决定。
-4. 详情失败保正文已确认；仍需在实现前定义合法缺失payload/validator/正式模板展示协议，不能任意删必需字段导致白屏。
-5. 规划引用哪些本地正文摘录、网络重试预算和增量补稿的任务schema须在实现前定清。
-6. 最终安全门槛：继续当前分维度3/4，还是落实此前讨论的“改后2分拦截”；需要明确维度及>=或>口径，不能把讨论当成已实现代码。
+- 搬栏前宽字数、Science出版方轮询、逐篇合并成品、详情合法降级已实现；不扩大到旧profile或生产main。
+- 仍是缓存候选最多八篇交DeepSeek选五，不是全采集池全部写稿；Grok按五稿排序再逐篇完成。
+- 安全继续分维度3/4阈值。事实布尔疑问和引语逐字差异仅告警；数字、英文、结构、历史和安全仍可拒绝。
+- 本地内容不足可报告/留档，但网站reader必须News/Science/Fun各三篇。省略详情不等于省略文章。
+- 首次新模式真实质量、token与耗时尚待VM运行；旧包发布成功不证明新模式已验收，真实回滚未执行。
 
-## 现有代码对照：已有规则不等于新流程已实现
+| 内容 | 当前实现 |
+| --- | --- |
+| 来源4篇即停、6→3→3、首六全坏暂停、三源十篇、Science轮询 | pipeline/agent_shadow_source_first.py |
+| 冻结快照恢复、超过24小时历史重核 | pipeline/agent_shadow.py |
+| 正文/图片缓存、搬栏资格、增量单栏补稿 | pipeline/agent_shadow_source_editor.py |
+| 八选五、重要News首位/跳过理由、Fun明星/学科偏好、五稿排序 | pipeline/agent_shadow_batch.py；pipeline/editorial_policy.py |
+| 单篇精修＋详情＋自检、正文一次修正、详情有限补修/降级 | pipeline/agent_shadow_finish.py |
+| 详情校验/关键词清理/最长答案告警 | pipeline/agent_shadow_details.py |
+| 包内容与证据、完整性检查 | pipeline/publication_bundle.py |
+| 正式模板省略详情适配、latest备份/恢复/回滚 | pipeline/source_first_reader.py；pipeline/website_release.py |
 
-| 内容 | 现有依据 | 状态 |
-| --- | --- | --- |
-| 分栏：公共事务科技News、趣味科技Fun、动物生物Science | pipeline/editorial_policy.py SECTION_POLICY；pipeline/agent_shadow.py RANK_RULES | 已有prompt/规则；最终内容仍需实测 |
-| physics/chemistry等正式topic与软多样性 | pipeline/news_topics.py；pipeline/agent_shadow_batch.py plan | 已有标签及prompt，不是每日学科硬配额 |
-| Science独立publisher归并/不同出版方候选机会 | editorial_policy.py publisher_key；agent_shadow_batch.py publisher_first_catalog | 已有文章目录层换位；新采集前group轮询未实现 |
-| News重要性首位/缺重要候选有条件补稿 | agent_shadow_batch.py validate_order/validate_batch；agent_shadow_editor.py needs | 已有；validate_batch只约束最高者被包含时排首，不完整强制最高者一定入五稿 |
-| Fun明星、当前比赛、纪录优先 | agent_shadow_batch.py FAMILY_SPORTS_PREFERENCE与sports_preference | 已有，当前仅uses_native_details模式生效；不能说所有旧profile都已采用 |
-| 同栏七天、初筛风险4、置信0.7与event去重 | agent_shadow.py RANK_RULES；agent_shadow_batch.py extend；editor.py | 已有；不是同日模型查重 |
-| 单篇modifier及事实/安全字段校验 | agent_shadow_editor.py；agent_shadow_modifier.py | 已有精修；与详情是分开阶段 |
-| facts_supported=false降级为告警 | 本Spec最新用户决定 | 待实现；现有editor仍要求true，不能直接运行旧代码声称已放宽 |
-| 原生详情自检、背景观点为空、关键词与最长答案告警 | agent_shadow_details.py | 已有；Python不能独立证明事实或每题题意 |
-| 最终图片20,000字节门槛 | agent_shadow_details.py及test_shadow_image_bytes.py | 已提交影子规则；当前是最终去图保正文，新的入口淘汰整候选未实现 |
-| 每源4篇即停、6→3→3、三源十篇、首六全坏暂停 | 本Spec | 待实现 |
-| 精修＋详情同一任务、正文修一次、详情可补修或降级、逐篇完成 | 本Spec | 待实现；不能冒称现有任务schema/模板已支持新组合答卷和ready_degraded |
-| 搬栏前宽字数、采集前Science group轮询 | 本Spec | 待批准/实现 |
+## 运行与验收
 
-## 下一步
-
-用户评审本稿→批准规则与边界→共享源码feature分支先失败回归测试→修复并Python3.10验证→同步Bot快照/说明/UPSTREAM→更新Atlas JSON并commit/push报告→真实影子停ZIP→人工批准后网站发布。
-本轮到本地Spec为止，不执行这些后续动作。
+按 KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md 使用新目录和显式profile；保留同目录状态及调试缓存。完成本地ZIP及正式reader检查后，依现有具体发布授权交付原Actions链，不写DB/archive或邮件。
+本次最终复核的问题和回归见 KIDSNEWS-SOURCE-FIRST-FINAL-REVIEW-2026-10-02.md。生产full_round/news_rss_core路径保持不变，两个feature PR不自动合并。

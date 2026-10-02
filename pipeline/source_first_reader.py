@@ -1,10 +1,12 @@
 """Package-only adaptation for explicitly omitted source-first detail levels."""
-ADAPTER_VERSION = 'source-first-detail-availability-v1'
+ADAPTER_VERSION = 'source-first-detail-availability-v2'
 
 
 def adapt_article_shell(data):
     text = data.decode('utf-8')
     changes = {
+        'const mapped = {':
+        'const mapped = {\n          detail_status: d.detail_status,',
         "const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'];":
         "const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'].filter(s => detail?.detail_status !== 'omitted' || s === 'read');",
         "    { id:'discuss', label:'Think', emoji:'💭' },\n  ];":

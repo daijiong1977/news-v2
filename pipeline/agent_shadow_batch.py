@@ -103,6 +103,18 @@ def validate_order(value, pool, category):
 
 
 class BatchEditor(AutonomousEditor):
+    def accepted_context(self, cat):
+        """Bounded ready-article context for new-source planning/selection only."""
+        from .agent_shadow import read
+        path = self.root / 'editor-state.json'
+        rows = read(path).get(cat, {}).get('accepted', []) if path.exists() else []
+        return [{'id': a['candidate']['id'],
+                 'title': a['entry'].get('middle_en', {}).get('headline') or a['candidate']['article']['title'],
+                 'topic': a['candidate']['topic'],
+                 'publisher': a['candidate']['article'].get('_publisher_key') or a['candidate'].get('publisher', ''),
+                 'source_excerpt': a['candidate']['article']['body'][:1200]}
+                for a in rows]
+
     def originals(self, cat):
         return super().pool(cat, len(self.catalog[cat]), limit=8)
 
@@ -230,6 +242,15 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
         for row in result['drafts']:
             index[row['id']]['writer_provider'] = 'native' if native else 'deepseek'
         pool = [index[row['id']] for row in result['drafts']]
+        choice_material = {'category': cat, 'drafts': result['drafts'], 'sources': [
+                {k: b[k] for k in ('id', 'topic', 'importance')} | {
+                    'title': b['article']['title'], 'source': b['article']['source'],
+                    'url': b['article']['link']} for b in pool]}
+        if is_source_first(self.snapshot):
+            choice_material['accepted'] = self.accepted_context(cat)
+            for row, b in zip(choice_material['sources'], pool):
+                row['publisher'] = b['article'].get('_publisher_key') or publisher_key(
+                    NewsSource(**self.snapshot['sources'][b['article']['source']]))
         choice = self.ask(self.root, f'select-batch-{cat}-{target}',
             'Read five drafts and source metadata. Rank best three then every reserve. '
             'Return {"order":["id",...]}, every ID once. News highest importance first; '
@@ -237,10 +258,7 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
             'Fun prioritize actual fun, swimming/tennis/other sports distinct. Prefer quality over quotas. '
             'Selection only: modifier will correct selected bodies next. No browsing, writing details or publishing.'
             + sports_preference(self.snapshot, cat),
-            {'category': cat, 'drafts': result['drafts'], 'sources': [
-                {k: b[k] for k in ('id', 'topic', 'importance')} | {
-                    'title': b['article']['title'], 'source': b['article']['source'],
-                    'url': b['article']['link']} for b in pool]},
+            choice_material,
             lambda v: validate_order(v, pool, cat))
         pool = [index[sid] for sid in choice['order']]
         write(path, {'pool': pool, 'drafts': result['drafts'],
