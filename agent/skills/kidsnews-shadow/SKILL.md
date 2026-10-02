@@ -13,6 +13,26 @@ Your files are `work/`. The local project maintainer changes code through Git.
 
 ## Maintainer-approved hybrid tests
 
+### Current new run: source-first-grok (2026-10-02)
+
+Read docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md and its full Spec.
+Use a NEW directory with --editor-mode autonomous --test-profile source-first-grok.
+Python collects bodies/photos first: source windows6/3/3, stop immediately at4 qualified,
+max12/source, first6 all bad suspends this feed for this run. WebP below20,000 bytes
+drops the candidate without alternate images. No native browsing/discovery.
+DeepSeek writes five bodies per category; native plan/select plus each review-finish task
+modifies ONE article, generates both detail levels and self-checks in ONE response.
+No separate detail audit. Normal baseline3 DeepSeek and13 native tasks; repairs extra.
+facts_supported=false is recorded warning only in this mode, not proof of factual accuracy.
+Python safety/evidence/body gates still apply. Detail-only failure may be repaired once
+more or omitted by scripts, never discard a good body only for bad detail. Preserve state.
+Exit2 is a request handoff, not failure; answer exact path and resume same directory.
+Never rewrite whole batches, edit frozen input, reset budgets, or delete caches.
+First new flow stops at checked ZIP for human quality approval; approved website-only
+handoff uses existing CI backup/resume protocol. DB/archive/email remain forbidden.
+
+Older profiles below remain supported for SAME-directory resume only.
+
 ### Website-only trial after Cloud fixes (2026-10-01)
 
 Read docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md for the current executable contract.
@@ -39,7 +59,7 @@ the final titles/bodies/Chinese while enriching. Ground viewpoints, roles and ba
 keep answer options parallel in length. Longest-correct-answer warnings do not authorize another model call.
 News two qualified publishers are accepted in this profile; Science two and Fun three remain.
 Science/Fun have no additional standalone strict fact audit, but modifiers still correct false claims.
-Normal baseline: three DeepSeek batch calls and 24 native tasks (plan1/select3/modify9/details9),
+Normal baseline: three DeepSeek batch calls and 22 native tasks (plan1/select3/modify9/details9),
 not a quota promise; repairs/refills add tasks. Stop at local ZIP build/check. Old profiles below
 are retained for resume compatibility, not silently upgraded. Do not change frozen input.json.
 2026-10-01 family preference: famous tennis/swimming champions and engaging current matches,

@@ -1,5 +1,10 @@
 # Kids News 8→5→3：执行、ZIP 交接与启用边界
 
+2026-10-02 新轮优先使用显式 `source-first-grok`，见
+`KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md` 与完整 Source-first Spec。
+每源先由Python取正文/图，4篇合格即停；DeepSeek批量正文，Grok逐篇精修/详情/自检合并。
+下文旧模式为恢复兼容记录，不用于描述新模式。旧 input 不改、不自动升级。
+
 2026-09-30 ET；feature PR #86（共享代码）/ #1（Bot 导出快照），不是生产上线记录。
 
 2026-10-01 当前新轮使用 `batch-grok-details`，完整总结与测试消息见

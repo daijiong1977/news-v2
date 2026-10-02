@@ -143,6 +143,21 @@ def enrich_and_review(root, final, variants, ask, boundary, stepwise):
     from .agent_shadow import read, write, AnswerRejected, pin_task_answers
     from .news_rss_core import DETAIL_ENRICH_PROMPT, _detail_enrich_input_per_category
     from .agent_shadow_profiles import uses_native_details
+    from .agent_shadow_profiles import is_source_first
+    if (root / 'input.json').exists() and is_source_first(read(root / 'input.json')):
+        result, report = {}, {}
+        for cat, stories in final.items():
+            result[cat] = {}
+            for i, story in enumerate(stories):
+                for level in ('easy', 'middle'):
+                    slot = story['_details'].get('0_' + level)
+                    if slot is not None:
+                        result[cat][f'{i}_{level}'] = slot
+                report[f'{cat}-{story["winner"]["id"]}'] = {'passed': story['_ready_status'] == 'ready_full',
+                    'review_method': '精修＋详情同次生成并自检；Python校验；无独立审核',
+                    'removed': [level for level in ('easy', 'middle') if '0_' + level not in story['_details']]}
+        write(root / 'detail-reviews.json', report)
+        return result
     native_details = uses_native_details(read(root / 'input.json')) if (root / 'input.json').exists() else False
     path = root / "enrichment-state.json"
     state = read(path) if path.exists() else {}

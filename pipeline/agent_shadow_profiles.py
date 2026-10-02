@@ -1,5 +1,6 @@
 """Explicit opt-in local-only hybrid experiments; production defaults unchanged."""
 HYBRID_PROFILES = {
+    'source-first-grok': ('News', 'Science', 'Fun'),
     'batch-deepseek': ('News', 'Science', 'Fun'),
     'batch-grok-details': ('News', 'Science', 'Fun'),
     'news-deepseek': ('News',),
@@ -12,8 +13,12 @@ def is_hybrid(snapshot):
 
 
 def is_batch(snapshot):
-    return snapshot.get('test_profile') in ('batch-deepseek', 'batch-grok-details')
+    return snapshot.get('test_profile') in ('batch-deepseek', 'batch-grok-details', 'source-first-grok')
 
 
 def uses_native_details(snapshot):
-    return snapshot.get('test_profile') == 'batch-grok-details'
+    return snapshot.get('test_profile') in ('batch-grok-details', 'source-first-grok')
+
+
+def is_source_first(snapshot):
+    return snapshot.get('test_profile') == 'source-first-grok'

@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from .ai_providers import AgentFilesProvider, AgentNeeded
 from .ai_providers.transport import _atomic_json
 from .agent_shadow_errors import AnswerRejected, correction_kind
-from .agent_shadow_profiles import HYBRID_PROFILES, is_hybrid, is_batch
+from .agent_shadow_profiles import HYBRID_PROFILES, is_hybrid, is_batch, is_source_first
 
 CATS = ("News", "Science", "Fun")
 
@@ -213,7 +213,27 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
                         if registry is not None else PublicationHistoryGuard.load(today, cat).rows)
     if not any(history.values()):
         raise ValueError("all three sections have zero history; check the Supabase connector before retrying")
-    for cat in active:
+    if is_source_first({'test_profile': test_profile}):
+        from .agent_shadow_source_first import collect
+        context_path = root / 'prepare-context.json'
+        context = read(context_path) if context_path.exists() else None
+        if context is None:
+            selected = {cat: db_config.load_sources(cat, today=date.fromisoformat(today), n=1000,
+                        source_rows=registry['sources'] if registry is not None else None) for cat in active}
+            context = {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback,
+                       'history': history, 'sources': {c: [asdict(s) for s in rows] for c, rows in selected.items()}}
+            write(context_path, context)
+        else:
+            if any(context.get(k) != v for k, v in {'date': today, 'test_profile': test_profile, 'http_fallback': http_fallback}.items()):
+                raise ValueError('Interrupted prepare context is frozen; use same date/profile/fallback')
+            from .news_sources import NewsSource
+            selected = {c: [NewsSource(**s) for s in rows] for c, rows in context['sources'].items()}
+            history = context['history']
+        candidates = collect(root, selected, today)
+        # Sources are frozen by the collector BEFORE any network activity.
+        collected = read(root / 'source-collection.json')
+        sources = {s['source']['name']: s['source'] for c in collected['sections'].values() for s in c['sources']}
+    for cat in (() if is_source_first({'test_profile': test_profile}) else active):
         selected = db_config.load_sources(cat, today=date.fromisoformat(today), n=10 if cat == "Fun" else 8,
                                          source_rows=registry["sources"] if registry is not None else None)
         sources.update({s.name: asdict(s) for s in selected})
@@ -238,7 +258,8 @@ def prepare(root: Path, today: str, env_file: str | None = None, registry_file: 
     write(root / "metrics.json", {"prepare_seconds": round(time.monotonic()-t0, 3),
                                  "started_at": started_at,
                                  "candidate_counts": {c: sum(b["category"] == c for b in candidates) for c in CATS},
-                                 "history_counts": {c: len(history[c]) for c in CATS}, "steps": [], "body_fetches": 0})
+                                 "history_counts": {c: len(history[c]) for c in CATS}, "steps": [],
+                                 "body_fetches": sum(r.get('body_attempted', False) for c in collected['sections'].values() for s in c['sources'] for r in s['results']) if is_source_first({'test_profile': test_profile}) else 0})
     boundary(root, "prepare", False, t0)
     return {"ok": True, "next": "next", "input": str(root / "input.json"), "counts": read(root / "metrics.json")["candidate_counts"]}
 
@@ -435,6 +456,9 @@ def advance(root: Path, *, stepwise=False):
         if is_batch(snapshot):
             from .agent_shadow_batch import BatchEditor
             editor_class = BatchEditor
+        if is_source_first(snapshot):
+            from .agent_shadow_source_editor import SourceFirstEditor
+            editor_class = SourceFirstEditor
         policy = editor_class(root, snapshot, ask, boundary, stepwise)
         ranked = policy.plan()
     else:
@@ -443,7 +467,11 @@ def advance(root: Path, *, stepwise=False):
         boundary(root, "rank", stepwise)
     from .agent_shadow_editor import edit
     editor_ask = policy.dispatch if is_batch(snapshot) else ask
-    final, variants, outcomes, warnings = edit(root, snapshot, ranked, editor_ask, boundary, stepwise, policy=policy)
+    if is_source_first(snapshot):
+        from .agent_shadow_finish import edit_source_first
+        final, variants, outcomes, warnings = edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy)
+    else:
+        final, variants, outcomes, warnings = edit(root, snapshot, ranked, editor_ask, boundary, stepwise, policy=policy)
     emit_dir = root / "reader"
     from .agent_shadow_details import enrich_and_review, images
     details = enrich_and_review(root, final, variants, ask, boundary, stepwise)
@@ -465,6 +493,16 @@ def advance(root: Path, *, stepwise=False):
     warnings.extend(f"Image unavailable: {sid}" for sid, report in image_report.items() if not report["ok"])
     t0 = time.monotonic()
     emit_v1_shape(final, variants, details, snapshot["date"], emit_dir)
+    if is_source_first(snapshot):
+        # Official reader already tolerates empty arrays/strings. Explicit status
+        # distinguishes a deliberately omitted module from corrupt/missing JSON.
+        for cat, stories in final.items():
+            for i, story in enumerate(stories, 1):
+                for level in ('easy', 'middle'):
+                    path = emit_dir / 'article_payloads' / f'payload_{snapshot["date"]}-{cat.lower()}-{i}' / f'{level}.json'
+                    payload = read(path)
+                    payload['detail_status'] = 'full' if '0_' + level in story['_details'] else 'omitted'
+                    write(path, payload)
     if (root / "site").exists():
         manifest = read(root / "site/shadow-run.json")
     else:
@@ -477,7 +515,7 @@ def advance(root: Path, *, stepwise=False):
             manifest = export(emit_dir, staged, snapshot["date"], provider_label)
             staged.rename(root / "site")
     write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings,
-        "review_method": "逐篇见 outcomes.review_method；兜底为同模型写稿并自检" if manifest['provider'] == 'mixed' else "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
+        "review_method": "精修＋详情生成并自检；Python校验；无独立审核" if is_source_first(snapshot) else "逐篇见 outcomes.review_method；兜底为同模型写稿并自检" if manifest['provider'] == 'mixed' else "第二遍审核；模型见 provider-audit（原生默认同模型）" if policy else "同模型第二遍审核"})
     write(root / "done.json", {"site": str(root / "site"), "counts": manifest["counts"], "warnings": warnings,
                                 "provider": manifest['provider'],
                                 "test_profile": snapshot.get("test_profile"),
@@ -556,7 +594,7 @@ def main():
                         raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
                     if args.providers_config:
                         raise ValueError("Hybrid profile supplies its own provider config")
-                    config_name = ('shadow-batch-grok-details.json' if profile == 'batch-grok-details'
+                    config_name = ('shadow-batch-grok-details.json' if profile in ('batch-grok-details', 'source-first-grok')
                                    else 'shadow-news-deepseek.json')
                     args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
                 if args.providers_config:

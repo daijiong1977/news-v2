@@ -102,6 +102,15 @@ def build_reader(internal, shell, template_commit):
         name = path.relative_to(shell).as_posix()
         if path.is_file() and (name in SHELL_FILES or name.split('/')[0] in {'assets','components'}):
             public[name] = path.read_bytes()
+    adapter = None
+    if original.get('editorial_profile') == 'source-first-grok' and any(
+        json.loads(b).get('detail_status') == 'omitted'
+        for n, b in public.items() if n.split('/')[0] in {'payloads', 'article_payloads'} and n.endswith('.json')
+    ):
+        from .source_first_reader import ADAPTER_VERSION, adapt_article_shell
+        if 'article.jsx' not in public: raise ValueError('Reader adapter requires article.jsx')
+        public['article.jsx'] = adapt_article_shell(public['article.jsx'])
+        adapter = ADAPTER_VERSION
     data = zip_files(public)
     records = json.loads(files['publication-records.json'])
     stamp = datetime.now(timezone.utc).isoformat()
@@ -115,6 +124,7 @@ def build_reader(internal, shell, template_commit):
     manifest = {'version':original['date'], 'packed_at':stamp, 'git_sha':commit,
         'zip_bytes':len(data), 'zip_sha256':sha(data), 'story_count':9, 'stories':stories,
         'template_commit':template_commit, 'files':{n:sha(b) for n,b in sorted(public.items())}}
+    if adapter: manifest['template_adapter'] = adapter
     check_reader(data, manifest)
     return {'zip':data, 'manifest':manifest, 'records':records}
 

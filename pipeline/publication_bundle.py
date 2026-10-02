@@ -88,7 +88,10 @@ def validate_contents(files, manifest):
                 raise ValueError('Listing/record ID mismatch')
         for row in section:
             sid = row['payload_story_id']
-            if sid in ids or row['published_date'] != run_date or row.get('facts_supported') is not True or row.get('event_clear') is not True:
+            facts_ok = row.get('facts_supported') is True
+            if manifest.get('editorial_profile') == 'source-first-grok' and manifest.get('facts_policy') == 'warning_only':
+                facts_ok = type(row.get('facts_supported')) is bool and (row['facts_supported'] or bool(row.get('fact_warning')))
+            if sid in ids or row['published_date'] != run_date or not facts_ok or row.get('event_clear') is not True:
                 raise ValueError('Unqualified publication record')
             ids.add(sid)
             scores = row['safety_scores']
@@ -102,11 +105,25 @@ def validate_contents(files, manifest):
                 lo, hi = rewrite_band(level, cat, body['source_word_count'])
                 if not lo <= len(body['summary'].split()) <= hi or body['source_url'] != row['source_url']:
                     raise ValueError('Body length/source mismatch')
+                if manifest.get('editorial_profile') == 'source-first-grok':
+                    from .agent_shadow_details import validate_native_details
+                    fields = ('keywords', 'questions', 'background_read', 'Article_Structure', 'why_it_matters', 'perspectives')
+                    slot = {f: body.get(f) for f in fields}
+                    if body.get('detail_status') == 'omitted':
+                        if any(slot.values()):
+                            raise ValueError('Omitted detail module must contain empty legacy-compatible fields')
+                    elif body.get('detail_status') != 'full' or validate_native_details({'details': {'0_easy': slot, '0_middle': slot}},
+                            {0: {'easy_en': {'body': body['summary']}, 'middle_en': {'body': body['summary']}}}):
+                        raise ValueError('Malformed retained detail module')
                 image = body.get('image_url')
+                if manifest.get('editorial_profile') == 'source-first-grok' and not image:
+                    raise ValueError('Source-first article lost its required image')
                 if image:
                     name = image.lstrip('/')
                     if not name.startswith('article_images/') or name not in files:
                         raise ValueError('Image mapping mismatch')
+                    if manifest.get('editorial_profile') == 'source-first-grok' and len(files[name]) < 20000:
+                        raise ValueError('Source-first image below final 20000 byte floor')
                     with Image.open(io.BytesIO(files[name])) as im:
                         if im.format not in ('WEBP', 'PNG', 'JPEG') or min(im.size) < 1 or max(im.size) > 4096:
                             raise ValueError('Image size/format invalid')
@@ -145,7 +162,10 @@ def build(root: Path, output: Path, shell: Path | None = None):
                 files[path.relative_to(shell).as_posix()] = path.read_bytes()
     records = []
     photos = read(root / 'candidate-images.json') if (root / 'candidate-images.json').exists() else {}
-    source_by_id = {b['id']: snapshot['sources'][b['source']]['id'] for b in snapshot['candidates']}
+    catalog_path = root / 'autonomous-catalog.json'
+    catalog = read(catalog_path) if catalog_path.exists() else {}
+    source_rows = {**snapshot['sources'], **catalog.get('sources', {})}
+    source_by_id = {b['id']: source_rows[b['source']]['id'] for b in snapshot['candidates'] + catalog.get('candidates', [])}
     for cat in CATS:
         accepted = {a['candidate']['id']: a for a in state[cat]['accepted']}
         listing = json.loads(files[f'payloads/articles_{cat.lower()}_easy.json'])['articles']
@@ -171,6 +191,8 @@ def build(root: Path, output: Path, shell: Path | None = None):
                 'writer_provider': match['candidate'].get('writer_provider', 'deepseek'),
                 'safety_scores': outcome['safety']['scores'], 'facts_supported': outcome['facts_supported'],
                 'event_clear': outcome['event_clear'], 'primary_image_local': body['image_url'].lstrip('/'),
+                'ready_status': match.get('ready_status', 'ready_full'),
+                'fact_warning': ('事实支持存在自检疑问，初期仅告警: ' + outcome.get('notes', '')) if outcome['facts_supported'] is False else '',
                 'primary_image_url': photos.get(candidate_id, {}).get('source_url') or None,
                 'payload_path': f'payloads/articles_{cat.lower()}_easy.json'})
     usage = [{'source_id': sid, 'used_date': snapshot['date']} for sid in sorted({r['source_config_id'] for r in records if r['source_config_id']})]
@@ -181,6 +203,9 @@ def build(root: Path, output: Path, shell: Path | None = None):
                 'files': hashes, 'package_id': sha(encoded(hashes)), 'shell': 'provided' if shell else 'shadow',
                 'started_at': read(root / 'metrics.json').get('started_at') or read(site / 'shadow-run.json')['generated_at'],
                 'publication_verified': False}
+    from .agent_shadow_profiles import is_source_first
+    if is_source_first(snapshot):
+        manifest.update(editorial_profile='source-first-grok', facts_policy='warning_only')
     files['publication-manifest.json'] = encoded(manifest)
     validate_contents(files, manifest)
     stream = io.BytesIO()

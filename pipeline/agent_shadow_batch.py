@@ -44,7 +44,7 @@ def publisher_first_catalog(rows, candidates, sources):
     for row in rows:
         article = index[row['id']]
         source = sources.get(article['source']) or {'rss_url': article.get('link', ''), 'name': article['source']}
-        publisher = publisher_key(source)
+        publisher = article.get('publisher') or publisher_key(source)
         if publisher not in seen:
             seen.add(publisher)
             first.append(row)
@@ -103,6 +103,12 @@ def validate_order(value, pool, category):
 
 
 class BatchEditor(AutonomousEditor):
+    def originals(self, cat):
+        return super().pool(cat, len(self.catalog[cat]), limit=8)
+
+    def check_batch(self, value, originals, cat):
+        return validate_batch(value, originals, cat)
+
     def plan(self):
         from .agent_shadow import read, write, RANK_RULES, validate_catalog
         if self.path.exists():
@@ -117,6 +123,10 @@ class BatchEditor(AutonomousEditor):
                       'before source/topic diversity. Science physics/chemistry/astronomy/biology remain distinct. '
                       'Use canonical topic labels supplied in material. Never invent a source. No browsing.')
             rules += sports_preference(self.snapshot)
+            from .agent_shadow_profiles import is_source_first
+            if is_source_first(self.snapshot):
+                from .editorial_policy import SECTION_POLICY
+                rules += '\n' + SECTION_POLICY + '\nSOURCE-FIRST: metadata includes independently fetched body length, photo bytes and final-category fits. Rank only suitable final categories. No new fetching or browsing. Initial risk alone must not exclude calm politics/war/death.'
             def check_plan(value):
                 errors = validate_catalog(value, ids)
                 if not errors:
@@ -149,7 +159,7 @@ class BatchEditor(AutonomousEditor):
             self.catalog[cat] = publisher_first_catalog(
                 self.catalog[cat], self.snapshot['candidates'], self.snapshot['sources'])
         try:
-            originals = super().pool(cat, len(self.catalog[cat]), limit=8)
+            originals = self.originals(cat)
         finally:
             self.catalog[cat] = original_catalog
             self.save()
@@ -186,7 +196,7 @@ class BatchEditor(AutonomousEditor):
         from .agent_shadow_lengths import rewrite_band
         key = f'rewrite-batch-{cat}-{target}'
         material = {'date': self.snapshot['date'], 'category': cat, 'candidates': [
-            {**b, 'image_ok': photos[b['id']]['ok'], 'publisher': publisher_key(
+            {**b, 'image_ok': photos[b['id']]['ok'], 'publisher': b['article'].get('_publisher_key') or publisher_key(
                 NewsSource(**self.snapshot['sources'][b['article']['source']])),
              'body_word_bands': {level: rewrite_band(level, cat, b['article']['word_count'])
                                  for level in ('easy', 'middle')}} for b in originals]}
@@ -201,9 +211,12 @@ Prefer varied topics and independent publishers without displacing important New
 Only supplied original texts support facts/quotes/attribution. Do not add unsupported viewpoints.
 '''
         prompt += sports_preference(self.snapshot, cat)
+        from .agent_shadow_profiles import is_source_first
+        if is_source_first(self.snapshot):
+            prompt += '\nSOURCE-FIRST OVERRIDE: Include a highest-importance eligible News FIRST, or explicitly skipped:[{id,reason}] for every tied highest unsuitable candidate. Never silently omit it. Source/topic diversity is secondary.'
         try:
             result = self.ask(self.root, key, prompt, material,
-                              lambda v: validate_batch(v, originals, cat))
+                              lambda v: self.check_batch(v, originals, cat))
         except AnswerRejected as exc:
             pin_task_answers(self.root, key)
             write(path, {'pool': [], 'drafts': [], 'considered': [b['id'] for b in originals],

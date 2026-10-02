@@ -1,5 +1,7 @@
 # Kids News：DeepSeek 正文 + Grok 最终详情
 
+> 来源前置采集改版待评审：[完整新Spec](KIDSNEWS-SOURCE-FIRST-2026-10-01.md)。本文步骤1–3和旧Bot测试消息只代表现有已实现流程，不代表新采集逻辑已可运行；后续Grok详情职责仍保留。
+
 2026-10-01。仅影子 feature PR #86 / Bot PR #1；生产未更改。新模式
 `--editor-mode autonomous --test-profile batch-grok-details`；旧模式与已冻结运行保持不变。
 
