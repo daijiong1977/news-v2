@@ -59,7 +59,7 @@ def fixture_round(root, monkeypatch, n=24):
     monkeypatch.setattr("requests.post", lambda *a, **kw: pytest.fail("real model/database HTTP forbidden"))
     def image(url, path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"RIFFfakeWEBP")
+        path.write_bytes(b"RIFFfakeWEBP" + b"x" * 20_000)
         return {"local_path": str(path)}
     monkeypatch.setattr("pipeline.image_optimize.fetch_and_optimize", image)
     def answer(root, key, system, material, validate, **kw):

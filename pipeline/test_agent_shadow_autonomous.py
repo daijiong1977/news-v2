@@ -353,7 +353,8 @@ def test_photo_review_is_mandatory_and_bad_photo_not_shown(tmp_path, monkeypatch
     monkeypatch.setattr(autonomous, 'fetch_original', lambda b: {**original(b), 'og_image': 'https://public.example/photo.png'})
     def photo(url, path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        Image.new('RGB', (320, 240), 'blue').save(path, 'WEBP')
+        import random
+        Image.frombytes('RGB', (320, 240), random.Random(0).randbytes(320 * 240 * 3)).save(path, 'WEBP')
         return {'local_path': str(path), 'width': 320, 'height': 240}
     monkeypatch.setattr(autonomous, 'safe_image', photo)
     def review(root, key, system, material, validate, **kw):

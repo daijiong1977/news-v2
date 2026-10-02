@@ -242,7 +242,8 @@ def images(root, final, boundary, stepwise, *, fetcher=None):
         for story in stories:
             sid = story["winner"]["id"]
             relative = f"article_images/{cat.lower()}-{sid}.webp"
-            if sid not in cache:
+            fresh = sid not in cache
+            if fresh:
                 started = time.monotonic()
                 if sid in candidate_cache:
                     import hashlib
@@ -261,6 +262,22 @@ def images(root, final, boundary, stepwise, *, fetcher=None):
                     result = fetcher(story["winner"].get("og_image", ""), root / "reader" / relative)
                 cache[sid] = {"ok": bool(result), "info": result,
                               "seconds": round(time.monotonic() - started, 3)}
-                write(path, cache)
+            # Owner decision 2026-10-01: use FINAL compressed WebP bytes,
+            # never source Content-Length or pixel dimensions. Recheck cached
+            # results on resume too; keep the article, remove only its picture.
+            asset = root / 'reader' / relative
+            if cache[sid]['ok']:
+                if asset.is_symlink() or not asset.is_file():
+                    raise ValueError('Final image missing or symlink; cannot check byte floor')
+                size = asset.stat().st_size
+                cache[sid]['final_bytes'] = size
+                if size < 20_000:
+                    import os
+                    quarantine = root / 'rejected-images' / Path(relative).name
+                    quarantine.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(asset, quarantine)
+                    cache[sid].update(ok=False, reason='compressed image below 20000 bytes')
+            write(path, cache)
+            if fresh:
                 boundary(root, f"image-{sid}", stepwise, started)
             story["_image_local"] = relative if cache[sid]["ok"] else ""

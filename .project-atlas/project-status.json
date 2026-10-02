@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T00:37:38Z",
+  "updated_at": "2026-10-02T01:19:58Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -474,6 +474,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-01",
+      "title": "最终压缩图片20KB硬门槛",
+      "note": "用户确认小于20000字节淘汰成品WebP图片，保留正文；统一检查新图片及恢复缓存并隔离至rejected-images，原图59KB不代表压缩成品9KB可用。只改影子路径，已完成运行和生产不自动覆盖。",
+      "source_ref": "docs/KIDSNEWS-IMAGE-BYTE-FLOOR-2026-10-01.md"
+    },
     {
       "date": "2026-10-01",
       "title": "latest 两对象半写后的恢复",
