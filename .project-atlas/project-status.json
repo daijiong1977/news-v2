@@ -555,6 +555,12 @@
   "lessons": [
     {
       "date": "2026-10-02",
+      "title": "英文正文上下限允许15%容差，避免无意义定点修稿",
+      "note": "原区间仍是写作目标，接受范围ceil(lower*0.85)..floor(upper*1.15)。答卷、精修和ZIP共用影子校验；中文、原文、图片、安全及结构规则不变，生产wordcount_policy未改。原缓存Fun 276/273词不再超限；不修改冻结答卷，不部署或写库。",
+      "source_ref": "docs/KIDSNEWS-DEEPSEEK-BATCH-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
       "title": "1M上下文不解决8K输出截断，五篇答卷须排序并精简重复原文",
       "note": "官方和账号/models确认Flash/Pro为1048576上下文及393216最大输出。影子HTTP批次改为独立JSON五篇prompt、16384输出、显式关闭thinking和0.2温度，drafts按优先到备用排序，移除重复paragraphs但保留完整body。原生/生产路径不变；冻结旧目录不重生成。真实缓存Fun小范围实测及字数验证见报告；本补丁不发布、写库、归档或邮件。Science/Fun每源3→3、目标10的采集变更另待实现。",
       "source_ref": "docs/KIDSNEWS-DEEPSEEK-BATCH-2026-10-02.md"

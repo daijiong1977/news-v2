@@ -55,6 +55,26 @@ def test_bad_public_site_never_has_ready_proof(tmp_path, monkeypatch):
         bundle.verify_site(path.read_bytes(), 'https://example.com', lambda *a, **kw: SimpleNamespace(status_code=200, content=b'old'))
 
 
+def test_bundle_word_tolerance_does_not_relax_source_gate(tmp_path, monkeypatch):
+    import json
+    path, _ = full_bundle(tmp_path, monkeypatch)
+    files, manifest = bundle.unpack(path.read_bytes())
+    name = next(n for n in files if n.startswith('article_payloads/') and n.endswith('/easy.json'))
+    body = json.loads(files[name])
+    body['summary'] = 'word ' * 276
+    files[name] = json.dumps(body).encode()
+    bundle.validate_contents(files, manifest)
+    body['summary'] = 'word ' * 369
+    files[name] = json.dumps(body).encode()
+    with pytest.raises(ValueError, match='Body length/source mismatch'):
+        bundle.validate_contents(files, manifest)
+    body['summary'] = 'word ' * 276
+    body['source_url'] = 'https://wrong.example/story'
+    files[name] = json.dumps(body).encode()
+    with pytest.raises(ValueError, match='Body length/source mismatch'):
+        bundle.validate_contents(files, manifest)
+
+
 def test_corrupted_manifest_hash_refused(tmp_path, monkeypatch):
     path, _ = full_bundle(tmp_path, monkeypatch)
     data = path.read_bytes()

@@ -5,7 +5,7 @@ from .agent_shadow_profiles import is_hybrid, is_batch, uses_native_details
 
 
 def validate_rewrite(value, cat, word_count):
-    from .agent_shadow_lengths import rewrite_band
+    from .agent_shadow_lengths import acceptance_band
     entries = value.get("articles", [])
     if len(entries) != 1 or entries[0].get("source_id") != 0:
         return ["Return exactly one article with source_id 0"]
@@ -20,7 +20,7 @@ def validate_rewrite(value, cat, word_count):
     if errors:
         return errors
     for level in ('easy', 'middle'):
-        lo, hi = rewrite_band(level, cat, word_count)
+        lo, hi = acceptance_band(level, cat, word_count)
         count = len(entry[f'{level}_en']['body'].split())
         if not lo <= count <= hi:
             errors.append(f'{level}: {count}w outside {lo}-{hi}')

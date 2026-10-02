@@ -327,7 +327,7 @@ def test_body_fix_exhausted_gone_and_optional_cleanup_needs_no_ai_retry(tmp_path
     def bad(root, key, prompt, material, validate, **kw):
         tasks.append(key)
         value = combined_answer()
-        value['corrected_article']['middle_en']['body'] = 'fact ' * 281
+        value['corrected_article']['middle_en']['body'] = 'fact ' * 254
         return value
     result = finish(tmp_path, 'News', 'bad', art, {}, [], [], bad)
     assert result['status'] == 'gone' and len(tasks) == 2

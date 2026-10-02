@@ -66,7 +66,7 @@ def unpack(data):
 
 def validate_contents(files, manifest):
     from PIL import Image
-    from .agent_shadow_lengths import rewrite_band
+    from .agent_shadow_lengths import acceptance_band
     run_date = manifest['date']
     date.fromisoformat(run_date)
     uuid.UUID(manifest['run_id'])
@@ -102,7 +102,7 @@ def validate_contents(files, manifest):
                 raise ValueError('Unsafe final content')
             for level in ('easy', 'middle'):
                 body = json.loads(files[f'article_payloads/payload_{sid}/{level}.json'])
-                lo, hi = rewrite_band(level, cat, body['source_word_count'])
+                lo, hi = acceptance_band(level, cat, body['source_word_count'])
                 if not lo <= len(body['summary'].split()) <= hi or body['source_url'] != row['source_url']:
                     raise ValueError('Body length/source mismatch')
                 if manifest.get('editorial_profile') in ('source-first-grok', 'source-first-deepseek'):

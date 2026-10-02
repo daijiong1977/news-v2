@@ -11,9 +11,9 @@ def test_fun_short_middle_survives(source_words, middle_words):
     assert validate_rewrite({'articles': [value]}, 'Fun', source_words) == []
 
 
-def test_fun_179_words_still_rejected():
+def test_fun_below_tolerated_lower_bound_still_rejected():
     value = draft()
-    value['middle_en']['body'] = ' '.join(['word'] * 179)
+    value['middle_en']['body'] = ' '.join(['word'] * 152)
     assert validate_rewrite({'articles': [value]}, 'Fun', 500)
 
 
@@ -48,7 +48,7 @@ def test_modifier_accepts_fun_180_without_extra_rewrite(tmp_path):
     assert corrected == value
 
 
-@pytest.mark.parametrize('category,words', [('News', 180), ('Science', 180), ('Fun', 411)])
+@pytest.mark.parametrize('category,words', [('News', 180), ('Science', 180), ('Fun', 472)])
 def test_other_categories_and_fun_ceiling_not_relaxed(category, words):
     value = draft()
     value['middle_en']['body'] = ' '.join(['word'] * words)
