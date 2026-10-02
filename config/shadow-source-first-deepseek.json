@@ -1,9 +1,9 @@
 {
   "roles": {
-    "rank": {"type": "http", "model": "deepseek-chat", "endpoint": "https://api.deepseek.com/chat/completions", "key_env": "DEEPSEEK_API_KEY"},
+    "rank": {"type": "http", "model": "deepseek-flash", "endpoint": "https://api.deepseek.com/chat/completions", "key_env": "DEEPSEEK_API_KEY"},
     "editor": {"type": "native"},
     "review": {"type": "native"},
-    "write": {"type": "http", "model": "deepseek-chat", "endpoint": "https://api.deepseek.com/chat/completions", "key_env": "DEEPSEEK_API_KEY"},
+    "write": {"type": "http", "model": "deepseek-flash", "endpoint": "https://api.deepseek.com/chat/completions", "key_env": "DEEPSEEK_API_KEY"},
     "details": {"type": "native"},
     "detail_review": {"type": "native"}
   }

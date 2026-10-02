@@ -555,6 +555,12 @@
   "lessons": [
     {
       "date": "2026-10-02",
+      "title": "1M上下文不解决8K输出截断，五篇答卷须排序并精简重复原文",
+      "note": "官方和账号/models确认Flash/Pro为1048576上下文及393216最大输出。影子HTTP批次改为独立JSON五篇prompt、16384输出、显式关闭thinking和0.2温度，drafts按优先到备用排序，移除重复paragraphs但保留完整body。原生/生产路径不变；冻结旧目录不重生成。真实缓存Fun小范围实测及字数验证见报告；本补丁不发布、写库、归档或邮件。Science/Fun每源3→3、目标10的采集变更另待实现。",
+      "source_ref": "docs/KIDSNEWS-DEEPSEEK-BATCH-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
       "title": "固定五选三和三段式入口减少交接，推送不等于上线",
       "note": "source-first-deepseek每栏ID摘要排前8，再一次写5篇Easy/Middle/中文；Python输出15稿及机械审查，Grok负责三组选择和九篇精修/详情自检，不能后补。软来源/学科/重要性条件可放宽，不适龄细节删、短稿可加准确解释，不能造事实。固定组硬失败保存断点，不能伪造3篇或发短包。原始批次/已通过稿冻结，便宜Python边界连续执行，日志每个交接推一次；reader原子目录和private/public一致性检查，push前哨兵防未知状态重复发。仅网站latest和核验history ledger，文章DB/date archive/邮件不动。246项Python3.10离线通过不证明真实质量、成本、新轮上线或回滚；缓存保留。",
       "source_ref": "docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md"
