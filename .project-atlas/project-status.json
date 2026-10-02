@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T12:23:24-04:00",
+  "updated_at": "2026-10-02T17:09:04.146Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR86固定五选三：Python连续准备/DeepSeek前8及15篇三版本；Grok组选择及逐篇成品；Python正式reader与现有CI交接。3.10离线246项通过，未改main/DB/archive，真实新轮待VM。",
+      "purpose": "PR86真正三阶段：Python/DeepSeek先输出15稿，Grok连续五选三及修稿详情自检，Python统一校验和正式reader/现有CI交付；3.10离线255项通过，不改main/DB/archive，真实VM发布待验收。",
       "status": "review"
     },
     {
@@ -91,20 +91,76 @@
     }
   ],
   "files": [
-    {"path":"pipeline/kidsnews_bot.py","purpose":"三段式连续入口、原生交接、正式ZIP及网站CI幂等交付","location":"repo"},
-    {"path":"pipeline/agent_shadow_shortlist.py","purpose":"DeepSeek ID摘要前8、15稿Python审查、禁五稿之后后补","location":"repo"},
-    {"path":"docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md","purpose":"当前固定五选三Spec、模型/Python职责、规则与发布边界","location":"repo"},
-    {"path":"pipeline/agent_shadow_source_first.py","purpose":"来源前置6/3/3、4篇即停、NPR正文与Science组轮询","location":"repo"},
-    {"path":"pipeline/agent_shadow_source_editor.py","purpose":"缓存复用和单栏增量补稿","location":"repo"},
-    {"path":"pipeline/agent_shadow_finish.py","purpose":"逐篇精修/详情/自检及有限修复降级","location":"repo"},
-    {"path":"pipeline/source_first_reader.py","purpose":"新包缺详情模板适配，避免空题目奖励","location":"repo"},
-    {"path":"docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md","purpose":"新模式运行、同目录恢复和发布边界","location":"repo"},
-    {"path": "pipeline/website_release.py", "purpose": "正式reader转换与latest-only备份/发布/恢复/公开哈希；未真实上线", "location": "repo"},
-    {"path": "pipeline/website_delivery.py", "purpose": "Bot只推四个批准artifact，hash绑定与CI入口", "location": "repo"},
-    {"path": "pipeline/website_ledger.py", "purpose": "私有有效发布历史供七日查重", "location": "repo"},
-    {"path": "config/reader-shell.json", "purpose": "正式模板b9592e0的22文件哈希固定", "location": "repo"},
-    {"path": "agent/github/publish-reader.yml", "purpose": "仅导出到Bot repo的发布Action；密钥留CI", "location": "repo"},
-    {"path": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md", "purpose": "最新实现/CI设置/完整Bot prompt与限制", "location": "repo"},
+    {
+      "path": "pipeline/kidsnews_bot.py",
+      "purpose": "三段式连续入口、原生交接、正式ZIP及网站CI幂等交付",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_shortlist.py",
+      "purpose": "DeepSeek ID摘要前8、15稿Python审查、禁五稿之后后补",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md",
+      "purpose": "当前固定五选三Spec、模型/Python职责、规则与发布边界",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_source_first.py",
+      "purpose": "来源前置6/3/3、4篇即停、NPR正文与Science组轮询",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_source_editor.py",
+      "purpose": "缓存复用和单栏增量补稿",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_finish.py",
+      "purpose": "逐篇精修/详情/自检及有限修复降级",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/source_first_reader.py",
+      "purpose": "新包缺详情模板适配，避免空题目奖励",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md",
+      "purpose": "新模式运行、同目录恢复和发布边界",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/website_release.py",
+      "purpose": "正式reader转换与latest-only备份/发布/恢复/公开哈希；未真实上线",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/website_delivery.py",
+      "purpose": "Bot只推四个批准artifact，hash绑定与CI入口",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/website_ledger.py",
+      "purpose": "私有有效发布历史供七日查重",
+      "location": "repo"
+    },
+    {
+      "path": "config/reader-shell.json",
+      "purpose": "正式模板b9592e0的22文件哈希固定",
+      "location": "repo"
+    },
+    {
+      "path": "agent/github/publish-reader.yml",
+      "purpose": "仅导出到Bot repo的发布Action；密钥留CI",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md",
+      "purpose": "最新实现/CI设置/完整Bot prompt与限制",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-WEBSITE-ONLY-RUNBOOK-2026-10-01.md",
       "purpose": "现有ZIP生成命令、待实现发布/恢复操作单及Cloud只读审查prompt；非发布授权。",
@@ -479,6 +535,21 @@
       "path": "pipeline/test_agent_shadow_grok_fixes.py",
       "purpose": "Grok后续四类问题8项先红后绿回归；断点兜底来源、四稿约束、发现稿历史及缓存预算。",
       "location": "repo"
+    },
+    {
+      "path": "pipeline/kidsnews_groups.py",
+      "purpose": "自包含三栏文件工单、固定五选三导入、有限修正和跨天无API历史复核",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_kidsnews_groups.py",
+      "purpose": "三阶段9项离线回归，最终Python零模型调用及单行JSON/冻结答卷/定点修正",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md",
+      "purpose": "当前Python→Grok连续文件编辑→Python正式reader发布合同与Bot说明",
+      "location": "repo"
     }
   ],
   "lessons": [
@@ -494,10 +565,15 @@
       "note": "三Agent直接修复：冻结prepare不依赖原连接器且不重置起时；feed与跳转URL双查重、正文缓存hash、补选ready上下文、30项目录退役保留最终栏目；详情修复保正文/另一有效级别、坏JSON降级、空答卷恢复及清理日志；真实article.jsx mapper传detail_status；发布resume/rollback锁定ZIP和manifest；标题卡片证据纳入pack且引语只告警。17项回归先失败后通过，共235项Python3.10离线通过。Spec消除待实现矛盾；正式reader仍须九篇。未真实模型、写库、部署、merge；保留缓存。",
       "source_ref": "docs/KIDSNEWS-SOURCE-FIRST-FINAL-REVIEW-2026-10-02.md"
     },
-    {"date":"2026-10-02","title":"引语启发式不再阻止发布","note":"用户要求上次Unsupported quoted sentence类门禁改为warning。引语逐字不匹配返回告警，逐篇精修不因此修稿/拒稿；ZIP记录和manifest以及公开latest-manifest保存evidence_warnings。不代表引语准确，数字/英文结构/儿童安全及其他发布完整性门禁不变。未调用模型或实际发布，feature PR同步Bot。","source_ref":"pipeline/website_release.py"},
     {
       "date": "2026-10-02",
-        "title": "来源前置单篇成品与可恢复发布（pack后仅交接ZIP，不误导Vercel发布）",
+      "title": "引语启发式不再阻止发布",
+      "note": "用户要求上次Unsupported quoted sentence类门禁改为warning。引语逐字不匹配返回告警，逐篇精修不因此修稿/拒稿；ZIP记录和manifest以及公开latest-manifest保存evidence_warnings。不代表引语准确，数字/英文结构/儿童安全及其他发布完整性门禁不变。未调用模型或实际发布，feature PR同步Bot。",
+      "source_ref": "pipeline/website_release.py"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "来源前置单篇成品与可恢复发布（pack后仅交接ZIP，不误导Vercel发布）",
       "note": "显式source-first-grok实现，每源最多12、4篇即停、首六全坏本轮暂停，至少三源十稿；Science跨publisher轮询；Python正文/图片先筛，WebP>=20000字节。正常DeepSeek3＋native13任务。facts false只告警，安全/证据仍硬门禁；精修和两级详情自检合并，有限修复后坏详情合法省略。固定模板包内省略详情适配避免0/0奖励；旧模式不升级，缓存保留。只读验证旧包resume36948143776和网站36948187869成功，58公网文件hash全部吻合；新模式未真实发布，真实回滚未执行。",
       "source_ref": "docs/KIDSNEWS-SOURCE-FIRST-2026-10-01.md"
     },
@@ -519,7 +595,12 @@
       "note": "website-1 的 18 份正文离线通过修复后的证据门禁；只忽略引语句尾标点，措辞和人数仍精确核验。Science 初次抓取先给各独立出版方一次机会，防止失败站点消耗预算；已有稿件不重生成。代码在 feature PR，真实网站发布待 Bot 恢复核验，DB/archive 不动。",
       "source_ref": "docs/bugs/2026-10-01-shadow-quote-punctuation-and-science-fetch.md"
     },
-    {"date": "2026-10-01", "title": "Cloud发布门禁修复", "note": "坏批次消费本组全部ID避免重复DeepSeek；有效未选候选保留。正式模板从固定网站提交全22文件导出含JSX，不取落后且脏checkout。上传即可被旧cron读走即发布；先独立CI备份，只写latest两对象，再dispatch旧Action与公开全hash核验。私有ledger替代未入库稿的同栏七日历史；DB/archive延后。250项离线和Actionlint通过不等于真实上线，Bot CI secrets待配置。", "source_ref": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md"},
+    {
+      "date": "2026-10-01",
+      "title": "Cloud发布门禁修复",
+      "note": "坏批次消费本组全部ID避免重复DeepSeek；有效未选候选保留。正式模板从固定网站提交全22文件导出含JSX，不取落后且脏checkout。上传即可被旧cron读走即发布；先独立CI备份，只写latest两对象，再dispatch旧Action与公开全hash核验。私有ledger替代未入库稿的同栏七日历史；DB/archive延后。250项离线和Actionlint通过不等于真实上线，Bot CI secrets待配置。",
+      "source_ref": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md"
+    },
     {
       "date": "2026-09-30",
       "title": "完整影子流水线必须逐步暂停，附加内容也要独立审核",
@@ -831,6 +912,12 @@
       "title": "网站先行与后台归档分阶段，Spec不能把计划功能写成完工",
       "note": "用户决定第一阶段仅latest.zip和匹配manifest，经原news-v2-uploaded事件由旧Action解包部署；日期包/flat archive/DB/新consumer不写。正式.jsx转换、独立备份批准恢复状态、有效发布history overlay及writer协调待实现/验收。网站已发但DB未入库时需要本地有效历史账本；旧registry不会自动包含Bot稿。此次仅文档，不修改生产或调用模型，Cloud先审Spec再核对代码。",
       "source_ref": "docs/KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "真正拆成两次Python与中间连续Grok文件工作，不能只改prompt声称接口已完成",
+      "note": "prepare冻结十五稿、原文/图片和工单；Grok每栏选三并一次修稿/详情/自检、逐篇保存；finalize只读文件校验、有限定点修正并复用正式reader和原CI交付，不追加模型调用。已接受文件hash锁定，跨24小时用新registry与文件式历史复核，不改冻结日期/输入。255项3.10离线通过；无真实模型、DB/archive/邮件或发布操作，新质量/费用/公网成功待VM。",
+      "source_ref": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md"
     }
   ]
 }

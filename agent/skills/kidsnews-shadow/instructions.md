@@ -1,5 +1,18 @@
 # Native Agent judgments
 
+## Current three-stage file workspace
+
+For NEW source-first-deepseek runs, docs/KIDSNEWS-THREE-STAGES-2026-10-02.md wins.
+After --stage prepare, read the three self-contained groups/*-request.json files,
+one category at a time. Write selection envelopes with request_id/order/reason and
+one combined answer envelope per chosen article with request_id/id/value (an object).
+Complete three within each fixed five; body fine-tuning, both detail levels and self-check
+are ONE task per article. Save each immediately. No intermediate Python calls, no
+separate reviewer, no external model API or extra source. Run --stage finalize only
+after all nine are saved. Exit2 permits correcting the exact file/failed field; never
+edit a hash-pinned accepted answer or reset budgets. Old task protocols below apply
+only to directories that did not start with --stage prepare.
+
 ## Current source-first-deepseek override (2026-10-02)
 
 Read docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md. DeepSeek already ranked metadata and wrote

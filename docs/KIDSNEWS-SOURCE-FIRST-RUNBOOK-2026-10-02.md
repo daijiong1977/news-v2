@@ -1,5 +1,15 @@
 # 固定五选三运行说明（2026-10-02）
 
+## 当前新轮：真正三阶段
+
+按 `KIDSNEWS-THREE-STAGES-2026-10-02.md` 执行：
+1. kidsnews_bot --stage prepare，一次完成Python＋DeepSeek准备。
+2. Grok读取groups三份request，连续保存selection及九篇成品，不穿插Python。
+3. kidsnews_bot --stage finalize（可显式--publish），统一校验/打包/交现有CI。
+旧无--stage入口仅供旧目录恢复，不能用于已有groups/manifest的新目录。
+
+## 以下是历史逐任务接口（旧目录恢复）
+
 当前 Spec：KIDSNEWS-FIXED-FIVE-2026-10-02.md。旧 source-first-grok 目录继续原模式，不改 input。
 新入口 `pipeline.kidsnews_bot` 自动连续做准备、跳过便宜Python边界、打包并按显式参数交付。
 

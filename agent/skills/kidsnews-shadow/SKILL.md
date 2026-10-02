@@ -13,7 +13,22 @@ Your files are `work/`. The local project maintainer changes code through Git.
 
 ## Maintainer-approved hybrid tests
 
-### Current new run: source-first-deepseek fixed five (2026-10-02)
+### CURRENT execution interface: true three stages (2026-10-02)
+
+Read docs/KIDSNEWS-THREE-STAGES-2026-10-02.md first; it overrides ALL interleaved
+instructions below for NEW runs. In a fresh directory, run kidsnews_bot --stage prepare
+once. Grok then reads groups/{News,Science,Fun}-request.json one category at a time,
+writes three selection files and nine combined body/details/self-check article files.
+Do NOT run intermediate Python or read old tasks/review-finish answers. Then run
+kidsnews_bot --stage finalize, preserving the same directory and explicit publication
+parameters. Finalize calls NO model; exit2 is a specific targeted file repair only.
+Requests define exact schemas/paths; completed files are hash-pinned and cannot change.
+No backfill/sixth candidate, DB/archive/email writes or cache deletion. Existing official
+template and publishing CI only; push means CI pending, not public verification.
+Older-than24h finalize needs --confirm-stale --registry fresh snapshot; it yields a
+file-only history recheck, never an API call or rewrite of all bodies.
+
+### Historical interleaved interface: source-first-deepseek fixed five
 
 Read docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md and
 docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md first. They override older profile rules below.

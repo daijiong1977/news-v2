@@ -455,6 +455,8 @@ def advance(root: Path, *, stepwise=False):
     from .full_round import emit_v1_shape
     from .shadow_site import export
     verify_answer_hashes(root)
+    if (root / 'groups/manifest.json').exists() and not (root / 'groups/imported.json').exists():
+        raise ValueError('Three-stage run requires --stage finalize; do not interleave native tasks')
     if (root / "done.json").exists():
         return {"ok": True, "already_done": True, **read(root / "done.json")}
     snapshot = read(root / "input.json")
