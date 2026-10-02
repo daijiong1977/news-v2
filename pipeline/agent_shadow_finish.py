@@ -23,6 +23,9 @@ and death matter; explain calmly without graphic injury, fear or sensationalism.
 Correct names, quotes, attribution, qualifiers, years, numbers and causal claims.
 No workflow comments in reader text. Use only source-supported direct quotes/numbers.
 Prefer targeted corrections, never pad with invented facts. Preserve good passages.
+If a source includes unsuitable details, REMOVE those details and explain the safe
+core event. If short, add accurate general definitions clearly distinguished from
+reported event facts. Do not invent quotations, statistics, dates or other viewpoints.
 Return {"corrected_article":{source_id:0,easy_en:{headline,body,card_summary},
 middle_en:{headline,body,card_summary},zh:{headline,summary}}, "details":{"0_easy":{...},
 "0_middle":{...}}, "scores":{"0":{violence,sexual,substance,language,fear,adult_themes,
@@ -237,6 +240,8 @@ def edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy):
     from .agent_shadow import read, write, CATS
     from .news_sources import NewsSource
     from .editorial_policy import publisher_key
+    from .agent_shadow_profiles import uses_deepseek_shortlist
+    fixed_group = uses_deepseek_shortlist(snapshot)
     state_path = root / 'editor-state.json'
     state = read(state_path) if state_path.exists() else {cat: {'accepted': [], 'outcomes': [], 'order': [],
                     'pool_ids': [], 'pick_done': False, 'target': 8} for cat in CATS}
@@ -250,6 +255,8 @@ def edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy):
         section = state[cat]
         if len(section['accepted']) < 3:
             return True
+        if fixed_group:
+            return False
         tried = {o['id'] for o in section['outcomes']}
         remaining = [b for b in policy.originals(cat, limit=None) if b['id'] not in tried]
         if cat == 'News' and not any(a['candidate']['importance'] >= 3 for a in section['accepted']):
@@ -279,14 +286,22 @@ def edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy):
                                 or (cat == 'Science' and publisher(b) not in used)]
                 if not eligible:
                     break
-                b = max(eligible, key=lambda row: (cat == 'News' and not has_important and row['importance'] >= 3,
-                    cat == 'Science' and len(used) < 2 and publisher(row) not in used, row['topic'] not in topics))
+                if fixed_group:
+                    # Grok owns selection. Python must not silently reselect by
+                    # quotas or DeepSeek importance after the editor ordered five.
+                    b = eligible[0]
+                    round_number = 1 if section['order'].index(b['id']) < 3 else 2
+                else:
+                    b = max(eligible, key=lambda row: (cat == 'News' and not has_important and row['importance'] >= 3,
+                        cat == 'Science' and len(used) < 2 and publisher(row) not in used, row['topic'] not in topics))
+                    round_number = 1
                 sid, art = b['id'], b['article']
                 batch = read(root / f'batch-{cat}-{target}.json')
                 draft = next(row.get('article') for row in batch['drafts'] if row['id'] == sid)
                 accepted_events = [{'title': a['candidate']['article']['title'], 'source_excerpt': a['candidate']['article']['body'][:1200]} for a in section['accepted']]
                 result = finish(root, cat, sid, art, draft, snapshot['history'][cat], accepted_events, ask)
                 outcome = {'id': sid, 'category': cat, 'status': result['status'], 'review_method': METHOD,
+                           'selection_round': round_number,
                            'writer_provider': b.get('writer_provider', 'deepseek'),
                            'warnings': result.get('warnings', []), 'removed': result.get('removed', []),
                            'body_repairs': result.get('body_repairs', 0), 'detail_repairs': result.get('detail_repairs', 0)}
@@ -305,6 +320,11 @@ def edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy):
                 tried.add(sid)
                 save()
                 boundary(root, f'finish-{cat}-{sid}', stepwise)
+            if needs(cat) and fixed_group:
+                write(root / 'group-blocked.json', {'category': cat, 'required': 3,
+                      'ready': len(section['accepted']), 'fixed_ids': section['pool_ids'],
+                      'outcomes': section['outcomes'], 'next': 'Repair within the same five; no backfill, no publication'})
+                raise ValueError(f'{cat}: fixed five have only {len(section["accepted"])} ready; repair this group, no backfill')
             if needs(cat):
                 expanded = policy.extend(cat, target, section)
                 if expanded is not None:
@@ -317,13 +337,15 @@ def edit_source_first(root, snapshot, ranked, ask, boundary, stepwise, policy):
     for cat, section in state.items():
         accepted = section['accepted']
         chosen = accepted[:3]
-        if cat == 'News':
+        if cat == 'News' and not fixed_group:
             important = sorted((a for a in accepted if a['candidate']['importance'] >= 3), key=lambda a: -a['candidate']['importance'])
             if important:
                 chosen = [important[0]] + [a for a in chosen if a != important[0]][:2]
             else:
                 warnings.append('News has no qualified high-importance story')
-        if cat == 'Science' and len(chosen) == 3:
+        if fixed_group and cat == 'News' and not any(a['candidate']['importance'] >= 3 for a in chosen):
+            warnings.append('News has no high-importance story; fixed-group soft preference relaxed')
+        if cat == 'Science' and len(chosen) == 3 and not fixed_group:
             used = {publisher(a['candidate']) for a in chosen}
             other = next((a for a in accepted[3:] if publisher(a['candidate']) not in used), None)
             if len(used) < 2 and other:

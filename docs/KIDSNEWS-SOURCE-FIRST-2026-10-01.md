@@ -1,5 +1,9 @@
 # Kids News 来源前置＋逐篇成品完整 Spec
 
+> 2026-10-02 后续用户确认已改变分工：当前新轮以 **KIDSNEWS-FIXED-FIVE-2026-10-02.md** 为准。
+> DeepSeek ID/摘要前8＋每栏5篇三版本；Grok固定五选三、逐篇成品；Python现有网站发布。
+> 以下保留 source-first-grok 历史模式说明；其中Grok规划、后补、13任务基线不适用于新source-first-deepseek。
+
 日期：2026-10-01，America/New_York。
 状态：2026-10-02 已在 PR #86 feature 分支实现显式 `source-first-grok` 模式，并通过 Python 3.10 离线回归；新模式尚未真实生成/发布。生产 main 与旧运行恢复模式不变。
 

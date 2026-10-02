@@ -3,11 +3,11 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T05:09:37.134Z",
+  "updated_at": "2026-10-02T12:23:24-04:00",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
-      "purpose": "PR86 source-first-grok已完成三Agent最终复核；17项新增回归，Python3.10相关235项通过。来源前置、逐篇修稿/详情、reader与发布恢复已修；新模式真实质量仍待VM验证，未改main/DB/archive。",
+      "purpose": "PR86固定五选三：Python连续准备/DeepSeek前8及15篇三版本；Grok组选择及逐篇成品；Python正式reader与现有CI交接。3.10离线246项通过，未改main/DB/archive，真实新轮待VM。",
       "status": "review"
     },
     {
@@ -91,6 +91,9 @@
     }
   ],
   "files": [
+    {"path":"pipeline/kidsnews_bot.py","purpose":"三段式连续入口、原生交接、正式ZIP及网站CI幂等交付","location":"repo"},
+    {"path":"pipeline/agent_shadow_shortlist.py","purpose":"DeepSeek ID摘要前8、15稿Python审查、禁五稿之后后补","location":"repo"},
+    {"path":"docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md","purpose":"当前固定五选三Spec、模型/Python职责、规则与发布边界","location":"repo"},
     {"path":"pipeline/agent_shadow_source_first.py","purpose":"来源前置6/3/3、4篇即停、NPR正文与Science组轮询","location":"repo"},
     {"path":"pipeline/agent_shadow_source_editor.py","purpose":"缓存复用和单栏增量补稿","location":"repo"},
     {"path":"pipeline/agent_shadow_finish.py","purpose":"逐篇精修/详情/自检及有限修复降级","location":"repo"},
@@ -479,6 +482,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-02",
+      "title": "固定五选三和三段式入口减少交接，推送不等于上线",
+      "note": "source-first-deepseek每栏ID摘要排前8，再一次写5篇Easy/Middle/中文；Python输出15稿及机械审查，Grok负责三组选择和九篇精修/详情自检，不能后补。软来源/学科/重要性条件可放宽，不适龄细节删、短稿可加准确解释，不能造事实。固定组硬失败保存断点，不能伪造3篇或发短包。原始批次/已通过稿冻结，便宜Python边界连续执行，日志每个交接推一次；reader原子目录和private/public一致性检查，push前哨兵防未知状态重复发。仅网站latest和核验history ledger，文章DB/date archive/邮件不动。246项Python3.10离线通过不证明真实质量、成本、新轮上线或回滚；缓存保留。",
+      "source_ref": "docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md"
+    },
     {
       "date": "2026-10-02",
       "title": "最终复核须检查真实reader映射及恢复不变量",

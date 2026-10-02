@@ -13,7 +13,30 @@ Your files are `work/`. The local project maintainer changes code through Git.
 
 ## Maintainer-approved hybrid tests
 
-### Current new run: source-first-grok (2026-10-02)
+### Current new run: source-first-deepseek fixed five (2026-10-02)
+
+Read docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md and
+docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md first. They override older profile rules below.
+Use pipeline.kidsnews_bot in a NEW directory. It continuously executes Python preparation,
+three DeepSeek ID/abstract top-eight ranks and three five-draft writes. Each of fifteen drafts
+contains Easy/Middle/Chinese. No native plan task, no repeated full-text downloads.
+Grok must pick and finish THREE inside each fixed FIVE: group task returns all five IDs,
+best three then reserves, using DeepSeek order/Python audit as references, not binding rankings.
+Relax soft composition preferences, remove child-unsuitable detail, use accurate general
+definitions to explain short stories; never invent event facts/quotes/numbers. NO backfill.
+Finish one article with both detail levels and self-check in ONE task, then Python validates.
+No standalone details generation/audit; normal baseline6 DeepSeek +12 native tasks, repairs extra.
+Follow exit2 read/write_to; rerun the SAME kidsnews_bot command, preserving its publish parameters.
+The entry drains cheap Python boundaries automatically, not a loop of unanswered requests.
+Three-per-section count is a hard completion target. If bounded hard failures leave fewer,
+report group-blocked and keep the same five; no sixth candidate or short successful package.
+With explicit --publish --ack-same-day-replacement --branch, the entry builds the pinned official
+reader and pushes ONLY approved artifact files; existing CI backs up, replaces latest, dispatches
+the unchanged website Action and verifies public hashes. Push means pending CI, not deployed.
+Article DB/date archive/email are forbidden; preserve debug/cache. Logs ship once per handoff.
+Same-directory runs older than24h require --confirm-stale and refreshed history.
+
+### Historical new run: source-first-grok (frozen directories only)
 
 Read docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md and its full Spec.
 Use a NEW directory with --editor-mode autonomous --test-profile source-first-grok.

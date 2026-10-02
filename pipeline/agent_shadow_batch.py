@@ -102,6 +102,16 @@ def validate_order(value, pool, category):
     return []
 
 
+def validate_fixed_order(value, pool):
+    """The editor may override DeepSeek; IDs/membership cannot change."""
+    order = value.get('order') if isinstance(value, dict) else None
+    ids = {b['id'] for b in pool}
+    if (len(ids) != 5 or not isinstance(order, list) or len(order) != 5
+            or any(not isinstance(sid, str) for sid in order) or set(order) != ids):
+        return ['Fixed group requires exactly five unique supplied IDs: three priorities, two reserves']
+    return []
+
+
 class BatchEditor(AutonomousEditor):
     def accepted_context(self, cat):
         """Bounded ready-article context for new-source planning/selection only."""
@@ -156,85 +166,94 @@ class BatchEditor(AutonomousEditor):
         self.boundary(self.root, 'plan', self.stepwise)
         return self.catalog
 
-    def pool(self, cat, target):
+    def pool(self, cat, target, *, draft_only=False):
         from .agent_shadow import read, write, AnswerRejected, pin_task_answers
+        from .agent_shadow_profiles import is_source_first, uses_deepseek_shortlist
+        key = f'rewrite-batch-{cat}-{target}'
         path = self.root / f'batch-{cat}-{target}.json'
         if path.exists():
             return read(path)['pool']
-        prior = [read(p) for p in sorted(self.root.glob(f'batch-{cat}-*.json'))]
-        consumed = {sid for batch in prior for sid in batch['considered']}
-        original_catalog = self.catalog[cat]
-        # Previous valid-but-unselected originals remain available; only generated drafts
-        # and structurally invalid drafts are consumed. No duplicate rewriting of them.
-        self.catalog[cat] = [b for b in original_catalog if b['id'] not in consumed]
-        if cat == 'Science':
-            self.catalog[cat] = publisher_first_catalog(
-                self.catalog[cat], self.snapshot['candidates'], self.snapshot['sources'])
-        try:
-            originals = self.originals(cat)
-        finally:
-            self.catalog[cat] = original_catalog
-            self.save()
-        photo_path = self.root / 'candidate-images.json'
-        photos = read(photo_path) if photo_path.exists() else {}
-        for b in originals:
-            sid, art = b['id'], b['article']
-            if sid not in photos:
-                dest = self.root / 'candidate-images' / f'{sid}.webp'
-                dest.parent.mkdir(exist_ok=True)
-                import time
-                started = time.monotonic()
-                try:
-                    info, image_url = None, ''
-                    for url in dict.fromkeys([art.get('og_image')] + art.get('image_candidates', [])):
-                        if url:
-                            info = safe_image(url, dest)
-                            if info:
-                                image_url = url
-                                break
-                    photos[sid] = {'ok': bool(info), 'path': str(dest) if info else '', 'source_url': image_url,
-                                   'width': info.get('width') if isinstance(info, dict) else None,
-                                   'height': info.get('height') if isinstance(info, dict) else None,
-                                   'sha256': hashlib.sha256(dest.read_bytes()).hexdigest() if info else ''}
-                except Exception as exc:
-                    photos[sid] = {'ok': False, 'path': '', 'reason': type(exc).__name__}
-                photos[sid]['seconds'] = round(time.monotonic()-started, 3)
-                write(photo_path, photos)
-        self.boundary(self.root, f'originals-images-{cat}-{target}', self.stepwise)
-        if not originals:
-            write(path, {'pool': [], 'drafts': [], 'considered': []})
-            return []
-        from .news_rss_core import TRI_VARIANT_REWRITER_PROMPT
-        from .agent_shadow_lengths import rewrite_band
-        key = f'rewrite-batch-{cat}-{target}'
-        material = {'date': self.snapshot['date'], 'category': cat, 'candidates': [
-            {**b, 'image_ok': photos[b['id']]['ok'], 'publisher': b['article'].get('_publisher_key') or publisher_key(
-                NewsSource(**self.snapshot['sources'][b['article']['source']])),
-             'body_word_bands': {level: rewrite_band(level, cat, b['article']['word_count'])
-                                 for level in ('easy', 'middle')}} for b in originals]}
-        prompt = TRI_VARIANT_REWRITER_PROMPT + '''
-BATCH OVERRIDE: select the best min(5, candidate count) articles AND write all selected drafts in ONE answer.
-Return {"drafts":[{"id":"supplied ID","reason":"why chosen","article":{...}}]}.
-Each article uses source_id 0, easy_en/middle_en headline/body/card_summary, zh headline/summary.
-The per-candidate body_word_bands override generic length rules. Do not generate details or quizzes.
-News: if a highest-importance candidate is included, put it first. Unsuitable sources may be
-skipped with skipped:[{id,reason}]; do not invent facts to satisfy importance.
-Prefer varied topics and independent publishers without displacing important News or inventing facts.
-Only supplied original texts support facts/quotes/attribution. Do not add unsupported viewpoints.
-'''
-        prompt += sports_preference(self.snapshot, cat)
-        from .agent_shadow_profiles import is_source_first
-        if is_source_first(self.snapshot):
-            prompt += '\nSOURCE-FIRST OVERRIDE: Include a highest-importance eligible News FIRST, or explicitly skipped:[{id,reason}] for every tied highest unsuitable candidate. Never silently omit it. Source/topic diversity is secondary.'
-        try:
-            result = self.ask(self.root, key, prompt, material,
-                              lambda v: self.check_batch(v, originals, cat))
-        except AnswerRejected as exc:
-            pin_task_answers(self.root, key)
-            write(path, {'pool': [], 'drafts': [], 'considered': [b['id'] for b in originals],
-                         'reason': str(exc)})
-            self.boundary(self.root, f'batch-invalid-{cat}-{target}', self.stepwise)
-            return []
+        raw_path = self.root / f'raw-batch-{cat}-{target}.json'
+        if raw_path.exists():
+            saved = read(raw_path)
+            originals, result = saved['originals'], saved['result']
+        else:
+            prior = [read(p) for p in sorted(self.root.glob(f'batch-{cat}-*.json'))]
+            consumed = {sid for batch in prior for sid in batch['considered']}
+            original_catalog = self.catalog[cat]
+            # Previous valid-but-unselected originals remain available; only generated drafts
+            # and structurally invalid drafts are consumed. No duplicate rewriting of them.
+            self.catalog[cat] = [b for b in original_catalog if b['id'] not in consumed]
+            if cat == 'Science':
+                self.catalog[cat] = publisher_first_catalog(
+                    self.catalog[cat], self.snapshot['candidates'], self.snapshot['sources'])
+            try:
+                originals = self.originals(cat)
+            finally:
+                self.catalog[cat] = original_catalog
+                self.save()
+            photo_path = self.root / 'candidate-images.json'
+            photos = read(photo_path) if photo_path.exists() else {}
+            for b in originals:
+                sid, art = b['id'], b['article']
+                if sid not in photos:
+                    dest = self.root / 'candidate-images' / f'{sid}.webp'
+                    dest.parent.mkdir(exist_ok=True)
+                    import time
+                    started = time.monotonic()
+                    try:
+                        info, image_url = None, ''
+                        for url in dict.fromkeys([art.get('og_image')] + art.get('image_candidates', [])):
+                            if url:
+                                info = safe_image(url, dest)
+                                if info:
+                                    image_url = url
+                                    break
+                        photos[sid] = {'ok': bool(info), 'path': str(dest) if info else '', 'source_url': image_url,
+                                       'width': info.get('width') if isinstance(info, dict) else None,
+                                       'height': info.get('height') if isinstance(info, dict) else None,
+                                       'sha256': hashlib.sha256(dest.read_bytes()).hexdigest() if info else ''}
+                    except Exception as exc:
+                        photos[sid] = {'ok': False, 'path': '', 'reason': type(exc).__name__}
+                    photos[sid]['seconds'] = round(time.monotonic()-started, 3)
+                    write(photo_path, photos)
+            self.boundary(self.root, f'originals-images-{cat}-{target}', self.stepwise)
+            if not originals:
+                write(path, {'pool': [], 'drafts': [], 'considered': []})
+                return []
+            from .news_rss_core import TRI_VARIANT_REWRITER_PROMPT
+            from .agent_shadow_lengths import rewrite_band
+            material = {'date': self.snapshot['date'], 'category': cat, 'candidates': [
+                {**b, 'image_ok': photos[b['id']]['ok'], 'publisher': b['article'].get('_publisher_key') or publisher_key(
+                    NewsSource(**self.snapshot['sources'][b['article']['source']])),
+                 'body_word_bands': {level: rewrite_band(level, cat, b['article']['word_count'])
+                                     for level in ('easy', 'middle')}} for b in originals]}
+            prompt = TRI_VARIANT_REWRITER_PROMPT + '''
+    BATCH OVERRIDE: select the best min(5, candidate count) articles AND write all selected drafts in ONE answer.
+    Return {"drafts":[{"id":"supplied ID","reason":"why chosen","article":{...}}]}.
+    Each article uses source_id 0, easy_en/middle_en headline/body/card_summary, zh headline/summary.
+    The per-candidate body_word_bands override generic length rules. Do not generate details or quizzes.
+    News: if a highest-importance candidate is included, put it first. Unsuitable sources may be
+    skipped with skipped:[{id,reason}]; do not invent facts to satisfy importance.
+    Prefer varied topics and independent publishers without displacing important News or inventing facts.
+    Only supplied original texts support facts/quotes/attribution. Do not add unsupported viewpoints.
+    '''
+            prompt += sports_preference(self.snapshot, cat)
+            from .agent_shadow_profiles import is_source_first
+            if is_source_first(self.snapshot):
+                prompt += '\nSOURCE-FIRST OVERRIDE: Include a highest-importance eligible News FIRST, or explicitly skipped:[{id,reason}] for every tied highest unsuitable candidate. Never silently omit it. Source/topic diversity is secondary.'
+            try:
+                result = self.ask(self.root, key, prompt, material,
+                                  lambda v: self.check_batch(v, originals, cat))
+            except AnswerRejected as exc:
+                pin_task_answers(self.root, key)
+                write(path, {'pool': [], 'drafts': [], 'considered': [b['id'] for b in originals],
+                             'reason': str(exc)})
+                self.boundary(self.root, f'batch-invalid-{cat}-{target}', self.stepwise)
+                return []
+            write(raw_path, {'originals': originals, 'result': result})
+        if draft_only:
+            return result
         index = {b['id']: b for b in originals}
         audit = read(self.root / 'provider-audit.json') if (self.root / 'provider-audit.json').exists() else {}
         native = any(token.startswith(key + ':') and r.get('fallback') == 'native'
@@ -251,7 +270,25 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
             for row, b in zip(choice_material['sources'], pool):
                 row['publisher'] = b['article'].get('_publisher_key') or publisher_key(
                     NewsSource(**self.snapshot['sources'][b['article']['source']]))
-        choice = self.ask(self.root, f'select-batch-{cat}-{target}',
+        if uses_deepseek_shortlist(self.snapshot):
+            from .agent_shadow_shortlist import audit_draft
+            choice_material['python_audit'] = {
+                row['id']: audit_draft(row['article'], index[row['id']]['article'], cat)
+                for row in result['drafts']}
+            choice = self.ask(self.root, f'select-batch-{cat}-{target}',
+                'You own this fixed FIVE-to-THREE group. Return {"order":[all five supplied IDs]}: '
+                'the best three first, two reserves. DeepSeek order and Python findings are references, '
+                'not binding choices. Select repairable quality: remove unsuitable child details; add '
+                'accurate general definitions if short, never invented news facts. You MUST complete '
+                'three from these five, no discovery or replacement outside this group. Source/topic '
+                'quotas are soft: relax them if needed and prioritize good articles. News first most '
+                'important suitable story; Science varied disciplines/second publisher when possible; '
+                'Fun genuine fun and famous tennis/swimming stars. Next tasks finish one article fully '
+                'with details and self-check, not independent audits. No publishing in this task.'
+                + sports_preference(self.snapshot, cat), choice_material,
+                lambda v: validate_fixed_order(v, pool))
+        else:
+            choice = self.ask(self.root, f'select-batch-{cat}-{target}',
             'Read five drafts and source metadata. Rank best three then every reserve. '
             'Return {"order":["id",...]}, every ID once. News highest importance first; '
             'Science prefer physics/chemistry/astronomy/biology diversity and two independent publishers; '
@@ -259,7 +296,7 @@ Only supplied original texts support facts/quotes/attribution. Do not add unsupp
             'Selection only: modifier will correct selected bodies next. No browsing, writing details or publishing.'
             + sports_preference(self.snapshot, cat),
             choice_material,
-            lambda v: validate_order(v, pool, cat))
+                lambda v: validate_order(v, pool, cat))
         pool = [index[sid] for sid in choice['order']]
         write(path, {'pool': pool, 'drafts': result['drafts'],
                      'considered': [row['id'] for row in result['drafts']] + [row['id'] for row in result.get('skipped', [])],

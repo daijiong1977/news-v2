@@ -469,6 +469,10 @@ def advance(root: Path, *, stepwise=False):
         if is_source_first(snapshot):
             from .agent_shadow_source_editor import SourceFirstEditor
             editor_class = SourceFirstEditor
+        if snapshot.get('test_profile') == 'source-first-deepseek':
+            from .agent_shadow_shortlist import DeepSeekSourceEditor, build_drafts
+            build_drafts(root)
+            editor_class = DeepSeekSourceEditor
         policy = editor_class(root, snapshot, ask, boundary, stepwise)
         ranked = policy.plan()
     else:
@@ -538,7 +542,7 @@ def advance(root: Path, *, stepwise=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "step", "next", "status", "publish", "verify"))
+    parser.add_argument("command", choices=("prepare", "preflight", "step", "next", "status", "publish", "verify"))
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--date")
     parser.add_argument("--editor-mode", choices=("staged", "autonomous"), default="staged")
@@ -587,24 +591,27 @@ def main():
                 except (OSError, ValueError) as exc:
                     value[name.replace('-', '_')] = {'read_error': str(exc)}
             return say(value, 0)
-        if args.http_fallback and args.command != 'prepare':
+        if args.http_fallback and args.command not in ('prepare', 'preflight'):
             raise ValueError('--http-fallback belongs to prepare only')
         if args.retry_after_failed_verify and args.command != "publish":
             raise ValueError("--retry-after-failed-verify is only allowed with publish")
         with run_lock(root):
             verify_answer_hashes(root)
-            profile = args.test_profile if args.command == "prepare" else (read(root / "input.json").get("test_profile") if (root / "input.json").exists() else None)
+            profile = args.test_profile if args.command in ('prepare', 'preflight') else (read(root / "input.json").get("test_profile") if (root / "input.json").exists() else None)
             if args.env_file or profile:
                 from dotenv import load_dotenv
                 load_dotenv(args.env_file or Path(__file__).resolve().parents[1] / ".env")
-            if args.command == "prepare":
+            if args.command in ('prepare', 'preflight'):
+                if args.command == 'preflight' and profile != 'source-first-deepseek':
+                    raise ValueError('preflight requires --test-profile source-first-deepseek')
                 if profile:
                     import os
                     if not os.environ.get("DEEPSEEK_API_KEY"):
                         raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
                     if args.providers_config:
                         raise ValueError("Hybrid profile supplies its own provider config")
-                    config_name = ('shadow-batch-grok-details.json' if profile in ('batch-grok-details', 'source-first-grok')
+                    config_name = ('shadow-source-first-deepseek.json' if profile == 'source-first-deepseek'
+                                   else 'shadow-batch-grok-details.json' if profile in ('batch-grok-details', 'source-first-grok')
                                    else 'shadow-news-deepseek.json')
                     args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
                 if args.providers_config:
@@ -619,6 +626,10 @@ def main():
                     write(saved, config)
                 value = prepare(root, args.date or datetime.now(tz).date().isoformat(), args.env_file, args.registry,
                                 editor_mode=args.editor_mode, test_profile=args.test_profile, http_fallback=args.http_fallback)
+                if args.command == 'preflight':
+                    check_stale(root, args.confirm_stale, args.registry)
+                    from .agent_shadow_shortlist import build_drafts
+                    value = build_drafts(root)
             elif args.command in ("step", "next"):
                 if args.providers_config:
                     raise ValueError("--providers-config belongs to prepare only")
@@ -639,6 +650,8 @@ def main():
         return say(finished.result, 0)
     except AgentNeeded as needed:
         rerun = resume_command(root)
+        if args.command == 'preflight':
+            rerun = shlex.join([sys.executable, '-m', 'pipeline.agent_shadow', *sys.argv[1:]])
         if args.confirm_stale and args.registry:
             rerun += f' --confirm-stale --registry {shlex.quote(str(args.registry.resolve()))}'
         return say({**needed.as_dict(), "rerun": rerun}, 2)
@@ -647,7 +660,9 @@ def main():
     finally:
         if args.command != "status" and root.exists():
             from .agent_shadow_logs import ship
-            ship(root)
+            import os
+            if os.environ.get('KIDSNEWS_DEFER_LOG_SHIP') != '1':
+                ship(root)
 
 
 if __name__ == "__main__":

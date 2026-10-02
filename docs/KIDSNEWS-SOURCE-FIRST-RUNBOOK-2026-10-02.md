@@ -1,42 +1,56 @@
-# 来源前置混合流水线：新轮与恢复
+# 固定五选三运行说明（2026-10-02）
 
-本指南仅供显式 source-first-grok 新轮；生产 main、DB、archive、邮件不变。
-完整规则：KIDSNEWS-SOURCE-FIRST-2026-10-01.md。
+当前 Spec：KIDSNEWS-FIXED-FIVE-2026-10-02.md。旧 source-first-grok 目录继续原模式，不改 input。
+新入口 `pipeline.kidsnews_bot` 自动连续做准备、跳过便宜Python边界、打包并按显式参数交付。
 
-2026-10-02：`Unsupported quoted sentence` 改为可追踪告警，不挡发布、不据此额外修稿。
-保存 evidence_warnings 并在报告中列出；不是事实通过证明。数字/结构/安全仍可阻止发布。
+## 开始前
 
-新目录命令（D/RUN 替换为真实美东日期和新运行名，registry 先完成历史overlay）：
+在VM /workspace/kidsnews-shadow 拉 codex/stepwise-full-shadow，安装 pipeline/requirements.txt。
+DeepSeek key 已由用户放 .env；不要打印。发布凭据只在Bot仓库CI，不需要VM service-role。
+按原 registry_snapshot/只读连接器取得当天sources与七天真实history；下载 website-effective-history ledger并overlay。
+日期用America/New_York；所有work状态、原文图片和调试文件保留。第一次用新目录。
+
+## 一个入口，完成后同目录恢复
+
+D/RUN替换真实日期/运行名，registry先准备。当前用户授权网站试发，但不写DB/archive：
 
 ```sh
 cd /workspace/kidsnews-shadow
 git pull --ff-only origin codex/stepwise-full-shadow
 .venv/bin/pip install -q -r pipeline/requirements.txt
-.venv/bin/python -m pipeline.agent_shadow prepare --date D --editor-mode autonomous --test-profile source-first-grok --registry work/D/RUN/registry.json --run-dir work/D/RUN
-.venv/bin/python -m pipeline.agent_shadow step --run-dir work/D/RUN
-.venv/bin/python -m pipeline.publication_bundle build --run-dir work/D/RUN --zip work/D/RUN/publication.zip
-.venv/bin/python -m pipeline.publication_bundle check --zip work/D/RUN/publication.zip
-.venv/bin/python -m pipeline.website_release build --zip work/D/RUN/publication.zip --output-dir work/D/RUN/reader-artifact
-.venv/bin/python -m pipeline.website_release check --release-dir work/D/RUN/reader-artifact
+.venv/bin/python -m pipeline.kidsnews_bot --date D --registry work/D/RUN/registry.json --run-dir work/D/RUN --publish --ack-same-day-replacement --branch codex/website-release-D-RUN
 ```
 
-以上 step 必须按照返回值逐次完成至 pack，不能直接跳过等待任务执行后续命令。
+只看ZIP、不发布：省略最后三个发布参数（--publish、--ack-same-day-replacement、--branch）。
+命令会连续完成步骤1–6（每栏排序前8、生成5篇Easy/Middle/中文，共15篇）。
+之后每次exit2，只读返回的read文件，按原生协议写write_to；request_id一致，content为JSON字符串。
+**写完重跑同一个kidsnews_bot命令**，不要按旧rerun直接跳到pack。Grok按组任务返回五个ID顺序，
+并逐篇修稿＋两级详情＋自检；三篇来自固定五篇，不能后补、搜索、改代码或篡改已接受答卷。
+Python按原有有限修正/详情降级管理失败。正文改动同步详情，名词解释不能编造事件事实。
 
-1. VM `/workspace/kidsnews-shadow` 拉取 `codex/stepwise-full-shadow`，安装锁定依赖。保留所有 work 状态/缓存；不在 VM 修改代码。
-2. 按现有 registry_snapshot/只读 Supabase 连接器及网站已核验 ledger overlay 流程取得当天 registry：sources 和真实七天 history 缺一不可，不能用全零绕过。key 只在 env，不写文件或日志。
-3. 使用全新运行目录，例如 `work/D/source-first-1`，命令沿用旧 runbook 的 prepare，仅将 `--test-profile` 改为 `source-first-grok`；保留 `--editor-mode autonomous`、真实 `--registry` 和所需显式传输兜底选项。执行器必须是 `.venv/bin/python`。
-4. 同目录反复执行 `.venv/bin/python -m pipeline.agent_shadow step --run-dir work/D/source-first-1`。exit 0 前进，exit 2 按返回 request/answer 路径完成当前任务并重跑，exit 1 停止报告，不换目录清零预算。超过24小时仅按 --confirm-stale 重查历史后恢复。
-5. Grok 任务有 plan、select、review-finish；最后一个是“精修＋两级详情＋自检”一体任务，不额外开详情审核。不得整组重写。正文失败最多定点修一次；详情再修/删除由脚本管理。facts false 告警不是独立审核通过。
-6. 完成 pack 后按 publication_bundle build/check，再按现有 website_release build/check 获取固定正式模板 reader。模板依赖包含 JSX；有降级详情时自动适配，未知锚点停止。记录 ZIP hash、数量、来源/学科/重要稿、实际模型调用/token/阶段耗时、删字段及降级原因。
-7. 新流程首轮先保留 ZIP 供本机检查。只有用户批准具体 package/reader hash、网站目标和同日覆盖时才按 KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md 的 website_delivery 交付 FOUR 文件到临时发布分支。Actions 负责备份、latest 两对象替换、既有 kidsnews-v2 dispatch 和公网哈希验证；不写 DB/date archive、不发邮件。
-8. 如果 latest 读回失败，保留 release.json 和首次备份 artifact。用同一包和原 backup_run_id 走明确 resume；不得 whole-job rerun 重备份半写状态。回滚使用原备份对；不得口头称回滚已验收。日志推送遵循 BOT.md 的私有 logs 分支规则。
+- exit2：需要当前原生答卷或答卷修正；不是挂住，不循环空跑。
+- exit1：真实错误/硬校验或固定组不足，保留断点和报告；不要换目录清零或重写整个五稿。
+- exit0 checked_local_zip：本地reader已检查，未发布。
+- exit0 ci_verification_pending：artifact已推送，等待Bot Publish website-only reader Actions；不是网站成功。
+- 子命令exit3：已完成，入口会继续到打包/既有交付回执。
+- 超过24小时：刷新真实history，再显式加 --confirm-stale，沿用原目录和目标日。
 
-部署实证：旧包恢复发布36948143776、网站Action36948187869成功，58文件公开hash一致。新模式离线测试不是已发布证明，真实新轮质量/回滚仍需验收。
+正常无修复基线6次DeepSeek（排序3＋正文3）、12个Grok任务（组选择3＋逐篇成品9）。
+数字仅是调用基线，不承诺实际token/账单。
 
-最终复核补充（2026-10-02）：
+## 发布与失败恢复
 
-- prepare 中断后重跑相同命令，优先使用已冻结 prepare-context.json，不重新依赖连接器；开始时间不重置，超过24小时仍须重核历史。
-- 详情修复只返回脚本要求的失败详情，不能修改已通过正文/自检，也不能覆盖另一已合格阅读级别。坏格式仍走有限补修或详情降级，不把好正文丢掉。
-- 只读 status/日志不等于生产发布成功。网站reader仍必须三栏各三篇；缺稿可保留本地结果，不以不完整reader覆盖网站。
-- resume 同时锁定 reader.zip 和 latest-manifest.json；不得手改manifest后沿用同一发布状态。rollback遇到不属于原包/备份的manifest会停止，避免覆盖其他写入者。
-- 正式模板省略详情适配器为v2，传递detail_status到页面状态；省略详情的稿件只保留阅读，不展示空测验。
+输出publication.zip为内部包，reader-artifact/reader.zip为公开正式模板包。
+四份批准artifact自动到新的codex/website-release-*分支，触发Bot已有publish-reader.yml。
+Actions备份旧对→latest两对象→dispatch原网站Action→公网hash→私有有效历史ledger。
+不写文章/详情/来源DB，不写日期archive，不调用新consumer，不发邮件。
+引语逐字不匹配和facts false只告警；三栏各3篇、结构/数字/适龄和hash仍要通过。
+不能把push/Storage PUT/Action绿灯单独称网站已更新。
+
+出现website-handoff attempting：先查精确远端分支SHA和CI，不盲重发。
+出现latest读回失败：保留原CI backup run ID，用website_delivery显式resume；不whole-job rerun。
+回滚依KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md，使用原备份对；其他写入者冲突必须停报。
+
+日志仍自动到私有logs分支（VM hostname守卫），本机测试不推日志。
+交付一行：counts、ZIP路径/hash、CI链接与公开验证状态、重要警告/耗时/token。
+先不建立新的每日例行调度，不清缓存。新模式真实质量/费用及真实回滚待VM验收。

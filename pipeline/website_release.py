@@ -105,7 +105,7 @@ def build_reader(internal, shell, template_commit):
         if path.is_file() and (name in SHELL_FILES or name.split('/')[0] in {'assets','components'}):
             public[name] = path.read_bytes()
     adapter = None
-    if original.get('editorial_profile') == 'source-first-grok' and any(
+    if original.get('editorial_profile') in ('source-first-grok', 'source-first-deepseek') and any(
         json.loads(b).get('detail_status') == 'omitted'
         for n, b in public.items() if n.split('/')[0] in {'payloads', 'article_payloads'} and n.endswith('.json')
     ):

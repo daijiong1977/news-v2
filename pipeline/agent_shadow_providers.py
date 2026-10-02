@@ -104,7 +104,7 @@ def validate_config(config):
     if not isinstance(config, dict) or set(config) != {'roles'} or not isinstance(config['roles'], dict):
         raise ValueError('Provider config must contain only a roles mapping; no credentials')
     for role, choice in config['roles'].items():
-        if role not in {'editor', 'write', 'review', 'details', 'detail_review', 'discovery', 'image_review'} or not isinstance(choice, dict):
+        if role not in {'rank', 'editor', 'write', 'review', 'details', 'detail_review', 'discovery', 'image_review'} or not isinstance(choice, dict):
             raise ValueError('Unknown provider role/config')
         required = {'type'} if choice.get('type') == 'native' else {'type', 'model', 'endpoint', 'key_env'}
         if set(choice) != required or choice.get('type') not in {'native', 'http'}:
@@ -116,6 +116,8 @@ def validate_config(config):
 
 
 def task_role(key):
+    if key.startswith('rank-shortlist-'):
+        return 'rank'
     if key.startswith('review-image-'):
         return 'image_review'
     if key.startswith('discover-'):

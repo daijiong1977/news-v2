@@ -1,5 +1,23 @@
 # Native Agent judgments
 
+## Current source-first-deepseek override (2026-10-02)
+
+Read docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md. DeepSeek already ranked metadata and wrote
+FIVE Easy/Middle/Chinese drafts per section. Your group task must rank all five IDs, best
+three then reserves; you choose, DeepSeek order/Python audit are references. No native plan,
+no extra source, no sixth candidate. Complete THREE from those five. Source/topic/importance
+composition are soft preferences, never a reason for an incomplete group.
+For each chosen article ONE review-finish task corrects body, generates both detail levels
+and self-checks, then Python validates. Delete child-unsuitable details, add accurate general
+definitions when useful, not invented news facts, named opinions, numbers or opposing claims.
+No independent/separate details audit. Do not follow historical separate-review steps below
+for this profile. Bounded targeted fixes/detail omission are managed by Python; if exhausted
+keep the same group and report precise failures, never add new drafts or fake ready status.
+Run pipeline.kidsnews_bot again after each answer. Explicit website-only publish is allowed
+through this entry/CI; DB/archive/email and direct privileged VM uploads remain forbidden.
+
+## Historical profiles below (follow the frozen request only)
+
 Batch-deepseek override: plan retains up to30 per category using supplied canonical topics;
 source-only image mechanics precede the writer. select-batch ranks every supplied draft ID,
 best three then reserves, News highest importance first. review-modify repairs ONLY that

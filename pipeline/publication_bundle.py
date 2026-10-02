@@ -89,7 +89,7 @@ def validate_contents(files, manifest):
         for row in section:
             sid = row['payload_story_id']
             facts_ok = row.get('facts_supported') is True
-            if manifest.get('editorial_profile') == 'source-first-grok' and manifest.get('facts_policy') == 'warning_only':
+            if manifest.get('editorial_profile') in ('source-first-grok', 'source-first-deepseek') and manifest.get('facts_policy') == 'warning_only':
                 facts_ok = type(row.get('facts_supported')) is bool and (row['facts_supported'] or bool(row.get('fact_warning')))
             if sid in ids or row['published_date'] != run_date or not facts_ok or row.get('event_clear') is not True:
                 raise ValueError('Unqualified publication record')
@@ -105,7 +105,7 @@ def validate_contents(files, manifest):
                 lo, hi = rewrite_band(level, cat, body['source_word_count'])
                 if not lo <= len(body['summary'].split()) <= hi or body['source_url'] != row['source_url']:
                     raise ValueError('Body length/source mismatch')
-                if manifest.get('editorial_profile') == 'source-first-grok':
+                if manifest.get('editorial_profile') in ('source-first-grok', 'source-first-deepseek'):
                     from .agent_shadow_details import validate_native_details
                     fields = ('keywords', 'questions', 'background_read', 'Article_Structure', 'why_it_matters', 'perspectives')
                     slot = {f: body.get(f) for f in fields}
@@ -116,13 +116,13 @@ def validate_contents(files, manifest):
                             {0: {'easy_en': {'body': body['summary']}, 'middle_en': {'body': body['summary']}}}):
                         raise ValueError('Malformed retained detail module')
                 image = body.get('image_url')
-                if manifest.get('editorial_profile') == 'source-first-grok' and not image:
+                if manifest.get('editorial_profile') in ('source-first-grok', 'source-first-deepseek') and not image:
                     raise ValueError('Source-first article lost its required image')
                 if image:
                     name = image.lstrip('/')
                     if not name.startswith('article_images/') or name not in files:
                         raise ValueError('Image mapping mismatch')
-                    if manifest.get('editorial_profile') == 'source-first-grok' and len(files[name]) < 20000:
+                    if manifest.get('editorial_profile') in ('source-first-grok', 'source-first-deepseek') and len(files[name]) < 20000:
                         raise ValueError('Source-first image below final 20000 byte floor')
                     with Image.open(io.BytesIO(files[name])) as im:
                         if im.format not in ('WEBP', 'PNG', 'JPEG') or min(im.size) < 1 or max(im.size) > 4096:
@@ -212,7 +212,7 @@ def build(root: Path, output: Path, shell: Path | None = None):
     manifest['evidence_warnings'] = [f"{r['payload_story_id']}: {w}" for r in records for w in r['evidence_warnings']]
     from .agent_shadow_profiles import is_source_first
     if is_source_first(snapshot):
-        manifest.update(editorial_profile='source-first-grok', facts_policy='warning_only')
+        manifest.update(editorial_profile=snapshot['test_profile'], facts_policy='warning_only')
     files['publication-manifest.json'] = encoded(manifest)
     validate_contents(files, manifest)
     stream = io.BytesIO()
