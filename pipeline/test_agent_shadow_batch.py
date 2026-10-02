@@ -8,6 +8,16 @@ from pipeline import agent_shadow_batch as batch
 from pipeline.test_agent_shadow_review_fixes import fixture_round, run_steps, draft
 
 
+def test_science_other_publishers_get_fetch_chance_before_repeated_failed_host():
+    rows = [{'id': str(i)} for i in range(13)]
+    candidates = [{'id': str(i), 'source': 'A' if i < 8 else 'B' if i < 12 else 'C'} for i in range(13)]
+    sources = {name: {'name': name, 'rss_url': f'https://{name.lower()}.example/rss'} for name in 'ABC'}
+    ordered = batch.publisher_first_catalog(rows, candidates, sources)
+    assert [r['id'] for r in ordered[:3]] == ['0', '8', '12']
+    assert {r['id'] for r in ordered} == {r['id'] for r in rows}
+    assert [r['id'] for r in ordered[3:]] == [str(i) for i in range(1, 8)] + ['9', '10', '11']
+
+
 def setup_batch(root, monkeypatch):
     fetched, _, previous = fixture_round(root, monkeypatch, n=16)
     snapshot = runner.read(root / 'input.json')

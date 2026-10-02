@@ -166,3 +166,13 @@ def test_evidence_gate_catches_known_bad_and_passes_good(text):
     original='In 2026, she said "we will try again tomorrow".'
     evidence_gate('In 2026, she said "we will try again tomorrow".',original)
     with pytest.raises(ValueError): evidence_gate(text,original)
+
+
+def test_quote_terminal_punctuation_is_not_a_fact_change():
+    from pipeline.website_release import evidence_gate
+    original = 'Netanyahu said: "He saved the lives of 174 people, including Israeli citizens and other nationals."'
+    evidence_gate('He said "he saved the lives of 174 people, including Israeli citizens and other nationals,"', original)
+    for changed in ('He saved the lives of 175 people', 'He did not save the lives of 174 people',
+                    'He saved the lives of 174 soldiers'):
+        with pytest.raises(ValueError, match='Unsupported quoted sentence'):
+            evidence_gate('He said "' + changed + ',"', original)

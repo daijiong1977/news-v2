@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-10-01 | high | shadow | [quote-punctuation-and-science-fetch](2026-10-01-shadow-quote-punctuation-and-science-fetch.md) | Verbatim quote typography blocks packaging; failed host starves other Science publishers | quotes, publisher, fetch-budget, resume |
 | 2026-10-01 | high | shadow / website | [shadow-website-release](2026-10-01-shadow-website-release.md) | Rejected groups resent; JSX missing; latest-only CI/backup/recovery added, real activation pending. | batch, JSX, reader, latest, rollback, CI |
 | 2026-10-01 | high | shadow pipeline | [shadow-http-resume](2026-10-01-shadow-http-resume.md) | HTTP errors/crash windows blocked same-directory resume; quota chasing starved other sections. | resume, HTTP, fallback, budget, stale, batch |
 | 2026-09-30 | medium | shadow pipeline | [shadow-fun-short-floor](2026-09-30-shadow-fun-short-floor.md) | Complete short Fun drafts were dropped solely for middle length; user approved 180-word shadow floor. | Fun, wordcount, hybrid, modifier |

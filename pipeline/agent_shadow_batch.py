@@ -32,6 +32,27 @@ def sports_preference(snapshot, category=None):
     return FAMILY_SPORTS_PREFERENCE if uses_native_details(snapshot) and category in (None, 'Fun') else ''
 
 
+def publisher_first_catalog(rows, candidates, sources):
+    """Give each Science publisher one early fetch opportunity, then retain rank.
+
+    This is not an approval or a quota: all normal history, safety and body gates
+    still apply. Failed hosts cannot monopolize the first twelve paid fetches.
+    Only fresh pools use this order; frozen drafts and accepted articles stay put.
+    """
+    index = {b['id']: b for b in candidates}
+    seen, first, rest = set(), [], []
+    for row in rows:
+        article = index[row['id']]
+        source = sources.get(article['source']) or {'rss_url': article.get('link', ''), 'name': article['source']}
+        publisher = publisher_key(source)
+        if publisher not in seen:
+            seen.add(publisher)
+            first.append(row)
+        else:
+            rest.append(row)
+    return first + rest
+
+
 def validate_batch(value, pool, category):
     index = {b['id']: b for b in pool}
     rows = value.get('drafts', [])
@@ -124,6 +145,9 @@ class BatchEditor(AutonomousEditor):
         # Previous valid-but-unselected originals remain available; only generated drafts
         # and structurally invalid drafts are consumed. No duplicate rewriting of them.
         self.catalog[cat] = [b for b in original_catalog if b['id'] not in consumed]
+        if cat == 'Science':
+            self.catalog[cat] = publisher_first_catalog(
+                self.catalog[cat], self.snapshot['candidates'], self.snapshot['sources'])
         try:
             originals = super().pool(cat, len(self.catalog[cat]), limit=8)
         finally:

@@ -30,13 +30,16 @@ def evidence_gate(text, original):
     """Cheap conservative evidence check, not a model fact audit.
 
     Numeric normalization permits thousands separators, not unsupported conversion.
-    Quoted multi-word sentences must be verbatim (case/whitespace normalized).
+    Quoted words must be verbatim; case, whitespace and terminal sentence
+    punctuation are typography, not factual differences. Interior wording stays exact.
     """
     if re.search(r'[\u3400-\u9fff]',text): raise ValueError('English field contains CJK')
     normalize=lambda s: ' '.join(s.replace('“','"').replace('”','"').replace('’',"'").lower().split())
     source=normalize(original)
     for quote in re.findall(r'"([^"\n]+)"',normalize(text)):
-        if len(quote.split())>=4 and quote not in source: raise ValueError('Unsupported quoted sentence: '+quote)
+        words = quote.rstrip('.,;:!?').rstrip()
+        if len(words.split()) >= 4 and not re.search(r'(?<!\w)' + re.escape(words) + r'(?!\w)', source):
+            raise ValueError('Unsupported quoted sentence: '+quote)
     numbers=lambda s: set(re.findall(r'(?<!\w)\d+(?:\.\d+)?',s.replace(',','')))
     extra=numbers(text)-numbers(original)
     if extra: raise ValueError('Numeric evidence missing from source: '+', '.join(sorted(extra)))

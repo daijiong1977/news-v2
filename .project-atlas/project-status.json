@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-01T17:42:23Z",
+  "updated_at": "2026-10-02T00:10:45Z",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -474,6 +474,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-01",
+      "title": "影子发布引语标点误拦和 Science 抓取公平性",
+      "note": "website-1 的 18 份正文离线通过修复后的证据门禁；只忽略引语句尾标点，措辞和人数仍精确核验。Science 初次抓取先给各独立出版方一次机会，防止失败站点消耗预算；已有稿件不重生成。代码在 feature PR，真实网站发布待 Bot 恢复核验，DB/archive 不动。",
+      "source_ref": "docs/bugs/2026-10-01-shadow-quote-punctuation-and-science-fetch.md"
+    },
     {"date": "2026-10-01", "title": "Cloud发布门禁修复", "note": "坏批次消费本组全部ID避免重复DeepSeek；有效未选候选保留。正式模板从固定网站提交全22文件导出含JSX，不取落后且脏checkout。上传即可被旧cron读走即发布；先独立CI备份，只写latest两对象，再dispatch旧Action与公开全hash核验。私有ledger替代未入库稿的同栏七日历史；DB/archive延后。250项离线和Actionlint通过不等于真实上线，Bot CI secrets待配置。", "source_ref": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md"},
     {
       "date": "2026-09-30",
