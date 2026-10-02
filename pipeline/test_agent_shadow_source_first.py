@@ -340,3 +340,18 @@ def test_body_fix_exhausted_gone_and_optional_cleanup_needs_no_ai_retry(tmp_path
         return value
     result = finish(tmp_path, 'News', 'optional', art, {}, [], [], optional)
     assert result['status'] == 'ready_full' and result['removed'] and len(tasks) == 1
+
+
+def test_quote_mismatch_is_ready_warning_without_extra_repair(tmp_path):
+    from pipeline.agent_shadow_finish import finish
+    runner.write(tmp_path / 'metrics.json', {'steps': []})
+    value = combined_answer()
+    value['corrected_article']['easy_en']['body'] += ' He said "a sentence never in the source".'
+    calls = []
+    def answer(*args, **kwargs):
+        calls.append(args[1])
+        return deepcopy(value)
+    art = {'word_count': 400, 'body': 'fact ' * 400, 'link': 'https://example.org/story'}
+    result = finish(tmp_path, 'News', 'quote', art, {}, [], [], answer)
+    assert result['status'] == 'ready_full' and len(calls) == 1
+    assert any('Unsupported quoted sentence' in w for w in result['warnings'])

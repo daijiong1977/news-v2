@@ -3,6 +3,9 @@
 本指南仅供显式 source-first-grok 新轮；生产 main、DB、archive、邮件不变。
 完整规则：KIDSNEWS-SOURCE-FIRST-2026-10-01.md。
 
+2026-10-02：`Unsupported quoted sentence` 改为可追踪告警，不挡发布、不据此额外修稿。
+保存 evidence_warnings 并在报告中列出；不是事实通过证明。数字/结构/安全仍可阻止发布。
+
 新目录命令（D/RUN 替换为真实美东日期和新运行名，registry 先完成历史overlay）：
 
 ```sh

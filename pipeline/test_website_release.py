@@ -203,7 +203,7 @@ def test_approval_binds_records_and_expires(tmp_path, monkeypatch):
     with pytest.raises(ValueError,match='records'): validate_receipt(tmp_path)
 
 
-@pytest.mark.parametrize('text', ['English 中文 mixed', 'There were 2029 events.', 'He said "a sentence never in the source".'])
+@pytest.mark.parametrize('text', ['English 中文 mixed', 'There were 2029 events.'])
 def test_evidence_gate_catches_known_bad_and_passes_good(text):
     from pipeline.website_release import evidence_gate
     original='In 2026, she said "we will try again tomorrow".'
@@ -215,7 +215,26 @@ def test_quote_terminal_punctuation_is_not_a_fact_change():
     from pipeline.website_release import evidence_gate
     original = 'Netanyahu said: "He saved the lives of 174 people, including Israeli citizens and other nationals."'
     evidence_gate('He said "he saved the lives of 174 people, including Israeli citizens and other nationals,"', original)
-    for changed in ('He saved the lives of 175 people', 'He did not save the lives of 174 people',
+    for changed in ('He did not save the lives of 174 people',
                     'He saved the lives of 174 soldiers'):
-        with pytest.raises(ValueError, match='Unsupported quoted sentence'):
-            evidence_gate('He said "' + changed + ',"', original)
+        assert evidence_gate('He said "' + changed + ',"', original)
+    with pytest.raises(ValueError, match='Numeric evidence'):
+        evidence_gate('He said "He saved the lives of 175 people,"', original)
+
+
+def test_unsupported_quote_warning_does_not_block_pack(tmp_path, monkeypatch):
+    from pipeline.website_release import evidence_gate
+    assert evidence_gate('He said "a sentence never in the source".', 'A written source') == [
+        'Unsupported quoted sentence: a sentence never in the source']
+    _, _ = full_bundle(tmp_path, monkeypatch)
+    payload_path = next((tmp_path / 'site/article_payloads').glob('*/easy.json'))
+    payload = runner.read(payload_path)
+    payload['summary'] += ' He said "a sentence never in the source".'
+    runner.write(payload_path, payload)
+    from pipeline.publication_bundle import build, unpack
+    output = tmp_path / 'warning-publication.zip'
+    result = build(tmp_path, output)
+    files, manifest = unpack(output.read_bytes())
+    records = __import__('json').loads(files['publication-records.json'])
+    assert any(r.get('evidence_warnings') for r in records)
+    assert result['evidence_warnings'] and manifest['evidence_warnings']

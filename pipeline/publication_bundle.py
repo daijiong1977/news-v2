@@ -178,9 +178,10 @@ def build(root: Path, output: Path, shell: Path | None = None):
             candidate_id = match['candidate']['id']
             from .website_release import evidence_gate
             original_text = match['candidate']['article']['body']
+            evidence_warnings = []
             for level in ('easy', 'middle'):
                 payload = json.loads(files[f'article_payloads/payload_{sid}/{level}.json'])
-                evidence_gate(payload['summary'], original_text)
+                evidence_warnings.extend(f'{level}: {warning}' for warning in evidence_gate(payload['summary'], original_text))
             outcome = next(o for o in reversed(state[cat]['outcomes']) if o['id'] == candidate_id)
             src_id = source_by_id.get(candidate_id)
             records.append({'category': cat, 'story_slot': slot, 'published_date': snapshot['date'],
@@ -189,6 +190,7 @@ def build(root: Path, output: Path, shell: Path | None = None):
                 'source_config_id': src_id if src_id is not None and src_id > 0 else None,
                 'topic': match['candidate']['topic'], 'importance': match['candidate']['importance'],
                 'writer_provider': match['candidate'].get('writer_provider', 'deepseek'),
+                'evidence_warnings': evidence_warnings,
                 'safety_scores': outcome['safety']['scores'], 'facts_supported': outcome['facts_supported'],
                 'event_clear': outcome['event_clear'], 'primary_image_local': body['image_url'].lstrip('/'),
                 'ready_status': match.get('ready_status', 'ready_full'),
@@ -203,6 +205,7 @@ def build(root: Path, output: Path, shell: Path | None = None):
                 'files': hashes, 'package_id': sha(encoded(hashes)), 'shell': 'provided' if shell else 'shadow',
                 'started_at': read(root / 'metrics.json').get('started_at') or read(site / 'shadow-run.json')['generated_at'],
                 'publication_verified': False}
+    manifest['evidence_warnings'] = [f"{r['payload_story_id']}: {w}" for r in records for w in r['evidence_warnings']]
     from .agent_shadow_profiles import is_source_first
     if is_source_first(snapshot):
         manifest.update(editorial_profile='source-first-grok', facts_policy='warning_only')

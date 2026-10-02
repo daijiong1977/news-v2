@@ -479,6 +479,7 @@
     }
   ],
   "lessons": [
+    {"date":"2026-10-02","title":"引语启发式不再阻止发布","note":"用户要求上次Unsupported quoted sentence类门禁改为warning。引语逐字不匹配返回告警，逐篇精修不因此修稿/拒稿；ZIP记录和manifest以及公开latest-manifest保存evidence_warnings。不代表引语准确，数字/英文结构/儿童安全及其他发布完整性门禁不变。未调用模型或实际发布，feature PR同步Bot。","source_ref":"pipeline/website_release.py"},
     {
       "date": "2026-10-02",
         "title": "来源前置单篇成品与可恢复发布（pack后仅交接ZIP，不误导Vercel发布）",

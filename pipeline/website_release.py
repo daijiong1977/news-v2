@@ -30,19 +30,21 @@ def evidence_gate(text, original):
     """Cheap conservative evidence check, not a model fact audit.
 
     Numeric normalization permits thousands separators, not unsupported conversion.
-    Quoted words must be verbatim; case, whitespace and terminal sentence
-    punctuation are typography, not factual differences. Interior wording stays exact.
+    2026-10-02: quote substring mismatches are warnings, not publication blockers.
+    This heuristic is NOT a fact audit. Numeric and English-field gates remain hard.
     """
     if re.search(r'[\u3400-\u9fff]',text): raise ValueError('English field contains CJK')
     normalize=lambda s: ' '.join(s.replace('“','"').replace('”','"').replace('’',"'").lower().split())
     source=normalize(original)
+    warnings = []
     for quote in re.findall(r'"([^"\n]+)"',normalize(text)):
         words = quote.rstrip('.,;:!?').rstrip()
         if len(words.split()) >= 4 and not re.search(r'(?<!\w)' + re.escape(words) + r'(?!\w)', source):
-            raise ValueError('Unsupported quoted sentence: '+quote)
+            warnings.append('Unsupported quoted sentence: '+quote)
     numbers=lambda s: set(re.findall(r'(?<!\w)\d+(?:\.\d+)?',s.replace(',','')))
     extra=numbers(text)-numbers(original)
     if extra: raise ValueError('Numeric evidence missing from source: '+', '.join(sorted(extra)))
+    return warnings
 
 
 def zip_files(files):
@@ -124,6 +126,7 @@ def build_reader(internal, shell, template_commit):
     manifest = {'version':original['date'], 'packed_at':stamp, 'git_sha':commit,
         'zip_bytes':len(data), 'zip_sha256':sha(data), 'story_count':9, 'stories':stories,
         'template_commit':template_commit, 'files':{n:sha(b) for n,b in sorted(public.items())}}
+    manifest['evidence_warnings'] = original.get('evidence_warnings', [])
     if adapter: manifest['template_adapter'] = adapter
     check_reader(data, manifest)
     return {'zip':data, 'manifest':manifest, 'records':records}

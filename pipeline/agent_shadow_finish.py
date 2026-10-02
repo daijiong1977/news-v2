@@ -201,6 +201,11 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
         slots, removed = sanitize_details(value.get('details'), value['corrected_article'])
         from .quiz_shuffle import shuffle_quiz_options
         warnings = quiz_quality_warnings(slots)
+        from .website_release import evidence_gate
+        for level in ('easy_en', 'middle_en'):
+            for field in ('headline', 'body', 'card_summary'):
+                warnings.extend(f'{level}.{field}: {w}' for w in
+                                evidence_gate(value['corrected_article'][level][field], art['body']))
         shuffle_quiz_options(slots, seed=f'{cat}-{sid}')
         if value['facts_supported'] is False:
             warnings.append('事实支持存在自检疑问，初期仅告警: ' + value.get('notes', ''))
