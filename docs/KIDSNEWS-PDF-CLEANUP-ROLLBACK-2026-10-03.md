@@ -21,14 +21,29 @@ Storage没有跨机器CAS锁；版本/哈希检查能发现冲突，但不能宣
 
 ## 已验证
 
-- Python3.10相关套件63项通过；6项新维护测试覆盖PDF、保留原资产、清理/恢复/冲突、归档已写而DB响应丢失后的回滚。
+- Python3.10相关套件64项通过；7项新维护测试覆盖PDF、保留原资产、清理/恢复/冲突、归档已写而DB响应丢失后的回滚及长稿溢出页脚。较长Science稿允许五页，仍为四个学习步骤，不显示“Step 5 of 4”。
 - Oracle真实Supabase演练：latest、日期archive、数据库回滚均通过；模拟首次数据库写成功但响应丢失，同目录恢复未重复写；二次回滚幂等；测试对象删除；现网latest和今日故事/搜索未变。
 - 演练私有状态：`/home/opc/.local/state/kidsnews-backups/20261003-maintenance-drill-1/result.json`。
 - 18份实际PDF已生成，News Middle四页已逐页视觉检查。当前内容和9篇records不重新生成。
 
 ## 当前维护发布
 
-PDF reader SHA256：`8da0d46a5c61f8815bc380c4b88bde455fb7f0dae9d185204110ee81d387ed83`。
-修复artifact：`/home/opc/kidsnews/work/2026-10-03/pdf-maintenance-1/reader-artifact`。
+PDF reader SHA256：`9dca27dffe9272ee707b74c73b9b9039dd24fc2641a5b3b6671f6d39736b6f43`。
+修复artifact：`/home/opc/kidsnews/work/2026-10-03/pdf-maintenance-2/reader-artifact`。
 按现有artifact分支CI发布→公网核验→finish_publication更新同日归档/DB→先备份再清理75旧对象。
-真实发布和清理的最终证据待本轮验收后追加；上述演练并不等于今日现网做过回滚。
+网站发布CI [37134270185](https://github.com/daijiong1977/grokbot-kidsnews/actions/runs/37134270185) 成功；未修改原网站Action，dispatch运行 [37134316183](https://github.com/daijiong1977/kidsnews-v2/actions/runs/37134316183) 成功。CI公网hash核验通过。后台同日归档/DB已verify完成，私有备份在`/home/opc/.local/state/kidsnews-backups/20261003-pdf-maintenance-2`。
+清理已完成：39旧图片+36旧详情JSON=75个对象，仅2026-10-03；当前日期保留54个引用文件（9列表+18详情+9图片+18PDF），剩余未引用对象0。全部旧字节/hash和journal在`/home/opc/.local/state/kidsnews-backups/20261003-unused-archive-cleanup-1`，目录700、备份文件600，可恢复。
+
+最终验收：9 stories、27 search rows；54日期资产hash逐个一致；18份网站PDF全部HTTP200/application/pdf且与ZIP字节一致；日期ZIP/manifest和公开latest一致；1900-01-01测试行0。私有最终报告在`/home/opc/.local/state/kidsnews-backups/20261003-pdf-maintenance-2/final-verification.json`。
+
+共享源码与运行快照各64项相关Python3.10测试通过；Oracle运行仓库已fast-forward至3c4fa7b，使用新PDF逻辑，Oracle相关套件63通过/1个Deno离线SQL探针跳过（真实REST演练已通过）。上述隔离演练并不等于今日现网做过回滚，也不包含Vercel重新部署旧版的演练；现有CI恢复/dispatch路径未修改。
+
+## 本次维护的恢复顺序
+
+保留原CI run 37134270185的`latest-release-state`/`latest-backup-before-upload`（GitHub retention 30天），不要全job重跑刷新旧备份。
+
+1. 若需要恢复被清理的旧资产，先在日期manifest尚为当前维护版本时调用`restore_pruned(cleanup_state, storage)`。换了日期版本后不能强制覆盖，应按保存的计划人工复核。
+2. 若需撤销整个后台维护，再用`pipeline.kidsnews_python`的`operation:"rollback"`、`execute:true`、`state_dir:"/home/opc/.local/state/kidsnews-backups/20261003-pdf-maintenance-2"`和原私有env；入口调用`rollback_publication`恢复原DB/归档，不碰网站latest。
+3. 若网站也要恢复，现有`website_delivery handoff --operation rollback --backup-run-id 37134270185`使用同一维护artifact、新release分支和`--push`，由既有CI读取原备份、恢复latest、dispatch并公网核验。不能用新备份或新包冒充原备份。
+
+这三项不是一个原子按钮；每项保存尝试/结果和前后hash，未知结果先读回，沿原状态目录恢复。今天仅用户授权的维护修复发布，未启用定时、未修改main。

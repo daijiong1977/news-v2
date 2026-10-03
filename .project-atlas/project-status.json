@@ -3,8 +3,8 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-03",
-  "codex_round": "2026-10-03维护修复：reader/date archive自动包含18份确定性PDF；同日旧文件先逐对象备份/hash门禁后精确清理，可恢复。真实Supabase隔离演练1900-01-01通过latest/archive/DB回滚、丢响应续跑及重复回滚，测试对象已删除且现网未变；Python3.10相关63项通过。当前9篇内容不重生成，PDF修复CI发布和75残留清理正在验收，不称完成。详见docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md。",
+  "updated_at": "2026-10-03T15:51:51Z",
+  "codex_round": "2026-10-03用户1/2/3全部验收：75旧日期对象备份后已删除，仅54当前资产；18PDF网站/日期archive全部hash匹配HTTP200；DB9stories/27search无演练残留。真实隔离Supabase latest/archive/DB回滚、丢响应恢复、重复回滚通过；跨系统非原子事务。相关Python3.10共享源码/运行快照各64通过。CI37134270185及网站dispatch37134316183成功，新reader SHA9dca27df…736b6f43；不重生成文章、不改main。私有备份和恢复顺序见docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md。",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -78,8 +78,8 @@
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
-      "verified_at": "2026-09-28T20:50:12-04:00"
+      "status": "public_2026-10-03_pdf_repair_9_stories_18_pdfs_hash_verified_ci_37134270185",
+      "verified_at": "2026-10-03T15:51:51Z"
     },
     {
       "environment": "production_alias",
@@ -581,9 +581,35 @@
       "path": "pipeline/agent_shadow_candidate_quality.py",
       "purpose": "影子候选商业淘汰、TFK污染拒绝与具名赛事/内容交叠去重",
       "location": "repo"
+    },
+    {
+      "path": "pipeline/reader_pdfs.py",
+      "purpose": "确定性18份正式模板PDF与已批准artifact无正文变化修复",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_maintenance.py",
+      "purpose": "单日期逐对象备份/hash/清理与恢复，拒绝竞争覆盖",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_drill.py",
+      "purpose": "显式真实隔离Storage/空历史DB回滚演练；不dispatch网站",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md",
+      "purpose": "三项修复线上证据、私有备份位置与恢复顺序",
+      "location": "repo"
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-03",
+      "title": "旧归档先备份再精确清理；PDF和回滚必须逐项验收",
+      "note": "75未引用旧对象已移除（39图片/36详情），备份保留Oracle私有目录。18确定性PDF补入当前9篇reader及日期archive，长Science跨页footer修正。网站/归档54资产hash一致、9stories/27search正确；真实隔离1900-01-01验证响应丢失续跑与重复回滚且清除测试对象。不是Storage+DB跨系统原子事务；恢复网站和后台分开，须保留原CI备份和状态。",
+      "source_ref": "docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md"
+    },
     {
       "date": "2026-10-03",
       "title": "Fun网球和游泳各最多一篇；后端成功不能掩盖旧归档残留与PDF缺口",
