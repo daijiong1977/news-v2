@@ -1,4 +1,4 @@
-"""Deterministic three-calendar-day gate for new source-first collections.
+"""Category-specific calendar-day gates for new source-first collections.
 
 Publication metadata is not modification time. Lead-event extraction is
 deliberately narrow: an explicit 'On Month D, YYYY' opening, not every historical
@@ -11,7 +11,7 @@ import re
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-POLICY = 'three-day-source-and-explicit-lead-v1'
+POLICY = 'category-source-date-v2'
 
 
 def parse_day(value):
@@ -81,20 +81,32 @@ def lead_event_day(body):
 
 
 def rejection(candidate, today, article=None):
+    category = candidate.get('category', 'News')
+    if category == 'Science':
+        return None
+    max_days = 7 if category == 'Fun' else 3
     dates = [parse_day(candidate.get('published')), url_day(candidate.get('link'))]
     if article is not None:
         dates += [parse_day(v) for v in article.get('source_publication_dates', [])]
         dates += [url_day(article.get('evidence_url'))]
     dates = [d for d in dates if d is not None]
     now = date.fromisoformat(today)
-    if any((now-d).days > 3 for d in dates):
+    if any((now-d).days > max_days for d in dates):
         return 'stale_source_date'
     if any(d > now for d in dates):
         return 'future_source_date'
     if article is not None:
         event = lead_event_day(article.get('body', ''))
-        if event and (now-event).days > 3:
+        if category == 'Fun':
+            # An old occurrence is not an expiry. Only explicit end/deadline
+            # language with a full date can mechanically establish expiry.
+            pattern = r'\b(?:expires?|expired|ends?|ended|closes?|closed|deadline\s+is)\s+(?:on\s+)?([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+20\d{2})\b'
+            for match in re.finditer(pattern, article.get('body', ''), re.I):
+                expiry = lead_event_day('On ' + match[1])
+                if expiry and expiry < now:
+                    return 'expired_article'
+        elif event and (now-event).days > max_days:
             return 'stale_lead_event'
-        if not dates and not event:
+        if not dates and (category == 'Fun' or not event):
             return 'unknown_source_date'
     return None

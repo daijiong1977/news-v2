@@ -239,7 +239,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                                     qualified += 1
                                     seen_urls.add(evidence)
                                     b['mechanical'] = {'image_bytes': photo['final_bytes'], 'words': count,
-                                        'freshness': 'current' if strict_dates else date_check(b['published'], today, 5),
+                                        'freshness': ('not_required' if cat == 'Science' else 'current') if strict_dates else date_check(b['published'], today, 5),
                                         'fits': [c for c in ('News', 'Science', 'Fun') if original_band(c)[0] <= count <= original_band(c)[1]]}
                     except Exception as exc:
                         reason = 'fetch_or_decode_' + type(exc).__name__

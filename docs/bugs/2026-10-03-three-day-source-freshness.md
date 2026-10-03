@@ -10,12 +10,18 @@ used five days and allowed unknown dates. Publication time is not event time.
 
 ## Fix and invariant
 
-New source-collection journals freeze `three-day-source-and-explicit-lead-v1`.
-Python rejects publication dates older than three America/New_York calendar days,
+New source-collection journals freeze `category-source-date-v2`.
+News rejects publication dates older than three America/New_York calendar days,
 future publications, and explicit old `On Month D, YYYY` opening events. Feed,
 dated URL, original Article JSON-LD datePublished and published-time meta are
 checked; dateModified cannot rescue an old original. Unknown dates after fetching
 the body are rejected unless the opening supplies a current event date.
+
+User clarification: Science has no date gate at all. Fun accepts up to seven
+calendar days by page/publication date and does not check an old occurrence date.
+Only an explicit expiration/end/closing/deadline with a full date already passed
+causes `expired_article`; unstated expiry is not guessed. The September 30 DOGO
+table page is consequently allowed in Fun on October 3, as requested.
 
 Old feed dates stop before body/image; old lead events stop before image/AI.
 Rejection is candidate exclusion, not deletion from live DB or archives.
@@ -30,4 +36,5 @@ Historical scientific background is not rejected merely for mentioning years.
 
 `pipeline/test_source_freshness.py`: boundary/timezone, actual Romanian lead,
 unknown/future, historical background, datePublished versus dateModified,
+Science exemption, Fun seven-day boundary and old event versus real expiry,
 no-photo/no-body rejection, frozen resume. All offline Python3.10.

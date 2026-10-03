@@ -606,8 +606,8 @@
   "lessons": [
     {
       "date": "2026-10-03",
-      "title": "新发布不等于新事件；三天时效在Python采集阶段拦截",
-      "note": "DOGOnews九月三十日URL报道九月十二日餐桌活动且feed无日期，旧unknown放行导致十月三日入选。新source journal冻结三天美东日历政策，检查feed/URL/原始datePublished及明确On Month D YYYY开头事件；modified不续期，未知无法核验跳过。正文历史背景不全局扫日期。仅新轮，旧答卷/现网不删；不新增AI调用。隐含/相对事件日期仍无法机械全面识别。",
+      "title": "时效按栏目：News三天，Science不限，Fun网页时间七天",
+      "note": "用户澄清后新journal冻结category-source-date-v2：News三天并检查明确开头旧事件，Science不做日期淘汰，Fun只看原始网页发布时间七天、不检查活动发生日期，仅明确完整日期已到期内容排除。modified不续期；News/Fun无法核验日期跳过。DOGO九月三十日餐桌页十月三日允许进入Fun。仅新轮，旧答卷/现网不删，不新增AI调用；相对和隐含过期日期不声称机械全面识别。",
       "source_ref": "docs/bugs/2026-10-03-three-day-source-freshness.md"
     },
     {
