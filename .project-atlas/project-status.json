@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-03T03:53:00+00:00",
+  "updated_at": "2026-10-03T04:07:45+00:00",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -91,6 +91,11 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/publication_database.py",
+      "purpose": "后端opt-in DB入口：一致旧值快照、自动成对SQL、哈希门禁、同目录恢复和原文件rollback；不上传archive/改网站或启用Bot定时。",
+      "location": "repo"
+    },
     {
       "path": "docs/KIDSNEWS-ARCHIVE-BACKFILL-2026-10-02.md",
       "purpose": "已核验现网版本的手动日期归档/四表更新、备份与定向恢复；明确非整库备份、非Bot自动归档启用。",
@@ -970,6 +975,12 @@
       "title": "API业务备份与整库备份不同；日期归档必须和现网reader一致并可定向恢复",
       "note": "用户明确选择业务表＋涉及Storage字节备份：96表19840行单SELECT快照、105对象哈希稳定；不是Auth/角色/内部schema的整库dump。固定现网reader SHA886a24e2，手动更新Oct2的9篇、27搜索行、1运行和5来源时间，38归档对象公网校验，latest和index不改。paired SQL在写前生成，PGlite9断言含精确回滚和并发拦截；搜索触发器自动改时间需回滚事务内临时关闭再恢复。未恢复全部备份、未执行线上rollback、未启用自动Bot/Edge消费者，不清用户阅读/答题、不删孤儿归档、不发邮件。",
       "source_ref": "docs/KIDSNEWS-ARCHIVE-BACKFILL-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "每次更新和rollback SQL必须由Python自动生成并冻结，不让Agent手写",
+      "note": "publication_database后端commit先一致读取四表旧值，自动生成成对SQL并哈希锁定才写；恢复不重抓旧值，缺件/篡改/归档不匹配拦截，timeout不盲重发；rollback复用原文件、保UUID和ET cadence。3.10新15项、影子共332项通过；额外旧history六项因缺typesafe_sdk未通过，午夜脆弱fixture仅修测试日期。模块不写Storage/部署/邮件、不改旧生产路径、不启用Bot routine、不往VM发管理token；后台显式opt-in，无本轮真实DB写。",
+      "source_ref": "docs/KIDSNEWS-AUTO-SQL-PAIR.md"
     }
   ]
 }

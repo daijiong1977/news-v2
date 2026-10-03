@@ -163,7 +163,7 @@ def test_two_cli_stages_single_json_no_final_model_calls(tmp_path, monkeypatch, 
 
 
 def test_stale_history_recheck_is_file_only_and_does_not_mutate_input(tmp_path, monkeypatch):
-    from datetime import datetime, timedelta, timezone
+    from datetime import date, datetime, timedelta, timezone
     from zoneinfo import ZoneInfo
     from pipeline.kidsnews_groups import check_group_stale
     prepared(tmp_path, monkeypatch)
@@ -171,9 +171,15 @@ def test_stale_history_recheck_is_file_only_and_does_not_mutate_input(tmp_path, 
     before = (tmp_path / 'input.json').read_bytes()
     runner.write(tmp_path / 'metrics.json', {'started_at': (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()})
     today = datetime.now(ZoneInfo('America/New_York')).date()
+    # Do not accidentally use the frozen run's own day: history deliberately
+    # excludes it. The old today-2 fixture became empty at the Oct 3 rollover.
+    target_day = date.fromisoformat(runner.read(tmp_path / 'input.json')['date'])
+    history_day = today - timedelta(days=1)
+    if history_day == target_day:
+        history_day = today - timedelta(days=2)
     registry = tmp_path / 'fresh.json'
     runner.write(registry, {'date': today.isoformat(), 'history': [
-        {'category': cat, 'published_date': (today - timedelta(days=2)).isoformat(),
+        {'category': cat, 'published_date': history_day.isoformat(),
          'source_title': 'Another old event', 'source_url': 'https://old.example/other'} for cat in runner.CATS]})
     monkeypatch.setattr(runner, 'ask', lambda *a, **kw: pytest.fail('Stale guard cannot call model'))
     with pytest.raises(GroupNeeded) as exc:
