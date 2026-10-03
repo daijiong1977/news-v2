@@ -199,7 +199,7 @@ def test_editor_rejects_one_body_and_uses_same_five_reserve(tmp_path,monkeypatch
     assert {a['candidate']['id'] for a in section['accepted']}<=set(section['order'])
 
 
-def test_editor_rejects_relative_stale_event_and_uses_reserve(tmp_path, monkeypatch):
+def test_editor_defers_relative_stale_event_and_uses_fresh_reserve(tmp_path, monkeypatch):
     from pipeline.kidsnews_api_editor import edit_groups
     prepared(tmp_path, monkeypatch)
     provider = Provider()
@@ -210,15 +210,41 @@ def test_editor_rejects_relative_stale_event_and_uses_reserve(tmp_path, monkeypa
         if material.get('category') == 'News' and 'source' in material and not stale[0]:
             stale[0] = True
             provider.calls.append(payload)
-            value = {'source_event_fresh': False,
-                     'freshness_reason': 'The main event happened three weeks ago'}
+            value = combined_answer()
+            value.update(source_event_fresh=False,
+                         freshness_reason='The main event happened three weeks ago')
             return {'choices': [{'message': {'content': json.dumps(value)}, 'finish_reason': 'stop'}]}
         return original(payload, timeout)
     provider.complete = selective
     assert edit_groups(tmp_path, provider, {'model': 'fake'})['ok']
     section = runner.read(tmp_path / 'editor-state.json')['News']
     assert len(section['accepted']) == 3
-    assert any(o['status'] == 'gone' and 'three weeks ago' in o['reason'] for o in section['outcomes'])
+    assert any(o['status'] == 'deferred_stale' for o in section['outcomes'])
+    assert not any(a['candidate']['id'] == section['outcomes'][0]['id'] for a in section['accepted'])
+
+
+def test_editor_uses_historical_fallback_only_if_fresh_stories_insufficient(tmp_path, monkeypatch):
+    from pipeline.kidsnews_api_editor import edit_groups
+    prepared(tmp_path, monkeypatch)
+    provider = Provider()
+    original = provider.complete
+    seen = [0]
+    def selective(payload, timeout):
+        material = json.loads(payload['messages'][1]['content'])
+        if material.get('category') == 'News' and 'source' in material and seen[0] < 3:
+            seen[0] += 1
+            provider.calls.append(payload)
+            value = combined_answer()
+            value.update(source_event_fresh=False,
+                         freshness_reason='Main event was three weeks ago')
+            return {'choices': [{'message': {'content': json.dumps(value)}, 'finish_reason': 'stop'}]}
+        return original(payload, timeout)
+    provider.complete = selective
+    assert edit_groups(tmp_path, provider, {'model': 'fake'})['ok']
+    section = runner.read(tmp_path / 'editor-state.json')['News']
+    assert len(section['accepted']) == 3
+    assert sum(a['ready_status'] == 'ready_stale_fallback' for a in section['accepted']) == 1
+    assert any(o['status'] == 'ready_stale_fallback' for o in section['outcomes'])
 
 
 def test_http_json_provider_is_pluggable_without_cursor(monkeypatch):

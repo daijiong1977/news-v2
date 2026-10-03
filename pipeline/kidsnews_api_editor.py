@@ -97,6 +97,7 @@ def edit_groups(root, provider, identity):
                     candidate['writer_provider'] = writer or identity['type']
             ids = [r['id'] for r in raw['result']['drafts']]
             section = state[cat]
+            section.setdefault('deferred_stale', [])
             sports_limit = cat == 'Fun' and bool(request.get('fun_topic_limits'))
             if not section['pick_done']:
                 # Selection only; ONE article per subsequent completion.
@@ -126,6 +127,7 @@ def edit_groups(root, provider, identity):
                 if len(section['accepted']) == 3:
                     break
                 if any(a['candidate']['id'] == sid for a in section['accepted']) or any(
+                    a['candidate']['id'] == sid for a in section['deferred_stale']) or any(
                     o['id'] == sid and o['status'] == 'gone' for o in section['outcomes']):
                     continue
                 if refresh and sid in refresh['blocked_ids']:
@@ -153,6 +155,16 @@ def edit_groups(root, provider, identity):
                                                'reason': result['reason'], 'review_method': METHOD})
                     write(state_path, state); continue
                 review = result['review']
+                if result['status'] == 'ready_stale':
+                    section['deferred_stale'].append({'candidate': candidate, 'entry': result['entry'],
+                        'details': result['details'], 'ready_status': 'ready_stale_fallback',
+                        'warnings': result.get('warnings', []), 'final_sha256': result['final_sha256']})
+                    section['outcomes'].append({'id': sid, 'category': cat, 'status': 'deferred_stale',
+                        'reason': next((w for w in result.get('warnings', []) if 'Historical fallback' in w),
+                                       'Main event outside freshness window'),
+                        'review_method': METHOD, 'writer_provider': candidate.get('writer_provider', 'deepseek')})
+                    write(state_path, state)
+                    continue
                 section['accepted'].append({'candidate': candidate, 'entry': result['entry'],
                                             'details': result['details'], 'ready_status': result['status']})
                 section['outcomes'].append({'id': sid, 'category': cat, 'status': result['status'],
@@ -163,6 +175,15 @@ def edit_groups(root, provider, identity):
                     'facts_supported': review['facts_supported'], 'event_clear': review['event_clear'],
                     'notes': review['notes'], 'safety': evaluate_rewriter_safety(
                         {'safety': review['scores']['0']}, category=cat), 'final_sha256': result['final_sha256']})
+                write(state_path, state)
+            while len(section['accepted']) < 3 and section['deferred_stale']:
+                fallback = section['deferred_stale'].pop(0)
+                section['accepted'].append({k: fallback[k] for k in ('candidate', 'entry', 'details', 'ready_status')})
+                section['outcomes'].append({'id': fallback['candidate']['id'], 'category': cat,
+                    'status': 'ready_stale_fallback', 'reason': 'Fresh qualified candidates exhausted within fixed five',
+                    'warnings': fallback['warnings'], 'review_method': METHOD,
+                    'writer_provider': fallback['candidate'].get('writer_provider', 'deepseek'),
+                    'final_sha256': fallback['final_sha256']})
                 write(state_path, state)
             if len(section['accepted']) != 3:
                 raise ValueError(cat+': fixed five exhausted; cannot fabricate safe/unique stories')

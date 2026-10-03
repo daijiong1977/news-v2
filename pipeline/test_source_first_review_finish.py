@@ -15,7 +15,7 @@ def broken_details():
     return value
 
 
-def test_semantic_stale_event_rejected_without_rewrite_or_retry(tmp_path):
+def test_semantic_stale_event_edited_as_historical_fallback_without_retry(tmp_path):
     runner.write(tmp_path / 'source-collection.json', {'semantic_event_recency': True})
     runner.write(tmp_path / 'input.json', {'date': '2026-10-03'})
     calls = []
@@ -23,9 +23,12 @@ def test_semantic_stale_event_rejected_without_rewrite_or_retry(tmp_path):
         calls.append(key)
         assert 'three weeks ago' in prompt
         assert data['as_of_date'] == '2026-10-03'
-        return {'source_event_fresh': False, 'freshness_reason': 'Main event was three weeks ago'}
+        value = combined_answer()
+        value.update(source_event_fresh=False, freshness_reason='Main event was three weeks ago')
+        return value
     result = finish(tmp_path, 'Fun', 'old', ART, {}, [], [], ask)
-    assert result['status'] == 'gone' and 'three weeks ago' in result['reason']
+    assert result['status'] == 'ready_stale'
+    assert any('three weeks ago' in w for w in result['warnings'])
     assert calls == ['review-finish-Fun-old']
     assert finish(tmp_path, 'Fun', 'old', ART, {}, [], [], ask) == result
 

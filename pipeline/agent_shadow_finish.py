@@ -50,11 +50,13 @@ as_of_date in America/New_York. Read the original body, not just its publication
 date. Understand relative phrases such as "three weeks ago", "last month", and
 "yesterday"; do not mistake historical background for the main event. News main
 events older than 3 days and Fun main events older than 7 days are stale.
-If stale, STOP: return ONLY {"source_event_fresh":false,
-"freshness_reason":"brief source-grounded reason"}. Do not rewrite an old event
-as if it happened recently. If current, return the usual complete combined answer
-PLUS "source_event_fresh":true and "freshness_reason":"brief dated rationale".
-If the event date is genuinely unclear, do not assert it is current: reject it.
+Always return the usual complete combined answer PLUS "source_event_fresh":boolean
+and "freshness_reason":"brief source-grounded dated rationale". If stale or the
+event date is genuinely unclear, set source_event_fresh=false. Write it clearly
+as a historical story, never as if the main event happened today. Python holds
+it in reserve and uses it only if fewer than three fresh stories pass. Do not
+hide its age from readers. Other safety, factual, duplicate and format gates
+still apply. If current, set source_event_fresh=true.
 Science is exempt from this event-age gate.\n'''
 
 
@@ -76,7 +78,7 @@ def body_errors(value, category, source_words, *, require_fresh=False):
         errors.append('Final safety/neutrality score failed')
     if type(value.get('facts_supported')) is not bool:
         errors.append('facts_supported boolean required (false is warning only)')
-    if require_fresh and (value.get('source_event_fresh') is not True or
+    if require_fresh and (type(value.get('source_event_fresh')) is not bool or
                           not isinstance(value.get('freshness_reason'), str) or
                           not value['freshness_reason'].strip()):
         errors.append('Current main event and source-grounded freshness_reason required')
@@ -197,12 +199,6 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
                 save(); break
         state['pending_value'] = value
         save()  # answer committed before checks or next handoff
-        if require_fresh and value.get('source_event_fresh') is False:
-            reason = value.get('freshness_reason')
-            state['result'] = {'status': 'gone', 'reason': 'stale_or_uncertain_main_event: ' +
-                               (reason.strip() if isinstance(reason, str) and reason.strip() else 'no dated rationale'),
-                               'key': key}
-            save(); break
         if detail_only:
             # Freeze an already passing article and complete detail levels. A
             # repair cannot invalidate them, even when its JSON is malformed.
@@ -257,7 +253,10 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
         shuffle_quiz_options(slots, seed=f'{cat}-{sid}')
         if value['facts_supported'] is False:
             warnings.append('事实支持存在自检疑问，初期仅告警: ' + value.get('notes', ''))
-        state['result'] = {'status': 'ready_full' if set(slots) == {'0_easy', '0_middle'} else 'ready_degraded',
+        stale = require_fresh and value['source_event_fresh'] is False
+        if stale:
+            warnings.append('Historical fallback candidate; use only if fresh pool is short: ' + value['freshness_reason'])
+        state['result'] = {'status': 'ready_stale' if stale else 'ready_full' if set(slots) == {'0_easy', '0_middle'} else 'ready_degraded',
                           'entry': value['corrected_article'], 'details': slots, 'review': {k: value[k] for k in ('scores', 'facts_supported', 'event_clear', 'notes')},
                           'warnings': warnings, 'removed': state.get('removed', []) + removed,
                           'key': key, 'body_repairs': state['body_repairs'], 'detail_repairs': state['detail_repairs'],
