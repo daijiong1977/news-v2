@@ -55,8 +55,8 @@ SUPABASE_READ_TOKEN（缺省 SUPABASE_SERVICE_KEY）分页只读抓取、冻结 
 空历史/无权限拒绝，不能当作不存在历史。来源和候选沿已有十二→五→三规则。
 正常需 DEEPSEEK_API_KEY，以及 Cursor login/鉴权。模板下载/交付沿现有 git 工具。
 可显式传 `env_file` 指向本机私有 `.env`（只读、不覆盖已导出的环境）；不自动猜路径，
-不打印密钥，不把密钥写进 run.json。启用后端时先只读检查 DB 连接及四表/回滚权限，
-不满足便在模型/网站操作之前停止。
+不打印密钥，不把密钥写进 run.json。启用后端时先只读检查四表可访问，失败在模型/
+网站操作之前停止；REST 的 GET 不能证明写权限，实际写入必须逐项读回验收。
 
 ## 发布并接续数据库/归档
 
@@ -70,10 +70,15 @@ SUPABASE_READ_TOKEN（缺省 SUPABASE_SERVICE_KEY）分页只读抓取、冻结 
 ```
 
 网站-only 仍可 database_archive:false。现有 CI 保管 latest 上传及 dispatch 凭据；
-本机/Pod 若启用后续 DB/archive，需要 SUPABASE_SERVICE_KEY（Storage）以及
-KIDSNEWS_DATABASE_URL（专用数据库账号；强制 TLS、限定 Supabase project）。
-新的直接 Postgres adapter 不需要 Supabase 账号管理 token。**此代码不配置数据库
-密码或创建账号**；service-role JWT 不是 PostgreSQL 密码，不能混用。
+默认 database_transport=rest：复用原流水线 SUPABASE_URL + SUPABASE_SERVICE_KEY，
+经 Supabase Data API 做 insert/update/upsert/delete；Storage 复用同一个 service-role key。
+不需要新增 token、不需要 KIDSNEWS_DATABASE_URL、不调用 Edge Function/RPC 或部署 schema。
+此次已确认原 news-v2/.env 的凭据为 service_role，四张表只读 HTTP 200；密钥未输出、
+未复制到 Git/答卷。VM 使用其既有私有环境；本机可显式 env_file 指向原项目私有 .env。
+
+显式 database_transport=postgres 才需要 KIDSNEWS_DATABASE_URL（专用数据库账号、TLS）。
+此可选 adapter 不需要 Supabase 账号管理 token。**此代码不配置数据库密码或账号**；
+service-role JWT 不是 PostgreSQL 密码，不能混用。以下权限/5432要求只适用于 postgres：
 必须直连或 session pooler 的 5432 端口；拒绝 6543 transaction pooler，防止会话锁失效。
 连接方式依据 [Supabase 官方连接文档](https://supabase.com/docs/guides/database/connecting-to-postgres)。
 DB role 需四张业务表的 SELECT/INSERT/UPDATE/DELETE 和锁权限；精确 SQL 回滚
@@ -84,25 +89,33 @@ DB role 需四张业务表的 SELECT/INSERT/UPDATE/DELETE 和锁权限；精确 
 ## 后端执行顺序与恢复
 
 1. 核验 latest manifest 与本包相同、网站 reader 全文件 hash 一致。
-2. 专用 PostgreSQL session advisory lock 防本模块两个发布者并发，不开启长事务。
+2. 本机私有状态目录锁防同目录并发。REST 无远端跨机器锁；仅可选 postgres 使用
+   session advisory lock。首次运行必须避开旧生产及另一台机器同日期写入。
 3. 同一份 artifact 冻结数据库旧值与 apply/rollback SQL；备份每个将替换的归档对象，
    全部落盘并 hash 校验后才允许写入。备份目录 0700、文件 0600，不能在 repo/work。
 4. 写原结构的 `<date>/payloads`、`article_payloads`、`article_images`、`<date>.zip`
    和日期 manifest。日期缺失时保留其他日期更新 index；不写 latest、不删除孤儿旧文件。
 5. 每次写前记录 attempting，读回 hash 成功标 complete。失败恢复只读回，不盲重发。
-6. 归档全部验证，再核验网站未被替换；短 SQL transaction 更新四表，UUID/阅读进度保留。
+6. 归档全部验证，再核验网站未被替换。默认 REST 按 runs→stories→search→sources
+   更新四表，保留 UUID/阅读进度，已有行仅 PATCH 改变字段，新行 conflict-ignore 不覆盖
+   并发新插入；每行写前 sentinel、写后读回，rest-execution.json 记录断点。
+   apply/rollback SQL 仍自动生成冻结作为审计/可选 SQL 方式，但 REST 不执行任意 SQL。
+   可选 postgres 则在短 SQL transaction 中完成四表更新。
 7. DB 原值/新值 guard、DB读回、归档读回、网站读回全部通过才 status:complete。
 
 同目录重跑复用原稿、API 答卷、SQL、Storage before-images，成功操作不重复。
-网络响应丢失：归档读回等于新值可继续；SQL attempting 则停止人工核对，不能重发。
+网络响应丢失：归档/REST 行读回等于目标值可继续，不再发送该写请求；REST sentinel
+仍在而目标没到则停止人工核对，不能盲重发。SQL attempting 同样停止人工核对。
 源/已接受答卷/provider 更改、备份污染、第三方写入会停止。超过24小时沿旧 stale 门禁，
 不静默改日期；需显式 `confirm_stale:true` 才以当前 ET 日期重读历史、逐栏 API 查重。
 新历史里的重复/不确定项不能使用；若已接受稿变成重复，停止，不篡改旧成品。
 保留 debug，不清理状态文件。
 
-Storage 与 PostgreSQL 无跨系统原子事务；session lock 只覆盖本模块参与者，**旧生产
-写入者不一定持有此锁**。因此首次 live 应选无旧 writer 并发的时段；最新包身份检查、
-对象前像/后像检查、DB guard 能检测多数冲突，但不是 Storage CAS 保证。
+REST 四表不是一个事务，快照也是四次只读请求；中断可能暂时部分完成，恢复必须
+复用原 before/after 和逐行日志。没有远端锁或严格 CAS，不承诺跨写入者原子性。
+Storage 与数据库更无跨系统原子事务；即使 postgres session lock 也只覆盖本模块参与者，
+旧生产写入者不一定持有。首次 live 选无其他 writer 并发时段；整体前像检查、逐行
+再次检查和验收能检测多数冲突，但不等于消除最后一次检查与写入之间的竞争窗口。
 失败不会自动覆盖回网站；保留明确阶段，修复后原目录继续或执行限定回滚。
 
 已有验证网站可单独补后端：
@@ -118,8 +131,10 @@ Storage 与 PostgreSQL 无跨系统原子事务；session lock 只覆盖本模�
 {"operation":"rollback","state_dir":"/private-backups/release-id","execute":true}
 ```
 
-先整体核对归档没有第三方改动，再用原 SQL 回滚 DB，最后恢复旧对象/只删除本操作
-新建对象。两边中断仍保留状态；SQL结果不确定时拒绝盲回滚。网站 rollback 仍用现有
+先整体核对归档没有第三方改动，再按原 before/after 回滚 DB（REST 来源→search→
+stories→runs；只删除本批新增行，搜索派生 tsv/更新时间由数据库重新生成，不禁用触发器），
+最后恢复旧对象/只删除本操作新建对象。postgres 则使用原 rollback.sql 精确回滚。
+两边中断仍保留状态；SQL结果不确定时拒绝盲回滚。网站 rollback 仍用现有
 CI 原备份机制；不将 DB/archive 回滚标记成全站回滚。这里是涉及范围备份，不是 full dump。
 
 ## 测试与部署边界
@@ -132,3 +147,6 @@ CI 原备份机制；不将 DB/archive 回滚标记成全站回滚。这里是�
 
 验证：Python 3.10 原相关套件 350 项通过；追加只读数据库权限门禁后，新入口
 专项 19 项通过。Bot 导出后重跑含该新增用例的完整 351 项套件。
+2026-10-03 同日追加 REST 兼容：新增六项测试覆盖完整恢复/回滚、响应丢失不重复写、
+不确定未写入停止、外部改动拦截、凭据/项目/冲突保护以及无需数据库密码的默认入口。
+含 REST 的完整 Python 3.10 相关套件：357 项通过，两个既有警告；未真实写库/部署。

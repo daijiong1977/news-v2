@@ -92,6 +92,11 @@
   ],
   "files": [
     {
+      "path": "pipeline/publication_rest.py",
+      "purpose": "默认复用旧service-role Data API，逐行备份/前后像检查/中断恢复与业务回滚；无远端四表事务，不调用Edge/新增RPC",
+      "location": "repo"
+    },
+    {
       "path": "pipeline/kidsnews_python.py",
       "purpose": "全Python JSON入口：Cursor/Grok completion、缓存恢复、正式网站CI核验、显式日期归档和直连Postgres自动SQL；未启用真实后端。",
       "location": "repo"
@@ -996,6 +1001,12 @@
       "date": "2026-10-03",
       "title": "Cursor agent须通过CLI适配而非假定HTTP接口",
       "note": "空工作目录只读agent JSON适配实测约7秒；子进程不继承DB/Storage密钥。新全Python入口复用旧生产和网站Action，后端需专用Postgres连接及回滚权限，执行前检查。只有离线验证及小型模型连通测试，未真实写库/Storage/部署或启用定时。",
+      "source_ref": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "数据库默认复用旧SUPABASE_SERVICE_KEY而非新增Postgres密码",
+      "note": "旧pipeline/supabase_io.py通过service_role SDK/Data API写runs/stories。新入口默认REST同key、同四业务表和Storage；读回+逐行日志允许恢复，自动SQLpair留审计。跨四表无事务/远端锁，需避并发。原news-v2私有env凭据四表GET200，未写入。",
       "source_ref": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md"
     }
   ]

@@ -231,6 +231,9 @@ def commit(artifact,root,client):
     root=private_root(root)
     with run_lock(root):
         ready=_prepare(artifact,root,client)  # ALWAYS generate both before first write.
+        if hasattr(client,'apply_prepared'):
+            client.verify_archive(artifact)
+            return client.apply_prepared(root)
         execution=root/'execution.json'
         if execution.exists():
             previous=json.loads(execution.read_bytes())
@@ -248,6 +251,8 @@ def rollback(root,client):
     root=private_root(root)
     with run_lock(root):
         ready=verify_prepared(root)
+        if hasattr(client,'apply_prepared'):
+            return client.apply_prepared(root,restore=True)
         execution=root/'execution.json'
         previous=json.loads(execution.read_bytes()) if execution.exists() else {}
         if previous.get('status')=='rolled_back':return ready

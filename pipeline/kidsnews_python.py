@@ -45,6 +45,16 @@ def agent_provider(config):
     raise ValueError('Agent provider must be cursor or http')
 
 
+def database_client(config):
+    if config.get('database_transport','rest')=='rest':
+        from .publication_rest import RestClient
+        return RestClient()
+    if config.get('database_transport')=='postgres':
+        from .publication_postgres import PostgresClient
+        return PostgresClient()
+    raise ValueError('database_transport must be rest or postgres')
+
+
 def registry(day, root):
     """Freeze paginated read-only source/history registry; never silently zero history."""
     path = root/'api-registry.json'
@@ -215,6 +225,8 @@ def rollback_publication(state, client, storage):
         execution = json.loads((state/'database/execution.json').read_bytes()) if (state/'database/execution.json').exists() else {}
         if execution.get('status') in ('committed', 'rolled_back'):
             rollback(state/'database', client)
+        elif (state/'database/rest-execution.json').exists() and hasattr(client,'apply_prepared'):
+            rollback(state/'database',client)
         elif execution:
             raise ValueError('Database outcome uncertain; inspect before rollback')
         rollback_archive(state/'archive', storage)
@@ -240,8 +252,7 @@ def execute(config):
         raise ValueError('Publication requires branch and same-day replacement acknowledgement BEFORE writes')
     if backend:
         private_root(Path(config['state_dir']))
-        from .publication_postgres import PostgresClient
-        PostgresClient().preflight()  # Read-only credentials/role check before any website work.
+        database_client(config).preflight()  # Read-only credential check before any website work.
         if not os.environ.get('SUPABASE_SERVICE_KEY'):
             raise ValueError('SUPABASE_SERVICE_KEY required for archive')
     if operation == 'run' and backend and not publish:
@@ -278,9 +289,8 @@ def execute(config):
             raise ValueError('run database_archive requires publish:true; use backfill for a verified existing edition')
     else:
         artifact = Path(config['artifact_dir']) if operation == 'backfill' else None
-    from .publication_postgres import PostgresClient
     from .publication_archive import ArchiveStorage
-    client = PostgresClient()
+    client = database_client(config)
     storage = ArchiveStorage(f'https://{PROJECT}.supabase.co', os.environ['SUPABASE_SERVICE_KEY'])
     state = Path(config['state_dir'])
     return rollback_publication(state, client, storage) if operation == 'rollback' else finish_publication(artifact, state, client, storage)
