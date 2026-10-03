@@ -5,6 +5,19 @@ from pipeline.test_kidsnews_python import Storage
 from pipeline.publication_bundle import encoded, sha
 
 
+def test_pdf_footer_tracks_step_not_overflow_page(monkeypatch):
+    from pipeline.pdf_export import ArticlePDF
+    pdf = ArticlePDF('Science', 'Long explanation')
+    pdf.add_page()
+    pdf.header_bar('Step 4  ·  Think & Share')
+    monkeypatch.setattr(pdf, 'page_no', lambda: 5)
+    calls = []
+    monkeypatch.setattr(pdf, 'cell', lambda *args, **kwargs: calls.append(args[2]))
+    pdf.footer()
+    assert 'Step 4 of 4' in calls[0]
+    assert 'Page 5' in calls[1]
+
+
 def test_reader_pdfs_generated_hashed_and_archived(tmp_path, monkeypatch):
     from pipeline.publication_database import load_artifact
     from pipeline.publication_archive import targets
