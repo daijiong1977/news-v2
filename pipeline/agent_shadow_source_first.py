@@ -1,6 +1,6 @@
 """Versioned source-first collection. Python only; never writes production state.
 
-One frozen feed, at most twelve unique articles, stop at four passes. All
+One frozen feed, at most twelve unique articles; per-category pass quotas. All
 evidence/photos are checkpointed before editorial models receive metadata.
 """
 from dataclasses import asdict
@@ -115,6 +115,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
         from .source_freshness import POLICY
         state = {'version': 1, 'date': today, 'sections': sections, 'freshness_policy': POLICY,
                  'news_metadata_screen': True, 'routing_max_words': 2000,
+                 'category_limits': {'News': {'pass_target': 6, 'min_good': 18}} if fixed else {},
                  'limits': {'per_source': 12, 'pass_target': 4, 'min_groups': 0 if fixed else 3, 'min_good': 12 if fixed else 10,
                             'max_unique_articles': 12 * sum(len(c['sources']) for c in sections.values())},
                  'unique_attempts': 0}
@@ -140,6 +141,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                      if r.get('article', {}).get('evidence_url'))
     seen_titles = {_normalize_title(r['candidate']['title']) for r in all_results()}
     for cat, section in state['sections'].items():
+        limits = {**state['limits'], **state.get('category_limits', {}).get(cat, {})}
         if expand and cat != expand:
             continue
         if section['complete'] and expand != cat:
@@ -153,8 +155,8 @@ def collect(root, sources_by_cat, today, *, expand=None):
                 good += sum(r.get('qualified', False) for r in source_state['results'])
                 continue
             # Initial stop respects group opportunities; incremental stop finishes one new source.
-            if (not expand and len(done_groups) >= state['limits']['min_groups']
-                    and good >= state['limits']['min_good']) or (expand and newly_processed >= 1):
+            if (not expand and len(done_groups) >= limits['min_groups']
+                    and good >= limits['min_good']) or (expand and newly_processed >= 1):
                 break
             source = NewsSource(**source_state['source'])
             if 'entries' not in source_state:
@@ -171,7 +173,10 @@ def collect(root, sources_by_cat, today, *, expand=None):
             qualified = sum(r.get('qualified', False) for r in source_state['results'])
             entries = source_state['entries']
             for offset in range(len(source_state['results']), len(entries)):
-                if qualified >= 4:
+                if qualified >= limits['pass_target']:
+                    break
+                if (not expand and cat in state.get('category_limits', {})
+                        and good + qualified >= limits['min_good']):
                     break
                 if offset == 6 and qualified == 0:
                     source_state['status'] = 'suspended'
@@ -257,8 +262,8 @@ def collect(root, sources_by_cat, today, *, expand=None):
             newly_processed += 1
             sync()
         section.update(complete=True, qualified=good, attempted_groups=len(done_groups),
-                       shortfall=max(0, state['limits']['min_good'] - good),
-                       groups_shortfall=max(0, state['limits']['min_groups'] - len(done_groups)))
+                       shortfall=max(0, limits['min_good'] - good),
+                       groups_shortfall=max(0, limits['min_groups'] - len(done_groups)))
         sync()
     return [r['candidate'] for r in all_results() if r.get('qualified')]
 

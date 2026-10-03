@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "project_id": "kids-news-website",
+  "news_collection_18": "2026-10-03用户后续确认：新三阶段News每源6篇合格、总18即停；不足继续下一源，每源最多尝试12。摘要统一排序目录最多8，固定5稿最后3稿，无新增AI调用。Science/Fun不变、旧journal配额冻结。离线回归包含前三源6+6+6、第四源补足且不超18、恢复无重抓和旧配额兼容。无生成、发布或写库。",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
   "updated_at": "2026-10-03T18:41:45Z",
