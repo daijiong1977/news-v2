@@ -13,9 +13,9 @@ from .publication_bundle import sha
 
 
 class CachedJSON:
-    def __init__(self, root, provider, identity):
+    def __init__(self, root, provider, identity, provider_file='api-editor-provider.json'):
         self.root, self.provider, self.identity = Path(root), provider, identity
-        path = self.root / 'api-editor-provider.json'
+        path = self.root / provider_file
         if path.exists() and read(path) != identity:
             raise ValueError('Frozen Agent provider changed; use a new directory')
         if not path.exists():
@@ -62,6 +62,10 @@ def edit_groups(root, provider, identity):
     from .agent_shadow_finish import finish, METHOD
     if (Path(root)/'all-ai-providers.json').exists():
         METHOD = 'Codex 同模型精修、详情生成并自检（非独立审核）'
+    batch_path = Path(root)/'batch-writer.json'
+    writer = read(batch_path)['identity']['model'] if batch_path.exists() else None
+    if writer:
+        METHOD = identity.get('model', identity['type'])+' 精修、详情生成并自检（非独立审核；初稿 '+writer+'）'
     from .news_rss_core import evaluate_rewriter_safety
     root = Path(root)
     with run_lock(root):
@@ -80,7 +84,7 @@ def edit_groups(root, provider, identity):
             candidates = {b['id']: b for b in raw['originals']}
             if (root/'all-ai-providers.json').exists():
                 for candidate in candidates.values():
-                    candidate['writer_provider'] = identity['type']
+                    candidate['writer_provider'] = writer or identity['type']
             ids = [r['id'] for r in raw['result']['drafts']]
             section = state[cat]
             sports_limit = cat == 'Fun' and bool(request.get('fun_topic_limits'))
@@ -142,7 +146,7 @@ def edit_groups(root, provider, identity):
                 section['accepted'].append({'candidate': candidate, 'entry': result['entry'],
                                             'details': result['details'], 'ready_status': result['status']})
                 section['outcomes'].append({'id': sid, 'category': cat, 'status': result['status'],
-                    'review_method': METHOD, 'writer_provider': identity['type'] if (root/'all-ai-providers.json').exists() else candidate.get('writer_provider', 'deepseek'),
+                    'review_method': METHOD, 'writer_provider': candidate.get('writer_provider', 'deepseek'),
                     'selection_round': 1, 'warnings': result.get('warnings', []),
                     'removed': result.get('removed', []), 'body_repairs': result.get('body_repairs', 0),
                     'detail_repairs': result.get('detail_repairs', 0),

@@ -606,6 +606,12 @@
   "lessons": [
     {
       "date": "2026-10-03",
+      "title": "批量初稿模型成为配置开关，排序精修独立保留",
+      "note": "batch_writer可选deepseek/grok/codex/claude，默认Flash/Grok4.7high/Sol6.1medium/Claude sonnet，模型可显式覆盖。今晚初稿DeepSeek关闭thinking，其余Codexmedium；JSON适配器、分角色身份及同目录冻结，不能换模型清缓存，writer标签真实记录。Claude禁tools/MCP/技能并隔离业务密钥。Oracle已有DeepSeek key、agent及Claude认证；真实四模型质量不由离线测试替代。不创建cron、不关闭旧生产。",
+      "source_ref": "docs/KIDSNEWS-AI-SWITCHES.md"
+    },
+    {
+      "date": "2026-10-03",
       "title": "时效按栏目：News三天，Science不限，Fun网页时间七天",
       "note": "用户澄清后新journal冻结category-source-date-v2：News三天并检查明确开头旧事件，Science不做日期淘汰，Fun只看原始网页发布时间七天、不检查活动发生日期，仅明确完整日期已到期内容排除。modified不续期；News/Fun无法核验日期跳过。DOGO九月三十日餐桌页十月三日允许进入Fun。仅新轮，旧答卷/现网不删，不新增AI调用；相对和隐含过期日期不声称机械全面识别。",
       "source_ref": "docs/bugs/2026-10-03-three-day-source-freshness.md"

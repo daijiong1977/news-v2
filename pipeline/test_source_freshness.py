@@ -14,6 +14,9 @@ def test_old_event_is_not_rescued_by_recent_publication():
     row = {'published': '', 'link': 'https://www.dogonews.com/2026/9/30/giant-table'}
     assert rejection(row, '2026-10-03') is None
     assert rejection(row, '2026-10-03', {'body': 'On September 12, 2026, about 20,000 people gathered in Bucharest.'}) == 'stale_lead_event'
+    # User's second concrete example: newly posted coverage of an August record.
+    assert rejection({'category':'News','published':'2026-10-03'}, '2026-10-03',
+                     {'body':'On August 31, 2026, Dale Sanders from Memphis became the oldest person to hike the entire Appalachian Trail.'}) == 'stale_lead_event'
 
 
 def test_unknown_future_and_historical_background():

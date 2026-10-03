@@ -24,6 +24,18 @@ from .publication_bundle import encoded, sha
 def agent_provider(config):
     """Business logic knows only complete(payload)->JSON, never provider tools."""
     choice = config.get('agent_provider', {'type': 'cursor', 'model': config.get('model')})
+    if isinstance(choice, str):
+        choice = {'type': choice}
+    deepseek = choice.get('type') == 'deepseek'
+    if choice.get('type') == 'grok':
+        choice = {**choice, 'type':'cursor', 'model':choice.get('model','grok-4.7-high')}
+    if choice.get('type') == 'deepseek':
+        choice = {**choice, 'type':'http', 'model':choice.get('model','deepseek-flash'),
+                  'endpoint':'https://api.deepseek.com/chat/completions', 'key_env':'DEEPSEEK_API_KEY'}
+    if choice.get('type') == 'claude':
+        from .claude_json import ClaudeJSONProvider
+        provider = ClaudeJSONProvider(choice.get('model','sonnet'), choice.get('binary'))
+        return provider, {'type':'claude-cli-json', 'model':provider.model}
     if choice.get('type') == 'codex':
         from .codex_json import CodexJSONProvider
         provider = CodexJSONProvider(choice.get('model'), choice.get('binary'), choice.get('reasoning','low'))
@@ -45,6 +57,7 @@ def agent_provider(config):
         class HTTP:
             def complete(self, payload, timeout):
                 return delegate.complete({**payload, 'model': model,
+                    **({'thinking':{'type':'disabled'}} if deepseek else {}),
                     'response_format': {'type': 'json_object'}, 'max_tokens': 16384}, timeout)
         return HTTP(), {'type': 'http', 'endpoint': endpoint, 'model': model, 'key_env': key_env}
     raise ValueError('Agent provider must be codex, cursor or http')
@@ -96,16 +109,36 @@ def run_cli(module, *args):
     return invoke(module, *args)
 
 
-def prepare_api(root, day, registry_path, provider, identity, all_ai=False):
+def prepare_api(root, day, registry_path, provider, identity, all_ai=False, batch_writer=None):
     """DeepSeek normal prepare; Cursor answers ONLY requested format fix JSON."""
     cached = CachedJSON(root, provider, identity)
+    batch_cached = cached
     extra = []
-    if all_ai:
-        if identity.get('type') != 'codex-cli-json':
+    if all_ai or batch_writer is not None:
+        if all_ai and batch_writer is None and identity.get('type') != 'codex-cli-json':
             raise ValueError('all_ai currently requires explicit Codex provider')
         path = root/'all-ai-providers.json'
         config = {'roles':{role:{'type':'native'} for role in
                   ('rank','editor','write','review','details','detail_review','discovery','image_review')}}
+        if batch_writer is not None:
+            choice = {'type':batch_writer} if isinstance(batch_writer,str) else batch_writer
+            if not isinstance(choice,dict) or choice.get('type') not in {'deepseek','grok','codex','claude'}:
+                raise ValueError('batch_writer must be deepseek, grok, codex or claude')
+            if choice['type'] == 'codex':
+                choice = {'model':'gpt-6.1-sol','reasoning':'medium',**choice}
+            batch_provider, batch_identity = agent_provider({'agent_provider':choice})
+            frozen = {'selection':choice,'identity':batch_identity}
+            batch_path = root/'batch-writer.json'
+            if batch_path.exists() and read(batch_path) != frozen:
+                raise ValueError('Frozen batch writer changed; use a new directory')
+            write(batch_path,frozen)
+            from .kidsnews_groups import pin
+            pin(root,batch_path)
+            if choice['type'] == 'deepseek':
+                config['roles']['write'] = {'type':'http','model':batch_identity['model'],
+                    'endpoint':batch_identity['endpoint'],'key_env':batch_identity['key_env']}
+            else:
+                batch_cached = CachedJSON(root,batch_provider,batch_identity,'api-batch-provider.json')
         if path.exists() and read(path) != config:
             raise ValueError('Frozen all-AI provider changed')
         write(path,config)
@@ -123,16 +156,20 @@ def prepare_api(root, day, registry_path, provider, identity, all_ai=False):
             raise ValueError('Unsupported prepare handoff; preserve state')
         errors = result.get('errors',[])
         prior = read(Path(result['write_to'])) if Path(result['write_to']).exists() else None
-        material = {'task':task,'validation_errors':errors,'previous_answer':prior} if all_ai else task
+        native_tasks = all_ai or batch_writer is not None
+        material = {'task':task,'validation_errors':errors,'previous_answer':prior} if native_tasks else task
+        from .agent_shadow_providers import task_role
+        is_write = task_role(Path(result['read']).parent.parent.name) == 'write'
+        active = batch_cached if is_write else cached
         key = 'prepare-format-'+request['request_id']+('-correction' if prior else '')
-        value = cached(root, key,
+        value = active(root, key,
             ('Follow the supplied task.messages exactly. Return its complete required JSON object. '
              'If a previous answer failed, correct the listed validation errors, preserving IDs and supported facts.'
-             if all_ai else 'Answer the supplied messages as JSON. Correct only the requested malformed answer; preserve content and IDs.'),
+             if native_tasks else 'Answer the supplied messages as JSON. Correct only the requested malformed answer; preserve content and IDs.'),
             material, lambda v: [] if isinstance(v, dict) else ['JSON object required'])
         write(Path(result['write_to']), {'request_id': request['request_id'],
               'content': json.dumps(value, ensure_ascii=False), 'finish_reason': 'stop',
-              'writer_provider':identity.get('type','native'), **cached.last_metadata})
+              'writer_provider':active.identity.get('type','native'), **active.last_metadata})
     raise ValueError('Prepare repair budget exhausted')
 
 
@@ -312,7 +349,8 @@ def execute(config):
         day = date.fromisoformat(config['date']).isoformat()
         provider, identity = agent_provider(config)
         registry_path = Path(config['registry']) if config.get('registry') else registry(day, root)
-        prepare_api(root, day, registry_path, provider, identity, all_ai=config.get('all_ai') is True)
+        prepare_api(root, day, registry_path, provider, identity, all_ai=config.get('all_ai') is True,
+                    batch_writer=config.get('batch_writer'))
         refresh_history_api(root, provider, identity, config.get('confirm_stale') is True)
         edit_groups(root, provider, identity)
         from .agent_shadow import advance
