@@ -58,6 +58,17 @@ def extract_npr(url, html):
 
 def fetch_original(candidate):
     host = (urlsplit(candidate['link']).hostname or '').lower()
+    if host == 'timeforkids.com' or host.endswith('.timeforkids.com'):
+        from .news_rss_core import extract_article_from_html
+        from .agent_shadow_candidate_quality import extraction_reason
+        data, url, encoding = fetch_bytes(candidate['link'], ('text/html', 'application/xhtml+xml'))
+        html = data.decode(encoding, errors='replace')
+        extracted = extract_article_from_html(url, html)
+        body = extracted.get('cleaned_body') or ''
+        return {**candidate, **extracted, 'body': body, 'word_count': len(body.split()),
+                'skip_reason': extraction_reason(url, html, body) or (None if body else 'empty original'),
+                'evidence_url': url, 'evidence_sha256': hashlib.sha256(body.encode()).hexdigest(),
+                'highlights': [], 'image_candidates': []}
     if host != 'npr.org' and not host.endswith('.npr.org'):
         return generic_original(candidate)
     data, url, encoding = fetch_bytes(candidate['link'], ('text/html', 'application/xhtml+xml'))
@@ -181,9 +192,10 @@ def collect(root, sources_by_cat, today, *, expand=None):
                 if state['unique_attempts'] > state['limits']['max_unique_articles']:
                     raise ValueError('Frozen source collection budget exhausted')
                 canonical, normalized = _canonical_source_url(url), _normalize_title(title)
+                from .agent_shadow_candidate_quality import commercial_reason
                 reason = ('duplicate_url_or_title' if not canonical or not normalized or canonical in seen_urls or normalized in seen_titles
                           else 'stale_feed_entry' if freshness(b['published'], today) == 'stale'
-                          else editorial_exclusion(b))
+                          else commercial_reason(b) or editorial_exclusion(b))
                 seen_urls.add(canonical); seen_titles.add(normalized)
                 sync()  # reserve the slot BEFORE network activity
                 started = time.monotonic()
@@ -192,7 +204,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                         record['body_attempted'] = True
                         sync()
                         art = fetch_original(b)
-                        reason = art.get('skip_reason')
+                        reason = art.get('skip_reason') or commercial_reason(b, art.get('body', ''))
                         count = len(art.get('body', '').split())
                         art['word_count'] = count
                         if not reason and not 180 <= count <= 1500:

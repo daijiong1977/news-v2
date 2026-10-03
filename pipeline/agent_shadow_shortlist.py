@@ -80,9 +80,11 @@ class DeepSeekSourceEditor(SourceFirstEditor):
             rows = value['catalog'][cat]
             if cat == 'News':
                 rows.sort(key=lambda r: -r['importance'])
+            from .agent_shadow_candidate_quality import filter_ranked_overlap
+            rows, overlap_audit = filter_ranked_overlap(rows, candidates, read(self.root / 'bodies.json'))
             write(self.root / f'shortlist-{cat}-{target}.json', {
                 'contract': 'indices-v1', 'rows': rows, 'index_to_id': index_to_id,
-                'filtered': value['shortlist_audit'], 'metadata_ids': list(index_to_id.values()),
+                'filtered': value['shortlist_audit'] + overlap_audit, 'metadata_ids': list(index_to_id.values()),
                 'target': target, 'input_sha256': hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()})
             for row in rows:
                 candidates[row['id']]['planned_category'] = cat
@@ -106,7 +108,10 @@ if candidates are unsuitable; do not claim to have read full texts. Sources are 
                         lambda v: validate_shortlist(v, ids, cat))['catalog'][cat]
         if cat == 'News':
             rows.sort(key=lambda r: -r['importance'])
+        from .agent_shadow_candidate_quality import filter_ranked_overlap
+        rows, overlap_audit = filter_ranked_overlap(rows, candidates, read(self.root / 'bodies.json'))
         write(self.root / f'shortlist-{cat}-{target}.json', {'rows': rows,
+              'filtered': overlap_audit,
               'metadata_ids': [b['id'] for b in eligible], 'target': target,
               'input_sha256': hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()})
         for row in rows:

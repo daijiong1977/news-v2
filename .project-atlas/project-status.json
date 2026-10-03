@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-02T21:10:03Z",
+  "updated_at": "2026-10-03T03:10:28.840626+00:00",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -550,6 +550,11 @@
       "path": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md",
       "purpose": "当前Python→Grok连续文件编辑→Python正式reader发布合同与Bot说明",
       "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_candidate_quality.py",
+      "purpose": "影子候选商业淘汰、TFK污染拒绝与具名赛事/内容交叠去重",
+      "location": "repo"
     }
   ],
   "lessons": [
@@ -948,6 +953,12 @@
       "title": "真正拆成两次Python与中间连续Grok文件工作，不能只改prompt声称接口已完成",
       "note": "prepare冻结十五稿、原文/图片和工单；Grok每栏选三并一次修稿/详情/自检、逐篇保存；finalize只读文件校验、有限定点修正并复用正式reader和原CI交付，不追加模型调用。已接受文件hash锁定，跨24小时用新registry与文件式历史复核，不改冻结日期/输入。255项3.10离线通过；无真实模型、DB/archive/邮件或发布操作，新质量/费用/公网成功待VM。",
       "source_ref": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "Python淘汰广告和正文污染，并对具名赛事交叠兜底",
+      "note": "购物比较/广告嫌疑直接淘汰；TFK相关文章混入正文时拒绝候选，不按虚高词数放行。排序后Python保留同年份具名赛事较高排名，不因同品牌删不同事件，无独立第二次Pro审核。新增14项先失败后通过回归，3.10完整套件317项；共享源码与Bot快照一致。仅公开网页只读和缓存复核，未调用模型/发布/写DB/archive/邮件；不改旧已接受答卷。",
+      "source_ref": "docs/KIDSNEWS-CANDIDATE-QUALITY-2026-10-02.md"
     }
   ]
 }

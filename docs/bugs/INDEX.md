@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-10-02 | high | shadow | [shadow-candidate-quality](2026-10-02-shadow-candidate-quality.md) | Pokemon event wrappers duplicate; shopping reserve passes; TFK related cards inflate body length | Pokemon, event-overlap, ads, affiliate, TFK, extraction |
 | 2026-10-02 | high | shadow / website | [source-first-final-review](2026-10-02-source-first-final-review.md) | Frozen recovery, detail-only repair, reader mapping and release manifest invariants failed final review | source-first, resume, details, manifest, history |
 | 2026-10-01 | high | shadow-release | [latest-readback-wait](2026-10-01-latest-readback-wait.md) | Immediate readback leaves new ZIP with old manifest | storage, CDN, resume, bounded-GET |
 | 2026-10-01 | high | shadow | [quote-punctuation-and-science-fetch](2026-10-01-shadow-quote-punctuation-and-science-fetch.md) | Verbatim quote typography blocks packaging; failed host starves other Science publishers | quotes, publisher, fetch-budget, resume |

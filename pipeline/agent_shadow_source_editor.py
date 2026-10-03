@@ -27,6 +27,9 @@ class SourceFirstEditor(BatchEditor):
             art = cache.get(sid)
             if not art or not lo <= art['word_count'] <= hi:
                 continue
+            from .agent_shadow_candidate_quality import commercial_reason
+            if art.get('skip_reason') or commercial_reason(index[sid], art.get('body', '')):
+                continue
             if {_canonical_source_url(art.get('evidence_url') or art['link']),
                     _canonical_source_url(art['link'])} & past:
                 continue

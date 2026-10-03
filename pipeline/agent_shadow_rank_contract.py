@@ -11,6 +11,10 @@ CONTRACT = 'indices-v1'
 
 def metadata_exclusion(candidate, category):
     """Conservative explicit cues only; this is not a full-text safety verdict."""
+    from .agent_shadow_candidate_quality import commercial_reason
+    commercial = commercial_reason(candidate)
+    if commercial:
+        return commercial
     title = candidate.get('title', '').casefold()
     text = title + '\n' + candidate.get('summary', '').casefold()
     if re.search(r'\b(?:rape|raped|sexual assault|gang[- ]rape)\b', text):
@@ -72,6 +76,8 @@ Public-affairs technology, government diplomacy and important civic events stay 
 accepted events. A different outlet, interview, politician response or stage of the
 same incident is STILL the same event. Keep one representative per event, not both.
 Use the SAME specific event_key for all accounts of one event, including updates;
+An anniversary feature covering the same named championship is overlapping
+coverage, not a second event just because its headline or event_key differs.
 do not use broad labels like politics/science/sports as event keys. Reject previous
 events and uncertain history matches. Do not confuse two unrelated space missions.
 4. Rank remaining appropriate events by importance AND child interest; choose the
@@ -82,6 +88,8 @@ invent source diversity. The writing stage receives real publishers and original
 Fun favors genuine amusement, play, family animation and meaningful current star
 achievements; adult music polls, setlists, partisan fundraising albums, shopping,
 college recruitment, obituaries and animal death tributes should stay out.
+Exclude product comparisons, best-products lists, coupon/promo codes, affiliate
+shopping and sponsored/advertorial content from EVERY section, including reserves.
 
 importance is integer 0..4; initial_risk is integer 0..5 (higher is worse).
 history_status is clear/duplicate/uncertain; history_confidence is numeric 0..1.
