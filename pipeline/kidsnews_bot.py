@@ -94,6 +94,7 @@ def main():
     parser.add_argument('--run-dir', type=Path, required=True)
     parser.add_argument('--date')
     parser.add_argument('--registry', type=Path)
+    parser.add_argument('--providers-config', type=Path)
     parser.add_argument('--publish', action='store_true')
     parser.add_argument('--ack-same-day-replacement', action='store_true')
     parser.add_argument('--branch')
@@ -129,6 +130,8 @@ def main():
                 command += ['--date', args.date]
             if args.registry:
                 command += ['--registry', args.registry]
+            if args.providers_config:
+                command += ['--providers-config', args.providers_config]
             if args.confirm_stale:
                 command += ['--confirm-stale']
             code, value = invoke('pipeline.agent_shadow', *command)

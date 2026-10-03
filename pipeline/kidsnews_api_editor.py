@@ -44,9 +44,11 @@ class CachedJSON:
             from .cursor_json import parse_object
             value = parse_object(choice['message']['content'])
             write(answer, {'request_id': rid, 'value': value, 'usage': result.get('usage', {}),
+                           'model': result.get('model'),
                            'seconds': round(time.monotonic()-started, 3)})
             pin(self.root, answer)
         saved = read(answer)
+        self.last_metadata = {k:saved.get(k) for k in ('usage','model','seconds')}
         if saved.get('request_id') != rid:
             raise ValueError('API answer identity mismatch')
         errors = validate(saved['value'])
@@ -58,6 +60,8 @@ class CachedJSON:
 def edit_groups(root, provider, identity):
     from .agent_shadow_batch import validate_fixed_order
     from .agent_shadow_finish import finish, METHOD
+    if (Path(root)/'all-ai-providers.json').exists():
+        METHOD = 'Codex 同模型精修、详情生成并自检（非独立审核）'
     from .news_rss_core import evaluate_rewriter_safety
     root = Path(root)
     with run_lock(root):
@@ -74,6 +78,9 @@ def edit_groups(root, provider, identity):
             request = read(root / 'groups' / f'{cat}-request.json')
             raw = read(root / f'raw-batch-{cat}-8.json')
             candidates = {b['id']: b for b in raw['originals']}
+            if (root/'all-ai-providers.json').exists():
+                for candidate in candidates.values():
+                    candidate['writer_provider'] = identity['type']
             ids = [r['id'] for r in raw['result']['drafts']]
             section = state[cat]
             if not section['pick_done']:
@@ -118,7 +125,7 @@ def edit_groups(root, provider, identity):
                 section['accepted'].append({'candidate': candidate, 'entry': result['entry'],
                                             'details': result['details'], 'ready_status': result['status']})
                 section['outcomes'].append({'id': sid, 'category': cat, 'status': result['status'],
-                    'review_method': METHOD, 'writer_provider': candidate.get('writer_provider', 'deepseek'),
+                    'review_method': METHOD, 'writer_provider': identity['type'] if (root/'all-ai-providers.json').exists() else candidate.get('writer_provider', 'deepseek'),
                     'selection_round': 1, 'warnings': result.get('warnings', []),
                     'removed': result.get('removed', []), 'body_repairs': result.get('body_repairs', 0),
                     'detail_repairs': result.get('detail_repairs', 0),

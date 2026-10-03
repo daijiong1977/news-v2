@@ -24,6 +24,11 @@ from .publication_bundle import encoded, sha
 def agent_provider(config):
     """Business logic knows only complete(payload)->JSON, never provider tools."""
     choice = config.get('agent_provider', {'type': 'cursor', 'model': config.get('model')})
+    if choice.get('type') == 'codex':
+        from .codex_json import CodexJSONProvider
+        provider = CodexJSONProvider(choice.get('model'), choice.get('binary'), choice.get('reasoning','low'))
+        return provider, {'type':'codex-cli-json', 'model':provider.model or 'cli-default (not reported)',
+                          'reasoning':provider.reasoning}
     if choice.get('type') == 'cursor':
         provider = CursorJSONProvider(choice.get('model'))
         return provider, {'type': 'cursor-cli-json', 'model': provider.model}
@@ -42,7 +47,7 @@ def agent_provider(config):
                 return delegate.complete({**payload, 'model': model,
                     'response_format': {'type': 'json_object'}, 'max_tokens': 16384}, timeout)
         return HTTP(), {'type': 'http', 'endpoint': endpoint, 'model': model, 'key_env': key_env}
-    raise ValueError('Agent provider must be cursor or http')
+    raise ValueError('Agent provider must be codex, cursor or http')
 
 
 def database_client(config):
@@ -91,12 +96,23 @@ def run_cli(module, *args):
     return invoke(module, *args)
 
 
-def prepare_api(root, day, registry_path, provider, identity):
+def prepare_api(root, day, registry_path, provider, identity, all_ai=False):
     """DeepSeek normal prepare; Cursor answers ONLY requested format fix JSON."""
     cached = CachedJSON(root, provider, identity)
+    extra = []
+    if all_ai:
+        if identity.get('type') != 'codex-cli-json':
+            raise ValueError('all_ai currently requires explicit Codex provider')
+        path = root/'all-ai-providers.json'
+        config = {'roles':{role:{'type':'native'} for role in
+                  ('rank','editor','write','review','details','detail_review','discovery','image_review')}}
+        if path.exists() and read(path) != config:
+            raise ValueError('Frozen all-AI provider changed')
+        write(path,config)
+        extra = ['--providers-config',path]
     for _ in range(24):
         code, result = run_cli('pipeline.kidsnews_bot', '--stage', 'prepare', '--run-dir', root,
-                              '--date', day, '--registry', registry_path)
+                              '--date', day, '--registry', registry_path, *extra)
         if code == 0:
             return result
         if code != 2 or not result.get('read') or not result.get('write_to'):
@@ -105,11 +121,18 @@ def prepare_api(root, day, registry_path, provider, identity):
         task = request.get('task')
         if not isinstance(task, dict) or not isinstance(task.get('messages'), list):
             raise ValueError('Unsupported prepare handoff; preserve state')
-        value = cached(root, 'prepare-format-'+request['request_id'],
-            'Answer the supplied messages as JSON. Correct only the requested malformed answer; preserve content and IDs.',
-            task, lambda v: [] if isinstance(v, dict) else ['JSON object required'])
+        errors = result.get('errors',[])
+        prior = read(Path(result['write_to'])) if Path(result['write_to']).exists() else None
+        material = {'task':task,'validation_errors':errors,'previous_answer':prior} if all_ai else task
+        key = 'prepare-format-'+request['request_id']+('-correction' if prior else '')
+        value = cached(root, key,
+            ('Follow the supplied task.messages exactly. Return its complete required JSON object. '
+             'If a previous answer failed, correct the listed validation errors, preserving IDs and supported facts.'
+             if all_ai else 'Answer the supplied messages as JSON. Correct only the requested malformed answer; preserve content and IDs.'),
+            material, lambda v: [] if isinstance(v, dict) else ['JSON object required'])
         write(Path(result['write_to']), {'request_id': request['request_id'],
-              'content': json.dumps(value, ensure_ascii=False), 'finish_reason': 'stop'})
+              'content': json.dumps(value, ensure_ascii=False), 'finish_reason': 'stop',
+              'writer_provider':identity.get('type','native'), **cached.last_metadata})
     raise ValueError('Prepare repair budget exhausted')
 
 
@@ -262,7 +285,7 @@ def execute(config):
         day = date.fromisoformat(config['date']).isoformat()
         provider, identity = agent_provider(config)
         registry_path = Path(config['registry']) if config.get('registry') else registry(day, root)
-        prepare_api(root, day, registry_path, provider, identity)
+        prepare_api(root, day, registry_path, provider, identity, all_ai=config.get('all_ai') is True)
         refresh_history_api(root, provider, identity, config.get('confirm_stale') is True)
         edit_groups(root, provider, identity)
         from .agent_shadow import advance

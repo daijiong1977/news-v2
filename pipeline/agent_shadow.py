@@ -541,6 +541,8 @@ def advance(root: Path, *, stepwise=False):
             staged = Path(scratch) / "site"
             audit = read(root / 'provider-audit.json') if (root / 'provider-audit.json').exists() else {}
             provider_label = 'mixed' if audit.get('fallback_tasks') else 'shadow-role-router' if (root / 'providers.json').exists() else 'native-agent'
+            if (root/'all-ai-providers.json').exists():
+                provider_label = 'codex-cli-json'
             manifest = export(emit_dir, staged, snapshot["date"], provider_label)
             staged.rename(root / "site")
     write(root / "review-results.json", {"outcomes": outcomes, "warnings": warnings,
@@ -622,14 +624,18 @@ def main():
                     raise ValueError('preflight requires --test-profile source-first-deepseek')
                 if profile:
                     import os
-                    if not os.environ.get("DEEPSEEK_API_KEY"):
+                    native_override = (profile == 'source-first-deepseek' and args.providers_config
+                        and read(args.providers_config) == {'roles':{role:{'type':'native'} for role in
+                        ('rank','editor','write','review','details','detail_review','discovery','image_review')}})
+                    if not native_override and not os.environ.get("DEEPSEEK_API_KEY"):
                         raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
-                    if args.providers_config:
+                    if args.providers_config and not native_override:
                         raise ValueError("Hybrid profile supplies its own provider config")
                     config_name = ('shadow-source-first-deepseek.json' if profile == 'source-first-deepseek'
                                    else 'shadow-batch-grok-details.json' if profile in ('batch-grok-details', 'source-first-grok')
                                    else 'shadow-news-deepseek.json')
-                    args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
+                    if not native_override:
+                        args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
                 if args.providers_config:
                     from .agent_shadow_providers import validate_config
                     saved = root / "providers.json"
