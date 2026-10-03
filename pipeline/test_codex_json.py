@@ -72,3 +72,31 @@ def test_all_ai_cannot_silently_use_another_provider(tmp_path):
     from pipeline.kidsnews_python import prepare_api
     with pytest.raises(ValueError,match='explicit Codex'):
         prepare_api(tmp_path,'2026-10-03',tmp_path/'registry',None,{'type':'http'},all_ai=True)
+
+
+def test_website_verification_accepts_same_site_clean_url_only(monkeypatch,tmp_path):
+    from pipeline import kidsnews_python as app
+    manifest={'version':'2026-10-03'}
+    monkeypatch.setattr(app,'load_artifact',lambda p:({'zip_sha256':'hash'},manifest,{}, {'admin.html':b'actual admin'}))
+    calls=[]
+    def get(url,**kw):
+        calls.append(url)
+        if 'supabase' in url:
+            return SimpleNamespace(status_code=200,json=lambda:manifest,raise_for_status=lambda:None)
+        if url.endswith('/admin.html'):
+            return SimpleNamespace(status_code=308,headers={'Location':'/admin'},content=b'Redirecting...',raise_for_status=lambda:None)
+        return SimpleNamespace(status_code=200,headers={},content=b'actual admin',raise_for_status=lambda:None)
+    monkeypatch.setattr(app.requests,'get',get)
+    assert app.verify_website(tmp_path)['zip_sha256']=='hash'
+    assert calls[-1]=='https://kidsnews.21mins.com/admin'
+
+
+def test_website_verification_rejects_cross_origin_redirect(monkeypatch,tmp_path):
+    from pipeline import kidsnews_python as app
+    manifest={}
+    monkeypatch.setattr(app,'load_artifact',lambda p:({'zip_sha256':'hash'},manifest,{}, {'admin.html':b'admin'}))
+    def get(url,**kw):
+        if 'supabase' in url: return SimpleNamespace(json=lambda:manifest,raise_for_status=lambda:None)
+        return SimpleNamespace(status_code=308,headers={'Location':'https://untrusted.example/admin'},content=b'',raise_for_status=lambda:None)
+    monkeypatch.setattr(app.requests,'get',get)
+    with pytest.raises(ValueError,match='redirect'): app.verify_website(tmp_path)

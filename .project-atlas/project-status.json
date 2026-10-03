@@ -4,7 +4,7 @@
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
   "updated_at": "2026-10-03",
-  "codex_round": "Oracle整轮Codex适配：显式all_ai，所有AI原生CLI路由；保持默认与生产不变。新测试从失败到通过，真实整轮尚待验收，禁止误报已上线。",
+  "codex_round": "Oracle全Codex9篇22调用完成，CI37129321770网站核验成功；发现VM禁止跟随同站308导致后端等候，补有界同站redirect测试并同目录恢复；DB/archive最终验收仍待完成。",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",

@@ -184,6 +184,7 @@ def refresh_history_api(root, provider, identity, confirm=False):
 
 def verify_website(artifact):
     from .website_release import SITE
+    from urllib.parse import urljoin, urlsplit
     scope, manifest, _, files = load_artifact(artifact)
     response = requests.get(f'https://{PROJECT}.supabase.co/storage/v1/object/public/'
         'redesign-daily-content/latest-manifest.json', params={'publication_verify': scope['zip_sha256']},
@@ -192,8 +193,20 @@ def verify_website(artifact):
     if response.json() != manifest:
         raise ValueError('Another/older edition is latest; do not update archive/database')
     for name, expected in files.items():
-        response = requests.get(SITE+'/'+name, params={'publication_verify': scope['zip_sha256']},
-                                timeout=30, allow_redirects=False)
+        url = SITE+'/'+name
+        for _ in range(4):
+            response = requests.get(url, params={'publication_verify': scope['zip_sha256']},
+                                    timeout=30, allow_redirects=False)
+            if response.status_code not in (301,302,303,307,308):
+                break
+            target = urljoin(url,response.headers.get('Location',''))
+            parts = urlsplit(target)
+            if (not response.headers.get('Location') or parts.scheme!='https'
+                    or parts.netloc!=urlsplit(SITE).netloc or parts.username or parts.password):
+                raise ValueError('Unsafe website redirect: '+name)
+            url = target
+        else:
+            raise ValueError('Website redirect budget exceeded: '+name)
         response.raise_for_status()
         if sha(response.content) != sha(expected):
             raise ValueError('Website hash mismatch: '+name)
