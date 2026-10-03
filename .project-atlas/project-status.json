@@ -606,6 +606,12 @@
   "lessons": [
     {
       "date": "2026-10-03",
+      "title": "新发布不等于新事件；三天时效在Python采集阶段拦截",
+      "note": "DOGOnews九月三十日URL报道九月十二日餐桌活动且feed无日期，旧unknown放行导致十月三日入选。新source journal冻结三天美东日历政策，检查feed/URL/原始datePublished及明确On Month D YYYY开头事件；modified不续期，未知无法核验跳过。正文历史背景不全局扫日期。仅新轮，旧答卷/现网不删；不新增AI调用。隐含/相对事件日期仍无法机械全面识别。",
+      "source_ref": "docs/bugs/2026-10-03-three-day-source-freshness.md"
+    },
+    {
+      "date": "2026-10-03",
       "title": "完整发布需把派生PDF纳入内容一致性校验",
       "note": "evening-poc-1发布前因reader新增18PDF误拦，已确定性重建PDF逐字节校验并同目录续跑，不重新调用模型。CI37139421178成功，网站/DB/date archive均读回通过，9stories/27search/54当前资产/18PDF；目录另有7未引用旧图片，未删除。12:25:40至13:11:09 ET含修复45m29s；两次命令合计35m52s，22次显式gpt-6.1-sol medium。旧定时未停，明日切换待用户验收批准。",
       "source_ref": "pipeline/kidsnews_bot.py"

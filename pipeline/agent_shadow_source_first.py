@@ -57,6 +57,7 @@ def extract_npr(url, html):
 
 
 def fetch_original(candidate):
+    from .source_freshness import publication_dates
     host = (urlsplit(candidate['link']).hostname or '').lower()
     if host == 'timeforkids.com' or host.endswith('.timeforkids.com'):
         from .news_rss_core import extract_article_from_html
@@ -66,6 +67,7 @@ def fetch_original(candidate):
         extracted = extract_article_from_html(url, html)
         body = extracted.get('cleaned_body') or ''
         return {**candidate, **extracted, 'body': body, 'word_count': len(body.split()),
+                'source_publication_dates': publication_dates(html),
                 'skip_reason': extraction_reason(url, html, body) or (None if body else 'empty original'),
                 'evidence_url': url, 'evidence_sha256': hashlib.sha256(body.encode()).hexdigest(),
                 'highlights': [], 'image_candidates': []}
@@ -75,21 +77,14 @@ def fetch_original(candidate):
     extracted = extract_npr(url, data.decode(encoding, errors='replace'))
     body = extracted.get('cleaned_body', '')
     return {**candidate, **extracted, 'body': body, 'word_count': len(body.split()),
+            'source_publication_dates': publication_dates(data.decode(encoding, errors='replace')),
             'evidence_url': url, 'evidence_sha256': hashlib.sha256(body.encode()).hexdigest(),
             'highlights': [], 'image_candidates': []}
 
 
 def freshness(published, today):
-    if not published:
-        return 'unknown'
-    try:
-        stamp = datetime.fromisoformat(published.replace('Z', '+00:00'))
-    except (ValueError, TypeError):
-        try:
-            stamp = parsedate_to_datetime(published)
-        except (ValueError, TypeError):
-            return 'unknown'
-    return 'stale' if (date.fromisoformat(today) - stamp.date()).days > 5 else 'current'
+    from .source_freshness import freshness as check
+    return check(published, today)
 
 
 def collect(root, sources_by_cat, today, *, expand=None):
@@ -117,12 +112,15 @@ def collect(root, sources_by_cat, today, *, expand=None):
                 raise ValueError('More than 40 configured sources/section: explicitly reduce registry; never silently truncate')
             sections[cat] = {'sources': [{'source': asdict(s), 'publisher': publisher_key(s),
                 'results': [], 'windows': [], 'status': 'pending'} for s in selected], 'complete': False}
-        state = {'version': 1, 'date': today, 'sections': sections,
+        from .source_freshness import POLICY
+        state = {'version': 1, 'date': today, 'sections': sections, 'freshness_policy': POLICY,
                  'limits': {'per_source': 12, 'pass_target': 4, 'min_groups': 0 if fixed else 3, 'min_good': 12 if fixed else 10,
                             'max_unique_articles': 12 * sum(len(c['sources']) for c in sections.values())},
                  'unique_attempts': 0}
         write(path, state)
     all_results = lambda: [r for c in state['sections'].values() for s in c['sources'] for r in s['results']]
+    from .source_freshness import POLICY, rejection, freshness as date_check
+    strict_dates = state.get('freshness_policy') == POLICY
     def sync():
         # These caches can always be rebuilt from the single atomic source journal.
         write(path, state)
@@ -193,9 +191,10 @@ def collect(root, sources_by_cat, today, *, expand=None):
                     raise ValueError('Frozen source collection budget exhausted')
                 canonical, normalized = _canonical_source_url(url), _normalize_title(title)
                 from .agent_shadow_candidate_quality import commercial_reason
+                date_reason = (rejection(b, today) if strict_dates else
+                               'stale_feed_entry' if date_check(b['published'], today, 5) == 'stale' else None)
                 reason = ('duplicate_url_or_title' if not canonical or not normalized or canonical in seen_urls or normalized in seen_titles
-                          else 'stale_feed_entry' if freshness(b['published'], today) == 'stale'
-                          else commercial_reason(b) or editorial_exclusion(b))
+                          else date_reason or commercial_reason(b) or editorial_exclusion(b))
                 seen_urls.add(canonical); seen_titles.add(normalized)
                 sync()  # reserve the slot BEFORE network activity
                 started = time.monotonic()
@@ -205,6 +204,8 @@ def collect(root, sources_by_cat, today, *, expand=None):
                         sync()
                         art = fetch_original(b)
                         reason = art.get('skip_reason') or commercial_reason(b, art.get('body', ''))
+                        if not reason and strict_dates:
+                            reason = rejection(b, today, art)
                         count = len(art.get('body', '').split())
                         art['word_count'] = count
                         if not reason and not 180 <= count <= 1500:
@@ -238,7 +239,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                                     qualified += 1
                                     seen_urls.add(evidence)
                                     b['mechanical'] = {'image_bytes': photo['final_bytes'], 'words': count,
-                                        'freshness': freshness(b['published'], today),
+                                        'freshness': 'current' if strict_dates else date_check(b['published'], today, 5),
                                         'fits': [c for c in ('News', 'Science', 'Fun') if original_band(c)[0] <= count <= original_band(c)[1]]}
                     except Exception as exc:
                         reason = 'fetch_or_decode_' + type(exc).__name__

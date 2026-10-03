@@ -27,7 +27,7 @@ def fake_collection(monkeypatch, bad=None, small=False):
     calls = Counter()
     def feed(source, **kw):
         return [{'title': f'{source.name} story {i}', 'link': f'https://p{source.id}.example/{source.name}/{i}',
-                 'summary': 'A current story', 'published': ''} for i in range(12)]
+                 'summary': 'A current story', 'published': '2026-10-01'} for i in range(12)]
     def original(b):
         calls[b['source']] += 1
         art = {**b, 'body': 'fact ' * 400, 'word_count': 400, 'skip_reason': None,

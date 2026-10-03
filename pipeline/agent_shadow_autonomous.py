@@ -95,8 +95,10 @@ def fetch_original(candidate):
     alternates = [urljoin(url, node.get('content', '')) for node in soup.select(
         'meta[property="og:image"], meta[name="twitter:image"]') if node.get('content')]
     body = extracted.get("cleaned_body") or ""
+    from .source_freshness import publication_dates
     return {**candidate, "body": body, "word_count": len(body.split()), "og_image": extracted.get("og_image"),
             "paragraphs": extracted.get("paragraphs", []), "highlights": [], "image_candidates": list(dict.fromkeys(alternates))[:3],
+            "source_publication_dates": publication_dates(data.decode(encoding, errors='replace')),
             "skip_reason": None if body else "empty original", "evidence_url": url,
             "evidence_sha256": hashlib.sha256(body.encode()).hexdigest()}
 

@@ -7,6 +7,15 @@ Grok连续写3份selection和9份成品文件；finalize统一校验并打包/�
 本文取代旧 source-first-grok 的规划、补稿和调用分工；旧模式不追溯修改。
 源码 news-v2 的 PR86，运行快照 grokbot-kidsnews 的 PR1；不 merge main。
 
+2026-10-03 时效更新（新目录）：Python采集最先检查三天美东日历窗口。
+Feed日期/URL日期可确认超过三天时不抓正文；抓到正文后再核对网页原始
+datePublished（不是dateModified）以及明确以 `On Month D, YYYY` 开头的事件。
+例如10月3日的9月30日稿可入，但正文明确讲9月12日活动则淘汰，尚未抓图或调用AI。
+日期未知且正文开头也无法确认日期则跳过，未来发布日期跳过；背景历史年份不全局拦截。
+隐含/相对/后段事件日期不声称Python能全面识别。News/Science/Fun相同窗口。
+不因此自动删除现网、数据库或archive；旧已冻结journal恢复旧政策。
+完整规则见 `docs/bugs/2026-10-03-three-day-source-freshness.md`。
+
 ## 三大部分
 
 ### 一、Python 连续准备＋DeepSeek，输出15篇
