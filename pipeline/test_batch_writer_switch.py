@@ -66,3 +66,11 @@ def test_claude_incomplete_answer_rejected(monkeypatch):
     monkeypatch.setattr('subprocess.run',lambda *a,**kw:SimpleNamespace(returncode=0,stdout='{"is_error":true}'))
     with pytest.raises(ValueError,match='incomplete'):
         ClaudeJSONProvider(binary='claude').complete({'messages':[{}]})
+
+
+def test_batch_config_never_accepts_raw_key(tmp_path):
+    from pipeline.kidsnews_python import prepare_api
+    with pytest.raises(ValueError,match='never credentials'):
+        prepare_api(tmp_path,'2026-10-03',tmp_path/'registry',None,
+                    {'type':'codex-cli-json','model':'test'},True,{'type':'deepseek','api_key':'private'})
+    assert not (tmp_path/'batch-writer.json').exists()

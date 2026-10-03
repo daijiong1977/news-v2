@@ -124,6 +124,8 @@ def prepare_api(root, day, registry_path, provider, identity, all_ai=False, batc
             choice = {'type':batch_writer} if isinstance(batch_writer,str) else batch_writer
             if not isinstance(choice,dict) or choice.get('type') not in {'deepseek','grok','codex','claude'}:
                 raise ValueError('batch_writer must be deepseek, grok, codex or claude')
+            if set(choice)-{'type','model','reasoning','binary'} or any(not isinstance(v,str) or not v for v in choice.values()):
+                raise ValueError('batch_writer accepts only nonempty type/model/reasoning/binary strings; never credentials')
             if choice['type'] == 'codex':
                 choice = {'model':'gpt-6.1-sol','reasoning':'medium',**choice}
             batch_provider, batch_identity = agent_provider({'agent_provider':choice})
