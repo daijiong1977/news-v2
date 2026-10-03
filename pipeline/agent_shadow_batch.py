@@ -26,6 +26,17 @@ Do not invent family favorite names or events absent from the supplied candidate
 sports quota when there is no suitable story. Compare child interest, not celebrity alone.
 '''
 
+FUN_SPORTS_TOPICS = frozenset(('tennis', 'swimming'))
+FUN_SPORTS_LIMIT_RULE = '''
+HARD LIMIT (Fun final three): at most ONE tennis article and at most ONE swimming
+article. One tennis PLUS one swimming is allowed; never choose two tennis or two
+swimming articles. Keep the best eligible story within each of these sports by
+quality, current child interest and the family star preference. Extra stories in
+the same sport may remain reserves, not a second final slot. These caps are NOT
+relaxable preferences. Keep enough other distinct eligible topics in the ranked
+pool/fixed five to complete three. Never relabel sport to evade the caps.
+'''
+
 
 def sports_preference(snapshot, category=None):
     from .agent_shadow_profiles import uses_native_details
@@ -133,7 +144,7 @@ Avoid duplicate events within the five; use the supplied selection/history flags
 '''
     if snapshot.get('selection_policy') == 'twelve-five-three-v1':
         prompt += '\nComplete exactly FIVE drafts. Repeated publishers and disciplines are allowed; never skip a good story just for source/topic variety. Keep all five events distinct.\n'
-    return prompt + sports_preference(snapshot, category) + (NEWS_AUDIENCE_RULE if category == 'News' else '')
+    return prompt + sports_preference(snapshot, category) + (NEWS_AUDIENCE_RULE if category == 'News' else '') + (FUN_SPORTS_LIMIT_RULE if category == 'Fun' else '')
 
 
 def validate_batch(value, pool, category):
@@ -185,13 +196,18 @@ def validate_order(value, pool, category):
     return []
 
 
-def validate_fixed_order(value, pool):
+def validate_fixed_order(value, pool, category=None):
     """The editor may override DeepSeek; IDs/membership cannot change."""
     order = value.get('order') if isinstance(value, dict) else None
     ids = {b['id'] for b in pool}
     if (len(ids) != 5 or not isinstance(order, list) or len(order) != 5
             or any(not isinstance(sid, str) for sid in order) or set(order) != ids):
         return ['Fixed group requires exactly five unique supplied IDs: three priorities, two reserves']
+    if category == 'Fun':
+        index = {b['id']: b for b in pool}
+        for topic in FUN_SPORTS_TOPICS:
+            if sum(index[sid].get('topic') == topic for sid in order[:3]) > 1:
+                return ['Fun final three allow at most ONE '+topic+' article']
     return []
 
 

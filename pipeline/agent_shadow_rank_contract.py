@@ -111,7 +111,8 @@ preserve within-section seven-day and current-pool event deduplication.
 If fewer than five distinct safe events really exist, return all of them honestly;
 Python will collect additional sources before writing the fixed five.
 '''
-    return prompt + sports_preference(snapshot, category)
+    from .agent_shadow_batch import FUN_SPORTS_LIMIT_RULE
+    return prompt + sports_preference(snapshot, category) + (FUN_SPORTS_LIMIT_RULE if category == 'Fun' else '')
 
 
 def normalize_rank(value, index_to_id, category):

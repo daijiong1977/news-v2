@@ -4,7 +4,7 @@
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
   "updated_at": "2026-10-03",
-  "codex_round": "Oracle全Codex9篇22调用完成，CI37129321770网站核验成功；发现VM禁止跟随同站308导致后端等候，补有界同站redirect测试并同目录恢复；DB/archive最终验收仍待完成。",
+  "codex_round": "Oracle全Codex9篇22调用完成，CI37129321770及DB/date archive只读核验通过；9 stories/27搜索/36当轮公开资产一致。新Fun网球最多1、游泳最多1，允许同时两类；Python排序/备用硬校验，不追溯今日文章。发现75旧archive残留及缺PDF，未删除或补发；CLI默认型号未知，推理low。详见docs/KIDSNEWS-BACKEND-AND-FUN-AUDIT-2026-10-03.md。",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -584,6 +584,12 @@
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-03",
+      "title": "Fun网球和游泳各最多一篇；后端成功不能掩盖旧归档残留与PDF缺口",
+      "note": "用户澄清不是体育总计最多一篇，而是tennis/swimming分别最多一篇。新group冻结限额，API按原AI排名提位、不额外调用，备用按已ready题材过滤；旧已发布轮不追溯。只读DB schema/9 stories/27搜索无孤立或空tsvector；36公开归档资产与日期zip/manifest/index一致。日期目录仍有75未引用旧文件，未删除；reader缺PDF而模板按钮仍在，PDF未验收。Codex CLI0.160.0默认型号未返回、reasoning=low，不猜具体型号。",
+      "source_ref": "docs/KIDSNEWS-BACKEND-AND-FUN-AUDIT-2026-10-03.md"
+    },
     {
       "date": "2026-10-02",
       "title": "十二候选选五再成三；来源学科允许重复，事件仍去重",

@@ -21,6 +21,29 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def limit_fun_sports_order(order, pool):
+    """Keep the model's highest-ranked tennis/swimming story per sport, no AI."""
+    from .agent_shadow_batch import FUN_SPORTS_TOPICS, validate_fixed_order
+    errors = validate_fixed_order({'order': order}, pool)
+    if errors:
+        raise ValueError('; '.join(errors))
+    index = {b['id']: b for b in pool}
+    eligible, moved = [], []
+    sports_seen = set()
+    for sid in order:
+        topic = index[sid].get('topic')
+        if topic in FUN_SPORTS_TOPICS:
+            if topic in sports_seen:
+                moved.append(sid)
+                continue
+            sports_seen.add(topic)
+        eligible.append(sid)
+    if len(eligible) < 3:
+        raise ValueError('Fun fixed five needs three eligible stories under one-per-tennis/swimming caps; preserve state')
+    winners = eligible[:3]
+    return winners + [sid for sid in order if sid not in winners], moved
+
+
 def answer_json(path):
     try:
         value = read(path)
@@ -95,7 +118,7 @@ def check_group_stale(root, confirm, registry):
 def prepare_groups(root):
     from .agent_shadow_finish import PROMPT
     from .agent_shadow_lengths import rewrite_band
-    from .agent_shadow_batch import FAMILY_SPORTS_PREFERENCE
+    from .agent_shadow_batch import FAMILY_SPORTS_PREFERENCE, FUN_SPORTS_LIMIT_RULE
     verify_answer_hashes(root)
     folder = root / 'groups'
     manifest = folder / 'manifest.json'
@@ -124,7 +147,8 @@ def prepare_groups(root):
 Return all five IDs in order, the three completed winners FIRST and two reserves.
 News: important suitable story first. Science: prefer different disciplines and
 publishers. Fun: genuine fun, current swimming/tennis stars, then other topics.
-These are soft preferences; relax them to complete three, never add a sixth.
+These are soft preferences except the Fun sports hard limit below; relax soft
+preferences to complete three, never add a sixth.
 Exactly three finished stories per category is the goal. Science can have all
 three from one publisher and one discipline. Similar topics are allowed, but
 the same event/research/discovery is NOT allowed twice, including seven-day history.
@@ -134,11 +158,13 @@ One article at a time: correct body, create Easy/Middle details and self-check
 together. Save each answer immediately. Do NOT run intermediate Python, search,
 change code, call external models, deploy, write databases or delete checkpoints.
 Compare the three winners with each other as well as supplied category history.
-''' + (FAMILY_SPORTS_PREFERENCE if cat == 'Fun' else '') + PROMPT,
+''' + (FAMILY_SPORTS_PREFERENCE + FUN_SPORTS_LIMIT_RULE if cat == 'Fun' else '') + PROMPT,
                     'selection_schema': {'request_id': '<request_id>', 'order': ['<all five IDs, winners first>'],
                                          'reason': '<selection and any relaxed preferences>'},
                     'article_schema': {'request_id': '<request_id>', 'id': '<candidate ID>',
                                        'value': '<combined object required by prompt>'}}
+        if cat == 'Fun':
+            material['fun_topic_limits'] = {'tennis': 1, 'swimming': 1}  # Old checkpoints keep their policy.
         material['request_id'] = digest(material)
         material['selection_write_to'] = str(folder / f'{cat}-selection.json')
         material['article_write_to'] = str(folder / 'answers' / f'{cat}-<ID>.json')
@@ -183,7 +209,8 @@ def import_groups(root):
         raw = read(root / f'raw-batch-{cat}-8.json')
         candidates = {b['id']: b for b in raw['originals']}
         ids = [d['id'] for d in raw['result']['drafts']]
-        errors = validate_fixed_order(selection, [candidates[sid] for sid in ids])
+        errors = validate_fixed_order(selection, [candidates[sid] for sid in ids],
+                                      'Fun' if request.get('fun_topic_limits') else None)
         if selection.get('request_id') != request['request_id']:
             errors.append('request_id must match the frozen group request')
         if not isinstance(selection.get('reason'), str) or not selection['reason'].strip():

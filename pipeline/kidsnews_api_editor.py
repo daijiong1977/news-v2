@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 
 from .agent_shadow import CATS, read, write, run_lock, verify_answer_hashes
-from .kidsnews_groups import digest, pin, prepare_groups
+from .kidsnews_groups import digest, pin, prepare_groups, limit_fun_sports_order
 from .publication_bundle import sha
 
 
@@ -83,6 +83,7 @@ def edit_groups(root, provider, identity):
                     candidate['writer_provider'] = identity['type']
             ids = [r['id'] for r in raw['result']['drafts']]
             section = state[cat]
+            sports_limit = cat == 'Fun' and bool(request.get('fun_topic_limits'))
             if not section['pick_done']:
                 # Selection only; ONE article per subsequent completion.
                 prompt = request['prompt'].split('One article at a time:')[0] + '\nReturn ONLY {order:[all five IDs],reason:string}.'
@@ -98,6 +99,13 @@ def edit_groups(root, provider, identity):
                 except AnswerRejected as exc:
                     selection = ask(root, 'group-order-fix-'+cat, prompt,
                                     {**material, 'errors': str(exc)}, validate_order)
+                if sports_limit:
+                    original_order = selection['order'][:]
+                    order, moved = limit_fun_sports_order(original_order, [candidates[sid] for sid in ids])
+                    selection = {**selection, 'order': order}
+                    section['sports_adjustment'] = {'original_order': original_order,
+                        'moved_to_reserves': moved, 'limits': request['fun_topic_limits'],
+                        'reason': 'Keep highest-ranked story per tennis/swimming; promote others in model ranking order'}
                 section.update(order=selection['order'], pool_ids=selection['order'], pick_done=True)
                 section['selection_reason'] = selection['reason']; write(state_path, state)
             for sid in section['order']:
@@ -111,6 +119,15 @@ def edit_groups(root, provider, identity):
                         'reason':'Duplicate/uncertain under refreshed history','review_method':METHOD})
                     write(state_path,state);continue
                 candidate = candidates[sid]
+                if sports_limit:
+                    from .agent_shadow_batch import FUN_SPORTS_TOPICS
+                    if (candidate.get('topic') in FUN_SPORTS_TOPICS and any(
+                            a['candidate'].get('topic') == candidate['topic'] for a in section['accepted'])):
+                        if not any(o['id'] == sid and o['status'] == 'not_selected_sports_limit' for o in section['outcomes']):
+                            section['outcomes'].append({'id': sid, 'category': cat,
+                                'status': 'not_selected_sports_limit', 'reason': 'One '+candidate['topic']+' story already ready'})
+                            write(state_path, state)
+                        continue
                 draft = next(d['article'] for d in raw['result']['drafts'] if d['id'] == sid)
                 accepted = [{'title': a['candidate']['article']['title'],
                              'source_excerpt': a['candidate']['article']['body'][:1200]}
