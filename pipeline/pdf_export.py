@@ -412,9 +412,11 @@ class ArticlePDF(FPDF):
 
 def render_article_pdf(detail: dict, level: str, category: str,
                         source: str, mined_at: str, read_mins: int,
-                        out_path: Path) -> None:
+                        out_path: Path, *, created_at=None) -> None:
     """Render one article's 4-page PDF to `out_path`."""
     pdf = ArticlePDF(detail.get("title") or "(untitled)", category)
+    if created_at is not None:
+        pdf.set_creation_date(created_at)
     pdf.alias_nb_pages()
     pdf.render_page_read(detail, source, mined_at, read_mins)
     pdf.render_page_background(detail)

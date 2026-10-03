@@ -214,6 +214,20 @@ def verify_website(artifact):
 
 
 def finish_publication(artifact, state, client, storage):
+    """Durable cross-system saga; failures keep explicit resume/rollback evidence."""
+    state = private_root(state)
+    try:
+        result = _finish_publication(artifact, state, client, storage)
+    except Exception as exc:
+        private_write(state/'recovery-required.json', encoded({
+            'action': 'resume_or_rollback', 'error_class': type(exc).__name__,
+            'automatic_republish': False, 'state_dir': str(state)}))
+        raise
+    private_write(state/'recovery-required.json', encoded({'action': 'none', 'status': 'verified'}))
+    return result
+
+
+def _finish_publication(artifact, state, client, storage):
     from .publication_database import prepare, commit
     from .publication_archive import prepare_archive, apply_archive
     state = private_root(state)

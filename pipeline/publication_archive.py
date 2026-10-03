@@ -40,7 +40,7 @@ class ArchiveStorage:
         response.raise_for_status(); return response.content
 
     def put(self, name, data):
-        content_type = 'application/zip' if name.endswith('.zip') else 'application/json' if name.endswith('.json') else 'image/webp'
+        content_type = ('application/pdf' if name.endswith('.pdf') else 'application/zip' if name.endswith('.zip') else 'application/json' if name.endswith('.json') else 'image/webp')
         response = requests.post(self.base+quote(name, safe='/'), data=data,
                     headers={**self.headers, 'x-upsert': 'true', 'Content-Type': content_type}, timeout=60)
         response.raise_for_status()
@@ -51,13 +51,46 @@ class ArchiveStorage:
             json={'prefixes': [name]}, headers=self.headers, timeout=30)
         response.raise_for_status()
 
+    def list(self, prefix):
+        """Read exact files recursively under one date, with bounded pagination."""
+        from datetime import date
+        if date.fromisoformat(prefix).isoformat() != prefix:
+            raise ValueError('One ISO archive date required')
+        pending, result = [prefix], []
+        while pending:
+            folder = pending.pop()
+            for offset in range(0, 10000, 100):
+                response = requests.post(self.base.replace('/object/', '/object/list/').rstrip('/'),
+                    headers=self.headers, json={'prefix': folder, 'limit': 100, 'offset': offset,
+                        'sortBy': {'column': 'name', 'order': 'asc'}}, timeout=30, allow_redirects=False)
+                response.raise_for_status()
+                rows = response.json()
+                if not isinstance(rows, list):
+                    raise ValueError('Invalid Storage list')
+                for row in rows:
+                    name = row['name']
+                    if not name or '/' in name or name in ('.', '..') or '\\' in name:
+                        raise ValueError('Unsafe Storage object name')
+                    path = folder+'/'+name
+                    if row.get('id') is None:
+                        pending.append(path)
+                    else:
+                        result.append(path)
+                if len(result)+len(pending) > 10000:
+                    raise ValueError('Archive listing budget exceeded')
+                if len(rows) < 100:
+                    break
+            else:
+                raise ValueError('Archive listing pagination budget exceeded')
+        return sorted(result)
+
 
 def targets(artifact, storage):
     scope, manifest, _, files = load_artifact(artifact)
     result = {scope['date']+'.zip': (Path(artifact)/'reader.zip').read_bytes(),
               scope['date']+'-manifest.json': encoded(manifest)}
     result.update({scope['date']+'/'+name: data for name, data in files.items()
-                   if name.startswith(('payloads/', 'article_payloads/', 'article_images/'))})
+                   if name.startswith(('payloads/', 'article_payloads/', 'article_images/', 'article_pdfs/'))})
     raw_index = storage.get('archive-index.json')
     if raw_index is None:
         raise ValueError('Missing archive index; do not silently reset history')

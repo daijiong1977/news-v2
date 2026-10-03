@@ -282,7 +282,7 @@ class ManagementClient:
         targets={scope['date']+'.zip':(Path(artifact)/'reader.zip').read_bytes(),
                  scope['date']+'-manifest.json':encoded(manifest)}
         targets.update({scope['date']+'/'+name:data for name,data in files.items()
-                        if name.startswith(('payloads/','article_payloads/','article_images/'))})
+                        if name.startswith(('payloads/','article_payloads/','article_images/','article_pdfs/'))})
         for name,expected in targets.items():
             response=requests.get(base+'/'+name,params={'sql_pair_verify':scope['zip_sha256']},
                                   timeout=30,allow_redirects=False)

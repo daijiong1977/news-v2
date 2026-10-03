@@ -4,7 +4,7 @@
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
   "updated_at": "2026-10-03",
-  "codex_round": "Oracle全Codex9篇22调用完成，CI37129321770及DB/date archive只读核验通过；9 stories/27搜索/36当轮公开资产一致。新Fun网球最多1、游泳最多1，允许同时两类；Python排序/备用硬校验，不追溯今日文章。发现75旧archive残留及缺PDF，未删除或补发；CLI默认型号未知，推理low。详见docs/KIDSNEWS-BACKEND-AND-FUN-AUDIT-2026-10-03.md。",
+  "codex_round": "2026-10-03维护修复：reader/date archive自动包含18份确定性PDF；同日旧文件先逐对象备份/hash门禁后精确清理，可恢复。真实Supabase隔离演练1900-01-01通过latest/archive/DB回滚、丢响应续跑及重复回滚，测试对象已删除且现网未变；Python3.10相关63项通过。当前9篇内容不重生成，PDF修复CI发布和75残留清理正在验收，不称完成。详见docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md。",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",

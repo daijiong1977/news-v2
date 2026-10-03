@@ -113,8 +113,10 @@ def build_reader(internal, shell, template_commit):
         if 'article.jsx' not in public: raise ValueError('Reader adapter requires article.jsx')
         public['article.jsx'] = adapt_article_shell(public['article.jsx'])
         adapter = ADAPTER_VERSION
-    data = zip_files(public)
     records = json.loads(files['publication-records.json'])
+    from .reader_pdfs import add_reader_pdfs
+    public = add_reader_pdfs(public, records, original['date'])
+    data = zip_files(public)
     stamp = datetime.now(timezone.utc).isoformat()
     stories = []
     for row in records:

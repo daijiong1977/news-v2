@@ -89,8 +89,8 @@ def test_archive_backup_all_before_upload_resume_and_exact_rollback(tmp_path,mon
     artifact,_,_=fixture(tmp_path,monkeypatch);storage=Storage();original=deepcopy(storage.objects)
     state=tmp_path/'private-archive'
     plan=prepare_archive(artifact,state,storage)
-    # This fixture has no images: 27 JSON assets + ZIP + manifest + index.
-    assert storage.puts==[] and len(plan['objects'])==30
+    # No images: 27 JSON assets + 18 PDFs + ZIP + manifest + index.
+    assert storage.puts==[] and len(plan['objects'])==48
     assert all((state/r['after_file']).exists() for r in plan['objects'])
     apply_archive(artifact,state,storage);count=len(storage.puts)
     apply_archive(artifact,state,storage);assert len(storage.puts)==count
