@@ -22,6 +22,12 @@ class CachedJSON:
             write(path, identity); pin(self.root, path)
 
     def __call__(self, root, key, prompt, material, validate):
+        if hasattr(self.provider, 'for_task'):
+            stage, provider, identity = self.provider.for_task(key)
+            child = CachedJSON(self.root, provider, identity, 'api-stage-'+stage+'-provider.json')
+            value = child(root, key, prompt, material, validate)
+            self.last_metadata = child.last_metadata
+            return value
         from .agent_shadow import AnswerRejected
         payload = {'messages': [{'role': 'system', 'content': prompt},
                     {'role': 'user', 'content': json.dumps(material, ensure_ascii=False)}]}
@@ -66,6 +72,10 @@ def edit_groups(root, provider, identity):
     writer = read(batch_path)['identity']['model'] if batch_path.exists() else None
     if writer:
         METHOD = identity.get('model', identity['type'])+' 精修、详情生成并自检（非独立审核；初稿 '+writer+'）'
+    if hasattr(provider, 'for_task'):
+        writer = provider.backends['batch_write'][1].get('model', 'configured writer')
+        editor = provider.backends['review'][1].get('model', 'configured editor')
+        METHOD = editor+' 精修、详情生成并自检（非独立审核；初稿 '+writer+'）'
     from .news_rss_core import evaluate_rewriter_safety
     root = Path(root)
     with run_lock(root):

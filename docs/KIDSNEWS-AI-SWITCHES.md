@@ -1,4 +1,34 @@
-# AI 开关：三栏批量初稿（2026-10-03）
+# AI 开关：逐阶段供应商（2026-10-03）
+
+推荐新运行使用 `ai_stages`，未指定的阶段继承 `agent_provider`，
+`repair` 默认继承 `review`。不要同时设置 `batch_writer`。
+
+```json
+{
+  "agent_provider": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"},
+  "ai_stages": {
+    "pickup": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"},
+    "batch_write": {"type":"deepseek","model":"deepseek-flash"},
+    "selection": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"},
+    "review": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"},
+    "repair": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"},
+    "format_fix": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"},
+    "history_review": {"type":"codex","model":"gpt-6.1-sol","reasoning":"medium"}
+  }
+}
+```
+
+每个阶段都可以改为 DeepSeek/Grok/Codex/Claude 字符串或对象；模型由该供应商
+实际账号支持情况决定。`pickup` 是摘要选题排序，`batch_write` 是批量初稿，
+`selection` 是固定五选三顺序，`review` 是逐篇精修＋详情生成＋自检的一次任务，
+`repair` 是正文/详情定点修正，`format_fix` 是准备答卷格式修复和选稿答卷修复，
+`history_review` 是超过24小时恢复时的历史复核。不会新增独立详情审核调用。
+Python 抓取、机械校验、部署及数据库步骤不是 AI 阶段，不配置供应商。
+
+`ai-stages.json` 和逐阶段身份文件被冻结；恢复不能换配置、模型或身份。
+全部供应商接口均为 JSON-in / JSON-out；CLI 也由 Python 包装，不手工交接。
+配置只接受模型设置和环境变量名，拒绝明文 key；未知阶段名直接报错。
+默认不存在自动供应商降级。下面的旧 `batch_writer` 配置保留兼容。
 
 在运行 JSON 设置一个字段即可，无需改代码：
 

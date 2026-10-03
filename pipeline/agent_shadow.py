@@ -624,25 +624,26 @@ def main():
                     raise ValueError('preflight requires --test-profile source-first-deepseek')
                 if profile:
                     import os
-                    native_override = (profile == 'source-first-deepseek' and args.providers_config
-                        and read(args.providers_config) == {'roles':{role:{'type':'native'} for role in
-                        ('rank','editor','write','review','details','detail_review','discovery','image_review')}})
-                    if not native_override and not os.environ.get("DEEPSEEK_API_KEY"):
+                    custom_override = profile == 'source-first-deepseek' and bool(args.providers_config)
+                    if not custom_override and not os.environ.get("DEEPSEEK_API_KEY"):
                         raise ValueError("DEEPSEEK_API_KEY missing; set it in local .env, never in chat")
-                    if args.providers_config and not native_override:
+                    if args.providers_config and not custom_override:
                         raise ValueError("Hybrid profile supplies its own provider config")
                     config_name = ('shadow-source-first-deepseek.json' if profile == 'source-first-deepseek'
                                    else 'shadow-batch-grok-details.json' if profile in ('batch-grok-details', 'source-first-grok')
                                    else 'shadow-news-deepseek.json')
-                    if not native_override:
+                    if not custom_override:
                         args.providers_config = Path(__file__).resolve().parents[1] / 'config' / config_name
                 if args.providers_config:
                     from .agent_shadow_providers import validate_config
                     saved = root / "providers.json"
                     # Profile defaults apply only when the run is first created.
                     # A pull must not replace the model of an interrupted run.
-                    config = read(saved) if profile and saved.exists() else read(args.providers_config)
+                    config = read(saved) if profile and saved.exists() and not custom_override else read(args.providers_config)
                     validate_config(config)
+                    for role in config.get('roles', {}).values():
+                        if role.get('type') == 'http' and not os.environ.get(role['key_env']):
+                            raise ValueError('Missing provider environment variable: '+role['key_env'])
                     if saved.exists() and read(saved) != config:
                         raise ValueError("Provider config is frozen; use a fresh directory")
                     if (root / "input.json").exists() and not saved.exists():

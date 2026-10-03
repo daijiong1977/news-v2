@@ -60,7 +60,7 @@ def agent_provider(config):
                     **({'thinking':{'type':'disabled'}} if deepseek else {}),
                     'response_format': {'type': 'json_object'}, 'max_tokens': 16384}, timeout)
         return HTTP(), {'type': 'http', 'endpoint': endpoint, 'model': model, 'key_env': key_env}
-    raise ValueError('Agent provider must be codex, cursor or http')
+    raise ValueError('Agent provider must be deepseek, grok, codex, claude, cursor or http')
 
 
 def database_client(config):
@@ -114,12 +114,20 @@ def prepare_api(root, day, registry_path, provider, identity, all_ai=False, batc
     cached = CachedJSON(root, provider, identity)
     batch_cached = cached
     extra = []
-    if all_ai or batch_writer is not None:
-        if all_ai and batch_writer is None and identity.get('type') != 'codex-cli-json':
+    routed = hasattr(provider, 'for_task')
+    if all_ai or batch_writer is not None or routed:
+        if all_ai and batch_writer is None and not routed and identity.get('type') != 'codex-cli-json':
             raise ValueError('all_ai currently requires explicit Codex provider')
         path = root/'all-ai-providers.json'
         config = {'roles':{role:{'type':'native'} for role in
                   ('rank','editor','write','review','details','detail_review','discovery','image_review')}}
+        if routed:
+            if batch_writer is not None:
+                raise ValueError('Use ai_stages.batch_write instead of also setting batch_writer')
+            for stage, role in (('pickup','rank'),('batch_write','write')):
+                stage_identity = provider.backends[stage][1]
+                if stage_identity['type'] == 'http':
+                    config['roles'][role] = {k:stage_identity[k] for k in ('type','endpoint','model','key_env')}
         if batch_writer is not None:
             choice = {'type':batch_writer} if isinstance(batch_writer,str) else batch_writer
             if not isinstance(choice,dict) or choice.get('type') not in {'deepseek','grok','codex','claude'}:
@@ -158,20 +166,24 @@ def prepare_api(root, day, registry_path, provider, identity, all_ai=False, batc
             raise ValueError('Unsupported prepare handoff; preserve state')
         errors = result.get('errors',[])
         prior = read(Path(result['write_to'])) if Path(result['write_to']).exists() else None
-        native_tasks = all_ai or batch_writer is not None
+        native_tasks = all_ai or batch_writer is not None or routed
         material = {'task':task,'validation_errors':errors,'previous_answer':prior} if native_tasks else task
         from .agent_shadow_providers import task_role
         is_write = task_role(Path(result['read']).parent.parent.name) == 'write'
         active = batch_cached if is_write else cached
         key = 'prepare-format-'+request['request_id']+('-correction' if prior else '')
+        if routed:
+            stage = 'format_fix' if prior else 'batch_write' if is_write else 'pickup'
+            key = 'stage:'+stage+':'+key
         value = active(root, key,
             ('Follow the supplied task.messages exactly. Return its complete required JSON object. '
              'If a previous answer failed, correct the listed validation errors, preserving IDs and supported facts.'
              if native_tasks else 'Answer the supplied messages as JSON. Correct only the requested malformed answer; preserve content and IDs.'),
             material, lambda v: [] if isinstance(v, dict) else ['JSON object required'])
+        answer_identity = provider.backends[stage][1] if routed else active.identity
         write(Path(result['write_to']), {'request_id': request['request_id'],
               'content': json.dumps(value, ensure_ascii=False), 'finish_reason': 'stop',
-              'writer_provider':active.identity.get('type','native'), **active.last_metadata})
+              'writer_provider':answer_identity.get('type','native'), **active.last_metadata})
     raise ValueError('Prepare repair budget exhausted')
 
 
@@ -349,7 +361,12 @@ def execute(config):
     if operation == 'run':
         root = Path(config['run_dir']).resolve(); root.mkdir(parents=True, exist_ok=True)
         day = date.fromisoformat(config['date']).isoformat()
-        provider, identity = agent_provider(config)
+        if 'ai_stages' in config:
+            from .ai_stage_config import StageProviders
+            provider = StageProviders(root, config, agent_provider)
+            identity = provider.identity
+        else:
+            provider, identity = agent_provider(config)
         registry_path = Path(config['registry']) if config.get('registry') else registry(day, root)
         prepare_api(root, day, registry_path, provider, identity, all_ai=config.get('all_ai') is True,
                     batch_writer=config.get('batch_writer'))

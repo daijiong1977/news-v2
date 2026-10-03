@@ -3,7 +3,8 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-03T15:51:51Z",
+  "updated_at": "2026-10-03T18:00:44Z",
+  "ai_stage_switches": "2026-10-03：新增 ai_stages 七阶段 JSON 供应商选择（pickup/batch_write/selection/review/repair/format_fix/history_review），冻结配置与逐阶段答卷身份；修复混合 HTTP/native 配置被 preflight 误拒绝；不增加详情审核调用、不改生产 main、不执行真实模型或发布。离线 Python3.10 65 项通过；四模型实际质量验收待分别运行。",
   "codex_round": "2026-10-03用户1/2/3全部验收：75旧日期对象备份后已删除，仅54当前资产；18PDF网站/日期archive全部hash匹配HTTP200；DB9stories/27search无演练残留。真实隔离Supabase latest/archive/DB回滚、丢响应恢复、重复回滚通过；跨系统非原子事务。相关Python3.10共享源码/运行快照各64通过。CI37134270185及网站dispatch37134316183成功，新reader SHA9dca27df…736b6f43；不重生成文章、不改main。私有备份和恢复顺序见docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md。",
   "branches": [
     {
