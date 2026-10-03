@@ -3,11 +3,17 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-09-29T00:11:40-04:00",
+  "updated_at": "2026-10-03T15:51:51Z",
+  "codex_round": "2026-10-03用户1/2/3全部验收：75旧日期对象备份后已删除，仅54当前资产；18PDF网站/日期archive全部hash匹配HTTP200；DB9stories/27search无演练残留。真实隔离Supabase latest/archive/DB回滚、丢响应恢复、重复回滚通过；跨系统非原子事务。相关Python3.10共享源码/运行快照各64通过。CI37134270185及网站dispatch37134316183成功，新reader SHA9dca27df…736b6f43；不重生成文章、不改main。私有备份和恢复顺序见docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md。",
   "branches": [
     {
+      "name": "codex/agent-provider-boundary",
+      "purpose": "PR86三阶段共享源码：Pro摘要排序＋Flash五稿，均关闭thinking；整数编号映射、适龄/栏目/同事件过滤、JSON机械恢复。2026-10-02用户批准现网版本手动补入日期archive/DB并配套业务备份与回滚；非自动consumer启用，不改main。新开发版完整VM仍待核验。",
+      "status": "review"
+    },
+    {
       "name": "main",
-      "purpose": "生产流水线主分支；集成 PR #83 合并提交 a425dca 已包含 #78、#81、#82 的代码与工作流，首次自然运行和网站同步仍待验证。",
+      "purpose": "生产流水线主分支；集成 PR #83 已包含 #78、#81、#82，2026-09-29 首次自然运行和网站同步已核验。质量自动修复依赖修正仍在独立 PR #85，不能视为已上线。",
       "status": "production"
     },
     {
@@ -44,17 +50,36 @@
       "name": "codex/retire-swimswam-source",
       "purpose": "PR #78 的 SwimSwam 来源停用迁移、旧 seed 修正和文档；已纳入 2026-09-29 集成分支，生产来源表 ID 220 先前已核验为停用。",
       "status": "merged_in_main"
+    },
+    {
+      "name": "codex/stepwise-full-shadow",
+      "purpose": "PR #1：从 news-v2 94109db 导出的原生 Agent 全流程影子运行快照，H1–H3/M1–M5 离线修复，按栏目补稿和可恢复审查；未合并、未真实运行或发布。",
+      "status": "review"
+    },
+    {
+      "name": "news-v2/main",
+      "purpose": "上游生产流水线主分支，与本仓库旧 bootstrap main 不同；本轮未改动、未合并影子逻辑。",
+      "status": "production_upstream"
     }
   ],
   "deployments": [
+    {
+      "environment": "shadow",
+      "provider": "Vercel kidsnews-bot-shadow；独立静态部署",
+      "url": "https://kidsnews-bot-shadow.vercel.app",
+      "audience": "项目维护者比较 Agent 生成质量；公开测试地址",
+      "branch": "codex/agent-provider-boundary",
+      "status": "reader_shell_verified_http_200_awaiting_real_agent_content",
+      "verified_at": "2026-09-30T13:34:22-04:00"
+    },
     {
       "environment": "production",
       "provider": "Supabase Storage → kidsnews-v2 → Vercel",
       "url": "https://kidsnews.21mins.com",
       "audience": "儿童读者和家长",
       "branch": "main",
-      "status": "public_2026-09-28_payload_verified_after_run_36504334239",
-      "verified_at": "2026-09-28T20:50:12-04:00"
+      "status": "public_2026-10-03_pdf_repair_9_stories_18_pdfs_hash_verified_ci_37134270185",
+      "verified_at": "2026-10-03T15:51:51Z"
     },
     {
       "environment": "production_alias",
@@ -67,6 +92,221 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/publication_rest.py",
+      "purpose": "默认复用旧service-role Data API，逐行备份/前后像检查/中断恢复与业务回滚；无远端四表事务，不调用Edge/新增RPC",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/kidsnews_python.py",
+      "purpose": "全Python JSON入口：Cursor/Grok completion、缓存恢复、正式网站CI核验、显式日期归档和直连Postgres自动SQL；未启用真实后端。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md",
+      "purpose": "Mac/Linux运行、私有凭据、全链路恢复及限定回滚说明",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_database.py",
+      "purpose": "后端opt-in DB入口：一致旧值快照、自动成对SQL、哈希门禁、同目录恢复和原文件rollback；不上传archive/改网站或启用Bot定时。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-ARCHIVE-BACKFILL-2026-10-02.md",
+      "purpose": "已核验现网版本的手动日期归档/四表更新、备份与定向恢复；明确非整库备份、非Bot自动归档启用。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/kidsnews_bot.py",
+      "purpose": "三段式连续入口、原生交接、正式ZIP及网站CI幂等交付",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_shortlist.py",
+      "purpose": "DeepSeek ID摘要前8、15稿Python审查、禁五稿之后后补",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md",
+      "purpose": "当前固定五选三Spec、模型/Python职责、规则与发布边界",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_source_first.py",
+      "purpose": "来源前置6/3/3、4篇即停、NPR正文与Science组轮询",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_source_editor.py",
+      "purpose": "缓存复用和单栏增量补稿",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_finish.py",
+      "purpose": "逐篇精修/详情/自检及有限修复降级",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/source_first_reader.py",
+      "purpose": "新包缺详情模板适配，避免空题目奖励",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-SOURCE-FIRST-RUNBOOK-2026-10-02.md",
+      "purpose": "新模式运行、同目录恢复和发布边界",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/website_release.py",
+      "purpose": "正式reader转换与latest-only备份/发布/恢复/公开哈希；未真实上线",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/website_delivery.py",
+      "purpose": "Bot只推四个批准artifact，hash绑定与CI入口",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/website_ledger.py",
+      "purpose": "私有有效发布历史供七日查重",
+      "location": "repo"
+    },
+    {
+      "path": "config/reader-shell.json",
+      "purpose": "正式模板b9592e0的22文件哈希固定",
+      "location": "repo"
+    },
+    {
+      "path": "agent/github/publish-reader.yml",
+      "purpose": "仅导出到Bot repo的发布Action；密钥留CI",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md",
+      "purpose": "最新实现/CI设置/完整Bot prompt与限制",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-WEBSITE-ONLY-RUNBOOK-2026-10-01.md",
+      "purpose": "现有ZIP生成命令、待实现发布/恢复操作单及Cloud只读审查prompt；非发布授权。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md",
+      "purpose": "最新网站先行阶段合同、代码匹配矩阵、待实现门禁；仅latest包试用，DB/日期archive/新function延后。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md",
+      "purpose": "正式模板/独立测试站/DB归档/单writer切换与回退、粗估工期；非部署授权。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md",
+      "purpose": "21次DeepSeek调用拆解、用户详情POC、新8→5→3完整职责与Bot ZIP测试消息。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md",
+      "purpose": "已实现的opt-in 8→5→3混合流程与验收边界；离线通过，不代表真实Bot运行或生产上线。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md",
+      "purpose": "News单栏混合测试：VM命令、模型职责、来源图检查边界、调用/耗时/配额测量；config/shadow-news-deepseek.json仅引用环境变量。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_photos.py",
+      "purpose": "自主影子照片：像素解码/尺寸/hash，独立原生视觉复核相关性/儿童安全/中立/隐私/误导；失败移出site，审后改图阻止恢复。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md",
+      "purpose": "自主影子模式使用、可调预算、模型配置、源码/Bot快照边界、首测与可复用算法。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_autonomous.py",
+      "purpose": "自主模式离线回归；快路径九次正文、缺栏补稿、已有深层候选、历史事件/来源/重要稿、模型缓存和安全抓取。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_providers.py",
+      "purpose": "影子模型角色适配：原生答卷默认、显式兼容HTTP环境凭据、缓存/一次修正/调用预算与超时不盲重试。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_autonomous.py",
+      "purpose": "可选自主三篇与局部发现策略、公共HTTPS固定IP/TLS抓取、原文证据及安全图片、按栏扩展与预算。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_editor.py",
+      "purpose": "持久化按栏目候选/通过稿/拒稿状态；单栏扩容，仅新候选补选，Science 出版方与 News 重要稿；不触碰生产编排。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_review_fixes.py",
+      "purpose": "审查 H1–H3、M1–M5 及小项的离线回归；24 候选/栏、假图片哈希、真实文件答卷 CLI；Python 3.10。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-STEPWISE-PIPELINE.md",
+      "purpose": "逐步运行全链路、文件交接、耗时定义及影子发布与核验边界。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_details.py",
+      "purpose": "详情 slot/关键词/测验校验、独立附加内容审核和原始图片本地优化。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_publish.py",
+      "purpose": "锁定独立影子 Vercel 项目并验证所有公开 payload/detail/image 哈希；无正式发布。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow.py",
+      "purpose": "原生 Agent 可恢复影子流程：采集、元数据排名、分批正文、六选三、改写、独立复核、补稿和导出；没有生产写操作。",
+      "location": "repo"
+    },
+    {
+      "path": "agent/skills/kidsnews-shadow/SKILL.md",
+      "purpose": "新 Kids News Bot 云端只读 connector、文件交接、退出码、影子发布和禁止调用生产入口的运行手册。",
+      "location": "repo"
+    },
+    {
+      "path": "https://github.com/daijiong1977/grokbot-kidsnews",
+      "purpose": "私有 Bot 运行仓库；全流程测试分支 codex/stepwise-full-shadow（PR #1 未合并）；main 仍是旧 bootstrap，VM 安装与首次原生模型运行尚待完成。",
+      "location": "url"
+    },
+    {
+      "path": "shadow/site/index.html",
+      "purpose": "独立 Vercel 影子站阅读页面入口；显示日期、平台和审核状态。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/shadow_site.py",
+      "purpose": "从生成结果导出阅读 payload 到全新测试部署目录，不写生产数据库或内容包。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-SHADOW-SITE.md",
+      "purpose": "影子站部署、项目标识、导出协议、验收和迁移边界。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/ai_providers/transport.py",
+      "purpose": "兼容 HTTP 模型及在线 Agent 文件交接的单一通信边界。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/AGENT-PROVIDER-BOUNDARY.md",
+      "purpose": "可替换接口、文件协议、当前接入范围和后续完整 Bot 迁移步骤。",
+      "location": "repo"
+    },
     {
       "path": "pipeline/full_round.py",
       "purpose": "每日采集、JEV/DeepSeek 标题摘要排序、排序后分批原文验证（News 350–1200、Science 350–1500、Fun 250–1200）、候选补稿、安全审核和发布编排。",
@@ -271,9 +511,225 @@
       "path": "/Users/jiong/myprojects/kidsnews-v2",
       "purpose": "kidsnews-v2 部署仓的本机 checkout；本次落后远端且有未提交修改，勿直接覆盖。",
       "location": "local"
+    },
+    {
+      "path": "docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md",
+      "purpose": "新模式职责、VM命令、ZIP契约、部署启用前提和回滚/同步边界",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_batch.py",
+      "purpose": "每栏八篇原文和图片缓存、一次选五改写、三篇加备用、单ID修正",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_bundle.py",
+      "purpose": "成品/图片/hash校验，确定性ZIP，独立stage与私有upload/ready，不写DB",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/registry_snapshot.py",
+      "purpose": "只读获取启用来源和同栏目过去七天历史",
+      "location": "repo"
+    },
+    {
+      "path": "supabase/functions/finalize-news-publication/index.ts",
+      "purpose": "默认禁用的定时消费者，租约/幂等/公开证明/归档/数据库事务",
+      "location": "repo"
+    },
+    {
+      "path": "supabase/migrations/20261001_bot_publication_handoff.sql",
+      "purpose": "与核验过的真实schema对应的最终稿事务、来源使用更新和受限上传策略；尚未上线",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_resume.py",
+      "purpose": "B1–B7/S7恢复、预算、熔断和CLI离线回归",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-HYBRID-RESUME-REVIEW-2026-09-30.md",
+      "purpose": "逐项审查与修复状态，生产P1–P5保留",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-HYBRID-RESUME-SPEC-2026-09-30.md",
+      "purpose": "原Spec保留及实施增补",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_agent_shadow_grok_fixes.py",
+      "purpose": "Grok后续四类问题8项先红后绿回归；断点兜底来源、四稿约束、发现稿历史及缓存预算。",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/kidsnews_groups.py",
+      "purpose": "自包含三栏文件工单、固定五选三导入、有限修正和跨天无API历史复核",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/test_kidsnews_groups.py",
+      "purpose": "三阶段9项离线回归，最终Python零模型调用及单行JSON/冻结答卷/定点修正",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md",
+      "purpose": "当前Python→Grok连续文件编辑→Python正式reader发布合同与Bot说明",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/agent_shadow_candidate_quality.py",
+      "purpose": "影子候选商业淘汰、TFK污染拒绝与具名赛事/内容交叠去重",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/reader_pdfs.py",
+      "purpose": "确定性18份正式模板PDF与已批准artifact无正文变化修复",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_maintenance.py",
+      "purpose": "单日期逐对象备份/hash/清理与恢复，拒绝竞争覆盖",
+      "location": "repo"
+    },
+    {
+      "path": "pipeline/publication_drill.py",
+      "purpose": "显式真实隔离Storage/空历史DB回滚演练；不dispatch网站",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md",
+      "purpose": "三项修复线上证据、私有备份位置与恢复顺序",
+      "location": "repo"
     }
   ],
   "lessons": [
+    {
+      "date": "2026-10-03",
+      "title": "完整发布需把派生PDF纳入内容一致性校验",
+      "note": "evening-poc-1九篇已完成，发布前旧校验因reader新增18PDF误报差异，尚未交接CI或写库。校验从批准详情确定性重建PDF后逐字节比较，不放宽正文图片校验；同目录恢复，不重新调用模型。线上验收仍待完整运行结果。",
+      "source_ref": "pipeline/kidsnews_bot.py"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "旧归档先备份再精确清理；PDF和回滚必须逐项验收",
+      "note": "75未引用旧对象已移除（39图片/36详情），备份保留Oracle私有目录。18确定性PDF补入当前9篇reader及日期archive，长Science跨页footer修正。网站/归档54资产hash一致、9stories/27search正确；真实隔离1900-01-01验证响应丢失续跑与重复回滚且清除测试对象。不是Storage+DB跨系统原子事务；恢复网站和后台分开，须保留原CI备份和状态。",
+      "source_ref": "docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "Fun网球和游泳各最多一篇；后端成功不能掩盖旧归档残留与PDF缺口",
+      "note": "用户澄清不是体育总计最多一篇，而是tennis/swimming分别最多一篇。新group冻结限额，API按原AI排名提位、不额外调用，备用按已ready题材过滤；旧已发布轮不追溯。只读DB schema/9 stories/27搜索无孤立或空tsvector；36公开归档资产与日期zip/manifest/index一致。日期目录仍有75未引用旧文件，未删除；reader缺PDF而模板按钮仍在，PDF未验收。Codex CLI0.160.0默认型号未返回、reasoning=low，不猜具体型号。",
+      "source_ref": "docs/KIDSNEWS-BACKEND-AND-FUN-AUDIT-2026-10-03.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "十二候选选五再成三；来源学科允许重复，事件仍去重",
+      "note": "新目录冻结twelve-five-three-v1：每栏首批目标12篇机械合格，取消不同出版方数量门槛；Pro摘要选五到八，Flash写五稿。短名单不足五时仅补采缺少栏目下一配置源并重排，缓存和其他栏目保留；Grok固定五篇完成三篇，同源同学科允许，同事件/同研究/七天历史仍排除。303项Python3.10离线测试通过，未新调用模型或部署。真实来源耗尽仍不足不制造重复，保存缺口供维护者处理。",
+      "source_ref": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "摘要排序改Pro；数字编号和Python过滤比只加提示词可靠",
+      "note": "同摘要A/B中Pro格式更稳，闲时三栏排序约0.0083美元；新目录仅rank改deepseek-v4-pro，Flash写稿不变，均disabled thinking。indices-v1精确映射长ID，过滤模型明示重复/风险及同event_key；明确性侵/处决、Fun研究/悼念/投票等先Python排除。JSON围栏/尾逗号/多余右括号可机械恢复，不改文字，旧provider/prepare上下文保留。三次真实Pro协议调用一次通过；旧池News4/Fun约2是候选不足，写稿前shortfall报出。来源扩充仍待办，未新发布。",
+      "source_ref": "docs/KIDSNEWS-PRO-RANK-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "摘要排序也须关闭默认thinking；伤亡量不等于儿童新闻重要性",
+      "note": "three-stage-2四次排序仅ID/标题/RSS摘要却花24424 reasoning tokens；参数补JSON/4096/disabled。Science/Fun原始JSON未截断，sibling zh及多余右括号可Python恢复，文字与原答卷不改，274项3.10回归。刚果埃博拉死亡数字稿在News排序前排除，国际稿需儿童意义；法国暴力表达、NASA旧计划日期、Science全生物及体育源未尝试已记录。真实日志cfb418c，三栏公开中文payload哈希吻合；本补丁未重发布。",
+      "source_ref": "docs/KIDSNEWS-THREE-STAGE-2-REVIEW-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "英文正文上下限允许15%容差，避免无意义定点修稿",
+      "note": "原区间仍是写作目标，接受范围ceil(lower*0.85)..floor(upper*1.15)。答卷、精修和ZIP共用影子校验；中文、原文、图片、安全及结构规则不变，生产wordcount_policy未改。原缓存Fun 276/273词不再超限；不修改冻结答卷，不部署或写库。",
+      "source_ref": "docs/KIDSNEWS-DEEPSEEK-BATCH-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "1M上下文不解决8K输出截断，五篇答卷须排序并精简重复原文",
+      "note": "官方和账号/models确认Flash/Pro为1048576上下文及393216最大输出。影子HTTP批次改为独立JSON五篇prompt、16384输出、显式关闭thinking和0.2温度，drafts按优先到备用排序，移除重复paragraphs但保留完整body。原生/生产路径不变；冻结旧目录不重生成。真实缓存Fun小范围实测及字数验证见报告；本补丁不发布、写库、归档或邮件。Science/Fun每源3→3、目标10的采集变更另待实现。",
+      "source_ref": "docs/KIDSNEWS-DEEPSEEK-BATCH-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "固定五选三和三段式入口减少交接，推送不等于上线",
+      "note": "source-first-deepseek每栏ID摘要排前8，再一次写5篇Easy/Middle/中文；Python输出15稿及机械审查，Grok负责三组选择和九篇精修/详情自检，不能后补。软来源/学科/重要性条件可放宽，不适龄细节删、短稿可加准确解释，不能造事实。固定组硬失败保存断点，不能伪造3篇或发短包。原始批次/已通过稿冻结，便宜Python边界连续执行，日志每个交接推一次；reader原子目录和private/public一致性检查，push前哨兵防未知状态重复发。仅网站latest和核验history ledger，文章DB/date archive/邮件不动。246项Python3.10离线通过不证明真实质量、成本、新轮上线或回滚；缓存保留。",
+      "source_ref": "docs/KIDSNEWS-FIXED-FIVE-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "最终复核须检查真实reader映射及恢复不变量",
+      "note": "三Agent直接修复：冻结prepare不依赖原连接器且不重置起时；feed与跳转URL双查重、正文缓存hash、补选ready上下文、30项目录退役保留最终栏目；详情修复保正文/另一有效级别、坏JSON降级、空答卷恢复及清理日志；真实article.jsx mapper传detail_status；发布resume/rollback锁定ZIP和manifest；标题卡片证据纳入pack且引语只告警。17项回归先失败后通过，共235项Python3.10离线通过。Spec消除待实现矛盾；正式reader仍须九篇。未真实模型、写库、部署、merge；保留缓存。",
+      "source_ref": "docs/KIDSNEWS-SOURCE-FIRST-FINAL-REVIEW-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "引语启发式不再阻止发布",
+      "note": "用户要求上次Unsupported quoted sentence类门禁改为warning。引语逐字不匹配返回告警，逐篇精修不因此修稿/拒稿；ZIP记录和manifest以及公开latest-manifest保存evidence_warnings。不代表引语准确，数字/英文结构/儿童安全及其他发布完整性门禁不变。未调用模型或实际发布，feature PR同步Bot。",
+      "source_ref": "pipeline/website_release.py"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "来源前置单篇成品与可恢复发布（pack后仅交接ZIP，不误导Vercel发布）",
+      "note": "显式source-first-grok实现，每源最多12、4篇即停、首六全坏本轮暂停，至少三源十稿；Science跨publisher轮询；Python正文/图片先筛，WebP>=20000字节。正常DeepSeek3＋native13任务。facts false只告警，安全/证据仍硬门禁；精修和两级详情自检合并，有限修复后坏详情合法省略。固定模板包内省略详情适配避免0/0奖励；旧模式不升级，缓存保留。只读验证旧包resume36948143776和网站36948187869成功，58公网文件hash全部吻合；新模式未真实发布，真实回滚未执行。",
+      "source_ref": "docs/KIDSNEWS-SOURCE-FIRST-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "最终压缩图片20KB硬门槛",
+      "note": "用户确认小于20000字节淘汰成品WebP图片，保留正文；统一检查新图片及恢复缓存并隔离至rejected-images，原图59KB不代表压缩成品9KB可用。只改影子路径，已完成运行和生产不自动覆盖。",
+      "source_ref": "docs/KIDSNEWS-IMAGE-BYTE-FLOOR-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "latest 两对象半写后的恢复",
+      "note": "CI36945154027已写新ZIP但未写manifest，公开网站仍匹配备份；修复仅对回读GET每5秒有限等待至75秒，不重复PUT。使用原CI备份和状态执行resume，不重做文章、不把半写pair当备份。真实恢复发布由Bot执行，仍待核验。",
+      "source_ref": "docs/bugs/2026-10-01-latest-readback-wait.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "影子发布引语标点误拦和 Science 抓取公平性",
+      "note": "website-1 的 18 份正文离线通过修复后的证据门禁；只忽略引语句尾标点，措辞和人数仍精确核验。Science 初次抓取先给各独立出版方一次机会，防止失败站点消耗预算；已有稿件不重生成。代码在 feature PR，真实网站发布待 Bot 恢复核验，DB/archive 不动。",
+      "source_ref": "docs/bugs/2026-10-01-shadow-quote-punctuation-and-science-fetch.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "Cloud发布门禁修复",
+      "note": "坏批次消费本组全部ID避免重复DeepSeek；有效未选候选保留。正式模板从固定网站提交全22文件导出含JSX，不取落后且脏checkout。上传即可被旧cron读走即发布；先独立CI备份，只写latest两对象，再dispatch旧Action与公开全hash核验。私有ledger替代未入库稿的同栏七日历史；DB/archive延后。250项离线和Actionlint通过不等于真实上线，Bot CI secrets待配置。",
+      "source_ref": "docs/KIDSNEWS-WEBSITE-RELEASE-2026-10-01.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "完整影子流水线必须逐步暂停，附加内容也要独立审核",
+      "note": "native Agent step/next 每次只完成一个单元：排名、延迟原文、六选三、改写、独立正文审核、补稿、详情、独立详情审核、图片、打包。新增关键词槽位/测验答案校验；不合格详情省略并告警。发布入口锁定独立 shadow Vercel project，核验公开全部 payload/detail/image 内容哈希；VM 无发布密钥，首次仍由 Mac 维护者部署。86 项离线测试通过（含假答卷分步全程恢复），不代表真实 Grok 质量或 VM 安装已验证。生产 main 未修改，代码仍在 PR。",
+      "source_ref": "docs/KIDSNEWS-STEPWISE-PIPELINE.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "Agent 暂停必须是可恢复交接而非失败回退",
+      "note": "影子 CLI 接住 AgentNeeded，输出 request/answer 路径并退出 2，不让生产式 catch-all 把它当模型失败而绕过审核。每个阶段材料哈希绑定缓存，逐篇改写与复核分别交接，阅稿不带作者自评分；模型只给分，代码重用现有字数及安全阈值。原文/答卷缓存用于安全后补稿，补稿仍复核。78 项离线测试通过，真实采集 9.426 秒；原生 Grok 运行需安装新 Bot 仓库，当前只是停在排名请求。",
+      "source_ref": "docs/KIDSNEWS-SHADOW-SITE.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "新 Agent 先在独立 Vercel 影子站比较",
+      "note": "已建立 kidsnews-bot-shadow.vercel.app，独立 project prj_wAKQb7C37whe0Wi6BNvb5zYpbceg；正式 kidsnews-v2 未部署修改。复用现有 v1 payload 格式，测试导出只复制引用文件、核对日期和 ID，默认审核未知。网站 HTTP 200 已核验，真实 Bot 文章和完整 Agent 编排尚未接入，不把空测试入口当作质量验证完成。",
+      "source_ref": "docs/KIDSNEWS-SHADOW-SITE.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "质量邮件成功不等于自动修复成功",
+      "note": "9 月 30 日自然质量摘要工作流 36703162747 成功发送邮件，但自动修复唯一的新排队项在独立安全复核前因 runner 未安装 feedparser 崩溃并升级。邮件六项升级中其余五项来自持久队列，不能归因于这次崩溃。修正在独立 PR #85；不能因工作流 success 就把已发布内容标为修好。",
+      "source_ref": "https://github.com/daijiong1977/news-v2/pull/85"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "Bot 内置模型用文件交接，平台通信集中管理",
+      "note": "Grok Bot 内置模型没有供脚本调用的 API key，采用 request/answer 文件协议；模型材料哈希绑定答卷，适配器不决定编辑阈值或发布。DeepSeek HTTP 通信已移入统一接口，JEV 仍为类型化 SDK。Agent 文件适配器已离线测试，完整可恢复生产编排尚未接入；现有两 Bot 的 Supabase 权限无需重复配置。",
+      "source_ref": "docs/AGENT-PROVIDER-BOUNDARY.md"
+    },
     {
       "date": "2026-09-27",
       "title": "同事件不能只靠标题共同词筛选",
@@ -411,6 +867,186 @@
       "title": "集成代码已合并，生产结果尚待自然验证",
       "note": "PR #83 于 2026-09-29 00:10 EDT 合并到 news-v2/main，merge commit a425dca636385583742a0bb215902f0109307c1a；原 PR #78、#81、#82 均被 GitHub 标记为 merged。代码合并不等于内容或网站已用新版运行。下一次自然 Daily 应核对 06:10 美东调度、News 大新闻预留/最终入选、Science 出版方、Fun 选文、七天同栏去重、独立全文儿童安全、质量邮件、网站同步新提交与公开 payload，不自行重跑。",
       "source_ref": "PROJECT-OPERATIONS.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "影子流水线审查：栏目局部补稿与答卷降级必须可恢复",
+      "note": "H1 原流程 Science 缺出版方会重抓/重选 News；修为 backfill.targets 按栏目、editor-state 存过审稿、仅新候选补选。改写含字数修正一次仍无效记 rewrite_invalid 换备用，详情复用生产 filter_keywords 后仍无效省略 extras；rank/pick 仍致命。原子 JSON +非阻塞锁、history 必填且总零拒绝（缓存亦检查）、完成答卷 SHA256、防部署超时盲重试、零篇拒发。观点仅原文归属、背景禁新增年份/数字，详情逐字段逐题审核；审核必须新会话/子 Agent，报告称同模型第二遍，代码不能证明真实会话隔离。Python 3.10.20 离线 109 项通过：初始15例及 H1 专项先失败，再修复通过，另补完整目录/备用/图片/真实 CLI 测试。两份 requirements 同版本且保留生产 fpdf2 锁定依赖。未调用模型、DB 写、Vercel 或邮件；生产 full_round/news_rss_core 未改。VM/原生质量/文件交接仍待首测，暂不合并。",
+      "source_ref": "docs/KIDSNEWS-STEPWISE-PIPELINE.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "首测前审查：生产隔离可靠，但补稿、答卷失败和状态写入会让首测中途停下",
+      "note": "只读审查确认：部署锁定影子项目、verify 重算线上哈希、共享代码与 UPSTREAM 一致、Python 3.10 下影子测试 23/23 通过。已确认 bug：补稿会重跑三栏并打乱已过审栏目（H1）；同一答卷第二次不合格即中止整轮（H2）；状态文件非原子写入（H3）。另：Bot main 仍是旧程序，首测须用 codex/stepwise-full-shadow；VM→Mac 传回 site/ 未定义。未修复，真实 VM 与 Grok 质量仍未验证。",
+      "source_ref": "docs/REVIEW-2026-09-30.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "首测前影子审查整改：共享源码先修再逐文件导出",
+      "note": "UPSTREAM 指向 news-v2 94109db51d5711a33e436303b5c69e76967ff210（代码修复98ccda8）；134个共享文件逐文件零差异。两个仓库 Python 3.10.20 各109项离线测试通过，回归先失败再通过：栏目局部补稿保留已审稿、rewrite_invalid换备用、详情过滤/省略、原子写/目录锁、历史不可全零、完成答卷SHA256、发布先记录attempt且只在明确核验失败后显式重试、零篇拒发。M1逐字段/题审核与M2新会话同模型第二遍规范已写入；真实语义与会话隔离尚未验证。README锁定codex/stepwise-full-shadow而非旧main，两份依赖一致且保留fpdf2及tzdata。未调用模型、DB写、Vercel或邮件；VM PAT/clone、真实内容/日志及完整文件下载到Mac仍待用户首测。临时失败缓存及CI暂不改，文档说明理由；两个PR不合并，不推main。",
+      "source_ref": "https://github.com/daijiong1977/grokbot-kidsnews/blob/f8a1c39266524be0ed6b213e85e52bc10ed4fa4b/docs/REVIEW-2026-09-30.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "自主编辑可以跳过固定漏斗，但不跳过证据和最终审核",
+      "note": "可选 autonomous 从元数据直接选3+最多3备用，先每栏3原文；仅缺稿栏目扩展，先用未选元数据再原生搜索，2轮每轮至多3候选，全轮正文36次。安全/中立/事实/同栏七天及同日已通过事件仍检查，已通过稿保留。重要News和Science第二出版方不足时局部找备用，不改生产。原生搜索3查询/6页面是平台指令而非工具配额代码证明。未真实模型/连接器/部署测试。",
+      "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "模型切换应集中在影子角色适配器，而不是散落编辑规则",
+      "note": "editor/write/review/details 可用native文件交接或显式兼容HTTP；discovery仅native有工具平台，纯文本API不能假装搜索。配置只含环境变量名字、不含Key；任务/HTTP各120次预算，首任务后一小时停止新增任务/HTTP，缓存和一次修正可恢复，HTTP未知超时不盲重试。原生token不可得，不能用任务数假造费用或宣称会话隔离。",
+      "source_ref": "pipeline/agent_shadow_providers.py"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "新来源是临时提议，出版方按最终证据地址而非AI自报核算",
+      "note": "发现结果不能自带正文或出版方；工具检查公共HTTPS/443、DNS公共IP固定连接、TLS原域校验、逐跳重验、2MB/20秒限制。原图同样受控。最终原文域名结合已有品牌别名计出版方，未知集团仍需人工确认；source-suggestions仅运行目录，永不自动写来源表。快路径及补稿离线测试不证明真实网络、搜索和编辑质量，首次真实影子仍需验收。",
+      "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "跳转后的原文URL也必须机械查重",
+      "note": "自主影子抓取的起始URL可能不在历史，但跳转最终URL已发布。先用失败回归复现，再对最终URL重验同栏历史/正文池，并将最终URL作为导出来源；独立事件语义复核仍保留。新增1回归，总离线132项；生产路径未改，尚未真实生成或部署。",
+      "source_ref": "pipeline/test_agent_shadow_autonomous.py"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "自主编辑快照仍须与共享提交逐文件一致，不把离线测试当云端成功",
+      "note": "Bot运行分支快照来自 news-v2 a23641a45655ce725c4e25319724003e249b2e8b；source和runtime共享代码/文档逐文件比对，Python3.10离线131项通过。未merge main、未给Bot发消息、未真实AI/DB写/部署。影子页现有壳不等于自主内容上线；VM安装、原生搜索、真实TLS网络兼容、会话隔离、费用及稿件质量都留首测验收。",
+      "source_ref": "docs/KIDSNEWS-AUTONOMOUS-SHADOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "最终跳转查重补丁也要再导出并重测Bot快照",
+      "note": "UPSTREAM更新到 cec6853b464bba82ba6e598fbf763c178438de0d，补丁记录 docs/bugs/2026-09-30-shadow-final-url-history.md；自主新增23回归，加原109总132项。源码先修后runtime导出比对，无生产写或真实模型/部署。先前a23641a/131测试记录属同日历史，不代表最终快照。",
+      "source_ref": "docs/REVIEW-2026-09-30.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "照片可解码不等于适合发布：必须独立看像素并绑定资产",
+      "note": "自主模式照片增加review-image原生视觉角色：机器先检查WEBP/160x100/2MB/非symlink/目录/hash，Agent新会话看实际本地像素，相关性/儿童安全/中立/隐私/非误导及viewed六项全true才展示；不能看像素就false，哈希不一致一次修正后仍无效则排除。拒图移到rejected-images，不进入网站；保留通过正文，审后资产改动拒恢复。文本HTTP不当作视觉模型；每九图增加九任务，真实视觉工具/质量/费用须首测轨迹确认，离线139项仅证明门禁。",
+      "source_ref": "pipeline/agent_shadow_photos.py"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "先单栏验证DeepSeek写稿，保留Bot关键判断，不把7%线性折成3%",
+      "note": "用户报告完整原生9篇耗7%周额度；上次51m11s、56任务、18次正文抓取，News全PBS，5稿事实淘汰，3图因不可看像素排除。新增news-deepseek只采News：Bot计划/独立全文审核，DeepSeek正文/详情/详情复核；仅新profile自动一次HTTP格式修正，旧协议不变。图片按用户要求来源图机械检查、非视觉批准；禁部分发布。Python3.10相关85项通过，新模式真实费用/质量待VM测试。全pipeline收集失败属于既有3.10旧feed脚本f-string和需真实key的thinking测试，未改生产测试或调用模型。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "第二模型直接修稿并自检，不为可修正的事实问题增加第三轮审核",
+      "note": "news-deepseek显式改为modifier：Grok基于原文修归因/引语/限定语/中立/语言，并给修后稿事实、安全和事件评分；代码查字数/格式/英文混入中文，仍不合格换备用稿。无第三轮审核，不把修稿者自检称独立审核。HTTP格式一次+内容一次，最多三调用且逐次记录token。修复python -m重复异常类导致单篇失败中断整轮。旧接受稿缓存保留，旧事实淘汰可尝试modifier；一小时预算仍保留，超时必须停报。离线测试不证明VM修稿质量或3%费用目标；未真实AI/DB写/部署/merge。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "Science和Fun复用低额混合测试，不重做已成功News",
+      "note": "News hybrid恢复完成3篇NPR/PBS/BBC，修后正文逐字保留；恢复约6m39s，3个modifier任务和6次HTTP共30622新增DeepSeek token。详情年份/限定语小问题仅观察，不加修正轮次。新增science-fun-deepseek显式只收集Science/Fun历史和feed，DeepSeek生成+原生Bot修稿并自检，图片来源机械检查，publish/verify禁止。Science两出版方和Fun短文/题材规则保持；Python3.10离线161项通过，真实Science/Fun质量/费用待VM测试，未部署或merge。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "影子Fun不因短稿补字凑篇幅，生产保持原策略",
+      "note": "Science/Fun实测完成各3篇，流水线19m20s、15次抓正文、8个原生任务、27次DeepSeek调用共123889 token；详情全PASS仍漏因果、数字矛盾及无来源观点，未证明质量全面提升。用户确认来源配图很好，保持现有图片步骤。用户批准Fun下限180：影子原文180–1200、middle180–350或180–410；easy短源120–220，否则140–270。四个先失败的长度回归修后通过；Python3.10相关163项通过。生成及modifier提示与校验一致，生产wordcount_policy不改。未重新调用模型、写库、部署或merge；新规则用新运行目录。",
+      "source_ref": "docs/KIDSNEWS-NEWS-HYBRID-TEST.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "8→5→3混合方案：重要News先选首篇，题材与出版方分别记录",
+      "note": "用户确认Grok初筛/搬栏/同栏七天事件去重，Python在步骤3抓图验尺寸、按需抓原文凑8；DeepSeek每栏一次8选五并写正文无详情；Grok五选三精修，坏稿先从另两篇补，再扩备用；DeepSeek基于修后最终9篇生成详情。Science明确physics、chemistry_materials等，优先多题材与至少两出版方；News第一篇最重要合格稿优先于多样性换位，另外两篇再兼顾组合；不绕过事实/安全/中立/事件门禁。仅文档确认，新批量/图片提前/缓存同步编排尚未实现或真实测试，不把旧命令称新流程，不改生产或发布。",
+      "source_ref": "docs/KIDSNEWS-HYBRID-8-5-3-FLOW.md"
+    },
+    {
+      "date": "2026-09-30",
+      "title": "8→5→3已实现；失败只修单篇，不重新生成整组",
+      "note": "Python3.10 190项与Deno 7项通过，离线全轮三栏各3篇，24次原文抓取与图片缓存成功。DeepSeek每栏一次选五写稿，坏JSON只修语法、坏字段只修ID，字数交单篇modifier；没有整组重写。实际只读刷新32个启用来源和各栏21条七日历史；实采元数据46/27/35，停在原生计划请求，未调用真实模型或写库/部署。新增ZIP私有upload/ready与定时Edge事务代码，但未部署/启用；GitHub Action保持不变。真实VM全轮及生产启用需单独验收，不把离线假稿称真实质量提升。",
+      "source_ref": "docs/KIDSNEWS-BATCH-AND-ZIP-RUNBOOK.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "影子恢复以答卷为提交记录，按栏目和持久预算兜底而非重做",
+      "note": "B1–B7/S7离线修复：已知未执行HTTP可有限重试，429最多120秒，读超时/reset保持uncertain；匹配answer.json优先于attempting，审计可重建、原答卷保留。取消一小时限制，超24小时显式确认并重核同栏七天历史；每栏抓取12，重要News/Science第二出版方仅有未尝试改善候选才补。显式native兜底四稿3+1、两连续轮熔断、计入预算并诚实标mixed/同模型写稿自检/writer_provider。status只读无锁，CLI绝对解释器，抓取审计与正文同原子保存。Python3.10.20离线219项通过；未真实模型、DB写、部署、邮件、merge。P1–P5不在本次范围，VM质量和费用仍待首测，保留调试缓存。 修复提交66b7546；Review逐项补充状态，原Spec保留且增补优先，导出前文档记录一起提交。",
+      "source_ref": "docs/bugs/2026-10-01-shadow-http-resume.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "Grok复核发现的恢复窗口必须故障注入，不把测试绿灯当全部完成",
+      "note": "四类后续整改：fallback_pending先隔离旧HTTP答卷，恢复不重标旧答卷来源；原生四稿在消息和校验中同时落实，原request_id不变；24小时复核并入discover和最终分栏，归档字段统一，冻结目标日排除仍保留；正文抓取上限只禁新增下载，已缓存未消费稿仍可补录。新增8个测试实例先全部失败、修后通过，Python3.10相关227项通过。保留同目录身份修复重试及持久120次预算，不盲目采纳Grok禁止二次调用建议。未真实模型/DB写/发布/merge，P1–P5延期，缓存保留。",
+      "source_ref": "docs/KIDSNEWS-GROK-FOLLOWUP-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "最终修稿后原生详情，冻结正文避免重复审核",
+      "note": "旧日志21次DeepSeek=3正文+9详情+9详情审核，共159954token。新模式正常3正文HTTP+9原生详情，无独立详情审核；Python结构校验/洗牌/最长答案告警不等于事实证明。旧profile冻结兼容；News两出版方接受，Science/Fun不加独立严格audit但仍修实质事实。用户POC附件未在Mac独立读取；约3%配额是用户观察，不承诺新轮成本。",
+      "source_ref": "docs/KIDSNEWS-GROK-DETAILS-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "明星偏好贯穿选文，生产过渡先模板和环境隔离",
+      "note": "真实日志c077/c079都历史clear、importance3且入五稿，最终退役胜过比赛是提示偏好而非查重漏抓。新profile同一Fun偏好传计划/DeepSeek五稿/Grok三选，旧profile冻结；不加调用不强凑体育。现ZIP为shadow shell，正式.jsx依赖仍待模板修复验证。DB优先复用、隔离测试不更新生产history/cadence/latest；P1–P5与单writer/回退未验收不能上线。news.21min.com未核验，不当现成测试域名。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "独立测试域名拼写已确认news.21mins.com",
+      "note": "用户确认news.21mins.com为计划测试域名，不是news.21min.com。计划独立测试项目配正式reader、旧kidsnews.21mins.com继续生产；DNS/所有权/绑定尚未核验，未更改或部署。现worker白名单不含测试域名，不能为测试绕过并写生产归档；隔离DB/Storage配置另行评审。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "中午候选先批准再晋升，回滚必须同步内容而非整库恢复",
+      "note": "用户提议中午生成满意则正式用新稿，否则旧流程备用。当前06:10早于中午，初期保留当日早上包作退路；条件备用/截止时间仅计划，未改调度。回滚需不可变包+模板版本、公开哈希、定向DB/搜索/归档/current一致；旧包直接重发被superseded检查挡住，必须显式rollback操作/互斥/幂等。不能仅Git revert称全链路回滚，不恢复账号/阅读整库，不盲退来源cadence，不重发邮件。粗估增加1–2日，整个过渡4–6工程日+观察，未实现/部署。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "直接正式站试一天是缩短观察，不省略模板及回滚门槛",
+      "note": "用户提出更快直接发布选项，尚未执行或批准具体包。当前shadow ZIP不能覆盖正式模板；要已核验正式reader、备份当前内容/Git/DB归档、唯一writer、受控内容更新与公开哈希，未验收消费者不得启用。可以先一次手动交接+已演练手动回退，不必先做完整自动rollback；账号/阅读数据不整库恢复。",
+      "source_ref": "docs/KIDSNEWS-SAFE-TRANSITION-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-01",
+      "title": "网站先行与后台归档分阶段，Spec不能把计划功能写成完工",
+      "note": "用户决定第一阶段仅latest.zip和匹配manifest，经原news-v2-uploaded事件由旧Action解包部署；日期包/flat archive/DB/新consumer不写。正式.jsx转换、独立备份批准恢复状态、有效发布history overlay及writer协调待实现/验收。网站已发但DB未入库时需要本地有效历史账本；旧registry不会自动包含Bot稿。此次仅文档，不修改生产或调用模型，Cloud先审Spec再核对代码。",
+      "source_ref": "docs/KIDSNEWS-WEBSITE-ONLY-SPEC-2026-10-01.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "真正拆成两次Python与中间连续Grok文件工作，不能只改prompt声称接口已完成",
+      "note": "prepare冻结十五稿、原文/图片和工单；Grok每栏选三并一次修稿/详情/自检、逐篇保存；finalize只读文件校验、有限定点修正并复用正式reader和原CI交付，不追加模型调用。已接受文件hash锁定，跨24小时用新registry与文件式历史复核，不改冻结日期/输入。255项3.10离线通过；无真实模型、DB/archive/邮件或发布操作，新质量/费用/公网成功待VM。",
+      "source_ref": "docs/KIDSNEWS-THREE-STAGES-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "Python淘汰广告和正文污染，并对具名赛事交叠兜底",
+      "note": "购物比较/广告嫌疑直接淘汰；TFK相关文章混入正文时拒绝候选，不按虚高词数放行。排序后Python保留同年份具名赛事较高排名，不因同品牌删不同事件，无独立第二次Pro审核。新增14项先失败后通过回归，3.10完整套件317项；共享源码与Bot快照一致。仅公开网页只读和缓存复核，未调用模型/发布/写DB/archive/邮件；不改旧已接受答卷。",
+      "source_ref": "docs/KIDSNEWS-CANDIDATE-QUALITY-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-02",
+      "title": "API业务备份与整库备份不同；日期归档必须和现网reader一致并可定向恢复",
+      "note": "用户明确选择业务表＋涉及Storage字节备份：96表19840行单SELECT快照、105对象哈希稳定；不是Auth/角色/内部schema的整库dump。固定现网reader SHA886a24e2，手动更新Oct2的9篇、27搜索行、1运行和5来源时间，38归档对象公网校验，latest和index不改。paired SQL在写前生成，PGlite9断言含精确回滚和并发拦截；搜索触发器自动改时间需回滚事务内临时关闭再恢复。未恢复全部备份、未执行线上rollback、未启用自动Bot/Edge消费者，不清用户阅读/答题、不删孤儿归档、不发邮件。",
+      "source_ref": "docs/KIDSNEWS-ARCHIVE-BACKFILL-2026-10-02.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "每次更新和rollback SQL必须由Python自动生成并冻结，不让Agent手写",
+      "note": "publication_database后端commit先一致读取四表旧值，自动生成成对SQL并哈希锁定才写；恢复不重抓旧值，缺件/篡改/归档不匹配拦截，timeout不盲重发；rollback复用原文件、保UUID和ET cadence。3.10新15项、影子共332项通过；额外旧history六项因缺typesafe_sdk未通过，午夜脆弱fixture仅修测试日期。模块不写Storage/部署/邮件、不改旧生产路径、不启用Bot routine、不往VM发管理token；后台显式opt-in，无本轮真实DB写。",
+      "source_ref": "docs/KIDSNEWS-AUTO-SQL-PAIR.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "Cursor agent须通过CLI适配而非假定HTTP接口",
+      "note": "空工作目录只读agent JSON适配实测约7秒；子进程不继承DB/Storage密钥。新全Python入口复用旧生产和网站Action，后端需专用Postgres连接及回滚权限，执行前检查。只有离线验证及小型模型连通测试，未真实写库/Storage/部署或启用定时。",
+      "source_ref": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "数据库默认复用旧SUPABASE_SERVICE_KEY而非新增Postgres密码",
+      "note": "旧pipeline/supabase_io.py通过service_role SDK/Data API写runs/stories。新入口默认REST同key、同四业务表和Storage；读回+逐行日志允许恢复，自动SQLpair留审计。跨四表无事务/远端锁，需避并发。原news-v2私有env凭据四表GET200，未写入。",
+      "source_ref": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md"
     }
   ]
 }

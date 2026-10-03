@@ -1,0 +1,28 @@
+{
+  "repo": "daijiong1977/kidsnews-v2",
+  "commit": "b9592e02faeabf9fa906aaa22b00770b8796273e",
+  "files": {
+    "components.jsx": "afd27ccc8c097d0eb0935164a9bdd498c048cfd9e99de7dc1760973ff937039e",
+    "index.html": "1545635e43122902168c9d0265dda0b2c84fa45e7a93ea44e3d31a278b721b56",
+    "admin.html": "2c96a2f2ccbf60cc1627aa57bddfa655144c7debf229a20f4b090865155539c8",
+    "data.jsx": "5128e9817a01de0a4dabdde1143a4d8d36c5449baf7cac697d6e9d96461e428a",
+    "kidsync.js": "ed6e6f8824489620276ea2798ec57932509dbf801a3dde79dc65e953d5bdfcb6",
+    "parent.jsx": "7bdf70b5d5ab06e0e082178689d191e8f6ffc9ae133f564b6f5550dc55dc4464",
+    "tokens.css": "f28119cd086e2e5a3cf1dfae8e92272f3d48579ba7e04175a17e3bef1e9b45e1",
+    "article.jsx": "39047a57275361ee4030a51c2f5eaa8ad6d72d7358fc6761a023e6c6d8839398",
+    "autofix.html": "92aa564a0ce4b505533e1f3a5b6daf538317631390ddace8bbf89dc42c26e1e3",
+    "components/Big21.jsx": "b48997f974669e721b2daab5a8313c3ae0131f10ecf94e29cb53845a7cfec838",
+    "components/SunFace21.jsx": "c854c40676eb88aa4c10a643d14786703cb6a93f90b143730248f09f46196dda",
+    "user-panel.jsx": "82e29f9582aba6880c38678b1b3e56e708a653a670e47fe1066f85de99d85392",
+    "parent.html": "1c78cc23d36721e8354549bd1a9b35b7aa67ce94c20181ac4412d738568a7da0",
+    "fonts.css": "92519465042fa1242a268a9c9d1d321414e80872019e6cfc85210f299484ffb0",
+    "podcast.html": "f1fb0ba471191683720971057e429ce0661e05278404f1690ef56785c4f5cfd5",
+    "assets/21mins-mark-dark.svg": "4f06c343c6f60e07857e262c230f1b4d788b52a640a21249861c51a78a337dc9",
+    "assets/og-image.png": "5a4ce7d30c6beee6010fbdb8c7ceb13f9fa611d476fb18eb6b76853a90edf55a",
+    "assets/kidsnews-mark-dark.svg": "d83af2aa2a6da0711a1bd04c1fec321e9f69ec67e2bcdb8209ab969c7d8d0a89",
+    "assets/21mins-mark.svg": "60a8c1ad09e1d9f6a267677ccac712d8e5696f0c5a78067ac49c694407421897",
+    "assets/kidsnews-mark.svg": "7bca3940ef5af3194ee32aea14e0ca49090cfb282cd2213c3d25f47893bfa430",
+    "assets/favicon-kidsnews.svg": "cedefb34d1cef6c191ae3437be5a3ff38d1621a5ac6bfb6f486f07d5843937f3",
+    "home.jsx": "0adfa602c37b5e753a1af73a9a510e0763c5f7f4722d3bdc653b3b9923ca0779"
+  }
+}
