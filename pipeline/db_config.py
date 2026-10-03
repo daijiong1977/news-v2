@@ -120,7 +120,8 @@ def _ensure_src_cache() -> dict[str, list[dict]]:
 
 def load_sources(category_name: str, *,
                  today: "date | None" = None,
-                 n: int = 3) -> list[NewsSource]:
+                 n: int = 3,
+                 source_rows: list[dict] | None = None) -> list[NewsSource]:
     """Cadence-aware source selection per category.
 
     See docs/superpowers/specs/2026-05-03-cadence-aware-source-selection-design.md
@@ -142,8 +143,9 @@ def load_sources(category_name: str, *,
     if today is None:
         today = _date.today()
 
-    raw_by_cat = _ensure_src_cache()
-    rows = raw_by_cat.get(category_name, [])
+    # Agent shadow runs can supply a connector-read snapshot, without VM secrets.
+    rows = ([r for r in source_rows if (r.get("category") or "").strip() == category_name]
+            if source_rows is not None else _ensure_src_cache().get(category_name, []))
 
     # Filter: enabled, state in (NULL, 'live'), and active on today's weekday.
     wd = today.weekday()   # Mon=0 — matches the active_weekdays column comment

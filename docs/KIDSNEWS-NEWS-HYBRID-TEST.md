@@ -1,0 +1,91 @@
+# News-only DeepSeek/Bot experiment — 2026-09-30
+
+后续用户确认的完整方案见 [8→5→3 流程](KIDSNEWS-HYBRID-8-5-3-FLOW.md)：
+包含物理/化学等细分题材、来源与题材软偏好、News重要首篇、图片提前和模型分工。
+该方案尚待实现；本页现有命令仍运行原混合测试，不是新批量流程。
+
+## Science + Fun follow-up (2026-09-30)
+
+Use `--test-profile science-fun-deepseek` in a NEW directory. This profile reuses
+config/shadow-news-deepseek.json (historical filename, shared role map). Only Science/Fun
+sources/history are collected; News has no output, model work or body fetching.
+DeepSeek writes bodies/details and performs the existing details review; Bot plans and modifies
+the final bodies from original sources. No extra details repair or third body audit is added.
+All hybrid profiles forbid publish/verify; production/default autonomous behavior is unchanged.
+
+```sh
+.venv/bin/python -m pipeline.agent_shadow prepare --run-dir work/2026-09-30/science-fun-hybrid-1 --date 2026-09-30 --editor-mode autonomous --test-profile science-fun-deepseek --registry work/2026-09-30/registry.json
+.venv/bin/python -m pipeline.agent_shadow step --run-dir work/2026-09-30/science-fun-hybrid-1
+```
+
+Confirm registry date and both Science/Fun source/history records exist first. If missing,
+obtain the runbook's connector SELECT-only snapshot; do not substitute News history or write DB.
+Science keeps existing word limits and two-independent-publisher goal; biology stays Science.
+Fun keeps short-story limits, swimming/tennis/other_sports priorities, playful technology and
+non-research animal stories; exclude college recruitment, dull routine sports and sales pitches.
+These are editorial rules, not promises that live candidates will supply every desired topic.
+Stop after local pack. Report article/title/publisher/topic/word counts, modifications/rejections,
+body fetches, native tasks, DeepSeek calls/tokens and ET times separately per section where available.
+Shared plan cost stays shared; never invent quota or per-section timing. Images receive mechanical
+checks, not visual approval. Preserve warnings and existing one-hour/call budgets.
+
+News baseline: logs show 3 final stories (NPR/PBS/BBC), corrected bodies identical to final
+payload, recovery 20:08:21–20:15:00 ET (~6m39s), 3 modifier tasks + 6 new HTTP calls
+(30,622 new DeepSeek tokens). Total 38m includes old failures/pause, not pure new-flow time.
+Details retain known year/number/qualifier issues despite all-pass review; user chose observation,
+not an additional correction pass. Do not claim full detail verification or under-3% quota proven.
+
+Opt-in local shadow test. Production and the previous full autonomous run are unchanged.
+
+| Work | Owner |
+| --- | --- |
+| Feed collection, original fetch, counts, cache, pack | Python |
+| News plan: three winners plus up to three reserves, history and importance | Bot |
+| EN easy/middle + Chinese rewrite | DeepSeek HTTP |
+| Source-grounded modification + final facts/safety/neutrality judgment | Bot in a fresh session/sub-Agent; no third AI audit |
+| Details generation and per-field/per-question review | DeepSeek HTTP, separate requests |
+| Original-source images | Existing bounded download/decode; no Bot visual task |
+
+Science/Fun are empty and not fetched/generated/reviewed. Catalog validator rejects selections in inactive sections. Publication is forbidden for this partial experiment. Images are **not visually approved**; technical checks do not prove relevance, neutrality or child safety. Default full autonomous visual review stays enabled.
+
+Provider boundary: `config/shadow-news-deepseek.json`, environment reference `DEEPSEEK_API_KEY`. `.env` is loaded on every profile command, not just prepare, without overriding exported variables. Never read/print/commit it. Only this profile allows one formatting repair AND one content/word-count repair (at most three HTTP attempts including initial output). Corrections include the previous answer, not a blind regeneration. Exhausted invalid drafts are skipped, invalid details omitted. Uncertain network outcomes do not auto-retry. Each HTTP attempt records usage separately; old overwritten usage cannot be reconstructed.
+
+The second model directly fixes attribution, quotes, qualifiers, neutrality and mixed-language text from the source, then scores its FINAL corrected draft. Code validates corrected fields, word limits, English language, eight safety scores, facts_supported and same-category event_clear. A failed final judgment replaces the draft. This is second-model editing/self-check, NOT an independent audit of the modifier's own edits. Serious politics/war/death remain allowed without graphic violence. No additional pre-audit pass or third model call.
+
+### Resume the failed hybrid run
+
+Pull and repeat `step` on `work/2026-09-30/news-hybrid-1`; do not remove cached answers or accepted drafts. Legacy factual rejections get one modifier opportunity; the accepted mixed-language draft is reopened for modification. Completed answer hashes remain immutable. The real CLI uses a shared AnswerRejected class so an exhausted article correction is caught even with `python -m`.
+
+The existing one-hour run deadline and call budgets remain enforced. If the interrupted run has already exceeded that deadline, it cannot be resumed by silently resetting its audit; stop/report and explicitly start a new run directory. No real resume result is claimed by offline tests.
+
+## VM test
+
+Use a new run directory; do not reuse `autonomous-1`. First pull with fast-forward only on `codex/stepwise-full-shadow`. The existing registry date must match 2026-09-30 and include News history. It contains source/history configuration, **not a frozen feed snapshot**, so live feed changes affect comparison.
+
+```sh
+cd /workspace/kidsnews-shadow
+git pull --ff-only origin codex/stepwise-full-shadow
+.venv/bin/python -m pipeline.agent_shadow prepare --run-dir work/2026-09-30/news-hybrid-1 --date 2026-09-30 --editor-mode autonomous --test-profile news-deepseek --registry work/2026-09-30/registry.json
+.venv/bin/python -m pipeline.agent_shadow step --run-dir work/2026-09-30/news-hybrid-1
+```
+
+Repeat the last command according to the JSON result: exit 0 next step; exit 2 read **only** the indicated native request and write its envelope answer; exit 1 stop/report; exit 3 already done. Every body modifier must be a fresh session/sub-Agent without reading the writer's answer file, and return corrected_article plus scores and factual/event judgments on that corrected article. Do not write HTTP answers yourself, change code, deploy, write Supabase or send mail. No routine progress messages; one final report or blocking error.
+
+On pack completion stop. Inspect `done.json`, `review-results.json`, `metrics.json`, `provider-audit.json`, `steps.jsonl`, `reader/`, `site/`. News should have 3 accepted drafts (or explain candidate exhaustion), one important qualified story and publisher/topic diversity. Check details accuracy and source-image suitability manually. Preserve warnings.
+
+## Baseline and measurement
+
+Previous full native run: 51m11s, 56 AI tasks, 18 body fetches, 9 final stories; observed user quota 7% weekly (not measured model tokens). Three News stories were all PBS; five drafts were rejected for unsupported facts; three images were removed when reviewers could not view pixels. Avoid fabricating a 7%→3% linear estimate.
+
+This experiment targets only News, normally one native planning task + three independent body reviews, plus rejected-story/discovery/correction tasks if needed. DeepSeek normally performs nine requests: three rewrites, three details, three detail reviews. Actual usage and per-call seconds are recorded in provider-audit; native tokens are unavailable, so user console must measure quota. Compare News-specific quality and costs, not this three-story cost against the previous nine-story total. Record start/end ET, full wall time (including Bot handoffs), body fetches, native/HTTP calls, tokens, retries, rejection reasons, source mix, importance and manual assessment. Do not claim the under-3% target achieved before console evidence.
+## 2026-09-30 Fun short-story adjustment (shadow only)
+
+User approved a 180-word floor after Science/Fun hybrid completed. Source originals
+may be 180–1200 words. Fun middle output may be 180–350 words for 180–349-word
+sources, otherwise 180–410; easy remains 120–220 for short sources and 140–270
+otherwise. Both writer and modifier receive the same ranges enforced in code.
+No padding with invented facts; safety, fact support and history checks remain.
+Use a fresh run directory: do not mutate accepted answers in a completed run.
+Production `wordcount_policy.py` is unchanged. The four observed length-only
+rejections (191/247/287/291 words) no longer fail solely on middle length.
+Photos are retained per user's visual confirmation; no extra visual AI stage.

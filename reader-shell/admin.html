@@ -1,0 +1,1890 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>21 minutes every day · Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@800;900&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Nunito', system-ui, sans-serif; background:#fff9ef; color:#1b1230; min-height:100vh; }
+  .row { display:flex; gap:12px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:8px; }
+  .card { background:#fff; border-radius:14px; padding:18px 20px; box-shadow:0 2px 0 rgba(27,18,48,0.05); border:1.5px solid #f0e8d8; }
+  button { font-family:inherit; }
+  input, select, textarea {
+    font-family:inherit; font-size:14px; padding:8px 10px;
+    border:1.5px solid #e8dfd3; border-radius:10px; background:#fff;
+    color:#1b1230; outline:none;
+  }
+  input:focus, select:focus, textarea:focus { border-color:#1b1230; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:#6b5c80; font-weight:700; padding:8px 10px; border-bottom:2px solid #f0e8d8; text-transform:uppercase; letter-spacing:.04em; }
+  td { padding:10px 10px; font-size:14px; border-bottom:1px solid #f7f0e3; vertical-align:middle; }
+  tr:hover td { background:#fffaef; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:800; letter-spacing:.02em; }
+  .pill-on  { background:#e0f6f3; color:#0e8d82; }
+  .pill-off { background:#f4eee5; color:#9a8d7a; }
+  .pill-warn{ background:#fff4e0; color:#c9931f; }
+  .danger { color:#c14e2a; }
+  .btn {
+    background:#1b1230; color:#fff; border:none; border-radius:10px;
+    padding:9px 16px; font-weight:800; font-size:13px; cursor:pointer;
+    box-shadow:0 3px 0 rgba(27,18,48,0.15);
+  }
+  .btn:hover  { transform:translateY(-1px); }
+  .btn:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(27,18,48,0.15); }
+  .btn-ghost { background:transparent; color:#1b1230; border:1.5px solid #e8dfd3; box-shadow:none; }
+  .btn-danger{ background:#c14e2a; }
+  .btn-sm    { padding:5px 10px; font-size:12px; box-shadow:0 2px 0 rgba(27,18,48,0.15); }
+  .tab {
+    background:transparent; border:none; padding:14px 18px; font-weight:800;
+    font-size:14px; color:#6b5c80; border-bottom:3px solid transparent;
+    cursor:pointer;
+  }
+  .tab.active { color:#1b1230; border-bottom-color:#ffc83d; }
+  .tab:hover  { color:#1b1230; }
+  .empty { text-align:center; padding:40px 20px; color:#9a8d7a; font-size:14px; }
+  .pre   { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; background:#1b1230; color:#ffe2a8; padding:6px 10px; border-radius:6px; }
+  pre.json { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; background:#fbf6ec; padding:10px; border-radius:8px; max-height:240px; overflow:auto; margin:0; }
+  .err { color:#c14e2a; background:#fff0e8; padding:10px 14px; border-radius:10px; font-size:13px; border:1.5px solid #f4c4ad; }
+  .ok  { color:#0e8d82; background:#e0f6f3; padding:10px 14px; border-radius:10px; font-size:13px; border:1.5px solid #8fd6cd; }
+  .label { font-size:11px; color:#6b5c80; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+</style>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react,env" data-type="module">
+const { useState, useEffect, useMemo, useRef } = React;
+
+// ─────────────────────────────────────────────────────────────────────
+// Supabase init — publishable (anon-equivalent) key. Auth + RLS gate
+// every write; the key alone gives no admin power.
+// ─────────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://lfknsvavhiqrsasdfyrs.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_C0UF9RR0ui0XnmF5OdYwGg_W7628Yex';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Tiny helpers
+// ─────────────────────────────────────────────────────────────────────
+const fmt = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleString('en-US', {
+    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit',
+  });
+};
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+};
+const dur = (sec) => sec >= 60 ? `${(sec/60).toFixed(1)}m` : `${sec.toFixed(1)}s`;
+
+const useNotice = () => {
+  const [notice, setNotice] = useState(null);  // { kind:'ok'|'err', msg }
+  const flash = (kind, msg, ms=4000) => {
+    setNotice({ kind, msg });
+    setTimeout(() => setNotice(null), ms);
+  };
+  return [notice, flash];
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// AUTH HEADER
+// ─────────────────────────────────────────────────────────────────────
+function AuthHeader({ session, onSignIn, onSignOut }) {
+  return (
+    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18}}>
+      <div>
+        <h1 style={{margin:0, fontFamily:'Fraunces, serif', fontSize:30, letterSpacing:'-.01em'}}>
+          📊 21 minutes every day · Admin
+        </h1>
+        <div style={{fontSize:13, color:'#6b5c80', marginTop:4}}>
+          v2 pipeline / sources / providers / users / cron
+        </div>
+      </div>
+      <div className="row">
+        {session
+          ? <>
+              <span style={{fontSize:13, color:'#1b1230'}}>{session.user.email}</span>
+              <button className="btn btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>
+            </>
+          : <button className="btn btn-sm" onClick={onSignIn}>Sign in with Google</button>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// NOTICE BAR
+// ─────────────────────────────────────────────────────────────────────
+function Notice({ notice }) {
+  if (!notice) return null;
+  return <div className={notice.kind === 'ok' ? 'ok' : 'err'} style={{marginBottom:14}}>{notice.msg}</div>;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BOOTSTRAP MODE — runs when redesign_admin_users is empty
+// ─────────────────────────────────────────────────────────────────────
+function BootstrapWizard({ session, onDone }) {
+  const [email, setEmail] = useState(session?.user?.email || '');
+  const [name, setName] = useState(session?.user?.user_metadata?.full_name || '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    if (!email) { setErr('Email is required'); return; }
+    setBusy(true);
+    setErr(null);
+    // Use the SECURITY DEFINER RPC so the bootstrap insert is atomic
+    // (locks the table; refuses if any admin already exists). Avoids the
+    // two-visitors race that a plain INSERT would have.
+    const { error } = await sb.rpc('bootstrap_admin', { p_email: email, p_name: name || '' });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onDone();
+  };
+
+  return (
+    <div className="card" style={{maxWidth:520, margin:'40px auto'}}>
+      <h2 style={{marginTop:0}}>👋 No admins yet — set one up</h2>
+      <p style={{color:'#6b5c80', fontSize:14, lineHeight:1.5}}>
+        Once you save the first email here, the admin page will require Google
+        sign-in for that email on every visit. Make sure it's a Google account
+        you'll always have access to.
+      </p>
+      <div className="col" style={{gap:12, marginTop:14}}>
+        <div className="col">
+          <span className="label">Google email</span>
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@gmail.com" />
+        </div>
+        <div className="col">
+          <span className="label">Display name (optional)</span>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" />
+        </div>
+        {err && <div className="err">{err}</div>}
+        <div className="row" style={{justifyContent:'flex-end', marginTop:6}}>
+          <button className="btn" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Make me admin'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// AUTH GATE — when bootstrap is done and user is not signed in / not allowed
+// ─────────────────────────────────────────────────────────────────────
+function SignInPanel({ onSignIn, accessDenied, deniedEmail }) {
+  return (
+    <div className="card" style={{maxWidth:480, margin:'40px auto', textAlign:'center'}}>
+      <h2 style={{marginTop:0}}>🔒 Admin access required</h2>
+      {accessDenied
+        ? <>
+            <div className="err" style={{marginBottom:14}}>
+              <b>Access denied.</b> {deniedEmail} isn't on the admin list. An
+              existing admin needs to add this email first.
+            </div>
+            <button className="btn" onClick={onSignIn}>Try a different Google account</button>
+          </>
+        : <>
+            <p style={{color:'#6b5c80'}}>Sign in with the Google account you registered as admin.</p>
+            <button className="btn" onClick={onSignIn}>Sign in with Google</button>
+          </>
+      }
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CRUD TAB SCAFFOLD — list + add form + per-row edit/delete
+// ─────────────────────────────────────────────────────────────────────
+function ConfirmButton({ children, onConfirm, label='Delete', className='btn btn-sm btn-danger' }) {
+  const [armed, setArmed] = useState(false);
+  if (!armed) return <button className={className} onClick={()=>setArmed(true)}>{children || label}</button>;
+  return (
+    <span className="row" style={{gap:6}}>
+      <span className="pill pill-warn">sure?</span>
+      <button className={className} onClick={()=>{ setArmed(false); onConfirm(); }}>Yes</button>
+      <button className="btn btn-ghost btn-sm" onClick={()=>setArmed(false)}>No</button>
+    </span>
+  );
+}
+
+// ── SOURCE VERIFY ────────────────────────────────────────────────────
+// Two paths depending on where the operator is:
+//
+//   · Local run:  python -m pipeline.verify_source --source-id N
+//   · Cloud run:  GitHub Actions → Verify source(s) → workflow_dispatch
+//                 with target='id:N' (or 'category:NAME' or 'all').
+//                 Output uploads to Supabase Storage at verify/<ts>/
+//                 and as a GitHub Actions artifact (14-day retention).
+//
+// The button below opens a modal showing both options + a direct link
+// to the GitHub Actions dispatch page so non-CLI editors can click
+// through. Old behavior — silent clipboard copy — was confusing
+// because the toast was easy to miss and made the button look broken.
+function verifyCmdFor(target) {
+  // target: {kind:'id'|'category'|'all'|'url', value?}
+  if (target.kind === 'id')       return `python -m pipeline.verify_source --source-id ${target.value}`;
+  if (target.kind === 'category') return `python -m pipeline.verify_source --category ${JSON.stringify(target.value)}`;
+  if (target.kind === 'url')      return `# ad-hoc preview — no Python equivalent.\n# Visit the RSS URL directly in a browser, or use:\ncurl -s ${JSON.stringify(target.value)} | head -200`;
+  return `python -m pipeline.verify_source --all`;
+}
+
+// Edge-function target string.
+function verifyTargetParam(target) {
+  if (target.kind === 'id')       return `id:${target.value}`;
+  if (target.kind === 'category') return `category:${target.value}`;
+  if (target.kind === 'url')      return `url:${target.value}`;
+  return 'all';
+}
+
+const VERIFY_WORKFLOW_URL = 'https://github.com/daijiong1977/news-v2/actions/workflows/verify-source.yml';
+
+async function copyToClipboard(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { return false; }
+}
+
+// Days since timestamp, for the stale-source badge.
+function daysSince(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.round((Date.now() - t) / 86400000);
+}
+
+function VerifiedBadge({ iso }) {
+  const d = daysSince(iso);
+  if (d === null) return <span className="pill pill-warn" title="never verified">never</span>;
+  if (d > 60)     return <span className="pill" style={{background:'#fff0e8', color:'#c14e2a'}} title={`last verified ${iso}`}>{d}d ago</span>;
+  if (d > 30)    return <span className="pill pill-warn" title={`last verified ${iso}`}>{d}d</span>;
+  return <span className="pill pill-on" title={`last verified ${iso}`}>{d}d</span>;
+}
+
+// Last-used freshness — shown alongside the verify badge so the editor
+// can see at a glance which sources are due for rotation. The pipeline
+// already prefers least-recently-used (NULLs first).
+function LastUsedBadge({ iso }) {
+  const d = daysSince(iso);
+  if (d === null) return <span className="pill pill-on" title="never picked yet — top of rotation">fresh</span>;
+  if (d === 0)    return <span className="pill" style={{background:'#fff4e0', color:'#c9931f'}} title={`last used ${iso}`}>today</span>;
+  if (d === 1)    return <span className="pill pill-warn" title={`last used ${iso}`}>yesterday</span>;
+  if (d <= 7)     return <span className="pill" style={{background:'#fbf6ec', color:'#6b5c80'}} title={`last used ${iso}`}>{d}d ago</span>;
+  return <span className="pill pill-on" title={`last used ${iso}`}>{d}d ago</span>;
+}
+
+// ── SOURCES TAB ──────────────────────────────────────────────────────
+function SourcesTab({ flash, categories }) {
+  const [rows, setRows] = useState(null);
+  const [draft, setDraft] = useState({
+    category:'', name:'', rss_url:'', priority:1, focus:'',
+    flow:'full', enabled:true,
+  });
+  const [bulkCat, setBulkCat] = useState('');
+
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_source_configs').select('*').order('category').order('priority');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.category || !draft.name || !draft.rss_url) { flash('err', 'category, name, rss_url are required'); return; }
+    const { error } = await sb.from('redesign_source_configs').insert({
+      ...draft,
+      active_weekdays: null,    // legacy column; selection is pure LRU now
+      focus: draft.focus || null,
+    });
+    if (error) flash('err', error.message);
+    else { flash('ok', 'Source added'); setDraft({ category:'', name:'', rss_url:'', priority:1, focus:'', flow:'full', enabled:true }); load(); }
+  };
+
+  const updateRow = async (id, patch) => {
+    const { error } = await sb.from('redesign_source_configs').update(patch).eq('id', id);
+    if (error) flash('err', error.message); else load();
+  };
+
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_source_configs').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  const [verifyModal, setVerifyModal] = useState(null);
+  const showVerifyCmd = (target, label) => {
+    setVerifyModal({ target, label });
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      {/* ── Add form ───────────────────────────────────────────────── */}
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add source</h3>
+        <div className="grid3">
+          <div className="col"><span className="label">Category</span>
+            <select value={draft.category} onChange={e=>setDraft({...draft, category:e.target.value})}>
+              <option value="">—</option>
+              {categories.map(c => <option key={c.slug} value={c.name}>{c.emoji} {c.name}</option>)}
+            </select>
+          </div>
+          <div className="col"><span className="label">Display name</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
+          <div className="col"><span className="label">Priority (lower = primary)</span>
+            <input type="number" value={draft.priority} onChange={e=>setDraft({...draft, priority:parseInt(e.target.value||0)})}/></div>
+          <div className="col"><span className="label">Focus (e.g. history, geometry)</span>
+            <input value={draft.focus} onChange={e=>setDraft({...draft, focus:e.target.value})} placeholder="optional tag"/></div>
+        </div>
+        <div className="col" style={{marginTop:10}}>
+          <span className="label">RSS URL</span>
+          <input value={draft.rss_url} onChange={e=>setDraft({...draft, rss_url:e.target.value})} placeholder="https://…/feed.rss"/>
+        </div>
+        <div className="row" style={{gap:14, marginTop:10, alignItems:'center'}}>
+          <label className="row" style={{gap:6, fontSize:13}}
+            title="full = pipeline scrapes the article URL for the body (use this 99% of the time, including for any new source). light = pipeline trusts the RSS &lt;description&gt; field as the full body — only set this if the feed already includes the article text inline.">
+            <span className="label" style={{margin:0}}>Flow</span>
+            <select value={draft.flow} onChange={e=>setDraft({...draft, flow:e.target.value})}>
+              <option value="full">full — scrape article page (default)</option>
+              <option value="light">light — trust RSS body</option>
+            </select>
+          </label>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <input type="checkbox" checked={draft.enabled} onChange={e=>setDraft({...draft, enabled:e.target.checked})}/> enabled
+          </label>
+        </div>
+        <div className="row" style={{justifyContent:'space-between', marginTop:12, gap:10}}>
+          <button className="btn btn-ghost btn-sm"
+            disabled={!draft.rss_url}
+            onClick={()=>{
+              if (!draft.rss_url) return;
+              showVerifyCmd(
+                { kind:'url', value: draft.rss_url, name: draft.name || '(unnamed)', category: draft.category || '—' },
+                draft.name || draft.rss_url,
+              );
+            }}>
+            👀 Preview RSS first
+          </button>
+          <button className="btn" onClick={add}>Add source</button>
+        </div>
+      </div>
+
+      {/* ── Bulk verify controls ──────────────────────────────────── */}
+      <div className="card" style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10}}>
+        <div className="col" style={{gap:4}}>
+          <span className="label">Verify (runs locally — copies the CLI command)</span>
+          <span style={{fontSize:11, color:'#6b5c80'}}>
+            Verify pulls 3 latest articles + og:image and renders an HTML preview.
+            The CLI runs the canonical pipeline extraction (matches what the daily
+            run produces) and stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span>.
+          </span>
+        </div>
+        <div className="row" style={{gap:8}}>
+          <select value={bulkCat} onChange={e=>setBulkCat(e.target.value)}>
+            <option value="">— Pick a category —</option>
+            {categories.map(c => <option key={c.slug} value={c.name}>{c.emoji} {c.name}</option>)}
+          </select>
+          <button className="btn btn-sm" disabled={!bulkCat}
+            onClick={()=>showVerifyCmd({kind:'category', value:bulkCat}, `category ${bulkCat}`)}>
+            Verify category
+          </button>
+          <span style={{fontSize:11, color:'#9a8d7a'}}>
+            (~10-15s for ~9 sources × 3 articles each)
+          </span>
+        </div>
+      </div>
+
+      {/* ── List ──────────────────────────────────────────────────── */}
+      <div className="card">
+        <table>
+          <thead><tr>
+            <th>Cat</th><th>Name</th><th>URL</th><th>Pri</th><th>Focus</th><th>State</th><th>Verified</th><th>Last used</th><th></th>
+          </tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>
+                  {/* Editable category — pipeline reads from this column, so a
+                      single dropdown change moves the source to the new cat
+                      next run. */}
+                  <select value={r.category} onChange={e=>updateRow(r.id, { category: e.target.value })}
+                          style={{padding:'4px 6px', fontSize:12, maxWidth:100}}>
+                    {categories.map(c => <option key={c.slug} value={c.name}>{c.name}</option>)}
+                  </select>
+                </td>
+                <td><input style={{width:'100%'}} defaultValue={r.name} onBlur={e=>e.target.value!==r.name && updateRow(r.id, { name:e.target.value })}/></td>
+                <td><input style={{width:'100%'}} defaultValue={r.rss_url} onBlur={e=>e.target.value!==r.rss_url && updateRow(r.id, { rss_url:e.target.value })}/></td>
+                <td><input type="number" style={{width:55}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
+                <td><input style={{width:'100%'}} defaultValue={r.focus||''} onBlur={e=>updateRow(r.id, { focus: e.target.value || null })} placeholder="—"/></td>
+                <td>
+                  <span className={r.enabled ? 'pill pill-on' : 'pill pill-off'}>
+                    {r.enabled ? 'enabled' : 'disabled'}
+                  </span>
+                </td>
+                <td><VerifiedBadge iso={r.last_verified_at}/></td>
+                <td><LastUsedBadge iso={r.last_used_at}/></td>
+                <td>
+                  <span className="row" style={{gap:4, justifyContent:'flex-end'}}>
+                    <button className="btn btn-sm btn-ghost"
+                      title={r.enabled ? 'Disable (keep row)' : 'Enable'}
+                      onClick={()=>updateRow(r.id, { enabled: !r.enabled })}>
+                      {r.enabled ? 'Disable' : 'Enable'}
+                    </button>
+                    <button className="btn btn-sm btn-ghost"
+                      title="Copy CLI command to verify this source"
+                      onClick={()=>showVerifyCmd({kind:'id', value:r.id}, r.name)}>
+                      Verify
+                    </button>
+                    <ConfirmButton onConfirm={()=>remove(r.id)} />
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="10" className="empty">No sources yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {verifyModal && (
+        <VerifyModal
+          target={verifyModal.target}
+          label={verifyModal.label}
+          onClose={()=>setVerifyModal(null)}/>
+      )}
+    </div>
+  );
+}
+
+// Modal that calls the verify-source edge function (Deno, runs entirely
+// on Supabase) to render a 3-article preview from this RSS feed and
+// embeds the returned HTML in an iframe via srcdoc. ~5 second turnaround,
+// no GitHub Actions, no PAT — only id:N targets supported here. For
+// category:* / all the modal still surfaces the GH Actions link.
+function VerifyModal({ target, label, onClose }) {
+  const param = verifyTargetParam(target);
+  const cmd = verifyCmdFor(target);
+  // id:N (single source), category:NAME (~9 sources), and url:<rss>
+  // (ad-hoc preview-before-add) all run inline in the edge function.
+  // "all" was removed — too many fetches for one invocation.
+  const isInline = target.kind === 'id' || target.kind === 'category' || target.kind === 'url';
+  const [phase, setPhase] = React.useState('idle');   // idle|running|done|error
+  const [html, setHtml] = React.useState(null);
+  const [errMsg, setErrMsg] = React.useState(null);
+  const [elapsed, setElapsed] = React.useState(0);
+
+  const runVerify = async () => {
+    setPhase('running'); setErrMsg(null); setHtml(null);
+    const start = Date.now();
+    const tick = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 500);
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Sign in first.');
+      const reqBody = { target: param };
+      // For ad-hoc preview, pass the user's chosen name + category so
+      // the rendered HTML's header reflects the source they're about
+      // to add (instead of a placeholder).
+      if (target.kind === 'url') { reqBody.name = target.name; reqBody.category = target.category; }
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/verify-source`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+      });
+      const j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      setHtml(j.html);
+      setPhase('done');
+    } catch (e) {
+      setErrMsg(String(e.message || e));
+      setPhase('error');
+    } finally {
+      clearInterval(tick);
+    }
+  };
+
+  const isBusy = phase === 'running';
+
+  return (
+    <div onClick={isBusy ? undefined : onClose} style={{
+      position:'fixed', inset:0, background:'rgba(27,18,48,0.55)', zIndex:50,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+      overflowY:'auto',
+    }}>
+      <div onClick={e=>e.stopPropagation()} className="card" style={{
+        maxWidth: html ? 1000 : 560, width:'100%', maxHeight:'90vh', overflowY:'auto',
+      }}>
+        <div className="row" style={{justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+          <h3 style={{margin:0}}>Verify <span style={{color:'#9061f9'}}>{label}</span></h3>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={isBusy}>✕</button>
+        </div>
+
+        {phase === 'idle' && (
+          <>
+            <p style={{fontSize:13, color:'#6b5c80', lineHeight:1.5, margin:'0 0 14px'}}>
+              {target.kind === 'id'
+                ? <>Fetches this RSS feed, pulls the top 3 articles, grabs each article's og:image + title + description, and renders a self-contained preview. ~5s. Stamps <span className="pre" style={{padding:'1px 5px'}}>last_verified_at</span>.</>
+                : target.kind === 'category'
+                ? <>Fetches every enabled source in this category (typically ~9 sources) in parallel, pulls top 3 articles from each, and renders one combined preview. ~10-15s.</>
+                : <>Ad-hoc preview of an RSS URL <b>before</b> you save it. Doesn't write anything to the DB — just shows what the top 3 articles + og:images look like. Use this to sanity-check a feed before clicking <i>Add source</i>.</>}
+            </p>
+            <div className="row" style={{gap:10, marginBottom:14, flexWrap:'wrap'}}>
+              <button className="btn" onClick={runVerify}>☁️ Run verify now</button>
+            </div>
+            <details style={{marginTop:8}}>
+              <summary style={{fontSize:12, color:'#6b5c80', cursor:'pointer'}}>Or run locally (canonical Python pipeline — image optimization)</summary>
+              <div className="pre" style={{padding:'8px 10px', fontSize:12.5, marginTop:8, userSelect:'all'}}>{cmd}</div>
+            </details>
+          </>
+        )}
+
+        {phase === 'running' && (
+          <div>
+            <div style={{fontSize:13, color:'#1b1230', marginBottom:10, fontWeight:600}}>
+              Verifying… {elapsed}s
+            </div>
+            <div style={{height:8, background:'#f0e8d8', borderRadius:999, overflow:'hidden', marginBottom:10}}>
+              <div style={{
+                height:'100%',
+                width: `${Math.min(95, 5 + elapsed * 6)}%`,
+                background:'linear-gradient(90deg, #9061f9, #ff6ba0)',
+                borderRadius:999,
+                transition:'width .3s',
+              }}/>
+            </div>
+            <div style={{fontSize:12, color:'#6b5c80'}}>
+              {target.kind === 'category'
+                ? 'Fetching all sources in parallel — usually 10-15s'
+                : 'Fetching RSS, then 3 article pages in parallel · usually 3-6s'}
+            </div>
+          </div>
+        )}
+
+        {phase === 'done' && html && (
+          <>
+            <div style={{display:'flex', gap:10, alignItems:'center', marginBottom:10}}>
+              <span className="pill pill-on" style={{background:'#d4f3ef', color:'#0e8d82'}}>✓ Done in {elapsed}s</span>
+              <button className="btn btn-sm btn-ghost" onClick={runVerify}>↻ Re-run</button>
+            </div>
+            <iframe srcDoc={html} title="Verify preview"
+              style={{width:'100%', height:'70vh', border:'1px solid #f0e8d8', borderRadius:8, background:'#fff'}}/>
+          </>
+        )}
+
+        {phase === 'error' && (
+          <div className="err" style={{marginTop:10}}>
+            <b>Verify failed.</b> {errMsg}
+            <div style={{marginTop:10}}>
+              <button className="btn btn-sm" onClick={runVerify}>↻ Retry</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── CATEGORIES TAB ───────────────────────────────────────────────────
+function CategoriesTab({ flash, onChanged }) {
+  const [rows, setRows] = useState(null);
+  const [draft, setDraft] = useState({ slug:'', name:'', emoji:'', color:'#1b1230', display_order:99, active:true });
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_categories').select('*').order('display_order');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.slug || !draft.name) { flash('err', 'slug + name required'); return; }
+    const { error } = await sb.from('redesign_categories').insert(draft);
+    if (error) flash('err', error.message);
+    else { flash('ok', 'Category added'); setDraft({ slug:'', name:'', emoji:'', color:'#1b1230', display_order:99, active:true }); load(); onChanged?.(); }
+  };
+  const updateRow = async (id, patch) => {
+    const { error } = await sb.from('redesign_categories').update(patch).eq('id', id);
+    if (error) flash('err', error.message); else { load(); onChanged?.(); }
+  };
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_categories').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); onChanged?.(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card" style={{background:'#fff4e0', borderColor:'#f4c4ad'}}>
+        <div style={{fontSize:13, color:'#c14e2a'}}>
+          ⚠️ <b>Phase 2 wiring pending.</b> Edits land in
+          <span className="pre" style={{margin:'0 6px'}}>redesign_categories</span>
+          immediately, but the pipeline still uses hardcoded News/Science/Fun
+          until that refactor ships.
+        </div>
+      </div>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add category</h3>
+        <div className="grid3">
+          <div className="col"><span className="label">Slug (lowercase)</span>
+            <input value={draft.slug} onChange={e=>setDraft({...draft, slug:e.target.value.toLowerCase()})} placeholder="news"/></div>
+          <div className="col"><span className="label">Display name</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
+          <div className="col"><span className="label">Emoji</span>
+            <input value={draft.emoji} onChange={e=>setDraft({...draft, emoji:e.target.value})} maxLength={4}/></div>
+          <div className="col"><span className="label">Color (hex)</span>
+            <input value={draft.color} onChange={e=>setDraft({...draft, color:e.target.value})}/></div>
+          <div className="col"><span className="label">Order</span>
+            <input type="number" value={draft.display_order} onChange={e=>setDraft({...draft, display_order:parseInt(e.target.value||0)})}/></div>
+          <div className="col"><span className="label">Active</span>
+            <input type="checkbox" checked={draft.active} onChange={e=>setDraft({...draft, active:e.target.checked})}/></div>
+        </div>
+        <div className="row" style={{justifyContent:'flex-end', marginTop:12}}>
+          <button className="btn" onClick={add}>Add category</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Slug</th><th>Name</th><th>Emoji</th><th>Color</th><th>Order</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td><span className="pre">{r.slug}</span></td>
+                <td><input style={{width:'100%'}} defaultValue={r.name} onBlur={e=>e.target.value!==r.name && updateRow(r.id, { name:e.target.value })}/></td>
+                <td><input style={{width:60}} defaultValue={r.emoji||''} onBlur={e=>updateRow(r.id, { emoji:e.target.value })}/></td>
+                <td><input style={{width:90}} defaultValue={r.color||''} onBlur={e=>updateRow(r.id, { color:e.target.value })}/></td>
+                <td><input type="number" style={{width:60}} defaultValue={r.display_order} onBlur={e=>updateRow(r.id, { display_order:parseInt(e.target.value||0) })}/></td>
+                <td><input type="checkbox" checked={r.active} onChange={e=>updateRow(r.id, { active:e.target.checked })}/></td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="7" className="empty">No categories yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── AI PROVIDERS TAB ─────────────────────────────────────────────────
+function AIProvidersTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  // Add-form defaults: model_id seeded with V4 Pro since that's the
+  // currently-recommended SKU (75% discount through 2026-05-05).
+  // Fall back to deepseek-v4-flash if cost matters more than reasoning.
+  const empty = { name:'', base_url:'https://api.deepseek.com', model_id:'deepseek-v4-pro', api_key_secret:'DEEPSEEK_API_KEY', role:'any', enabled:true, priority:0, max_tokens_default:null, temperature_default:null };
+  const [draft, setDraft] = useState(empty);
+
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_ai_providers').select('*').order('role').order('priority');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.name || !draft.base_url || !draft.model_id || !draft.api_key_secret) { flash('err', 'name, base_url, model_id, api_key_secret required'); return; }
+    const { error } = await sb.from('redesign_ai_providers').insert(draft);
+    if (error) flash('err', error.message); else { flash('ok', 'Provider added'); setDraft(empty); load(); }
+  };
+  const updateRow = async (id, patch) => {
+    const { error } = await sb.from('redesign_ai_providers').update(patch).eq('id', id);
+    if (error) flash('err', error.message); else load();
+  };
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_ai_providers').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card" style={{background:'#e0f6f3', borderColor:'#9bd2c8'}}>
+        <div style={{fontSize:13, color:'#0e6e64', lineHeight:1.5}}>
+          ✅ <b>Live.</b> Pipeline reads this table on every run via
+          <span className="pre" style={{margin:'0 6px'}}>select_provider(role)</span>
+          (lowest <code>priority</code> wins among <code>enabled</code> rows).
+          Currently seeded: <b>DeepSeek V4 Pro</b> (priority 0, on 75% discount through
+          2026-05-05) with <b>DeepSeek V4 Flash</b> (priority 1) as fallback.
+          To switch back when the discount ends, raise V4 Pro's priority or flip <code>enabled</code> → false.
+        </div>
+      </div>
+      <div className="card" style={{background:'#fff9ef', borderColor:'#e2dccc'}}>
+        <div style={{fontSize:12.5, color:'#6b5c80', lineHeight:1.5}}>
+          <b>Quick presets:</b>
+          <button className="btn small" style={{margin:'0 6px'}}
+            onClick={()=>setDraft({...empty, name:'DeepSeek V4 Pro (discount)', model_id:'deepseek-v4-pro', priority:0})}>
+            DeepSeek V4 Pro · discount
+          </button>
+          <button className="btn small" style={{margin:'0 6px'}}
+            onClick={()=>setDraft({...empty, name:'DeepSeek V4 Flash', model_id:'deepseek-v4-flash', priority:1})}>
+            DeepSeek V4 Flash · cheap
+          </button>
+          <button className="btn small" style={{margin:'0 6px'}}
+            onClick={()=>setDraft({...empty, name:'OpenAI gpt-4o-mini', base_url:'https://api.openai.com/v1', model_id:'gpt-4o-mini', api_key_secret:'OPENAI_API_KEY', priority:50})}>
+            OpenAI gpt-4o-mini
+          </button>
+        </div>
+      </div>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add AI provider</h3>
+        <div className="grid3">
+          <div className="col"><span className="label">Name</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})} placeholder="DeepSeek V4"/></div>
+          <div className="col"><span className="label">Base URL</span>
+            <input value={draft.base_url} onChange={e=>setDraft({...draft, base_url:e.target.value})}/></div>
+          <div className="col"><span className="label">Model ID</span>
+            <input value={draft.model_id} onChange={e=>setDraft({...draft, model_id:e.target.value})}/></div>
+          <div className="col"><span className="label">API key secret name (env var)</span>
+            <input value={draft.api_key_secret} onChange={e=>setDraft({...draft, api_key_secret:e.target.value})} placeholder="DEEPSEEK_API_KEY"/></div>
+          <div className="col"><span className="label">Role</span>
+            <select value={draft.role} onChange={e=>setDraft({...draft, role:e.target.value})}>
+              <option value="any">any</option>
+              <option value="curator">curator</option>
+              <option value="rewriter">rewriter</option>
+              <option value="enricher">enricher</option>
+            </select></div>
+          <div className="col"><span className="label">Priority (lower = preferred)</span>
+            <input type="number" value={draft.priority} onChange={e=>setDraft({...draft, priority:parseInt(e.target.value||0)})}/></div>
+        </div>
+        <div className="row" style={{justifyContent:'space-between', marginTop:12}}>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <input type="checkbox" checked={draft.enabled} onChange={e=>setDraft({...draft, enabled:e.target.checked})}/> enabled
+          </label>
+          <button className="btn" onClick={add}>Add provider</button>
+        </div>
+        <div style={{marginTop:8, fontSize:11, color:'#6b5c80'}}>
+          The API key value lives in env vars or Supabase Vault; <i>only the name</i> is stored here.
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Pri</th><th>Model</th><th>Key env</th><th>Enabled</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.name}</td>
+                <td><select value={r.role} onChange={e=>updateRow(r.id, { role:e.target.value })}><option value="any">any</option><option value="curator">curator</option><option value="rewriter">rewriter</option><option value="enricher">enricher</option></select></td>
+                <td><input type="number" style={{width:60}} defaultValue={r.priority} onBlur={e=>updateRow(r.id, { priority:parseInt(e.target.value||0) })}/></td>
+                <td><span className="pre">{r.model_id}</span></td>
+                <td><span className="pre">{r.api_key_secret}</span></td>
+                <td><input type="checkbox" checked={r.enabled} onChange={e=>updateRow(r.id, { enabled:e.target.checked })}/></td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="7" className="empty">No providers yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── ADMIN USERS TAB ──────────────────────────────────────────────────
+function AdminUsersTab({ flash, session }) {
+  const [rows, setRows] = useState(null);
+  const [draft, setDraft] = useState({ email:'', name:'' });
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_admin_users').select('*').order('created_at');
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const add = async () => {
+    if (!draft.email) { flash('err', 'email required'); return; }
+    const { error } = await sb.from('redesign_admin_users').insert(draft);
+    if (error) flash('err', error.message); else { flash('ok', 'Admin added'); setDraft({ email:'', name:'' }); load(); }
+  };
+  const remove = async (id, email) => {
+    if (email === session?.user?.email) { flash('err', "Can't delete yourself."); return; }
+    const { error } = await sb.from('redesign_admin_users').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>Add admin</h3>
+        <div className="grid2">
+          <div className="col"><span className="label">Google email</span>
+            <input value={draft.email} onChange={e=>setDraft({...draft, email:e.target.value})}/></div>
+          <div className="col"><span className="label">Display name (optional)</span>
+            <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})}/></div>
+        </div>
+        <div className="row" style={{justifyContent:'flex-end', marginTop:12}}>
+          <button className="btn" onClick={add}>Add admin</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Email</th><th>Name</th><th>Added</th><th>Last login</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.email}{r.email === session?.user?.email && <span className="pill pill-on" style={{marginLeft:8}}>you</span>}</td>
+                <td>{r.name || '—'}</td>
+                <td>{fmtDate(r.created_at)}</td>
+                <td>{fmt(r.last_login_at)}</td>
+                <td><ConfirmButton onConfirm={()=>remove(r.id, r.email)} /></td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="5" className="empty">No admins.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── STORIES TAB ──────────────────────────────────────────────────────
+function StoriesTab({ flash, categories }) {
+  const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState({ date: '', category: 'all', archived: 'active' });
+
+  const load = async () => {
+    let q = sb.from('redesign_stories').select('id, published_date, category, story_slot, source_name, source_title, archived').order('published_date', {ascending:false}).order('category').order('story_slot').limit(200);
+    if (filter.date) q = q.eq('published_date', filter.date);
+    if (filter.category !== 'all') q = q.eq('category', filter.category);
+    if (filter.archived === 'active') q = q.eq('archived', false);
+    if (filter.archived === 'archived') q = q.eq('archived', true);
+    const { data, error } = await q;
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, [filter]);
+
+  const archive = async (id, archived) => {
+    const { error } = await sb.from('redesign_stories').update({ archived }).eq('id', id);
+    if (error) flash('err', error.message);
+    else { flash('ok', archived ? 'Archived' : 'Restored'); load(); }
+  };
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <div className="row" style={{justifyContent:'space-between', flexWrap:'wrap', gap:12}}>
+          <div className="row" style={{gap:8}}>
+            <input type="date" value={filter.date} onChange={e=>setFilter({...filter, date:e.target.value})}/>
+            <select value={filter.category} onChange={e=>setFilter({...filter, category:e.target.value})}>
+              <option value="all">all categories</option>
+              {categories.map(c => <option key={c.slug} value={c.name}>{c.name}</option>)}
+            </select>
+            <select value={filter.archived} onChange={e=>setFilter({...filter, archived:e.target.value})}>
+              <option value="active">active only</option>
+              <option value="archived">archived only</option>
+              <option value="any">any</option>
+            </select>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setFilter({ date:'', category:'all', archived:'active' })}>Reset</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr><th>Date</th><th>Cat / Slot</th><th>Title</th><th>Source</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {rows?.map(r => (
+              <tr key={r.id}>
+                <td>{r.published_date}</td>
+                <td>{r.category} #{r.story_slot}</td>
+                <td>{r.source_title}</td>
+                <td>{r.source_name}</td>
+                <td>{r.archived ? <span className="pill pill-off">archived</span> : <span className="pill pill-on">active</span>}</td>
+                <td>
+                  {r.archived
+                    ? <button className="btn btn-sm btn-ghost" onClick={()=>archive(r.id, false)}>Restore</button>
+                    : <ConfirmButton label="Archive" onConfirm={()=>archive(r.id, true)}>Archive</ConfirmButton>}
+                </td>
+              </tr>
+            ))}
+            {rows && rows.length === 0 && <tr><td colSpan="6" className="empty">No stories matching the filter.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── FEEDBACK TAB ─────────────────────────────────────────────────────
+// ── DISCUSSIONS TAB — kid responses to article discussion prompts ─
+// (was originally called "Feedback" before user-submitted feedback
+// got its own table; renamed for clarity.)
+function DiscussionsTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_user_responses').select('*').order('created_at', { ascending: false }).limit(200);
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const remove = async (id) => {
+    const { error } = await sb.from('redesign_user_responses').delete().eq('id', id);
+    if (error) flash('err', error.message); else { flash('ok', 'Deleted'); load(); }
+  };
+
+  return (
+    <div className="card">
+      <table>
+        <thead><tr><th>When</th><th>Story</th><th>Client</th><th>Response</th><th></th></tr></thead>
+        <tbody>
+          {rows?.map(r => (
+            <tr key={r.id}>
+              <td>{fmt(r.created_at)}</td>
+              <td><span className="pre">{r.story_id}</span></td>
+              <td><span className="pre">{(r.client_id||'').slice(0,8)}</span></td>
+              <td style={{maxWidth:520, whiteSpace:'pre-wrap'}}>{r.response_text || r.body || '—'}</td>
+              <td><ConfirmButton onConfirm={()=>remove(r.id)} /></td>
+            </tr>
+          ))}
+          {rows && rows.length === 0 && <tr><td colSpan="5" className="empty">No discussion responses yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── FEEDBACK TAB — user-submitted bug/suggestion/content feedback ─
+// Source: redesign_feedback (the floating 💬 button posts here via
+// the submit-feedback edge function). Each row has triaged_status:
+// new | converted | resolved | dismissed. The triage workflow:
+//   · "Convert to bug" — copy docs/bugs/_template.md to docs/bugs/
+//     <YYYY-MM-DD>-<slug>.md, fill it in, paste the path here, mark
+//     converted. Future commits referencing that record satisfy the
+//     commit-msg hook.
+//   · "Resolve" — fixed without a record needed (config tweak,
+//     content change). Optional note.
+//   · "Dismiss" — duplicate / spam / not actionable.
+function FeedbackTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState('new');   // new | all
+
+  const load = async () => {
+    let q = sb.from('redesign_feedback').select('*').order('created_at', { ascending: false }).limit(200);
+    if (filter === 'new') q = q.eq('triaged_status', 'new');
+    const { data, error } = await q;
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, [filter]);
+
+  const updateStatus = async (id, status, note, bug_record) => {
+    const patch = { triaged_status: status, triaged_at: new Date().toISOString() };
+    if (note !== undefined)       patch.triaged_note = note;
+    if (bug_record !== undefined) patch.bug_record   = bug_record;
+    const { error } = await sb.from('redesign_feedback').update(patch).eq('id', id);
+    if (error) { flash('err', error.message); return false; }
+    flash('ok', `Marked ${status}`);
+    load();
+    return true;
+  };
+
+  const convert = async (row) => {
+    const path = window.prompt(
+      'Bug-Record path (e.g. docs/bugs/2026-04-30-my-slug.md):\n' +
+      '— copy docs/bugs/_template.md, fill it in, add a row to INDEX.md, then paste the path here.',
+      `docs/bugs/${new Date().toISOString().slice(0,10)}-`
+    );
+    if (!path || !path.trim()) return;
+    const note = window.prompt('Optional triage note:', '') || '';
+    await updateStatus(row.id, 'converted', note, path.trim());
+  };
+
+  const resolve = async (row) => {
+    const note = window.prompt('Resolve note (what fixed it):', '');
+    if (note === null) return;
+    await updateStatus(row.id, 'resolved', note, null);
+  };
+
+  const dismiss = async (row) => {
+    const note = window.prompt('Dismiss reason (duplicate / spam / not actionable):', '');
+    if (note === null) return;
+    await updateStatus(row.id, 'dismissed', note, null);
+  };
+
+  const reopen = async (row) => {
+    if (!window.confirm('Re-open as new?')) return;
+    await updateStatus(row.id, 'new', null, null);
+  };
+
+  const catBadge = (c) => ({
+    bug: { color:'#a02b2b', bg:'#fff1f1', label:'🐞 bug' },
+    suggestion: { color:'#1d6dbb', bg:'#eef6ff', label:'💡 suggestion' },
+    content: { color:'#7a4d18', bg:'#fff5e8', label:'📰 content' },
+    other: { color:'#555', bg:'#f3f3f3', label:'💬 other' },
+  }[c] || { color:'#555', bg:'#f3f3f3', label:c });
+
+  const statusBadge = (s) => ({
+    new:       { color:'#7a4d18', bg:'#fff5e8' },
+    converted: { color:'#1d6dbb', bg:'#eef6ff' },
+    resolved:  { color:'#197a3b', bg:'#ecfaf0' },
+    dismissed: { color:'#666',    bg:'#f3f3f3' },
+  }[s] || { color:'#555', bg:'#f3f3f3' });
+
+  return (
+    <>
+      <div className="card" style={{padding:'14px 18px', marginBottom:14}}>
+        <div className="row" style={{alignItems:'center', gap:14, flexWrap:'wrap'}}>
+          <strong>Filter:</strong>
+          <button className={'btn btn-sm ' + (filter==='new' ? 'btn-primary' : '')}
+                  onClick={()=>setFilter('new')}>New only</button>
+          <button className={'btn btn-sm ' + (filter==='all' ? 'btn-primary' : '')}
+                  onClick={()=>setFilter('all')}>All</button>
+          <span style={{marginLeft:'auto', fontSize:12, color:'#666'}}>
+            {rows ? `${rows.length} rows` : 'loading…'}
+          </span>
+        </div>
+      </div>
+
+      <div className="card">
+        <table>
+          <thead><tr>
+            <th style={{width:140}}>When</th>
+            <th style={{width:110}}>Type</th>
+            <th>Message</th>
+            <th style={{width:170}}>Context</th>
+            <th style={{width:120}}>Status</th>
+            <th style={{width:200}}>Action</th>
+          </tr></thead>
+          <tbody>
+            {rows?.map(r => {
+              const cat = catBadge(r.category);
+              const st  = statusBadge(r.triaged_status);
+              return (
+                <tr key={r.id}>
+                  <td style={{whiteSpace:'nowrap'}}>{fmt(r.created_at)}</td>
+                  <td>
+                    <span style={{
+                      display:'inline-block', padding:'2px 8px', borderRadius:10,
+                      fontSize:11, fontWeight:700,
+                      color: cat.color, background: cat.bg,
+                    }}>{cat.label}</span>
+                  </td>
+                  <td style={{maxWidth:480, whiteSpace:'pre-wrap'}}>
+                    {r.message}
+                    {r.triaged_note && (
+                      <div style={{marginTop:6, paddingTop:6, borderTop:'1px dashed #eee', fontSize:11, color:'#666'}}>
+                        <strong>Triage note:</strong> {r.triaged_note}
+                        {r.bug_record && <div style={{marginTop:3}}>
+                          <strong>Bug record:</strong> <span className="pre">{r.bug_record}</span>
+                        </div>}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{fontSize:11, color:'#555'}}>
+                    {r.user_level && <div>Level: <strong>{r.user_level}</strong></div>}
+                    {r.user_language && <div>Lang: <strong>{r.user_language}</strong></div>}
+                    {r.page_url && <div style={{wordBreak:'break-all'}}>URL: <a href={r.page_url} target="_blank" rel="noreferrer">{r.page_url.slice(0,40)}…</a></div>}
+                    {r.client_id && <div className="pre">cid: {r.client_id.slice(0,8)}</div>}
+                  </td>
+                  <td>
+                    <span style={{
+                      display:'inline-block', padding:'2px 8px', borderRadius:10,
+                      fontSize:11, fontWeight:700,
+                      color: st.color, background: st.bg,
+                    }}>{r.triaged_status}</span>
+                  </td>
+                  <td>
+                    {r.triaged_status === 'new' && (
+                      <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                        <button className="btn btn-sm btn-primary" onClick={()=>convert(r)}>→ Bug record</button>
+                        <button className="btn btn-sm" onClick={()=>resolve(r)}>Resolved</button>
+                        <button className="btn btn-sm" onClick={()=>dismiss(r)}>Dismiss</button>
+                      </div>
+                    )}
+                    {r.triaged_status !== 'new' && (
+                      <button className="btn btn-sm" onClick={()=>reopen(r)}>Reopen</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {rows && rows.length === 0 && (
+              <tr><td colSpan="6" className="empty">No feedback {filter === 'new' ? 'pending' : 'yet'}.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+// ── RUNS TAB ─────────────────────────────────────────────────────────
+function RunsTab({ flash }) {
+  const [rows, setRows] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_runs').select('*').order('started_at', { ascending: false }).limit(30);
+    if (error) flash('err', error.message); else setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="card">
+      <div className="row" style={{justifyContent:'space-between', marginBottom:10}}>
+        <h3 style={{margin:0}}>Recent pipeline runs</h3>
+        <button className="btn btn-ghost btn-sm" onClick={load}>Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Status</th><th>Started</th><th>Finished</th><th>Stories</th><th>Notes</th></tr></thead>
+        <tbody>
+          {rows?.map(r => (
+            <React.Fragment key={r.id}>
+              <tr style={{cursor:'pointer'}} onClick={()=>setOpenId(openId===r.id?null:r.id)}>
+                <td>{r.run_date}</td>
+                <td>{r.status === 'persisted' ? <span className="pill pill-on">persisted</span> : <span className="pill pill-off">{r.status}</span>}</td>
+                <td>{fmt(r.started_at)}</td>
+                <td>{fmt(r.finished_at)}</td>
+                <td>{r.stories_persisted ?? '—'}</td>
+                <td style={{maxWidth:300, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{r.notes || ''}</td>
+              </tr>
+              {openId === r.id && r.telemetry && (
+                <tr><td colSpan="6"><pre className="json">{JSON.stringify(r.telemetry, null, 2)}</pre></td></tr>
+              )}
+            </React.Fragment>
+          ))}
+          {rows && rows.length === 0 && <tr><td colSpan="6" className="empty">No runs yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── PIPELINE / CRON TAB ──────────────────────────────────────────────
+// "Manual run" card — admin clicks a button → trigger-pipeline edge
+// function dispatches the GitHub workflow → returns the run id + URL
+// so the admin can click straight to the running job. The PAT lives
+// only on the edge function (env var GITHUB_DISPATCH_TOKEN); never
+// touches the kid's localStorage.
+function ManualRunCard({ cfg, flash }) {
+  const [busy, setBusy] = useState(false);
+  const [lastResult, setLastResult] = useState(null); // { workflow, runUrl, runId, dispatchedAt, status?, conclusion? }
+  const [variant, setVariant] = useState(cfg?.pipeline_variant || 'mega');
+  const [resumeFrom, setResumeFrom] = useState('');
+  const pollRef = useRef(null);
+
+  // Stop polling on unmount so we don't leak intervals.
+  useEffect(() => () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
+
+  const callEdge = async (body) => {
+    const sess = await sb.auth.getSession();
+    const token = sess?.data?.session?.access_token;
+    if (!token) throw new Error('Sign in first');
+    const url = `${SUPABASE_URL}/functions/v1/trigger-pipeline`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      const msg = data.hint ? `${data.error} — ${data.hint}` : (data.error || `HTTP ${res.status}`);
+      throw new Error(msg);
+    }
+    return data;
+  };
+
+  const refreshStatus = async (runId) => {
+    try {
+      console.log('[trigger-pipeline] status check for run', runId);
+      const data = await callEdge({ action: 'status', runId });
+      console.log('[trigger-pipeline] status:', data.status, data.conclusion || '');
+      setLastResult(prev => prev && prev.runId === runId ? { ...prev, ...data } : prev);
+      if (data.status === 'completed') {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        if (data.conclusion === 'success') flash('ok', `✓ Run #${runId} completed successfully`);
+        else                                flash('err', `✗ Run #${runId} ended: ${data.conclusion}`);
+      }
+    } catch (e) {
+      console.warn('[trigger-pipeline] status error:', e.message);
+    }
+  };
+
+  const startPolling = (runId) => {
+    if (pollRef.current) { clearInterval(pollRef.current); }
+    let elapsed = 0;
+    const tick = () => {
+      elapsed += 5;
+      // Cap at 30 minutes. Daily-pipeline mega runs take ~10-20 min.
+      if (elapsed > 1800) {
+        clearInterval(pollRef.current); pollRef.current = null;
+        console.log('[trigger-pipeline] poll timeout after 30 min — check GitHub manually');
+        return;
+      }
+      refreshStatus(runId);
+    };
+    pollRef.current = setInterval(tick, 5000);
+    // Also tick once now so the user sees the queued/in_progress state ~5s sooner.
+    setTimeout(() => refreshStatus(runId), 1000);
+  };
+
+  const dispatch = async (workflow, inputs = {}) => {
+    setBusy(true); setLastResult(null);
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    console.log('[trigger-pipeline] dispatch:', workflow, inputs);
+    try {
+      // Pre-flight diagnostics — these errors used to throw silently
+      // and just bounce the spinner off; surfacing them in the result
+      // card so the user sees WHY nothing happened.
+      const sess = await sb.auth.getSession();
+      const sessUser = sess?.data?.session?.user?.email;
+      const sessTokenLen = sess?.data?.session?.access_token?.length || 0;
+      console.log('[trigger-pipeline] session:', { email: sessUser, tokenLen: sessTokenLen });
+      if (!sessTokenLen) {
+        throw new Error(`No Supabase session (sb.auth.getSession() returned no access_token). Sign-in expired? Try Sign out + Sign in.`);
+      }
+
+      const data = await callEdge({ workflow, inputs });
+      console.log('[trigger-pipeline] dispatched:', data);
+      setLastResult(data);
+      flash('ok', `Dispatched ${workflow}${data.runId ? ` · run #${data.runId}` : ''}`);
+      if (data.runId) startPolling(data.runId);
+    } catch (e) {
+      console.error('[trigger-pipeline] error:', e.message, e);
+      flash('err', e.message || String(e));
+      // Surface in the card too so the user sees it after the toast fades.
+      setLastResult({ ok: false, errorMessage: e.message || String(e), workflow });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Friendly status badge — emoji + color reflect the run state.
+  const statusBadge = (status, conclusion) => {
+    if (!status) return null;
+    const map = {
+      queued:        { icon: '⏳', label: 'Queued',      bg: '#fff4c2', fg: '#8a6d00' },
+      in_progress:   { icon: '🔄', label: 'Running',     bg: '#e0f6f3', fg: '#0e6e64' },
+      completed:     conclusion === 'success'
+        ? { icon: '✓', label: 'Succeeded',  bg: '#d4f3ef', fg: '#0e8d82' }
+        : { icon: '✗', label: conclusion || 'Failed', bg: '#ffe4e4', fg: '#b22525' },
+    };
+    const m = map[status] || { icon: '•', label: status, bg: '#f0e8d8', fg: '#6b5c80' };
+    return (
+      <span style={{
+        display:'inline-block', padding:'3px 9px', borderRadius:999,
+        fontSize:12, fontWeight:800, background: m.bg, color: m.fg, marginLeft:8,
+      }}>{m.icon} {m.label}</span>
+    );
+  };
+
+  return (
+    <div className="card">
+      <h3 style={{marginTop:0}}>Manual run</h3>
+      <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
+        Bypass the schedule and trigger a workflow from this page. The PAT
+        used for dispatch sits server-side in the
+        <code style={{margin:'0 4px'}}>trigger-pipeline</code> edge function;
+        no token leaves the browser.
+      </p>
+
+      {/* Daily pipeline */}
+      <div style={{padding:'12px 0', borderTop:'1px dashed #e2dccc'}}>
+        <div style={{fontWeight:800, fontSize:14, marginBottom:8}}>📰 Daily pipeline</div>
+        <div className="row" style={{gap:10, alignItems:'flex-end', flexWrap:'wrap'}}>
+          <label className="col" style={{gap:4, fontSize:12}}>
+            <span className="label" style={{margin:0}}>Variant</span>
+            <select value={variant} onChange={e=>setVariant(e.target.value)}>
+              <option value="mega">mega — fewer LLM calls</option>
+              <option value="current">current — legacy per-source vet</option>
+            </select>
+          </label>
+          <label className="col" style={{gap:4, fontSize:12}}>
+            <span className="label" style={{margin:0}}>Resume from (mega only)</span>
+            <select value={resumeFrom} onChange={e=>setResumeFrom(e.target.value)}>
+              <option value="">— start fresh —</option>
+              <option value="stage2_picks">stage2_picks</option>
+              <option value="verify">verify</option>
+              <option value="rewrite">rewrite</option>
+              <option value="stage3_safety">stage3_safety</option>
+              <option value="enrich">enrich</option>
+              <option value="persist">persist</option>
+            </select>
+          </label>
+          <button className="btn"
+            disabled={busy}
+            onClick={()=>dispatch('daily-pipeline.yml', {
+              pipeline_variant: variant,
+              ...(resumeFrom ? { resume_from: resumeFrom } : {}),
+            })}>
+            {busy ? '⏳ Dispatching…' : '▶ Run pipeline now'}
+          </button>
+        </div>
+      </div>
+
+      {/* Republish bundle */}
+      <div style={{padding:'12px 0', borderTop:'1px dashed #e2dccc'}}>
+        <div style={{fontWeight:800, fontSize:14, marginBottom:8}}>📦 Republish bundle</div>
+        <p style={{fontSize:12, color:'#6b5c80', margin:'0 0 8px'}}>
+          Repacks <code>latest.zip</code> from current <code>website/</code> + dispatches
+          kidsnews-v2 sync. Use this after editing site code without re-running the pipeline.
+        </p>
+        <button className="btn"
+          disabled={busy}
+          onClick={()=>dispatch('republish-bundle.yml', { trigger_kidsnews_sync: 'true' })}>
+          {busy ? '⏳ Dispatching…' : '↻ Republish + sync'}
+        </button>
+      </div>
+
+      {/* Parent digest */}
+      <div style={{padding:'12px 0', borderTop:'1px dashed #e2dccc'}}>
+        <div style={{fontWeight:800, fontSize:14, marginBottom:8}}>📬 Parent digest</div>
+        <p style={{fontSize:12, color:'#6b5c80', margin:'0 0 8px'}}>
+          Send the parent email digest now (instead of waiting for the cron). Reads
+          all parents whose <code>digest_cadence ≠ off</code>.
+        </p>
+        <button className="btn"
+          disabled={busy}
+          onClick={()=>dispatch('parent-digest.yml', {})}>
+          {busy ? '⏳ Dispatching…' : '✉ Send digests now'}
+        </button>
+      </div>
+
+      {/* Last dispatch — auto-polls every 5s until 'completed' or 30 min */}
+      {lastResult && (
+        <div style={{
+          marginTop:14, padding:'12px 14px',
+          background: lastResult.errorMessage
+            ? '#ffe4e4'
+            : lastResult.status === 'completed'
+              ? (lastResult.conclusion === 'success' ? '#e0f6f3' : '#ffe4e4')
+              : '#fff9ef',
+          border: `1px solid ${
+            lastResult.errorMessage
+              ? '#f0c8c0'
+              : lastResult.status === 'completed'
+                ? (lastResult.conclusion === 'success' ? '#9bd2c8' : '#f0c8c0')
+                : '#e2dccc'
+          }`,
+          borderRadius:10, fontSize:13,
+        }}>
+          {lastResult.errorMessage ? (
+            <>
+              <div style={{fontWeight:800, color:'#b22525', marginBottom:4}}>
+                ⚠ Dispatch failed{lastResult.workflow ? ` (${lastResult.workflow})` : ''}
+              </div>
+              <pre className="json" style={{margin:0, whiteSpace:'pre-wrap', fontSize:12}}>{lastResult.errorMessage}</pre>
+              <div style={{marginTop:6, fontSize:11, color:'#6b5c80'}}>
+                Open F12 → Console for the full stack and any
+                <code style={{margin:'0 4px'}}>[trigger-pipeline]</code> log lines.
+              </div>
+            </>
+          ) : (
+          <>
+          <div style={{fontWeight:800, color:'#1b1230', marginBottom:4}}>
+            Dispatched {lastResult.workflow}
+            {lastResult.runId ? ` · run #${lastResult.runId}` : ''}
+            {statusBadge(lastResult.status, lastResult.conclusion)}
+          </div>
+          <div style={{fontSize:12, color:'#3a2a4a'}}>
+            at {fmt(lastResult.dispatchedAt)}
+            {Object.keys(lastResult.inputs || {}).length > 0 && (
+              <> · inputs: <code>{JSON.stringify(lastResult.inputs)}</code></>
+            )}
+          </div>
+          <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap'}}>
+            {lastResult.runUrl && (
+              <a href={lastResult.runUrl} target="_blank" rel="noopener"
+                 style={{color:'#1f5fd1', fontWeight:700, fontSize:12}}>
+                Watch on GitHub Actions ↗
+              </a>
+            )}
+            {lastResult.runId && lastResult.status !== 'completed' && (
+              <button className="btn btn-sm" onClick={()=>refreshStatus(lastResult.runId)}>
+                ↻ Refresh status
+              </button>
+            )}
+            {lastResult.status === 'in_progress' && (
+              <span style={{fontSize:11, color:'#6b5c80'}}>
+                Auto-refreshing every 5s · ⏱
+              </span>
+            )}
+          </div>
+          </>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        marginTop:14, padding:'8px 12px', fontSize:11, color:'#9a8d7a',
+        background:'#fff9ef', border:'1px dashed #e2dccc', borderRadius:8,
+      }}>
+        Equivalent CLI:
+        <pre className="json" style={{margin:'4px 0 0', fontSize:11}}>{`gh workflow run daily-pipeline.yml --repo daijiong1977/news-v2 -f pipeline_variant=${variant}`}</pre>
+      </div>
+    </div>
+  );
+}
+
+function PipelineTab({ flash }) {
+  const [cfg, setCfg] = useState(null);
+  const load = async () => {
+    const { data, error } = await sb.from('redesign_cron_config').select('*').eq('name','daily-pipeline').single();
+    if (error) flash('err', error.message); else setCfg(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    const { error } = await sb.from('redesign_cron_config').update({
+      pipeline_variant: cfg.pipeline_variant,
+      enabled: cfg.enabled,
+    }).eq('id', cfg.id);
+    if (error) flash('err', error.message); else flash('ok', 'Saved. The enabled flag and variant apply on the next scheduled run.');
+  };
+
+  if (!cfg) return <div className="empty">Loading…</div>;
+
+  return (
+    <div className="col" style={{gap:18}}>
+      <div className="card">
+        <h3 style={{marginTop:0}}>🔧 Daily-pipeline schedule</h3>
+        <p style={{fontSize:13, color:'#6b5c80', marginTop:0}}>
+          Runs daily at 06:10 Eastern (EST/EDT). GitHub Actions handles daylight saving time.
+          To change the time, update <span className="pre">daily-pipeline.yml</span> through a pull request;
+          the old UTC cron field in this database is no longer used.
+        </p>
+        <div className="grid2">
+          <div className="col">
+            <span className="label">Pipeline variant</span>
+            <select value={cfg.pipeline_variant} onChange={e=>setCfg({...cfg, pipeline_variant:e.target.value})}>
+              <option value="current">current (per-source vet)</option>
+              <option value="mega">mega (Stage 1-3 holistic)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="row" style={{justifyContent:'space-between', marginTop:14}}>
+          <label className="row" style={{gap:6, fontSize:13}}>
+            <input type="checkbox" checked={cfg.enabled} onChange={e=>setCfg({...cfg, enabled:e.target.checked})}/> enabled
+          </label>
+          <button className="btn" onClick={save}>Save settings</button>
+        </div>
+        {cfg.last_fired_at && <div style={{marginTop:10, fontSize:12, color:'#6b5c80'}}>Last fired: {fmt(cfg.last_fired_at)}</div>}
+      </div>
+
+      <ManualRunCard cfg={cfg} flash={flash}/>
+      <RetentionCard flash={flash}/>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RETENTION CARD — pipeline-content cleanup window
+// ─────────────────────────────────────────────────────────────────────
+function RetentionCard({ flash }) {
+  const [days, setDays] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const { data, error } = await sb.from('engine_config')
+      .select('value').eq('key', 'retention.days').maybeSingle();
+    if (error) { flash('err', error.message); return; }
+    setDays(data ? Number(data.value) : 30);
+  };
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (!Number.isFinite(days) || days < 7 || days > 365) {
+      flash('err', 'Retention must be between 7 and 365 days');
+      return;
+    }
+    setBusy(true);
+    const { error } = await sb.from('engine_config')
+      .upsert({ key: 'retention.days', value: days,
+                description: 'Days to retain pipeline-generated content' },
+              { onConflict: 'key' });
+    setBusy(false);
+    if (error) flash('err', error.message);
+    else flash('ok', `Retention set to ${days} days. Daily 03:00 UTC cron applies it.`);
+  };
+  if (days === null) return null;
+  return (
+    <div className="card" style={{marginTop:18}}>
+      <h3 style={{margin:'0 0 10px'}}>🗑️ Retention</h3>
+      <p style={{margin:'0 0 12px', fontSize:13, color:'#555'}}>
+        Pipeline-generated content (stories, runs, search index, daily
+        storage) is auto-deleted after this many days. User data
+        (reactions, responses, kid profiles) is never auto-cleaned.
+      </p>
+      <div className="row" style={{gap:10, alignItems:'center'}}>
+        <input type="number" min="7" max="365" value={days}
+               onChange={e => setDays(parseInt(e.target.value, 10))}
+               style={{width:90, padding:'6px 10px', border:'1px solid #ddd',
+                       borderRadius:6, fontSize:14}}/>
+        <span style={{color:'#777', fontSize:13}}>days</span>
+        <button className="btn" onClick={save} disabled={busy}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <span style={{color:'#999', fontSize:12, marginLeft:'auto'}}>
+          Cron: daily 03:00 UTC · workflow: retention-cleanup.yml
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SOURCE HEALTH TAB — sourcefinder weekly DeepSeek verdicts
+// ─────────────────────────────────────────────────────────────────────
+function SourceHealthTab({ flash }) {
+  const [report, setReport] = useState(null);
+  const [enabledMap, setEnabledMap] = useState({}); // source_name -> bool
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setBusy(true);
+    // Latest report for kidsnews vertical
+    const { data: reports, error } = await sb
+      .from('engine_source_reports')
+      .select('*')
+      .eq('vertical', 'kidsnews')
+      .order('generated_at', { ascending: false })
+      .limit(1);
+    if (error) { flash('err', error.message); setBusy(false); return; }
+    setReport(reports?.[0] || null);
+
+    // Current enabled state per source so we can render toggles
+    const { data: srcs } = await sb
+      .from('redesign_source_configs')
+      .select('id, name, enabled, state');
+    const m = {};
+    (srcs || []).forEach(s => { m[s.name] = { id: s.id, enabled: !!s.enabled, state: s.state || 'live' }; });
+    setEnabledMap(m);
+    setBusy(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggleEnabled = async (sourceName) => {
+    const row = enabledMap[sourceName];
+    if (!row) { flash('err', `unknown source: ${sourceName}`); return; }
+    const { error } = await sb
+      .from('redesign_source_configs')
+      .update({ enabled: !row.enabled })
+      .eq('id', row.id);
+    if (error) flash('err', error.message);
+    else {
+      flash('ok', `${sourceName} ${row.enabled ? 'disabled' : 'enabled'}`);
+      load();
+    }
+  };
+
+  const verdictBadge = (v) => {
+    const palette = {
+      KEEP:  { bg:'#d4edda', fg:'#155724' },
+      WATCH: { bg:'#fff3cd', fg:'#856404' },
+      DROP:  { bg:'#f8d7da', fg:'#721c24' },
+    };
+    const p = palette[v] || { bg:'#eee', fg:'#333' };
+    return <span style={{
+      display:'inline-block', padding:'2px 10px', borderRadius:12,
+      fontWeight:600, background:p.bg, color:p.fg, fontSize:12,
+    }}>{v}</span>;
+  };
+
+  if (busy && !report) return <div className="card">Loading…</div>;
+  if (!report) return (
+    <div className="card">
+      <p style={{margin:0}}>No source health report yet.</p>
+      <p style={{margin:'8px 0 0', color:'#777', fontSize:13}}>
+        Reports run weekly Monday 06:00 UTC. Trigger manually with{' '}
+        <code>gh workflow run health.yml -R daijiong1977/sourcefinder</code>.
+      </p>
+    </div>
+  );
+
+  const sources = (report.sources || []);
+  const counts = sources.reduce((acc, s) => {
+    acc[s.verdict] = (acc[s.verdict] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline'}}>
+          <h3 style={{margin:0}}>Source Health</h3>
+          <span style={{fontSize:13, color:'#777'}}>
+            {new Date(report.generated_at).toLocaleString()} ·{' '}
+            {report.window_start} → {report.window_end}
+          </span>
+        </div>
+        <p style={{margin:'12px 0 4px'}}>{report.summary}</p>
+        <div style={{display:'flex', gap:14, marginTop:8, fontSize:13}}>
+          <span>{verdictBadge('KEEP')} {counts.KEEP || 0}</span>
+          <span>{verdictBadge('WATCH')} {counts.WATCH || 0}</span>
+          <span>{verdictBadge('DROP')} {counts.DROP || 0}</span>
+        </div>
+      </div>
+
+      <div className="card" style={{padding:0, overflow:'hidden'}}>
+        <table style={{width:'100%', borderCollapse:'collapse'}}>
+          <thead>
+            <tr style={{background:'#f7f7f7', textAlign:'left'}}>
+              <th style={{padding:'10px 12px'}}>Source</th>
+              <th style={{padding:'10px 12px'}}>Cat</th>
+              <th style={{padding:'10px 12px'}}>Verdict</th>
+              <th style={{padding:'10px 12px', textAlign:'right'}}>Score</th>
+              <th style={{padding:'10px 12px'}}>Reasoning</th>
+              <th style={{padding:'10px 12px', textAlign:'right'}}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sources
+              .slice()
+              .sort((a, b) => (a.category || '').localeCompare(b.category || '')
+                              || (a.source_name || '').localeCompare(b.source_name || ''))
+              .map((s, i) => {
+                const cur = enabledMap[s.source_name];
+                return (
+                  <tr key={i} style={{borderTop:'1px solid #eee'}}>
+                    <td style={{padding:'10px 12px', fontWeight:500}}>{s.source_name}</td>
+                    <td style={{padding:'10px 12px', color:'#555'}}>{s.category}</td>
+                    <td style={{padding:'10px 12px'}}>{verdictBadge(s.verdict)}</td>
+                    <td style={{padding:'10px 12px', textAlign:'right', color:'#555'}}>{s.score}</td>
+                    <td style={{padding:'10px 12px', color:'#555', fontSize:13}}>{s.reasoning}</td>
+                    <td style={{padding:'10px 12px', textAlign:'right'}}>
+                      {cur ? (
+                        <button
+                          className="btn"
+                          onClick={() => toggleEnabled(s.source_name)}
+                          style={cur.enabled
+                            ? {background:'#fff', color:'#a40', border:'1px solid #c93'}
+                            : {background:'#155724', color:'#fff'}}
+                        >
+                          {cur.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                      ) : <span style={{color:'#999', fontSize:12}}>not in pool</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// MINING CONSOLE TAB — sourcefinder discovery + probation status
+// ─────────────────────────────────────────────────────────────────────
+function MiningConsoleTab({ flash }) {
+  const [runs, setRuns] = useState([]);
+  const [probation, setProbation] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setBusy(true);
+    const [{ data: rs }, { data: ps }] = await Promise.all([
+      sb.from('engine_mining_runs')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(10),
+      sb.from('redesign_source_configs')
+        .select('id, name, category, subbucket, state, rss_url')
+        .eq('state', 'probation'),
+    ]);
+    setRuns(rs || []);
+    setProbation(ps || []);
+    setBusy(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div>
+      <div className="card" style={{marginBottom:16}}>
+        <h3 style={{margin:'0 0 12px'}}>Probation pool ({probation.length})</h3>
+        {probation.length === 0
+          ? <p style={{margin:0, color:'#777'}}>No sources currently on probation.</p>
+          : <table style={{width:'100%', borderCollapse:'collapse'}}>
+              <thead><tr style={{background:'#f7f7f7'}}>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Source</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Category</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Subbucket</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>RSS</th>
+              </tr></thead>
+              <tbody>
+                {probation.map(p => (
+                  <tr key={p.id} style={{borderTop:'1px solid #eee'}}>
+                    <td style={{padding:'8px 12px'}}>{p.name}</td>
+                    <td style={{padding:'8px 12px'}}>{p.category}</td>
+                    <td style={{padding:'8px 12px'}}>{p.subbucket || '—'}</td>
+                    <td style={{padding:'8px 12px', fontSize:12, fontFamily:'monospace'}}>{p.rss_url}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        }
+      </div>
+
+      <div className="card">
+        <h3 style={{margin:'0 0 12px'}}>Recent mining runs</h3>
+        {runs.length === 0
+          ? <p style={{margin:0, color:'#777'}}>No mining runs yet. Trigger via{' '}
+              <code>gh workflow run mining.yml -R daijiong1977/sourcefinder</code>.</p>
+          : <table style={{width:'100%', borderCollapse:'collapse'}}>
+              <thead><tr style={{background:'#f7f7f7'}}>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Started</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Cat / Sub</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Trigger</th>
+                <th style={{padding:'8px 12px', textAlign:'left'}}>Status</th>
+                <th style={{padding:'8px 12px', textAlign:'right'}}>Discovered → Triaged → Probation</th>
+              </tr></thead>
+              <tbody>
+                {runs.map(r => (
+                  <tr key={r.id} style={{borderTop:'1px solid #eee'}}>
+                    <td style={{padding:'8px 12px', fontSize:12}}>{new Date(r.started_at).toLocaleString()}</td>
+                    <td style={{padding:'8px 12px'}}>{r.category}/{r.subbucket || '—'}</td>
+                    <td style={{padding:'8px 12px', color:'#555', fontSize:12}}>{r.trigger}</td>
+                    <td style={{padding:'8px 12px'}}>{r.status}</td>
+                    <td style={{padding:'8px 12px', textAlign:'right', fontSize:12, color:'#555'}}>
+                      {r.candidates_discovered ?? 0} → {r.candidates_triaged ?? 0} → {r.candidates_promoted_to_probation ?? 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ADMIN UI — main app
+// ─────────────────────────────────────────────────────────────────────
+function AdminUI({ session, onSignOut, onSignIn }) {
+  const [tab, setTab] = useState('sources');
+  const [notice, flash] = useNotice();
+  const [categories, setCategories] = useState([]);
+
+  const loadCategories = async () => {
+    const { data } = await sb.from('redesign_categories').select('*').order('display_order');
+    setCategories(data || []);
+  };
+  useEffect(() => { loadCategories(); }, []);
+
+  const tabs = [
+    ['sources',    '📡 Sources'],
+    ['health',     '🩺 Source Health'],
+    ['mining',     '⛏️ Mining Console'],
+    ['categories', '🏷️ Categories'],
+    ['providers',  '🤖 AI Providers'],
+    ['admins',     '👥 Admins'],
+    ['stories',    '📰 Stories'],
+    ['discussions','💭 Discussions'],
+    ['feedback',   '💬 Feedback'],
+    ['runs',       '🏃 Runs'],
+    ['pipeline',   '🔧 Pipeline'],
+  ];
+
+  return (
+    <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+      <AuthHeader session={session} onSignIn={onSignIn} onSignOut={onSignOut}/>
+      <Notice notice={notice}/>
+      <div className="card" style={{padding:0, marginBottom:18, overflow:'hidden'}}>
+        <div className="row" style={{flexWrap:'wrap', gap:0, padding:'0 6px'}}>
+          {tabs.map(([k,label]) => (
+            <button key={k} className={'tab' + (tab===k?' active':'')} onClick={()=>setTab(k)}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'sources'    && <SourcesTab flash={flash} categories={categories}/>}
+      {tab === 'health'     && <SourceHealthTab flash={flash}/>}
+      {tab === 'mining'     && <MiningConsoleTab flash={flash}/>}
+      {tab === 'categories' && <CategoriesTab flash={flash} onChanged={loadCategories}/>}
+      {tab === 'providers'  && <AIProvidersTab flash={flash}/>}
+      {tab === 'admins'     && <AdminUsersTab flash={flash} session={session}/>}
+      {tab === 'stories'    && <StoriesTab flash={flash} categories={categories}/>}
+      {tab === 'discussions'&& <DiscussionsTab flash={flash}/>}
+      {tab === 'feedback'   && <FeedbackTab flash={flash}/>}
+      {tab === 'runs'       && <RunsTab flash={flash}/>}
+      {tab === 'pipeline'   && <PipelineTab flash={flash}/>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// TOP-LEVEL APP — handles bootstrap detection + auth gating
+// ─────────────────────────────────────────────────────────────────────
+function App() {
+  const [bootState, setBootState] = useState({ loading: true, adminCount: 0, allowed: false });
+  const [session, setSession] = useState(null);
+
+  // Listen for auth changes
+  useEffect(() => {
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = sb.auth.onAuthStateChange((_evt, s) => setSession(s));
+    return () => sub.subscription?.unsubscribe();
+  }, []);
+
+  // Re-check bootstrap state + allowlist when session changes
+  const recheck = async () => {
+    // admin_user_count() is a SECURITY DEFINER RPC — anon callers can
+    // get the count without exposing email rows.
+    const { data: countResult } = await sb.rpc('admin_user_count');
+    const count = countResult ?? 0;
+    let allowed = false;
+    if (session?.user?.email) {
+      // Once signed in, the SELECT policy admits the caller iff
+      // _is_admin() is true (their email is in the table). This call
+      // returns the row only when allowed, otherwise empty.
+      const { data } = await sb.from('redesign_admin_users').select('id').eq('email', session.user.email).maybeSingle();
+      allowed = !!data;
+      if (allowed) {
+        // best-effort last-login bump (RLS-allowed since user is admin)
+        await sb.from('redesign_admin_users').update({ last_login_at: new Date().toISOString() }).eq('email', session.user.email);
+      }
+    }
+    setBootState({ loading: false, adminCount: count, allowed });
+  };
+  useEffect(() => { recheck(); }, [session]);
+
+  const signIn = async () => {
+    const redirectTo = window.location.origin + window.location.pathname;
+    await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+  };
+  const signOut = async () => { await sb.auth.signOut(); setSession(null); };
+
+  if (bootState.loading) return <div className="empty">Loading…</div>;
+
+  // Bootstrap: no admins yet → open access; let user (signed in or not) add the first admin
+  if (bootState.adminCount === 0) {
+    return (
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+        <AuthHeader session={session} onSignIn={signIn} onSignOut={signOut}/>
+        <BootstrapWizard session={session} onDone={recheck}/>
+      </div>
+    );
+  }
+
+  // Has admins, but caller isn't authed or isn't on the list
+  if (!session) {
+    return (
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+        <AuthHeader session={null} onSignIn={signIn} onSignOut={signOut}/>
+        <SignInPanel onSignIn={signIn}/>
+      </div>
+    );
+  }
+  if (!bootState.allowed) {
+    return (
+      <div style={{maxWidth:1180, margin:'0 auto', padding:'24px 20px 60px'}}>
+        <AuthHeader session={session} onSignIn={signIn} onSignOut={signOut}/>
+        <SignInPanel onSignIn={signIn} accessDenied={true} deniedEmail={session.user.email}/>
+      </div>
+    );
+  }
+
+  return <AdminUI session={session} onSignIn={signIn} onSignOut={signOut}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

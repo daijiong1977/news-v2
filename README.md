@@ -5,6 +5,7 @@ Production content pipeline for KidsNews v2. `news-v2` generates content;
 
 ## Current pipeline and tuning guide
 
+- [News-only DeepSeek/Bot cost experiment](docs/KIDSNEWS-NEWS-HYBRID-TEST.md): opt-in shadow profile; no production publication.
 - [Current project map and operations handoff (中文)](PROJECT-OPERATIONS.md): repositories, local worktrees, sync chain, branch roles, current selection algorithm, pitfalls, and reusable lessons. Read this before the historical redesign notes below.
 - [2026-09-26 pipeline audit (中文)](docs/pipeline-funnel-audit-2026-09-26.md): separate News/Science/Fun source inventories, candidate funnels, measured timings, bottlenecks, and tuning locations.
 - [2026-09-27 fixes and reuse (中文)](docs/2026-09-27-fixes-and-reuse.md): today's issues, fixes, source-table changes, validation limits, and reusable practices.

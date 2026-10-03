@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Kids News · Agent Shadow</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><span class="badge">SHADOW · 测试站</span><h1>Kids News · Agent Lab</h1>
+    <p>比较不同 Agent 的每日选文和改写结果。</p>
+    <a href="https://kidsnews.21mins.com" target="_blank" rel="noopener">打开正式站 ↗</a>
+  </header>
+  <main>
+    <section class="status"><h2>本次运行</h2><p id="run">正在读取运行状态…</p></section>
+    <nav aria-label="文章筛选">
+      <label>栏目 <select id="category" disabled><option value="news">News</option><option value="science">Science</option><option value="fun">Fun</option></select></label>
+      <label>阅读版本 <select id="level" disabled><option value="easy">Easy</option><option value="middle">Middle</option><option value="cn">中文摘要</option></select></label>
+    </nav>
+    <p id="message" role="status"></p><section id="articles" aria-label="文章"></section>
+  </main>
+  <footer>测试内容仅供审阅。阅读、登录、邮件和正式站发布各自独立。</footer>
+</body>
+</html>

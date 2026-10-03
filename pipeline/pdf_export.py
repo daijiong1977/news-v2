@@ -133,6 +133,7 @@ class ArticlePDF(FPDF):
 
     def header_bar(self, step_label: str):
         """Category-colored top bar with step label."""
+        self._step_label = step_label.split('·', 1)[0].strip()
         # Category pill
         c = self._cat_color
         self.set_fill_color(*c)
@@ -161,7 +162,7 @@ class ArticlePDF(FPDF):
         # Page-number ratio
         page_no = self.page_no()
         self.cell(0, 0.18,
-                  f"News Oh,Ye!  ·  Step {page_no} of 4",
+                  f"News Oh,Ye!  ·  {getattr(self, '_step_label', 'Step 1')} of 4",
                   new_x=XPos.RIGHT, new_y=YPos.TOP)
         self.cell(0, 0.18, f"Page {page_no} / {{nb}}", align="R")
 
@@ -412,9 +413,11 @@ class ArticlePDF(FPDF):
 
 def render_article_pdf(detail: dict, level: str, category: str,
                         source: str, mined_at: str, read_mins: int,
-                        out_path: Path) -> None:
+                        out_path: Path, *, created_at=None) -> None:
     """Render one article's 4-page PDF to `out_path`."""
     pdf = ArticlePDF(detail.get("title") or "(untitled)", category)
+    if created_at is not None:
+        pdf.set_creation_date(created_at)
     pdf.alias_nb_pages()
     pdf.render_page_read(detail, source, mined_at, read_mins)
     pdf.render_page_background(detail)
