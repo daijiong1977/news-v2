@@ -45,7 +45,20 @@ Details must correspond to the final corrected article and use the six specified
 '''
 
 
-def body_errors(value, category, source_words):
+SEMANTIC_RECENCY_PROMPT = '''\nBefore editing, determine when the MAIN reported event happened, relative to
+as_of_date in America/New_York. Read the original body, not just its publication
+date. Understand relative phrases such as "three weeks ago", "last month", and
+"yesterday"; do not mistake historical background for the main event. News main
+events older than 3 days and Fun main events older than 7 days are stale.
+If stale, STOP: return ONLY {"source_event_fresh":false,
+"freshness_reason":"brief source-grounded reason"}. Do not rewrite an old event
+as if it happened recently. If current, return the usual complete combined answer
+PLUS "source_event_fresh":true and "freshness_reason":"brief dated rationale".
+If the event date is genuinely unclear, do not assert it is current: reject it.
+Science is exempt from this event-age gate.\n'''
+
+
+def body_errors(value, category, source_words, *, require_fresh=False):
     if not isinstance(value, dict) or not isinstance(value.get('corrected_article'), dict):
         return ['corrected_article object required']
     entry = value['corrected_article']
@@ -63,6 +76,10 @@ def body_errors(value, category, source_words):
         errors.append('Final safety/neutrality score failed')
     if type(value.get('facts_supported')) is not bool:
         errors.append('facts_supported boolean required (false is warning only)')
+    if require_fresh and (value.get('source_event_fresh') is not True or
+                          not isinstance(value.get('freshness_reason'), str) or
+                          not value['freshness_reason'].strip()):
+        errors.append('Current main event and source-grounded freshness_reason required')
     if value.get('event_clear') is not True:
         errors.append('Final event duplicate/uncertain or event_clear missing')
     if not isinstance(value.get('notes'), str):
@@ -70,8 +87,8 @@ def body_errors(value, category, source_words):
     return errors
 
 
-def checked_body(value, cat, art):
-    errors = body_errors(value, cat, art['word_count'])
+def checked_body(value, cat, art, *, require_fresh=False):
+    errors = body_errors(value, cat, art['word_count'], require_fresh=require_fresh)
     if not errors:
         from .website_release import evidence_gate
         for level in ('easy_en', 'middle_en'):
@@ -144,9 +161,15 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
     state = read(path) if path.exists() else {'phase': 'initial', 'body_repairs': 0, 'detail_repairs': 0}
     if 'result' in state:
         return state['result']
+    collection = root / 'source-collection.json'
+    require_fresh = (cat in ('News', 'Fun') and collection.exists() and
+                     read(collection).get('semantic_event_recency') is True)
+    as_of_date = read(root / 'input.json')['date'] if require_fresh else None
     material = {'category': cat, 'source': art['body'], 'source_url': art['link'], 'article': draft,
                 'history': history, 'accepted_events': accepted,
                 'body_word_bands': {l: rewrite_band(l, cat, art['word_count']) for l in ('easy', 'middle')}}
+    if require_fresh:
+        material['as_of_date'] = as_of_date
     def save():
         write(path, state)
     def request(key, prompt, data):
@@ -154,13 +177,13 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
         return ask(root, key, prompt, data, lambda v: [] if isinstance(v, dict) else ['JSON object required'])
     while 'result' not in state:
         phase = state['phase']
-        detail_only = phase == 'detail_fix' or (phase == 'fix' and not checked_body(state['value'], cat, art))
+        detail_only = phase == 'detail_fix' or (phase == 'fix' and not checked_body(state['value'], cat, art, require_fresh=require_fresh))
         key = f'review-finish-{cat}-{sid}' if phase == 'initial' else f'review-finish-fix-{cat}-{sid}' if phase == 'fix' else f'review-detail-fix-{cat}-{sid}'
         if detail_only:
             prompt = NATIVE_DETAILS_PROMPT + '\nRepair ONLY failed details. The supplied final article is immutable. Return ONLY {"details":{...}}.'
             data = {'source': art['body'], 'article': state['value']['corrected_article'], 'details': state['value'].get('details'), 'errors': state['errors']}
         else:
-            prompt = PROMPT + ('\nTARGETED FIX ONLY: correct listed failures in this ONE article. Keep all passing fields unchanged; if body changes update affected details.' if phase == 'fix' else '')
+            prompt = PROMPT + (SEMANTIC_RECENCY_PROMPT if require_fresh else '') + ('\nTARGETED FIX ONLY: correct listed failures in this ONE article. Keep all passing fields unchanged; if body changes update affected details.' if phase == 'fix' else '')
             data = {**material, **({'previous': state['value'], 'errors': state['errors']} if phase == 'fix' else {})}
         try:
             value = state['pending_value'] if 'pending_value' in state else request(key, prompt, data)
@@ -174,6 +197,12 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
                 save(); break
         state['pending_value'] = value
         save()  # answer committed before checks or next handoff
+        if require_fresh and value.get('source_event_fresh') is False:
+            reason = value.get('freshness_reason')
+            state['result'] = {'status': 'gone', 'reason': 'stale_or_uncertain_main_event: ' +
+                               (reason.strip() if isinstance(reason, str) and reason.strip() else 'no dated rationale'),
+                               'key': key}
+            save(); break
         if detail_only:
             # Freeze an already passing article and complete detail levels. A
             # repair cannot invalidate them, even when its JSON is malformed.
@@ -193,7 +222,7 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
             value = state['value']
         else:
             state['value'] = value
-        bad_body = checked_body(value, cat, art)
+        bad_body = checked_body(value, cat, art, require_fresh=require_fresh)
         bad_details = detail_errors(value, value['corrected_article']) if not bad_body else []
         if phase == 'initial' and (bad_body or bad_details):
             # Cheap deletable optional mistakes need no model correction.

@@ -114,6 +114,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                 'results': [], 'windows': [], 'status': 'pending'} for s in selected], 'complete': False}
         from .source_freshness import POLICY
         state = {'version': 1, 'date': today, 'sections': sections, 'freshness_policy': POLICY,
+                 'semantic_event_recency': True,
                  'news_metadata_screen': True, 'routing_max_words': 2000,
                  'category_limits': {'News': {'pass_target': 6, 'min_good': 18}} if fixed else {},
                  'limits': {'per_source': 12, 'pass_target': 4, 'min_groups': 0 if fixed else 3, 'min_good': 12 if fixed else 10,

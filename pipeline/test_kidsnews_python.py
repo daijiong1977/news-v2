@@ -199,6 +199,28 @@ def test_editor_rejects_one_body_and_uses_same_five_reserve(tmp_path,monkeypatch
     assert {a['candidate']['id'] for a in section['accepted']}<=set(section['order'])
 
 
+def test_editor_rejects_relative_stale_event_and_uses_reserve(tmp_path, monkeypatch):
+    from pipeline.kidsnews_api_editor import edit_groups
+    prepared(tmp_path, monkeypatch)
+    provider = Provider()
+    original = provider.complete
+    stale = [False]
+    def selective(payload, timeout):
+        material = json.loads(payload['messages'][1]['content'])
+        if material.get('category') == 'News' and 'source' in material and not stale[0]:
+            stale[0] = True
+            provider.calls.append(payload)
+            value = {'source_event_fresh': False,
+                     'freshness_reason': 'The main event happened three weeks ago'}
+            return {'choices': [{'message': {'content': json.dumps(value)}, 'finish_reason': 'stop'}]}
+        return original(payload, timeout)
+    provider.complete = selective
+    assert edit_groups(tmp_path, provider, {'model': 'fake'})['ok']
+    section = runner.read(tmp_path / 'editor-state.json')['News']
+    assert len(section['accepted']) == 3
+    assert any(o['status'] == 'gone' and 'three weeks ago' in o['reason'] for o in section['outcomes'])
+
+
 def test_http_json_provider_is_pluggable_without_cursor(monkeypatch):
     from pipeline.kidsnews_python import agent_provider
     monkeypatch.setenv('MY_AGENT_KEY','private')

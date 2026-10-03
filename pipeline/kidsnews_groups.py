@@ -127,6 +127,9 @@ def prepare_groups(root):
     if (root / 'editor-state.json').exists():
         raise ValueError('Cannot convert an interleaved run to three-stage mode; keep its original command')
     snapshot = read(root / 'input.json')
+    collection_path = root / 'source-collection.json'
+    semantic_recency = (collection_path.exists() and
+                        read(collection_path).get('semantic_event_recency') is True)
     drafts = read(root / 'drafts-for-grok.json')
     if snapshot.get('test_profile') != 'source-first-deepseek' or drafts['counts'] != {c: 5 for c in CATS}:
         raise ValueError('Three-stage mode requires the complete fixed fifteen drafts')
@@ -142,6 +145,12 @@ def prepare_groups(root):
                          'importance': originals[item['id']]['importance'],
                          'body_word_bands': {level: rewrite_band(level, cat, source['word_count'])
                                              for level in ('easy', 'middle')}})
+        freshness_rule = ('''\nNews and Fun: inspect each source's MAIN event date, including relative expressions
+such as "three weeks ago". Relative to the supplied date in America/New_York,
+News older than 3 days and Fun older than 7 days are stale. Put stale/uncertain
+events after current ones; prefer current winners. Historical background is not
+the main event. Each winner is checked again before editing; never make an old
+event sound current.\n''' if semantic_recency and cat in ('News', 'Fun') else '')
         material = {'date': snapshot['date'], 'category': cat, 'history': snapshot['history'][cat],
                     'candidates': rows, 'prompt': '''Choose exactly THREE from these fixed FIVE.
 Return all five IDs in order, the three completed winners FIRST and two reserves.
@@ -158,7 +167,7 @@ One article at a time: correct body, create Easy/Middle details and self-check
 together. Save each answer immediately. Do NOT run intermediate Python, search,
 change code, call external models, deploy, write databases or delete checkpoints.
 Compare the three winners with each other as well as supplied category history.
-''' + (FAMILY_SPORTS_PREFERENCE + FUN_SPORTS_LIMIT_RULE if cat == 'Fun' else '') + PROMPT,
+''' + freshness_rule + (FAMILY_SPORTS_PREFERENCE + FUN_SPORTS_LIMIT_RULE if cat == 'Fun' else '') + PROMPT,
                     'selection_schema': {'request_id': '<request_id>', 'order': ['<all five IDs, winners first>'],
                                          'reason': '<selection and any relaxed preferences>'},
                     'article_schema': {'request_id': '<request_id>', 'id': '<candidate ID>',

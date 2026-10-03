@@ -15,6 +15,45 @@ def broken_details():
     return value
 
 
+def test_semantic_stale_event_rejected_without_rewrite_or_retry(tmp_path):
+    runner.write(tmp_path / 'source-collection.json', {'semantic_event_recency': True})
+    runner.write(tmp_path / 'input.json', {'date': '2026-10-03'})
+    calls = []
+    def ask(root, key, prompt, data, validate):
+        calls.append(key)
+        assert 'three weeks ago' in prompt
+        assert data['as_of_date'] == '2026-10-03'
+        return {'source_event_fresh': False, 'freshness_reason': 'Main event was three weeks ago'}
+    result = finish(tmp_path, 'Fun', 'old', ART, {}, [], [], ask)
+    assert result['status'] == 'gone' and 'three weeks ago' in result['reason']
+    assert calls == ['review-finish-Fun-old']
+    assert finish(tmp_path, 'Fun', 'old', ART, {}, [], [], ask) == result
+
+
+def test_semantic_recency_missing_answer_cannot_pass(tmp_path):
+    runner.write(tmp_path / 'source-collection.json', {'semantic_event_recency': True})
+    runner.write(tmp_path / 'input.json', {'date': '2026-10-03'})
+    calls = []
+    def ask(root, key, prompt, data, validate):
+        calls.append(key)
+        value = combined_answer()
+        value.pop('source_event_fresh')
+        return value
+    result = finish(tmp_path, 'Fun', 'missing', ART, {}, [], [], ask)
+    assert result['status'] == 'gone'
+    assert len(calls) == 2
+
+
+def test_old_checkpoint_does_not_gain_new_answer_contract(tmp_path):
+    runner.write(tmp_path / 'source-collection.json', {'freshness_policy': 'category-source-date-v3'})
+    def ask(root, key, prompt, data, validate):
+        assert 'three weeks ago' not in prompt
+        value = combined_answer()
+        value.pop('source_event_fresh')
+        return value
+    assert finish(tmp_path, 'Fun', 'legacy', ART, {}, [], [], ask)['status'] == 'ready_full'
+
+
 def test_first_detail_repair_cannot_replace_passing_body(tmp_path):
     initial = broken_details()
     def ask(root, key, prompt, data, validate):

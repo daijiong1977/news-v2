@@ -1,11 +1,12 @@
 {
   "schema_version": 1,
   "project_id": "kids-news-website",
+  "semantic_event_recency": "2026-10-03 PR86: new source-first journals require existing Codex final-edit call to judge main-event recency including relative phrases. News >3 ET days and Fun >7 days are rejected; fixed-five reserve is tried, fewer than three stops. Science exempt. Old journals retain frozen behavior. Offline Python3.10 tests only; not merged or live-validated.",
   "fun_event_freshness": "2026-10-03 PR86：新source-first v3采集对Fun开头明确日期的主事件加7个美东日门禁；Sep30网页报道Sep12活动在抓图前排除。Science不变，旧v2运行目录恢复语义不变；已发布Oct3内容不自动撤回。",
   "news_collection_18": "2026-10-03用户后续确认：新三阶段News每源6篇合格、总18即停；不足继续下一源，每源最多尝试12。摘要统一排序目录最多8，固定5稿最后3稿，无新增AI调用。Science/Fun不变、旧journal配额冻结。离线回归包含前三源6+6+6、第四源补足且不超18、恢复无重抓和旧配额兼容。无生成、发布或写库。",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-03T18:41:45Z",
+  "updated_at": "2026-10-03T20:50:21Z",
   "news_pool_boundaries": "2026-10-03用户确认：Fun-origin禁止进入News；News原文上限2000英文词，Science/Fun不变；明确禁选元数据在新采集时提前筛，避免占四个合格名额。三项先失败后通过回归，相关Python3.10 46通过。PBS将在独立目录重抓，不生成/发布/写库，不改main。",
   "ai_stage_switches": "2026-10-03：新增 ai_stages 七阶段 JSON 供应商选择（pickup/batch_write/selection/review/repair/format_fix/history_review），冻结配置与逐阶段答卷身份；修复混合 HTTP/native 配置被 preflight 误拒绝；不增加详情审核调用、不改生产 main、不执行真实模型或发布。离线 Python3.10 65 项通过；四模型实际质量验收待分别运行。",
   "codex_round": "2026-10-03用户1/2/3全部验收：75旧日期对象备份后已删除，仅54当前资产；18PDF网站/日期archive全部hash匹配HTTP200；DB9stories/27search无演练残留。真实隔离Supabase latest/archive/DB回滚、丢响应恢复、重复回滚通过；跨系统非原子事务。相关Python3.10共享源码/运行快照各64通过。CI37134270185及网站dispatch37134316183成功，新reader SHA9dca27df…736b6f43；不重生成文章、不改main。私有备份和恢复顺序见docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md。",

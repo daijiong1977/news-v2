@@ -112,7 +112,8 @@ def combined_answer():
     from pipeline.news_rss_core import SAFETY_DIMS
     return {'corrected_article': draft(), 'details': extra(),
             'scores': {'0': {d: 0 for d in SAFETY_DIMS}}, 'event_clear': True,
-            'facts_supported': False, 'notes': 'Attribution remains uncertain'}
+            'facts_supported': False, 'notes': 'Attribution remains uncertain',
+            'source_event_fresh': True, 'freshness_reason': 'Current main event'}
 
 
 def test_fact_false_warning_not_reject_and_detail_degrade_preserves_other_level():
