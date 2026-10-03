@@ -158,7 +158,9 @@ def edit_groups(root, provider, identity):
                 if result['status'] == 'ready_stale':
                     section['deferred_stale'].append({'candidate': candidate, 'entry': result['entry'],
                         'details': result['details'], 'ready_status': 'ready_stale_fallback',
-                        'warnings': result.get('warnings', []), 'final_sha256': result['final_sha256']})
+                        'warnings': result.get('warnings', []), 'final_sha256': result['final_sha256'],
+                        'review': review, 'body_repairs': result.get('body_repairs', 0),
+                        'detail_repairs': result.get('detail_repairs', 0)})
                     section['outcomes'].append({'id': sid, 'category': cat, 'status': 'deferred_stale',
                         'reason': next((w for w in result.get('warnings', []) if 'Historical fallback' in w),
                                        'Main event outside freshness window'),
@@ -183,6 +185,11 @@ def edit_groups(root, provider, identity):
                     'status': 'ready_stale_fallback', 'reason': 'Fresh qualified candidates exhausted within fixed five',
                     'warnings': fallback['warnings'], 'review_method': METHOD,
                     'writer_provider': fallback['candidate'].get('writer_provider', 'deepseek'),
+                    'selection_round': 1, 'removed': [],
+                    'body_repairs': fallback['body_repairs'], 'detail_repairs': fallback['detail_repairs'],
+                    'facts_supported': fallback['review']['facts_supported'],
+                    'event_clear': fallback['review']['event_clear'], 'notes': fallback['review']['notes'],
+                    'safety': evaluate_rewriter_safety({'safety': fallback['review']['scores']['0']}, category=cat),
                     'final_sha256': fallback['final_sha256']})
                 write(state_path, state)
             if len(section['accepted']) != 3:

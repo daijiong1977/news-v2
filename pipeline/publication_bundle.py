@@ -187,6 +187,21 @@ def build(root: Path, output: Path, shell: Path | None = None):
                                     ('card_title', level_card['title']), ('card_summary', level_card['summary'])):
                     evidence_warnings.extend(f'{level}.{field}: {warning}' for warning in evidence_gate(text, original_text))
             outcome = next(o for o in reversed(state[cat]['outcomes']) if o['id'] == candidate_id)
+            if outcome.get('status') == 'ready_stale_fallback' and not all(
+                    key in outcome for key in ('safety', 'facts_supported', 'event_clear', 'notes')):
+                # A run can be fully edited/packed before a bundle-field bug is
+                # repaired. Recover only from its saved, matching article result;
+                # never rerun the model or synthesize a safety verdict.
+                saved = read(root / 'finished-articles' / f'{cat}-{candidate_id}.json')['result']
+                if (saved.get('status') != 'ready_stale' or
+                        saved.get('final_sha256') != outcome.get('final_sha256') or
+                        saved.get('entry') != match['entry']):
+                    raise ValueError('Historical fallback review does not match frozen article')
+                review = saved['review']
+                from .news_rss_core import evaluate_rewriter_safety
+                outcome = {**outcome, 'facts_supported': review['facts_supported'],
+                           'event_clear': review['event_clear'], 'notes': review['notes'],
+                           'safety': evaluate_rewriter_safety({'safety': review['scores']['0']}, category=cat)}
             src_id = source_by_id.get(candidate_id)
             records.append({'category': cat, 'story_slot': slot, 'published_date': snapshot['date'],
                 'payload_story_id': sid, 'source_name': body['source_name'], 'source_url': body['source_url'],

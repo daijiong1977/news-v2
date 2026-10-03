@@ -57,6 +57,28 @@ def test_old_checkpoint_does_not_gain_new_answer_contract(tmp_path):
     assert finish(tmp_path, 'Fun', 'legacy', ART, {}, [], [], ask)['status'] == 'ready_full'
 
 
+def test_new_finish_sees_verified_publication_date_and_source_title(tmp_path):
+    runner.write(tmp_path / 'source-collection.json', {'semantic_event_recency': True})
+    runner.write(tmp_path / 'input.json', {'date': '2026-10-03'})
+    article = {**ART, 'title': "Sabalenka 'trying hard to be easier on myself'",
+               'published': 'Fri, 02 Oct 2026 16:23:39 GMT'}
+    def ask(root, key, prompt, data, validate):
+        assert data['source_title'] == article['title']
+        assert data['source_published'] == article['published']
+        assert 'main subject' in prompt
+        return combined_answer()
+    finish(tmp_path, 'Fun', 'star', article, {}, [], [], ask)
+
+
+def test_source_title_subject_cannot_be_displaced_by_side_paragraph():
+    from pipeline.agent_shadow_finish import checked_body
+    article = {**ART, 'title': "Sabalenka 'trying hard to be easier on myself'",
+               'body': 'Aryna Sabalenka began her China Open campaign. ' + 'fact ' * 400 +
+                       'Novak Djokovic played elsewhere.'}
+    value = combined_answer()
+    assert any('Sabalenka' in error for error in checked_body(value, 'Fun', article, require_fresh=True))
+
+
 def test_first_detail_repair_cannot_replace_passing_body(tmp_path):
     initial = broken_details()
     def ask(root, key, prompt, data, validate):

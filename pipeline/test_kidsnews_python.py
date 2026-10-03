@@ -245,6 +245,17 @@ def test_editor_uses_historical_fallback_only_if_fresh_stories_insufficient(tmp_
     assert len(section['accepted']) == 3
     assert sum(a['ready_status'] == 'ready_stale_fallback' for a in section['accepted']) == 1
     assert any(o['status'] == 'ready_stale_fallback' for o in section['outcomes'])
+    from pipeline.publication_bundle import build
+    runner.advance(tmp_path)
+    # A completed run created before the record fix has already frozen this
+    # incomplete outcome. Bundle construction must recover verified review
+    # fields from its immutable per-article result, without calling a model.
+    state = runner.read(tmp_path / 'editor-state.json')
+    fallback = next(o for o in state['News']['outcomes'] if o['status'] == 'ready_stale_fallback')
+    for field in ('safety', 'facts_supported', 'event_clear', 'notes'):
+        fallback.pop(field, None)
+    runner.write(tmp_path / 'editor-state.json', state)
+    build(tmp_path, tmp_path / 'historical-fallback-publication.zip')
 
 
 def test_http_json_provider_is_pluggable_without_cursor(monkeypatch):

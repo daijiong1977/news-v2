@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "project_id": "kids-news-website",
+  "recency_rerun_incident": "2026-10-03 Oracle codex-recency-1 produced nine local articles/pack but bundle stopped KeyError before any website/DB/archive write. Marked historical fallback outcome lacked safety/fact fields; BBC Sabalenka source title/photo drifted to side-paragraph Djokovic headline. Run withheld. Branch fix persists complete outcome, recovers only matching frozen review for old checkpoint, passes page publication/title to editor, and guards title-leading name in final opening. Fresh e2e run pending.",
   "semantic_event_recency": "2026-10-03 PR86: new source-first journals require existing Codex final-edit call to judge main-event recency including relative phrases. News >3 ET days and Fun >7 days are deferred while fresh fixed-five reserves are tried; if needed, a safety-qualified historical story fills a slot with explicit warning and dated wording. Science exempt. Old journals retain frozen behavior. Offline Python3.10 tests only; not merged or live-validated.",
   "fun_event_freshness": "2026-10-03 PR86：新source-first v3采集对Fun开头明确日期的主事件加7个美东日门禁；Sep30网页报道Sep12活动在抓图前排除。Science不变，旧v2运行目录恢复语义不变；已发布Oct3内容不自动撤回。",
   "news_collection_18": "2026-10-03用户后续确认：新三阶段News每源6篇合格、总18即停；不足继续下一源，每源最多尝试12。摘要统一排序目录最多8，固定5稿最后3稿，无新增AI调用。Science/Fun不变、旧journal配额冻结。离线回归包含前三源6+6+6、第四源补足且不超18、恢复无重抓和旧配额兼容。无生成、发布或写库。",

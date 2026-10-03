@@ -100,3 +100,4 @@ you must not break.
 | 2026-10-03 | [reader-derived-pdf-check](2026-10-03-reader-derived-pdf-check.md) | shadow pipeline | Verify 18 deterministic reader PDFs without misidentifying them as changed articles | fixed |
 | 2026-10-03 | [three-day-source-freshness](2026-10-03-three-day-source-freshness.md) | shadow pipeline | Early Python three-day publication and explicit old lead-event exclusion | fixed |
 | 2026-10-03 | [relative-event-recency](2026-10-03-relative-event-recency.md) | shadow pipeline | Existing Codex final-edit call marks semantically stale News/Fun events; fresh-first reserve, explicit historical fallback | fixed offline |
+| 2026-10-03 | [fallback-bundle-main-subject](2026-10-03-fallback-bundle-main-subject.md) | shadow pipeline | Historical-fallback record lacked safety fields at bundle build; BBC side paragraph displaced Sabalenka title/photo subject | fixed offline |

@@ -6,6 +6,7 @@ No models, database or publication operations are called by this module itself.
 from copy import deepcopy
 import hashlib
 import json
+import re
 
 from .agent_shadow_editor import validate_rewrite
 from .agent_shadow_modifier import english_errors
@@ -47,7 +48,10 @@ Details must correspond to the final corrected article and use the six specified
 
 SEMANTIC_RECENCY_PROMPT = '''\nBefore editing, determine when the MAIN reported event happened, relative to
 as_of_date in America/New_York. Read the original body, not just its publication
-date. Understand relative phrases such as "three weeks ago", "last month", and
+date. The supplied source_published is the source page's publication metadata:
+use it to resolve "Wednesday"/"Saturday" when the article context supports
+that anchor, but never let a fresh page date erase an explicitly old event.
+Understand relative phrases such as "three weeks ago", "last month", and
 "yesterday"; do not mistake historical background for the main event. News main
 events older than 3 days and Fun main events older than 7 days are stale.
 Always return the usual complete combined answer PLUS "source_event_fresh":boolean
@@ -58,6 +62,13 @@ it in reserve and uses it only if fewer than three fresh stories pass. Do not
 hide its age from readers. Other safety, factual, duplicate and format gates
 still apply. If current, set source_event_fresh=true.
 Science is exempt from this event-age gate.\n'''
+
+MAIN_SUBJECT_PROMPT = '''\nThe source_title and opening paragraphs define the article's main subject.
+Keep that main subject in each Easy/Middle headline and opening, and align with
+the source's primary image. A later side paragraph about another person/event
+must NOT displace the title subject, even if its facts appear in the source.
+If the draft has drifted, correct the draft, details and Chinese card together.
+'''
 
 
 def body_errors(value, category, source_words, *, require_fresh=False):
@@ -91,6 +102,22 @@ def body_errors(value, category, source_words, *, require_fresh=False):
 
 def checked_body(value, cat, art, *, require_fresh=False):
     errors = body_errors(value, cat, art['word_count'], require_fresh=require_fresh)
+    if require_fresh and isinstance(art.get('title'), str):
+        # Conservative deterministic anchor: only a distinctive title-leading
+        # name that also appears in the source lead. Other titles stay model-led.
+        match = re.match(r"^([A-Z][a-zA-Z]{4,})\b", art['title'])
+        name = match.group(1) if match else None
+        if name and name.lower() not in {'about', 'after', 'before', 'inside', 'these',
+                                         'those', 'there', 'where', 'while', 'giant'} and re.search(
+                rf'\b{re.escape(name)}\b', art['body'][:500], re.IGNORECASE):
+            entry = value.get('corrected_article')
+            entry = entry if isinstance(entry, dict) else {}
+            for level in ('easy_en', 'middle_en'):
+                row = entry.get(level, {})
+                row = row if isinstance(row, dict) else {}
+                opening = row.get('headline', '') + ' ' + ' '.join(row.get('body', '').split()[:90])
+                if not re.search(rf'\b{re.escape(name)}\b', opening, re.IGNORECASE):
+                    errors.append(f'{level}: source-title main subject {name} missing from headline/opening')
     if not errors:
         from .website_release import evidence_gate
         for level in ('easy_en', 'middle_en'):
@@ -172,6 +199,9 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
                 'body_word_bands': {l: rewrite_band(l, cat, art['word_count']) for l in ('easy', 'middle')}}
     if require_fresh:
         material['as_of_date'] = as_of_date
+        material['source_title'] = art.get('title', '')
+        material['source_published'] = art.get('published', '')
+        material['source_publication_dates'] = art.get('source_publication_dates', [])
     def save():
         write(path, state)
     def request(key, prompt, data):
@@ -185,7 +215,7 @@ def finish(root, cat, sid, art, draft, history, accepted, ask):
             prompt = NATIVE_DETAILS_PROMPT + '\nRepair ONLY failed details. The supplied final article is immutable. Return ONLY {"details":{...}}.'
             data = {'source': art['body'], 'article': state['value']['corrected_article'], 'details': state['value'].get('details'), 'errors': state['errors']}
         else:
-            prompt = PROMPT + (SEMANTIC_RECENCY_PROMPT if require_fresh else '') + ('\nTARGETED FIX ONLY: correct listed failures in this ONE article. Keep all passing fields unchanged; if body changes update affected details.' if phase == 'fix' else '')
+            prompt = PROMPT + (SEMANTIC_RECENCY_PROMPT + MAIN_SUBJECT_PROMPT if require_fresh else '') + ('\nTARGETED FIX ONLY: correct listed failures in this ONE article. Keep all passing fields unchanged; if body changes update affected details.' if phase == 'fix' else '')
             data = {**material, **({'previous': state['value'], 'errors': state['errors']} if phase == 'fix' else {})}
         try:
             value = state['pending_value'] if 'pending_value' in state else request(key, prompt, data)
