@@ -3,7 +3,7 @@
   "project_id": "kids-news-website",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",
-  "updated_at": "2026-10-03T04:07:45+00:00",
+  "updated_at": "2026-10-03",
   "branches": [
     {
       "name": "codex/agent-provider-boundary",
@@ -91,6 +91,16 @@
     }
   ],
   "files": [
+    {
+      "path": "pipeline/kidsnews_python.py",
+      "purpose": "全Python JSON入口：Cursor/Grok completion、缓存恢复、正式网站CI核验、显式日期归档和直连Postgres自动SQL；未启用真实后端。",
+      "location": "repo"
+    },
+    {
+      "path": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md",
+      "purpose": "Mac/Linux运行、私有凭据、全链路恢复及限定回滚说明",
+      "location": "repo"
+    },
     {
       "path": "pipeline/publication_database.py",
       "purpose": "后端opt-in DB入口：一致旧值快照、自动成对SQL、哈希门禁、同目录恢复和原文件rollback；不上传archive/改网站或启用Bot定时。",
@@ -981,6 +991,12 @@
       "title": "每次更新和rollback SQL必须由Python自动生成并冻结，不让Agent手写",
       "note": "publication_database后端commit先一致读取四表旧值，自动生成成对SQL并哈希锁定才写；恢复不重抓旧值，缺件/篡改/归档不匹配拦截，timeout不盲重发；rollback复用原文件、保UUID和ET cadence。3.10新15项、影子共332项通过；额外旧history六项因缺typesafe_sdk未通过，午夜脆弱fixture仅修测试日期。模块不写Storage/部署/邮件、不改旧生产路径、不启用Bot routine、不往VM发管理token；后台显式opt-in，无本轮真实DB写。",
       "source_ref": "docs/KIDSNEWS-AUTO-SQL-PAIR.md"
+    },
+    {
+      "date": "2026-10-03",
+      "title": "Cursor agent须通过CLI适配而非假定HTTP接口",
+      "note": "空工作目录只读agent JSON适配实测约7秒；子进程不继承DB/Storage密钥。新全Python入口复用旧生产和网站Action，后端需专用Postgres连接及回滚权限，执行前检查。只有离线验证及小型模型连通测试，未真实写库/Storage/部署或启用定时。",
+      "source_ref": "docs/KIDSNEWS-ALL-PYTHON-2026-10-03.md"
     }
   ]
 }
