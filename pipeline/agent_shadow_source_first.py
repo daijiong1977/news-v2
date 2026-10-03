@@ -114,6 +114,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                 'results': [], 'windows': [], 'status': 'pending'} for s in selected], 'complete': False}
         from .source_freshness import POLICY
         state = {'version': 1, 'date': today, 'sections': sections, 'freshness_policy': POLICY,
+                 'news_metadata_screen': True, 'routing_max_words': 2000,
                  'limits': {'per_source': 12, 'pass_target': 4, 'min_groups': 0 if fixed else 3, 'min_good': 12 if fixed else 10,
                             'max_unique_articles': 12 * sum(len(c['sources']) for c in sections.values())},
                  'unique_attempts': 0}
@@ -195,6 +196,9 @@ def collect(root, sources_by_cat, today, *, expand=None):
                                'stale_feed_entry' if date_check(b['published'], today, 5) == 'stale' else None)
                 reason = ('duplicate_url_or_title' if not canonical or not normalized or canonical in seen_urls or normalized in seen_titles
                           else date_reason or commercial_reason(b) or editorial_exclusion(b))
+                if not reason and cat == 'News' and state.get('news_metadata_screen'):
+                    from .agent_shadow_rank_contract import metadata_exclusion
+                    reason = metadata_exclusion(b, cat)
                 seen_urls.add(canonical); seen_titles.add(normalized)
                 sync()  # reserve the slot BEFORE network activity
                 started = time.monotonic()
@@ -208,8 +212,9 @@ def collect(root, sources_by_cat, today, *, expand=None):
                             reason = rejection(b, today, art)
                         count = len(art.get('body', '').split())
                         art['word_count'] = count
-                        if not reason and not 180 <= count <= 1500:
-                            reason = 'original_outside_routing_band_180_1500'
+                        routing_max = state.get('routing_max_words', 1500)
+                        if not reason and not 180 <= count <= routing_max:
+                            reason = f'original_outside_routing_band_180_{routing_max}'
                         evidence = _canonical_source_url(art.get('evidence_url') or url)
                         if not reason and evidence != canonical and evidence in seen_urls:
                             reason = 'duplicate_redirect_url'

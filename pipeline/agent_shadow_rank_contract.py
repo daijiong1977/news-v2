@@ -19,9 +19,13 @@ def metadata_exclusion(candidate, category):
     text = title + '\n' + candidate.get('summary', '').casefold()
     if re.search(r'\b(?:rape|raped|sexual assault|gang[- ]rape)\b', text):
         return 'sexual_assault_not_child_suitable'
-    if re.search(r'\b(?:lethal injection|capital punishment|death penalty|execution attempt)\b', text):
+    if re.search(r'\b(?:lethal injection|capital punishment|death penalty|execution attempt|failed execution)\b', text):
         return 'execution_not_child_suitable'
     if category == 'News':
+        if re.search(r'\b(?:preparing terrorist acts|suspected plot)\b', text) and re.search(r'\b(?:terroris\w*|military base)\b', text):
+            return 'terror_attack_not_child_suitable'
+        if re.search(r'\b(?:co[- ]?pilot|captain)\b', text) and re.search(r'\b(?:axe|ax)[- ](?:wielding|attack)|\b(?:attacked|attack)\b.*\b(?:axe|ax)\b', text):
+            return 'plane_attack_not_child_suitable'
         return news_exclusion(candidate)
     if category != 'Fun':
         return ''

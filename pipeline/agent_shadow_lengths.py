@@ -4,7 +4,7 @@ from .wordcount_policy import body_band
 
 def original_band(category):
     # 2026-09-30: short Fun stories should not be padded or discarded for length alone.
-    return (180, 1200) if category == 'Fun' else (350, 1500) if category == 'Science' else (350, 1200)
+    return (180, 1200) if category == 'Fun' else (350, 1500) if category == 'Science' else (350, 2000)
 
 
 def rewrite_band(level, category, source_words):

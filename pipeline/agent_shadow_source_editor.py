@@ -22,6 +22,8 @@ class SourceFirstEditor(BatchEditor):
         result = []
         for score in self.catalog[cat]:
             sid = score['id']
+            if cat == 'News' and index[sid].get('category') == 'Fun':
+                continue  # Fun-origin stories cannot refill the News pool.
             if score['initial_risk'] >= 4 or score['history_status'] != 'clear' or score['history_confidence'] < .7:
                 continue
             art = cache.get(sid)
