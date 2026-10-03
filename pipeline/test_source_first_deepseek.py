@@ -241,6 +241,10 @@ def test_fixed_group_zip_official_reader_delivery_is_idempotent(tmp_path, monkey
     monkeypatch.setattr(delivery, 'handoff', handoff)
     local = bot.artifacts(tmp_path)
     assert not local['published'] and not calls
+    from pipeline.website_release import check_reader
+    output = tmp_path / 'reader-artifact'
+    public = check_reader((output / 'reader.zip').read_bytes(), runner.read(output / 'latest-manifest.json'))
+    assert len([n for n in public if n.startswith('article_pdfs/')]) == 18
     from pipeline.publication_bundle import unpack
     assert unpack((tmp_path / 'publication.zip').read_bytes())[1]['editorial_profile'] == 'source-first-deepseek'
     first = bot.artifacts(tmp_path, True, 'codex/website-release-test')
@@ -249,6 +253,18 @@ def test_fixed_group_zip_official_reader_delivery_is_idempotent(tmp_path, monkey
     assert first['published'] is False
     with pytest.raises(ValueError, match='already attempted'):
         bot.artifacts(tmp_path, True, 'codex/website-release-other')
+    # A self-consistent manifest must not make a changed derived PDF trusted.
+    from pipeline.publication_bundle import sha
+    pdf = next(n for n in public if n.startswith('article_pdfs/'))
+    public[pdf] += b'tampered'
+    changed_zip = zip_files(public)
+    manifest = runner.read(output / 'latest-manifest.json')
+    manifest.update(zip_sha256=sha(changed_zip), zip_bytes=len(changed_zip),
+                    files={n: sha(b) for n, b in public.items()})
+    (output / 'reader.zip').write_bytes(changed_zip)
+    runner.write(output / 'latest-manifest.json', manifest)
+    with pytest.raises(ValueError, match='Reader content differs'):
+        bot.artifacts(tmp_path)
 
 
 def test_preflight_command_stdout_single_json_no_native_tasks(tmp_path, monkeypatch, capsys):

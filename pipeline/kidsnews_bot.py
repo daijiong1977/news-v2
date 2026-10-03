@@ -66,6 +66,11 @@ def artifacts(root, publish=False, branch=None):
             raise ValueError('Reader publication records differ from internal ZIP')
         from .website_release import CONTENT_DIRS
         expected = {n: b for n, b in private_files.items() if n.split('/')[0] in CONTENT_DIRS}
+        # Reader PDFs are deterministic derivatives, not internal ZIP inputs.
+        # Recreate them from the approved details to verify their exact bytes too.
+        from .reader_pdfs import add_reader_pdfs
+        expected = add_reader_pdfs(expected, json.loads(private_files['publication-records.json']),
+                                   private_manifest['date'])
         actual = {n: b for n, b in public_files.items() if n.split('/')[0] in CONTENT_DIRS}
         if expected != actual or manifest.get('story_count') != 9:
             raise ValueError('Reader content differs from the nine ready articles')

@@ -606,6 +606,12 @@
   "lessons": [
     {
       "date": "2026-10-03",
+      "title": "完整发布需把派生PDF纳入内容一致性校验",
+      "note": "evening-poc-1九篇已完成，发布前旧校验因reader新增18PDF误报差异，尚未交接CI或写库。校验从批准详情确定性重建PDF后逐字节比较，不放宽正文图片校验；同目录恢复，不重新调用模型。线上验收仍待完整运行结果。",
+      "source_ref": "pipeline/kidsnews_bot.py"
+    },
+    {
+      "date": "2026-10-03",
       "title": "旧归档先备份再精确清理；PDF和回滚必须逐项验收",
       "note": "75未引用旧对象已移除（39图片/36详情），备份保留Oracle私有目录。18确定性PDF补入当前9篇reader及日期archive，长Science跨页footer修正。网站/归档54资产hash一致、9stories/27search正确；真实隔离1900-01-01验证响应丢失续跑与重复回滚且清除测试对象。不是Storage+DB跨系统原子事务；恢复网站和后台分开，须保留原CI备份和状态。",
       "source_ref": "docs/KIDSNEWS-PDF-CLEANUP-ROLLBACK-2026-10-03.md"
