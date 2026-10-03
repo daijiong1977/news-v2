@@ -2,7 +2,8 @@
 
 Publication metadata is not modification time. Lead-event extraction is
 deliberately narrow: an explicit 'On Month D, YYYY' opening, not every historical
-date in an article. No claim of semantic event-date understanding is made.
+date in an article. News gets three days; Fun gets seven. No claim of general
+semantic event-date understanding is made.
 """
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
@@ -11,7 +12,8 @@ import re
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-POLICY = 'category-source-date-v2'
+LEGACY_POLICY = 'category-source-date-v2'
+POLICY = 'category-source-date-v3'
 
 
 def parse_day(value):
@@ -80,7 +82,7 @@ def lead_event_day(body):
         return None
 
 
-def rejection(candidate, today, article=None):
+def rejection(candidate, today, article=None, *, policy=POLICY):
     category = candidate.get('category', 'News')
     if category == 'Science':
         return None
@@ -98,8 +100,10 @@ def rejection(candidate, today, article=None):
     if article is not None:
         event = lead_event_day(article.get('body', ''))
         if category == 'Fun':
-            # An old occurrence is not an expiry. Only explicit end/deadline
-            # language with a full date can mechanically establish expiry.
+            # A dated lead occurrence is the subject, unlike later historical
+            # context. Preserve v2 behavior for already frozen run journals.
+            if policy == POLICY and event and (now-event).days > max_days:
+                return 'stale_lead_event'
             pattern = r'\b(?:expires?|expired|ends?|ended|closes?|closed|deadline\s+is)\s+(?:on\s+)?([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+20\d{2})\b'
             for match in re.finditer(pattern, article.get('body', ''), re.I):
                 expiry = lead_event_day('On ' + match[1])

@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "project_id": "kids-news-website",
+  "fun_event_freshness": "2026-10-03 PR86：新source-first v3采集对Fun开头明确日期的主事件加7个美东日门禁；Sep30网页报道Sep12活动在抓图前排除。Science不变，旧v2运行目录恢复语义不变；已发布Oct3内容不自动撤回。",
   "news_collection_18": "2026-10-03用户后续确认：新三阶段News每源6篇合格、总18即停；不足继续下一源，每源最多尝试12。摘要统一排序目录最多8，固定5稿最后3稿，无新增AI调用。Science/Fun不变、旧journal配额冻结。离线回归包含前三源6+6+6、第四源补足且不超18、恢复无重抓和旧配额兼容。无生成、发布或写库。",
   "purpose": "为儿童新闻网站采集、筛选、改写和审核 News、Science、Fun 内容，生成每日内容包并交给 kidsnews-v2 部署。",
   "repo_url": "https://github.com/daijiong1977/news-v2",

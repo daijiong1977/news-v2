@@ -16,6 +16,7 @@ you must not break.
 
 | Date | Sev | Area | Record | Symptom | Keywords |
 |---|---|---|---|---|---|
+| 2026-10-03 | medium | shadow | [fun-old-lead-event](2026-10-03-fun-old-lead-event.md) | A Sep 30 DOGO page about a Sep 12 event passed Fun's publication-date gate and appeared Oct 3 | Fun, event-date, DOGOnews, frozen-journal, freshness |
 | 2026-10-03 | high | shadow | [news-pool-boundaries](2026-10-03-news-pool-boundaries.md) | Fun-origin fills News; 1200-word gate and early PBS stop lose civic candidates | routing, Fun, News, PBS, length |
 | 2026-10-02 | high | shadow | [shadow-candidate-quality](2026-10-02-shadow-candidate-quality.md) | Pokemon event wrappers duplicate; shopping reserve passes; TFK related cards inflate body length | Pokemon, event-overlap, ads, affiliate, TFK, extraction |
 | 2026-10-02 | high | shadow / website | [source-first-final-review](2026-10-02-source-first-final-review.md) | Frozen recovery, detail-only repair, reader mapping and release manifest invariants failed final review | source-first, resume, details, manifest, history |

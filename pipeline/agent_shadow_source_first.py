@@ -121,8 +121,9 @@ def collect(root, sources_by_cat, today, *, expand=None):
                  'unique_attempts': 0}
         write(path, state)
     all_results = lambda: [r for c in state['sections'].values() for s in c['sources'] for r in s['results']]
-    from .source_freshness import POLICY, rejection, freshness as date_check
-    strict_dates = state.get('freshness_policy') == POLICY
+    from .source_freshness import POLICY, LEGACY_POLICY, rejection, freshness as date_check
+    date_policy = state.get('freshness_policy')
+    strict_dates = date_policy in (POLICY, LEGACY_POLICY)
     def sync():
         # These caches can always be rebuilt from the single atomic source journal.
         write(path, state)
@@ -197,7 +198,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                     raise ValueError('Frozen source collection budget exhausted')
                 canonical, normalized = _canonical_source_url(url), _normalize_title(title)
                 from .agent_shadow_candidate_quality import commercial_reason
-                date_reason = (rejection(b, today) if strict_dates else
+                date_reason = (rejection(b, today, policy=date_policy) if strict_dates else
                                'stale_feed_entry' if date_check(b['published'], today, 5) == 'stale' else None)
                 reason = ('duplicate_url_or_title' if not canonical or not normalized or canonical in seen_urls or normalized in seen_titles
                           else date_reason or commercial_reason(b) or editorial_exclusion(b))
@@ -214,7 +215,7 @@ def collect(root, sources_by_cat, today, *, expand=None):
                         art = fetch_original(b)
                         reason = art.get('skip_reason') or commercial_reason(b, art.get('body', ''))
                         if not reason and strict_dates:
-                            reason = rejection(b, today, art)
+                            reason = rejection(b, today, art, policy=date_policy)
                         count = len(art.get('body', '').split())
                         art['word_count'] = count
                         routing_max = state.get('routing_max_words', 1500)
