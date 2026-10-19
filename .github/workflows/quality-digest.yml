@@ -100,8 +100,9 @@ jobs:
           cache: "pip"
       - name: Install deps
         if: ${{ steps.guard.outputs.should_run != 'false' }}
-        # autofix + digest only need stdlib.
-        run: python -m pip install -U pip
+        # The digest uses stdlib, but autofix_apply imports news_rss_core
+        # for the independent safety vet; that module imports feedparser.
+        run: python -m pip install -r requirements.txt
 
       # All subsequent work steps are also gated on the guard so we
       # don't sleep / call APIs / send email when the upstream was a
