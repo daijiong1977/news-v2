@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="en" class="brand-kidsnews">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>kidsnews · today's 21 minutes</title>
+<meta name="description" content="Three smart stories every day for curious kids 10–14. Little daily, big magic.">
+<!-- AI opt-out signals. Search-engine indexing welcome (we want families to
+     find us); training of generative AI on our derivative content is not.
+     See /robots.txt and /terms-of-use.html for the full policy. -->
+<meta name="robots" content="index, follow, noai, noimageai">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon-kidsnews.svg">
+
+<!-- Open Graph / share previews -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="kidsnews · little daily, big magic">
+<meta property="og:description" content="The daily news habit for curious kids 10–14. Three stories, 21 minutes, read · think · learn.">
+<meta property="og:image" content="/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="kidsnews · little daily, big magic">
+<meta name="twitter:description" content="The daily news habit for curious kids 10–14.">
+<meta name="twitter:image" content="/assets/og-image.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800;9..144,900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  html, body { margin:0; padding:0; font-family: var(--twentyone-sans); background: var(--twentyone-cream); color: var(--twentyone-ink); }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  button { font-family: var(--twentyone-sans); }
+  ::selection { background: var(--twentyone-gold); color: var(--twentyone-ink); }
+  /* ---- Responsive safety net (2026-09-20) ----------------------------------
+     The app styles every component with inline React styles, so CSS cannot
+     override those without !important. These rules cover the structural
+     defaults that caused a 390px iPhone to scroll sideways by 436px:
+       · flex/grid children default to min-width:auto and refuse to shrink
+         below their content, which is what turns one long header row into a
+         page wider than the screen
+       · media and long unbroken strings (URLs, source names) push containers
+     Layout that genuinely differs per device is done with clamp() in the
+     component styles; this block only stops overflow. */
+  img, svg, video, canvas { max-width: 100%; height: auto; }
+  #root :where(header, main, section, article) :where(div, button, a, p, h1, h2, h3) { min-width: 0; }
+  #root p, #root h1, #root h2, #root h3, #root li { overflow-wrap: anywhere; }
+  /* Phones: nothing may force the page wider than the viewport. */
+  @media (max-width: 480px) {
+    html, body { max-width: 100%; overflow-x: hidden; }
+  }
+
+  /* Scrollbar - subtle */
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background: var(--twentyone-cream); }
+  ::-webkit-scrollbar-thumb { background:#e8dcc6; border-radius:10px; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- kidsync — vanilla JS bridge that mirrors localStorage writes to
+     Supabase RPCs (parent dashboard cloud mode). Loaded BEFORE data.jsx
+     so window.kidsync is available everywhere downstream. -->
+<script src="kidsync.js?v=20260427pickssync"></script>
+
+<script type="text/babel" src="data.jsx?v=20260920h"></script>
+<script type="text/babel" src="components/SunFace21.jsx?v=20260920h"></script>
+<script type="text/babel" src="components/Big21.jsx?v=20260920h"></script>
+<script type="text/babel" src="components.jsx?v=20260920h"></script>
+<script type="text/babel" src="home.jsx?v=20260920h"></script>
+<script type="text/babel" src="article.jsx?v=20260920h"></script>
+<script type="text/babel" src="user-panel.jsx?v=20260920h"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "sunny",
+  "showConfetti": true,
+  "heroVariant": "daily15",
+  "userName": "",
+  "avatar": "panda",
+  "language": "en",
+  "dailyGoal": 21,
+  "level": "Sprout",
+  "streakDays": 0,
+  "xp": 0
+}/*EDITMODE-END*/;
+
+// Drop articleProgress entries whose date prefix is older than 10 days.
+// Keeps the kid's continue-reading rail useful without unbounded growth
+// across long-term use. Date is the YYYY-MM-DD prefix on the article id.
+function pruneArticleProgress(ap) {
+  const out = {};
+  const cutoff = Date.now() - 10 * 24 * 60 * 60 * 1000;
+  for (const [id, v] of Object.entries(ap || {})) {
+    const m = id.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!m) { out[id] = v; continue; }
+    const ts = new Date(m[1] + 'T00:00:00').getTime();
+    if (Number.isFinite(ts) && ts >= cutoff) out[id] = v;
+  }
+  return out;
+}
+
+function App() {
+  // All localStorage access goes through window.safeStorage (defined in
+  // data.jsx) so private-mode / quota-exhausted browsers degrade gracefully
+  // instead of taking down the whole app.
+  const ss = window.safeStorage;
+
+  const [route, setRoute] = useState(() => {
+    const saved = ss.getJSON('ohye_route');
+    if (!saved) return { page:'home', articleId:null };
+    if (saved.page === 'article' && !ARTICLES.some(a => a.id === saved.articleId)) {
+      return { page:'home', articleId:null };
+    }
+    return saved;
+  });
+  const [level, setLevel] = useState(() => {
+    const v = ss.get('ohye_level') || 'Sprout';
+    return v === 'Seedling' ? 'Sprout' : v;  // legacy migration
+  });
+  const [cat, setCat] = useState(() => {
+    const v = ss.get('ohye_cat') || 'News';
+    return (v === 'Today' || v === 'Archive' || v === 'All') ? 'News' : v;
+  });
+  const [archiveDay, setArchiveDay] = useState(() => {
+    // archiveDay is "YYYY-MM-DD" (string) or null for today.
+    // PRIORITY: URL pathname (/archive/<date>) takes precedence over
+    // sessionStorage so deep-links to a specific archive day land on
+    // that day's content even from a fresh tab.
+    try {
+      const m = (window.location.pathname || '').match(/^\/archive\/(\d{4}-\d{2}-\d{2})\/?$/);
+      if (m) return m[1];
+    } catch (e) {}
+    const v = ss.get('ohye_archive_day');
+    if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    if (v) ss.remove('ohye_archive_day');  // clear legacy numeric values
+    return null;
+  });
+  const [progress, setProgress] = useState(() => {
+    // Fresh users start with empty progress — no pre-filled mock reads.
+    // Old MOCK_USER readToday["a2"] inflated the count + showed phantom reads.
+    // Local-timezone day key (intentionally not UTC; resets feel right
+    // wherever the reader is).
+    const todayKey = new Date().toDateString();  // local "Sat Apr 25 2026"
+    const saved = ss.getJSON('ohye_progress');
+    const base = {
+      readToday: [], minutesToday: 0,
+      articleProgress: {},  // { [id]: { steps: ['read','analyze',...], lastTab: 'analyze' } }
+      readHistory: [],      // running list of {id, at} — survives day rollovers
+      dayKey: todayKey,
+    };
+    if (!saved) return base;
+
+    // Day-rollover reset — only wipes "today's counters" (readToday +
+    // minutesToday). articleProgress and readHistory are persistent
+    // history; wiping them stranded the streak popover and re-opened
+    // articles back at tab 1. Pre-change saves had no dayKey field;
+    // treating missing as "different from today" would wipe an active
+    // reader's same-day progress on first load after deploy. Missing
+    // dayKey ⇒ stamp it, don't reset.
+    if (saved.dayKey && saved.dayKey !== todayKey) {
+      return {
+        ...base,
+        articleProgress: pruneArticleProgress(saved.articleProgress || {}),
+        readHistory: Array.isArray(saved.readHistory) ? saved.readHistory : [],
+      };
+    }
+
+    // Legacy migration: articleProgress[id] used to be a single number
+    // (0/25/50/75/100). Map those to the new {steps,lastTab} shape so
+    // article.jsx and home.jsx see one consistent shape end-to-end —
+    // otherwise reopening an article would land on the wrong tab AND
+    // re-credit completed steps.
+    const STEP_IDS = ['read', 'analyze', 'quiz', 'discuss'];
+    const ap = {};
+    for (const [id, v] of Object.entries(saved.articleProgress || {})) {
+      if (v && typeof v === 'object') {
+        ap[id] = v;
+      } else if (typeof v === 'number') {
+        const n = Math.min(4, Math.max(0, Math.floor(v / 25)));
+        ap[id] = {
+          steps: STEP_IDS.slice(0, n),
+          // Resume on the next-incomplete tab (or 'read' if fully done).
+          lastTab: n >= 4 ? 'read' : STEP_IDS[n],
+        };
+      }
+    }
+    return { ...base, ...saved, articleProgress: pruneArticleProgress(ap), dayKey: todayKey };
+  });
+
+  const [tweaks, setTweaks] = useState(() => {
+    const saved = ss.getJSON('ohye_tweaks');
+    const merged = saved ? { ...TWEAK_DEFAULTS, ...saved } : TWEAK_DEFAULTS;
+    // One-time drift fix: app's `level` (read above from ohye_level) is the
+    // authoritative content filter. `tweaks.level` is a legacy mirror —
+    // sync it to `level` so the header button doesn't lie when the two
+    // localStorage keys disagree.
+    const appLevel = ss.get('ohye_level');
+    if (appLevel && merged.level !== appLevel) {
+      merged.level = appLevel;
+    }
+    return merged;
+  });
+  const [userPanelOpen, setUserPanelOpen] = useState(false);
+
+  // True from initial render until the magic-link RPC has settled (resolved
+  // OR rejected). HomePage uses this to suppress OnboardingScreen during
+  // the consumeMagicLink window — without this gate, users click the email
+  // link and briefly see the OnboardingScreen showing a "send magic link"
+  // form, which makes them think the link didn't work and they re-submit.
+  // See docs/bugs/2026-05-03-magic-link-onboarding-flash.md.
+  const [magicConsuming, setMagicConsuming] = useState(() => {
+    try { return /[?&]magic=/.test(window.location.search || ''); }
+    catch (e) { return false; }
+  });
+  // If the RPC rejects the token, surface the reason so OnboardingScreen
+  // can show a hint banner instead of silently asking the user to retry.
+  const [magicLinkError, setMagicLinkError] = useState(null);
+
+  useEffect(() => { ss.setJSON('ohye_route', route); }, [route]);
+  useEffect(() => { ss.set('ohye_level', level); }, [level]);
+  useEffect(() => { ss.set('ohye_cat', cat); }, [cat]);
+  useEffect(() => {
+    if (archiveDay) ss.set('ohye_archive_day', String(archiveDay));
+    else ss.remove('ohye_archive_day');
+
+    // Sync the URL to the current archive state. Without this, clicking
+    // "Return to today" (sets archiveDay=null) would leave the URL stuck
+    // at /archive/<date> — confusing on refresh and breaking relative
+    // fetches in any old code that hadn't migrated to absolute paths.
+    try {
+      const want = archiveDay ? `/archive/${archiveDay}` : '/';
+      if (window.location.pathname !== want) {
+        history.replaceState(null, '', want + window.location.search + window.location.hash);
+      }
+    } catch (e) {}
+
+    // Whenever archiveDay changes, re-load ARTICLES from the matching bundle
+    // (today's local files, or a past day's Supabase prefix).
+    if (typeof window.loadArchive === 'function') {
+      window.loadArchive(archiveDay).then(() => {
+        // Force a re-render by bumping a dummy state; route stays put.
+        setRoute(r => ({ ...r }));
+      });
+    }
+  }, [archiveDay]);
+  useEffect(() => { ss.setJSON('ohye_progress', progress); }, [progress]);
+
+  // Runtime day-rollover: if the user keeps the tab open across local
+  // midnight, reset the daily counters when the tab becomes visible
+  // again on the new day. Uses local timezone (matches initial-load
+  // dayKey check) — intentionally not UTC so the reset feels right
+  // wherever the reader is.
+  useEffect(() => {
+    const checkRollover = () => {
+      const now = new Date().toDateString();
+      setProgress(p => {
+        if (!p || p.dayKey === now) return p || { readToday: [], minutesToday: 0, articleProgress: {}, readHistory: [], dayKey: now };
+        // New day: reset today's counters but preserve articleProgress
+        // (per-article reading state) and readHistory (lifetime list of
+        // articles the kid has read). Without this, the streak/recents
+        // popover went empty every midnight.
+        return {
+          readToday: [], minutesToday: 0,
+          articleProgress: pruneArticleProgress(p.articleProgress || {}),
+          readHistory: Array.isArray(p.readHistory) ? p.readHistory : [],
+          dayKey: now,
+        };
+      });
+    };
+    document.addEventListener('visibilitychange', checkRollover);
+    return () => document.removeEventListener('visibilitychange', checkRollover);
+  }, []);
+  // Cloud bootstrap — once per app launch. Two responsibilities:
+  //
+  //   1. If we just bounced back from a Google OAuth redirect (URL has
+  //      ?code= or #access_token=), call linkCurrentSession() so the
+  //      signed-in email gets bound to a client_id server-side. The
+  //      RPC may rewrite localStorage's ohye_client_id if this email
+  //      is already linked to a different (canonical) id elsewhere.
+  //   2. Pull the kid's last 100 reading events from Supabase and
+  //      merge them into local readHistory + articleProgress. This is
+  //      the read side of cloud sync — without it, claiming an
+  //      identity (or just clearing the cache) leaves the kid with an
+  //      empty UI even though events exist server-side.
+  //
+  // Both steps are best-effort. Failures fall back to local-only state
+  // (the website continues to work fully offline-from-cloud).
+  useEffect(() => {
+    let cancelled = false;
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const looksLikeOAuthBounce = /access_token=|code=|state=/.test(hash + search);
+    // Magic-link landing — `?magic=<token>` from the email link. We
+    // consume + rewrite client_id BEFORE the OAuth check so the two
+    // can't fight if a user somehow combines them. Then strip ?magic=
+    // so refreshes don't re-attempt consumption.
+    const magicMatch = search.match(/[?&]magic=([^&]+)/);
+    (async () => {
+      try {
+        if (magicMatch && window.kidsync && typeof window.kidsync.consumeMagicLink === 'function') {
+          const token = decodeURIComponent(magicMatch[1]);
+          // Strip ?magic= from the URL BEFORE consuming, so a refresh mid-RPC
+          // can't re-attempt an already-spent token (which shows "invalid or
+          // expired" and loses the sign-in — the token is single-use). The
+          // token is captured above, so removing it from the bar is safe.
+          // Preserve the hash. The magicConsuming gate stays UP until
+          // fetchProfile (below) hydrates the profile, bridging the
+          // cross-device window where the clicking device has consumed the
+          // token but hasn't pulled the name/avatar from cloud yet.
+          try {
+            let cleanSearch = window.location.search.replace(/[?&]magic=[^&]+/, '').replace(/^&/, '?');
+            if (cleanSearch === '?') cleanSearch = '';
+            history.replaceState(null, '', window.location.pathname + cleanSearch + (window.location.hash || ''));
+          } catch (e) {}
+          let r = null;
+          try {
+            r = await window.kidsync.consumeMagicLink(token);
+          } catch (e) {
+            console.warn('[boot] consumeMagicLink threw', e);
+          }
+          if (r && r.ok) {
+            console.log('[boot] magic link consumed');
+          } else if (r && r.error) {
+            console.warn('[boot] magic link rejected:', r.error);
+            setMagicLinkError(r.error);
+            // Bad token — there's no profile to wait for; lift the
+            // spinner now so the user sees the error banner promptly.
+            setMagicConsuming(false);
+          } else {
+            // r is null/undefined — RPC unreachable or supabase-js missing.
+            setMagicLinkError('Sign-in service unreachable. Try again in a moment.');
+            setMagicConsuming(false);
+          }
+        } else if (magicMatch) {
+          // Token in URL but kidsync isn't ready (loaded out of order /
+          // private-mode storage error). Don't leave the spinner up.
+          setMagicConsuming(false);
+        }
+      } catch (e) {
+        console.warn('[boot] consumeMagicLink failed', e);
+        setMagicConsuming(false);
+        setMagicLinkError('Could not complete sign-in. Please try again.');
+      }
+      // ALWAYS try to link — covers two cases:
+      //   (a) OAuth bounce-back: URL has ?code=, exchange happens, we
+      //       create the email_link via RPC.
+      //   (b) Cached session, clean URL: previous sign-in succeeded
+      //       (session in localStorage) but the email_link RPC never
+      //       fired (e.g. timing race the first time). On this reload
+      //       linkCurrentSession is idempotent and self-heals.
+      try {
+        if (window.kidsync && typeof window.kidsync.linkCurrentSession === 'function') {
+          const r = await window.kidsync.linkCurrentSession();
+          if (r && r.clientId && looksLikeOAuthBounce) {
+            // Strip the OAuth token fragment so refreshes don't re-exchange.
+            try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+          }
+        }
+      } catch (e) { console.warn('[boot] linkCurrentSession failed', e); }
+      // Pull the kid's persisted profile (language/level/avatar/theme/
+      // daily_goal/display_name) from the cloud — this is what restores
+      // a returning kid's choices when they sign in on a new browser.
+      // Without this, the profile UPLOAD (upsertKidProfile) was working
+      // since day one but there was no DOWNLOAD path, so a fresh
+      // browser landed on defaults even after the identity claim.
+      try {
+        if (window.kidsync && typeof window.kidsync.fetchProfile === 'function') {
+          const cloudP = await window.kidsync.fetchProfile();
+          if (cancelled) return;
+          if (cloudP) {
+            // Merge: cloud wins for non-empty fields. Local-only
+            // settings (e.g. a setting changed on this device since
+            // the last cloud upload) survive because we skip empty
+            // cloud values.
+            setTweaks(t => {
+              const next = { ...t };
+              if (cloudP.display_name) next.userName = cloudP.display_name;
+              if (cloudP.avatar)       next.avatar = cloudP.avatar;
+              if (cloudP.language)     next.language = cloudP.language;
+              if (cloudP.theme)        next.theme = cloudP.theme;
+              if (cloudP.daily_goal)   next.dailyGoal = cloudP.daily_goal;
+              if (cloudP.level)        next.level = cloudP.level;
+              return next;
+            });
+            if (cloudP.level) {
+              setLevel(cloudP.level);
+              ss.set('ohye_level', cloudP.level);
+            }
+            // Today's 3 picks. Cloud has dayKey + ids. If dayKey matches
+            // local today, hydrate picksLock so the kid doesn't get
+            // bounced through pickup again on a fresh device.
+            if (cloudP.today_picks_date && Array.isArray(cloudP.today_picks_json)) {
+              const todayKey = new Date().toDateString();
+              if (cloudP.today_picks_date === todayKey && cloudP.today_picks_json.length === 3) {
+                ss.setJSON('ohye_picks_lock_v1', {
+                  dayKey: cloudP.today_picks_date,
+                  ids: cloudP.today_picks_json,
+                });
+              }
+            }
+          } else {
+            // No cloud row yet (brand-new anonymous user, never linked).
+            // Eagerly upload the local tweaks so the row exists for any
+            // future device claim. Bypasses the cloudPullDoneRef gate
+            // because we own the upload sequencing here.
+            if (window.kidsync && typeof window.kidsync.upsertKidProfile === 'function') {
+              window.kidsync.upsertKidProfile(tweaks);
+            }
+          }
+        }
+      } catch (e) { console.warn('[boot] fetchProfile failed', e); }
+      // Lift the magic-link spinner now that the profile pull has settled
+      // (resolved or rejected). If the URL had ?magic=, the user has been
+      // staring at SigningInScreen until this point — flipping
+      // magicConsuming=false here lets HomePage render either home (when
+      // tweaks.userName came back) or OnboardingScreen with the magicLinkError
+      // banner (when fetchProfile genuinely had nothing for this kid).
+      setMagicConsuming(false);
+      // Cloud pull (or skip) is done. Future tweaks changes can now
+      // upload to cloud through the gated useEffect.
+      cloudPullDoneRef.current = true;
+      try {
+        if (window.kidsync && typeof window.kidsync.fetchHistory === 'function') {
+          const events = await window.kidsync.fetchHistory(100);
+          if (cancelled || !Array.isArray(events) || events.length === 0) return;
+          // Translate cloud events into local readHistory shape and merge.
+          // Cloud rows: { story_id, step, occurred_at, day_key, ... }
+          // Local readHistory: [{ id, at }] — we use the LISTING id (with
+          // level suffix) so it matches what article.jsx writes; the
+          // cloud only knows storyId. We rebuild the listing id by
+          // pairing storyId with the kid's current level. Worst case
+          // the suffix is wrong and the streak popover skips it (it
+          // does an ARTICLES.find by id, returns null, the entry is
+          // dropped — no crash).
+          setProgress(p => {
+            const cur = p || { readToday: [], minutesToday: 0, articleProgress: {}, readHistory: [], dayKey: new Date().toDateString() };
+            const haveIds = new Set((cur.readHistory || []).map(e => typeof e === 'string' ? e : e?.id));
+            const lvlSuffix = (ss.get('ohye_level') === 'Sprout') ? '-easy' : '-middle';
+
+            // 1. Build/extend readHistory (lifetime list of completed reads).
+            const merged = (cur.readHistory || []).slice();
+            for (const ev of events) {
+              if (ev.step !== 'discuss' && ev.step !== 'finish') continue;
+              const id = ev.story_id + lvlSuffix;
+              if (haveIds.has(id)) continue;
+              haveIds.add(id);
+              merged.push({ id, at: ev.occurred_at });
+            }
+            merged.sort((a, b) => (a.at || '').localeCompare(b.at || ''));
+
+            // 2. Reconstruct articleProgress (per-article steps + lastTab)
+            //    from the same event stream. Each event = one (story, step)
+            //    transition; group by article id, union the steps, take the
+            //    most-recent occurred_at as lastTouchedAt + lastTab. Local
+            //    progress (with snapshot fields) wins on the snapshot keys
+            //    (title/category/imageURL etc.); cloud wins on steps when
+            //    it has more (kid read on another device since last sync).
+            const localAP = cur.articleProgress || {};
+            const fromCloud = {};
+            for (const ev of events) {
+              const id = ev.story_id + lvlSuffix;
+              const dateMatch = ev.story_id && ev.story_id.match(/^(\d{4}-\d{2}-\d{2})/);
+              const slot = fromCloud[id] || {
+                steps: [], lastTab: 'read', lastTouchedAt: '',
+                // Snapshot fields populated from the event row when present.
+                // Older events written before the title/image_url columns
+                // existed will have NULLs; we keep "" so the popover's
+                // `snap.title` truthiness check drops them gracefully (the
+                // ARTICLES.find fallback will pick them up if today's
+                // bundle still has the story).
+                title: ev.title || '',
+                category: ev.category || '',
+                level: ev.level || '',
+                imageURL: ev.image_url || '',
+                archiveDate: dateMatch ? dateMatch[1] : null,
+              };
+              if (!slot.steps.includes(ev.step)) slot.steps.push(ev.step);
+              if ((ev.occurred_at || '') > (slot.lastTouchedAt || '')) {
+                slot.lastTouchedAt = ev.occurred_at;
+                slot.lastTab = ev.step;
+                // Only the latest event refreshes title/image_url —
+                // earlier writes may pre-date the schema migration.
+                if (ev.title)     slot.title    = ev.title;
+                if (ev.image_url) slot.imageURL = ev.image_url;
+                if (ev.category)  slot.category = ev.category;
+                if (ev.level)     slot.level    = ev.level;
+              }
+              fromCloud[id] = slot;
+            }
+            const mergedAP = { ...localAP };
+            for (const [id, cloudSlot] of Object.entries(fromCloud)) {
+              const local = mergedAP[id];
+              if (!local || typeof local !== 'object') {
+                // No local snapshot (cross-device first-touch). Cloud
+                // snapshot fields (title/category/imageURL) are now
+                // sufficient for the popover to render this entry.
+                mergedAP[id] = cloudSlot;
+              } else {
+                // Union of steps (cloud may have more), latest lastTouchedAt
+                // wins for lastTab. Snapshot fields prefer LOCAL when set
+                // (it's authoritative on the device that read), but fall
+                // back to cloud values for fields the local entry lacks
+                // (e.g., a stale legacy entry without title).
+                const stepsSet = new Set([...(local.steps || []), ...(cloudSlot.steps || [])]);
+                const newer = (cloudSlot.lastTouchedAt || '') > (local.lastTouchedAt || '');
+                mergedAP[id] = {
+                  ...cloudSlot,
+                  ...local,
+                  // Specific fields where we WANT cloud-fallback rather
+                  // than local-wins-empty:
+                  title:    local.title    || cloudSlot.title    || '',
+                  category: local.category || cloudSlot.category || '',
+                  level:    local.level    || cloudSlot.level    || '',
+                  imageURL: local.imageURL || cloudSlot.imageURL || '',
+                  archiveDate: local.archiveDate || cloudSlot.archiveDate || null,
+                  steps: [...stepsSet],
+                  lastTab: newer ? cloudSlot.lastTab : (local.lastTab || cloudSlot.lastTab),
+                  lastTouchedAt: newer ? cloudSlot.lastTouchedAt : (local.lastTouchedAt || cloudSlot.lastTouchedAt),
+                };
+              }
+            }
+
+            return { ...cur, readHistory: merged.slice(-200), articleProgress: mergedAP };
+          });
+        }
+      } catch (e) { console.warn('[boot] fetchHistory failed', e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Always persist tweaks to localStorage on change.
+  useEffect(() => { ss.setJSON('ohye_tweaks', tweaks); }, [tweaks]);
+
+  // Cloud upload of tweaks — gated on cloud-pull completion.
+  //
+  // The hard-learned lesson: useEffect([tweaks]) fires on FIRST mount
+  // with whatever tweaks the page started with — usually local defaults
+  // (en / Tree / etc.) on a freshly-claimed device. Without this gate,
+  // the mount-time upload races ahead of the bootstrap fetchProfile
+  // pull and overwrites the canonical cloud row with the new device's
+  // defaults. Net effect: signing in on a second device CORRUPTED the
+  // cloud copy of the kid's settings instead of restoring them.
+  //
+  // Fix: ref-flag `cloudPullDone` flips true at the end of the
+  // bootstrap fetchProfile path. Until that flips, the upload effect
+  // is a no-op. After it flips, the next legitimate user-driven tweak
+  // change uploads normally. (The bootstrap also eagerly uploads if
+  // it learns the cloud row doesn't exist yet, so brand-new users
+  // still establish their cloud row on first sign-in.)
+  const cloudPullDoneRef = React.useRef(false);
+  useEffect(() => {
+    if (!cloudPullDoneRef.current) return;
+    if (window.kidsync && typeof window.kidsync.upsertKidProfile === 'function') {
+      window.kidsync.upsertKidProfile(tweaks);
+    }
+  }, [tweaks]);
+
+  // Edit-mode wiring
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setUserPanelOpen(true);
+      if (e.data.type === '__deactivate_edit_mode') setUserPanelOpen(false);
+    };
+    window.addEventListener('message', handler);
+    // Announce AFTER listener
+    try { window.parent.postMessage({ type:'__edit_mode_available' }, '*'); } catch {}
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const updateTweak = (key, val) => {
+    // Allow functional updates (setState-style) so callers can do
+    // `updateTweak('xp', cur => (cur || 0) + delta)` without first
+    // reading the latest tweaks.
+    setTweaks(t => {
+      const next = typeof val === 'function' ? val(t[key]) : val;
+      try { window.parent.postMessage({ type:'__edit_mode_set_keys', edits: { [key]: next } }, '*'); } catch {}
+      return { ...t, [key]: next };
+    });
+  };
+
+  // Apply theme to root
+  const themeVars = {
+    sunny: { bg:'#fff9ef', accent:'#ffc83d', hero1:'#ffe2a8', hero2:'#ffc0a8', border:'#ffb98a', heroTextAccent:'#c14e2a', card:'#fff', chip:'#f0e8d8' },
+    sky:   { bg:'#eef6ff', accent:'#5bb4ff', hero1:'#cfe6ff', hero2:'#bfd9ff', border:'#8ec2ff', heroTextAccent:'#1f6bbf', card:'#fff', chip:'#dce8f5' },
+    candy: { bg:'#fff0f6', accent:'#ff6ba0', hero1:'#ffd0e2', hero2:'#e0cbff', border:'#ffa0c5', heroTextAccent:'#b73a79', card:'#fff', chip:'#f5dce8' },
+    forest:{ bg:'#f3f8ec', accent:'#7cbf5a', hero1:'#d9ecc0', hero2:'#f2e1a6', border:'#a7d685', heroTextAccent:'#4a7a2a', card:'#fff', chip:'#e0e8cf' },
+  };
+  const theme = themeVars[tweaks.theme] || themeVars.sunny;
+
+  useEffect(() => {
+    document.body.style.background = theme.bg;
+    const root = document.documentElement;
+    root.style.setProperty('--theme-bg', theme.bg);
+    root.style.setProperty('--theme-accent', theme.accent);
+    root.style.setProperty('--theme-hero1', theme.hero1);
+    root.style.setProperty('--theme-hero2', theme.hero2);
+    root.style.setProperty('--theme-border', theme.border);
+    root.style.setProperty('--theme-hero-text', theme.heroTextAccent);
+    root.style.setProperty('--theme-chip', theme.chip);
+  }, [tweaks.theme]);
+
+  const onOpen = (id) => {
+    // Chinese summary cards have no detail page — route to the English twin
+    // (Tree-level / middle) via storyId. If no Tree twin exists, fall back to
+    // any English variant of the same story.
+    const target = ARTICLES.find(a => a.id === id);
+    if (target && target.noDetail && target.language === 'zh') {
+      const tree = ARTICLES.find(a => a.storyId === target.storyId && a.language === 'en' && a.level === 'Tree');
+      const any = tree || ARTICLES.find(a => a.storyId === target.storyId && a.language === 'en');
+      if (any) id = any.id;
+    }
+    setRoute({ page:'article', articleId:id });
+  };
+  const onBack = () => setRoute({ page:'home', articleId:null });
+  const onComplete = () => setRoute({ page:'home', articleId:null });
+  const onOpenSearch = () => setRoute({ page:'search', articleId:null });
+  // Search-result click. Same dance as onResume: load the past-day
+  // bundle FIRST so window.ARTICLES has the entry, THEN flip archiveDay
+  // and route. Without the await the article reader would open before
+  // ARTICLES swapped and fall back to a stub view.
+  const onOpenSearchResult = async (r) => {
+    if (!r || !r.story_id || !r.published_date) return;
+    // ZH search rows have no detail page (the cn payload is summary-only
+    // and ArticlePage routes those away). Redirect to the English twin
+    // (Tree first, then any English level) so the user lands on a
+    // working detail page — same logic as the streak-popover onOpen()
+    // path. If no twin is available, fall back to opening the cn id;
+    // ArticlePage will then redirect itself if it can.
+    let lvlSuffix = r.level === 'zh' ? 'cn' : (r.level || 'middle');
+    // Stash a synthetic listing entry BEFORE loadArchive runs so the
+    // bundle that ArticlePage reads from contains this story even
+    // when the day's listing JSON was overwritten by a later pipeline
+    // run (the per-story payload file is still on storage).
+    if (typeof window.stashSearchExtra === 'function') {
+      window.stashSearchExtra(r);
+    }
+    try {
+      if (typeof window.loadArchive === 'function') {
+        await window.loadArchive(r.published_date);
+      }
+      // Re-pick level for zh hits now that ARTICLES is loaded —
+      // prefer the Tree-level English twin for the same storyId.
+      if (r.level === 'zh' && Array.isArray(window.ARTICLES)) {
+        const twin = window.ARTICLES.find(a => a.storyId === r.story_id && a.language === 'en' && a.level === 'Tree')
+                  || window.ARTICLES.find(a => a.storyId === r.story_id && a.language === 'en');
+        if (twin) lvlSuffix = twin.id.split('-').pop();
+      }
+      setArchiveDay(r.published_date);
+      setRoute({ page:'article', articleId: `${r.story_id}-${lvlSuffix}` });
+    } catch (e) {
+      console.warn('[search] open failed', r, e);
+    }
+  };
+
+  return (
+    <div data-screen-label={route.page==='home' ? '01 Home' : '02 Article'} style={{minHeight:'100vh', background: theme.bg}}>
+      {route.page === 'search' && window.SearchPage ? (
+        <window.SearchPage
+          onBack={onBack}
+          onOpenResult={onOpenSearchResult}
+          level={level}
+          language={tweaks.language || 'en'}
+        />
+      ) : route.page === 'home' ? (
+        <HomePage
+          onOpen={onOpen}
+          onOpenSearch={onOpenSearch}
+          onOpenArchive={async (d) => {
+            // PRE-load ARTICLES before flipping archiveDay state so the
+            // first re-render after the click already has the right
+            // payloads in window.ARTICLES. Without this await, the
+            // useMemo in HomePage that reads ARTICLES runs against the
+            // OLD bundle and renders today's content under an archive
+            // URL — clicks then open the wrong article.
+            try {
+              if (typeof window.loadArchive === 'function') {
+                await window.loadArchive(d || null);
+              }
+            } catch (e) { /* fall through; useEffect will retry */ }
+            setArchiveDay(d);
+            setCat('All');
+            window.scrollTo({ top: 0 });
+          }}
+          onResume={async (item)=>{
+            // Continue-reading: open an article from a past day. Swap to
+            // the right archive bundle FIRST so window.ARTICLES has the
+            // listing the article reader does its lookup against, then
+            // route to the article. Without the await the reader opens
+            // before ARTICLES swaps and falls back to a stub view.
+            if (!item || !item.id) return;
+            try {
+              if (item.archiveDate && typeof window.loadArchive === 'function') {
+                await window.loadArchive(item.archiveDate);
+              }
+              setArchiveDay(item.archiveDate || null);
+              setRoute({ page:'article', articleId: item.id });
+            } catch (e) {
+              console.warn('[resume] failed to load archive', item.archiveDate, e);
+            }
+          }}
+          archiveDay={archiveDay}
+          level={level} setLevel={setLevel}
+          cat={cat} setCat={setCat}
+          progress={progress}
+          setProgress={setProgress}
+          theme={theme}
+          heroVariant={tweaks.heroVariant}
+          tweaks={tweaks}
+          updateTweak={updateTweak}
+          onOpenUserPanel={()=>setUserPanelOpen(true)}
+          magicConsuming={magicConsuming}
+          magicLinkError={magicLinkError}
+        />
+      ) : (
+        <ArticlePage
+          articleId={route.articleId}
+          onBack={onBack}
+          onComplete={onComplete}
+          onOpenArticle={(id)=>{ setRoute({ page:'article', articleId: id }); window.scrollTo(0,0); }}
+          progress={progress}
+          setProgress={setProgress}
+          updateTweak={updateTweak}
+        />
+      )}
+
+      {userPanelOpen && (
+        <UserPanel
+          tweaks={tweaks}
+          updateTweak={updateTweak}
+          level={level}
+          setLevel={setLevel}
+          progress={progress}
+          onClose={()=>setUserPanelOpen(false)}
+        />
+      )}
+
+      {/* Floating feedback button — always visible, opens FeedbackModal.
+          Hidden during onboarding (no userName) since the kid hasn't
+          set up yet and the button would crowd the welcome screen. */}
+      {(tweaks?.userName || '').trim() && window.FeedbackButton && (
+        <window.FeedbackButton/>
+      )}
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, updateTweak, setTweaksVisible }) {
+  return (
+    <div style={{
+      position:'fixed', bottom:20, right:20, width:280, background:'#fff',
+      borderRadius:18, border:'2px solid #1b1230', padding:'16px 18px',
+      boxShadow:'0 10px 0 rgba(27,18,48,0.18)', zIndex:100,
+      fontFamily:'Nunito, sans-serif',
+    }}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
+        <div style={{fontFamily:'Fraunces, serif', fontWeight:900, fontSize:18, color:'#1b1230'}}>🎨 Tweaks</div>
+        <button onClick={()=>setTweaksVisible(false)} style={{background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#9a8d7a'}}>×</button>
+      </div>
+
+      <TwkRow label="Color theme">
+        <select value={tweaks.theme} onChange={e=>updateTweak('theme', e.target.value)} style={twkInput}>
+          <option value="sunny">☀️ Sunny</option>
+          <option value="sky">🌊 Sky</option>
+          <option value="candy">🍬 Candy</option>
+          <option value="forest">🌳 Forest</option>
+        </select>
+      </TwkRow>
+
+      <TwkRow label="Hero style">
+        <select value={tweaks.heroVariant} onChange={e=>updateTweak('heroVariant', e.target.value)} style={twkInput}>
+          <option value="daily15">Daily 15 banner</option>
+          <option value="streak">Streak-focused</option>
+        </select>
+      </TwkRow>
+
+      <TwkRow label="Quiz confetti">
+        <label style={{display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:700, cursor:'pointer'}}>
+          <input type="checkbox" checked={tweaks.showConfetti} onChange={e=>updateTweak('showConfetti', e.target.checked)}/>
+          {tweaks.showConfetti ? 'On' : 'Off'}
+        </label>
+      </TwkRow>
+
+      <div style={{fontSize:11, color:'#9a8d7a', marginTop:10, borderTop:'1px dashed #eee', paddingTop:10}}>
+        Toggle Tweaks from the toolbar to customize.
+      </div>
+    </div>
+  );
+}
+const twkInput = {
+  width:'100%', padding:'8px 10px', border:'1.5px solid #f0e8d8', borderRadius:10,
+  fontSize:13, fontWeight:700, fontFamily:'Nunito, sans-serif', background:'#fff9ef', color:'#1b1230',
+};
+function TwkRow({ label, children }) {
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{fontSize:11, fontWeight:800, color:'#6b5c80', letterSpacing:'.06em', textTransform:'uppercase', marginBottom:5}}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+// Wait for all babel scripts to load AND for payloads to be fetched.
+function mount() {
+  if (!window.HomePage || !window.ArticlePage || !window.UserPanel) { setTimeout(mount, 50); return; }
+  if (!window.__payloadsLoaded) { setTimeout(mount, 50); return; }
+  window.__payloadsLoaded.then(() => {
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  });
+}
+setTimeout(mount, 0);
+</script>
+</body>
+</html>

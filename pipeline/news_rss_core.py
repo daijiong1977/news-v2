@@ -31,6 +31,7 @@ import requests
 
 from .cleaner import extract_article_from_html
 from .quiz_shuffle import shuffle_quiz_options
+from .ai_providers import OpenAICompatibleProvider
 from .wordcount_policy import (STANDARD_BANDS, STANDARD_REPAIR_TARGETS,
                                body_band, repair_target, is_short_fun_source)
 _REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
@@ -581,14 +582,7 @@ def _deepseek_post(payload: dict, timeout: int,
     truncation via `finish_reason == 'length'`."""
     api_key = api_key or DEEPSEEK_KEY
     endpoint = endpoint or DEEPSEEK_ENDPOINT
-    r = requests.post(
-        endpoint,
-        json=payload,
-        headers={"Authorization": f"Bearer {api_key}"},
-        timeout=timeout,
-    )
-    r.raise_for_status()
-    body = r.json()
+    body = OpenAICompatibleProvider(endpoint=endpoint, api_key=api_key).complete(payload, timeout)
     choice = (body.get("choices") or [{}])[0]
     msg = choice.get("message") or {}
     raw = msg.get("content") or ""

@@ -1,0 +1,83 @@
+name: Publish website-only reader
+on:
+  push:
+    branches: ['codex/website-release-*']
+    paths: ['releases/current/**']
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: kidsnews-latest-only
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: vars.KIDSNEWS_WEBSITE_TRIAL_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: kidsnews-production
+    env:
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      KIDSNEWS_DISPATCH_TOKEN: ${{ secrets.KIDSNEWS_DISPATCH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Check credentials without printing them
+        run: test -n "$SUPABASE_SERVICE_KEY" && test -n "$KIDSNEWS_DISPATCH_TOKEN"
+      - run: python -m pip install -q -r pipeline/requirements.txt
+      - name: Validate hash-bound expiring approval
+        id: receipt
+        run: python -m pipeline.website_delivery receipt --release-dir releases/current
+      - name: Restore previous CI state (resume or rollback)
+        if: steps.receipt.outputs.operation != 'publish'
+        uses: actions/download-artifact@v4
+        with:
+          name: latest-release-state
+          path: release-state
+          run-id: ${{ steps.receipt.outputs.backup_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy approved public artifacts
+        run: |
+          mkdir -p release-state
+          cp releases/current/reader.zip releases/current/latest-manifest.json releases/current/records.json release-state/
+          python -m pipeline.website_release check --release-dir release-state
+      - name: Download and validate independent backup before any writes
+        if: steps.receipt.outputs.operation == 'publish'
+        run: |
+          python -m pipeline.website_ledger snapshot --output release-state/ledger-before.json
+          python -m pipeline.website_release backup --release-dir release-state
+      - name: Persist backup outside this runner BEFORE publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-backup-before-upload
+          path: release-state/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Replace latest only (never DB, archive or function)
+        if: steps.receipt.outputs.operation != 'rollback'
+        run: python -m pipeline.website_release publish --release-dir release-state --ack-same-day-replacement
+      - name: Restore saved pair for rollback
+        if: steps.receipt.outputs.operation == 'rollback'
+        run: python -m pipeline.website_release rollback --release-dir release-state
+      - name: Notify unchanged kidsnews-v2 Action
+        run: python -m pipeline.website_release dispatch --release-dir release-state
+      - name: Wait for exact public files, not only Actions success
+        run: |
+          for attempt in $(seq 1 45); do
+            if python -m pipeline.website_release verify --release-dir release-state; then exit 0; fi
+            sleep 20
+          done
+          exit 1
+      - name: Record verified effective history on private ledger branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m pipeline.website_ledger record --release-dir release-state
+      - name: Always preserve state and recovery files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-release-state
+          path: release-state/
+          retention-days: 30
+          if-no-files-found: warn
