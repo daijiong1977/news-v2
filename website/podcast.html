@@ -40,7 +40,7 @@
   <img class="cover" src="https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/cover-4c.png" alt="Kids News podcast cover">
   <div class="tag">Podcast · from 21mins.com</div>
   <h1>Kids News</h1>
-  <p class="lede">Find the news in minutes. Four real stories a day for curious kids 10–14, in about eight minutes — Monday news, Tuesday science, Wednesday fun things, then again. Hosted by Maya and Theo.</p>
+  <p class="lede">Find the news in minutes. Real stories for curious kids 10–14, in about ten minutes each morning, plus short episodes for the way home and an occasional Special Edition.</p>
 
   <a class="btn apple" id="apple" href="#">Open in Apple Podcasts</a>
   <a class="btn over" id="overcast" href="#">Add to Overcast</a>
@@ -58,7 +58,7 @@
   // ?feed=test -> the Grok Bot shadow-week feed (2026-09-27). Only these two feeds: the page never
   // subscribes anyone to a URL taken from the query string.
   var FEEDS = {
-    real: "https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews/feed.xml",
+    real: "https://kidsnews.21mins.com/podcast/feed.xml",   // our own address (2026-10-19): it stays fixed if the files ever move
     test: "https://lfknsvavhiqrsasdfyrs.supabase.co/storage/v1/object/public/podcast/kidsnews-test/feed.xml"
   };
   var which = new URLSearchParams(location.search).get("feed") === "test" ? "test" : "real";
